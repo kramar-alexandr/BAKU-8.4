@@ -1,0 +1,969 @@
+external procedure GetCurncyRateOnDate(string,date,var val);
+external inner procedure ExtractObj(string,var Integer,var string);
+external inner procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);// Edit ************************** Wednesday, 19 June 2013 13:43:37
+external inner procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);// Edit ************************** Wednesday, 19 June 2013 14:02:13
+external procedure FindFIFOOrigValAndCurncyIV(longint,integer, var val, var string,var val,boolean);// Edit ************************** Tuesday, 2 July 2013 10:40:37
+
+//Edit***************************Sasha2,17:51 25.01.2016 {
+function string 200 GetDI(string classes)
+begin
+  string 200 res;
+  record DIVc DIr;
+  string 10 prevgroup;
+  integer gi;
+  
+      gi=0;
+			ExtractObj(classes,gi,prevgroup);
+      if(nonblank(prevgroup))then begin
+        DIr.Code = prevgroup;
+        if(readfirstmain(DIr,1,true))then begin res = DIr.Name; end;
+      end;
+
+  GetDI = res;
+return;
+end; //Edit***************************Sasha2,17:51 25.01.2016 }
+
+function string 200 ParseClassification(string class)
+begin
+	string 200 res,cl;
+	record DIVc DIr;
+	integer pos;
+	string 100 brandname,typename; //Edit***************************Sasha2,11:49 25.01.2016
+	
+	if(nonblank(class))then begin
+		pos = 0;
+		ExtractObj(class,pos,cl); 
+		while(nonblank(cl)) begin
+			DIr.Code = cl;
+			readfirstmain(DIr,1,true);
+			if(DIr.CType=="BRAND")then begin
+				brandname = DIr.Name;
+			end;
+			if(DIr.CType=="TYPE")then begin
+				typename = DIr.Name;
+			end;
+			if (NonBlank(brandname) and NonBlank(brandname)) then begin
+			  pos = len(class);
+			end;
+			ExtractObj(class,pos,cl);
+		end; 
+		
+		res = brandname;
+		outstring(0,0,brandname,false);
+	
+		if(NonBlank(typename))then begin
+			res = res & "," & typename;
+			if(currentcompany>3)then begin
+				outstring(0,0,typename,false);
+			end;
+		end else begin
+			if(currentcompany>3)then begin
+				outstring(0,0,"",false);
+			end;
+		end;
+	end else begin
+		outstring(0,0,"",false);
+		if(currentcompany>3)then begin
+			outstring(0,0,"",false);
+		end;
+	end;
+	
+	ParseClassification = res;
+return;
+end;
+
+
+function val getIHCost(longint sernr, integer rownr,boolean updst)
+begin
+	val res;
+	record ItemHistVc IHr;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record ORVc ORr;
+	row ORVc ORrw;
+	boolean TrHs,testf;
+	record SHVc SHr;
+	row SHVc SHrw;
+	integer i,mtrw;
+	
+	res = 0;
+	if(updst)then begin
+		IHr.FileName = "IVVc";
+		IHr.TransNr = sernr;
+		IHr.Row = rownr;
+		TrHs = true;
+		while(loopkey("FNTransNr",IHr,3,TrHs))begin
+			if(IHr.FileName!="IVVc")then begin TrHs = false; end;
+			if(IHr.TransNr!=sernr)then begin TrHs = false; end;
+			if(IHr.Row!=rownr)then begin TrHs = false; end;
+			
+			if(TrHs)then begin
+				res = res + IHr.TotCostPrice;
+			end;
+		end;
+	end else begin
+		IVr.SerNr = sernr;
+		readfirstmain(IVr,1,true);
+		matrowget(IVr,rownr,IVrw);
+		
+		TrHs = true;
+		SHr.OrderNr=IVr.OrderNr;
+		while(loopkey("OrderKey",SHr,1,TrHs))begin
+			if(SHr.OrderNr!=IVr.OrderNr)then begin TrHs=false; end;
+			
+			if(TrHs)then begin
+			mtrw = matrowcnt(SHr);
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(SHr,i,SHrw);
+				if(SHrw.OrdRow==IVrw.OrdRow)then begin
+					IHr.FileName = "SHVc";
+					IHr.TransNr = SHr.SerNr;
+					IHr.Row = SHrw.OrdRow;
+					while(loopkey("FNTransNr",IHr,3,TrHs))begin
+						if(IHr.FileName!="SHVc")then begin TrHs = false; end;
+						if(IHr.TransNr!=SHr.SerNr)then begin TrHs = false; end;
+						if(IHr.Row!=SHrw.OrdRow)then begin TrHs = false; end;
+			
+						if(TrHs)then begin
+							res = res + IHr.TotCostPrice;
+						end;
+					end;
+				end;	  
+			end; 
+			end;
+		end;
+	end;
+	
+	getIHCost = res;
+return;
+end;
+
+global
+procedure SaleReportRClassReportDefaults(Integer wn)
+BEGIN
+  record RcVc RepSpec;
+  record LocalMachineBlock LMb;
+
+  BlockLoad(LMb);
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  ReportDefaults(RepSpec,"SaleReportRClass");  
+  RepSpec.f1 = LMb.LocalMachineCode;
+  PutWindowRecord(wn,RepSpec);
+  SelectWindow(wn);
+  
+  RETURN;
+END;
+
+global
+procedure SaleReportRn(record RcVc RepSpec)
+begin
+  record LocalMachineVc LMr;
+  record IVrsVc IVrs;
+  Date sd,ed;
+  Boolean TrHs,testf;
+  string 20 frmn,tomn;
+  string 5 frgr,togr;
+  integer loopp,mark,totqty;
+  val rate,mcost,mprice,totalcost,totalprice,totalsum3,totdif1,totdif2,totdif3,totaldif1,totaldif2,totaldif3;
+  val price,sumprice;
+  val rebate,sumrebate,midrebate;
+  integer irebate,gi;
+  string 20 curartcode,curmn;
+  integer prevnr;
+  string 255 prevspec;
+  string 5 prevgroup;
+  record DIVc DIr;
+  string 100 tstr;
+  record INVc INr;
+  record ItemHistVc IHr;
+  boolean TrHs1;
+  record IVVc IVr;
+  row IVVc IVrw;
+  string 50 cntgrp;
+  boolean updst;
+  val fr,to1,to2,br1,br2,ivfr,ivto;
+  string 20 curncy;
+	Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
+  Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52
+  Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51
+  
+	CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);// Edit ************************** Wednesday, 19 June 2013 13:59:15
+	curncy = acrncy[0];// Edit ************************** Wednesday, 19 June 2013 13:59:14
+  
+  
+  irebate = 0;
+  
+  SetLangMode(LangRussian,"RUS",0);
+  
+    StartReportNoHeaderJob("Отчёт по продажам");
+    
+    sd = RepSpec.sStartDate;
+    ed = RepSpec.sEndDate;
+    
+    if blankdate(sd) then begin
+      StartFormat(15);
+      OutString(0,0,"Определите период",false);
+      EndFormat;
+    end else begin 
+      StartFormat(15);
+      OutString(0,0,"Отчёт по продажам",false);
+      EndFormat;
+      
+      StartFormat(15);
+      		OutString(0,0,"Период:",false);
+      		OutString(100,0,RepSpec.sStartDate & ":" & RepSpec.sEndDate,false);
+      endformat;
+      if(nonblank(RepSpec.f1))then begin
+				StartFormat(15);
+						OutString(0,0,"Локальная машина:",false);
+						OutString(100,0,RepSpec.f1,false);
+				endformat;
+      end else begin
+      		StartFormat(15);
+						OutString(0,0,"Локальная машина:",false);
+						OutString(100,0,"По всем машинам",false);
+				endformat;
+      end;
+      
+      gray_divider(0,1);
+      
+      frmn = FirstInRange(RepSpec.f1,20);
+      tomn = LastInRange(RepSpec.f1,20);
+      
+      frgr = FirstInRange(RepSpec.f2,5);
+      frgr = RepSpec.f2;
+      //gi=0;
+			//ExtractObj(RepSpec.f2,gi,frgr);
+      //togr = LastInRange(RepSpec.f2,5);
+      gi=0;
+			ExtractObj(LastInRange(RepSpec.f2,5),gi,togr);
+      GetCurncyRateOnDate("AZN",CurrentDate,rate);
+      IVrs.MachineName = frmn;
+      //IVrs.DispGroups = frgr;
+      IVrs.TransDate = sd;
+      TrHs = true;
+      mark = 0;
+      mcost = 0;
+      mprice = 0;
+      price = 0;
+      rebate = 0;
+      sumrebate = 0; irebate = 0;
+      curartcode = "";
+      curmn = "";
+      totalcost = 0;
+      totalprice = 0;
+      sumprice = 0;
+      totalsum3 = 0;
+      totdif1 = 0;
+      totdif2 = 0;
+      totdif3 = 0;
+      totaldif1 = 0;
+      totaldif2 = 0;
+      totaldif3 = 0;
+      while (LoopKey("MachineName",IVrs,4,TrHs)) begin
+        testf = true;
+        if nonblank(frmn) then begin
+          if frmn>IVrs.MachineName or IVrs.MachineName>tomn then begin
+          TrHs = false;
+          testf = false;
+          end;
+        end;
+        if testf then begin
+          if nonblank(frgr) then begin
+          	gi=0;
+						ExtractObj(IVrs.DispGroups,gi,cntgrp);
+						if(setinset(cntgrp,frgr)==false)then begin
+							testf = false;
+						end;/*
+            if frgr>cntgrp or cntgrp>togr then begin
+            testf = false;
+            end;*/
+          end; 
+        end;
+        if testf then begin
+          if IVrs.TransDate<sd or IVrs.TransDate>ed then begin
+          testf = false;
+          end;
+        end;
+        if testf then begin
+          if curmn!=IVrs.MachineName then begin
+            if mark==0 then begin
+              curmn = IVrs.MachineName;
+              curartcode = IVrs.ArtCode;
+            end else begin
+              if totqty!=0 then begin
+              	              	
+                prevnr = prevnr + 1;
+                StartFormat(15);
+                OutString(0,0,prevnr,false);
+                OutString(20,0,curartcode,false);
+                OutString(50,0,prevspec,false);
+                tstr = "";
+                INr.Code = curartcode;
+                readfirstmain(INr,1,true);
+                
+                tstr = GetDI(INr.DispGroups); //Edit***************************Sasha2,17:53 25.01.2016
+                
+                /*prevgroup = INr.DispGroups;
+                gi=0;
+								ExtractObj(INr.DispGroups,gi,prevgroup);
+                if(nonblank(prevgroup))then begin
+                  DIr.Code = prevgroup;
+                  if(readfirstmain(DIr,1,true))then begin tstr = DIr.Name; end;
+                end;*/
+                
+                if(currentcompany>2)then begin
+                	ParseClassification(INr.DispGroups);
+                end else begin
+									OutString(150,0,tstr,false);
+                end;
+                OutString(185,0,totqty,false);
+                OutVal(210,0,mcost/totqty,M4Val,false);
+                OutVal(245,0,mprice/totqty,M4Val,false);
+                OutVal(280,0,mcost,M4Val,false);
+                OutVal(330,0,price,M4Val,false);
+                OutVal(370,0,rebate,M4Val,false);
+                OutVal(400,0,mprice,M4Val,false);
+                OutVal(440,0,mprice-mcost*rate,M4Val,false);
+                totalcost = totalcost + mcost;
+                totalprice = totalprice + mprice;
+                sumprice = sumprice + price;
+                sumrebate = sumrebate + rebate; irebate = irebate + totqty;
+                totalsum3 = totalsum3 + (mprice-mcost*rate);
+                EndFormat;
+              end;
+              prevnr = 0;
+              totqty = 0;
+              mcost = 0;
+              mprice = 0;
+              rebate = 0;
+              price = 0;
+              if mark==3 then begin
+                mark = 1;
+                SetLoopPosition(IVrs,loopp-1);
+                Gray_Divider(0,1); 
+                StartFormat(15);
+                OutString(0,0,"Итого",false);
+                if(currentcompany>2)then begin
+                	OutString(20,0,"",false);
+                end;
+                OutString(20,0,"",false);
+								OutString(50,0,"",false);
+								OutString(150,0,"",false);
+								OutString(185,0,"",false);
+								OutString(210,0,"",false);
+								OutString(245,0,"",false);
+                OutVal(280,0,totalcost,M4Val,false);
+                OutVal(330,0,sumprice,M4Val,false);
+                if(irebate>=0)then begin
+									OutVal(370,0,sumrebate/irebate,M4Val,false);
+                end else begin
+									OutVal(370,0,-sumrebate/irebate,M4Val,false);
+                end;
+                OutVal(400,0,totalprice,M4Val,false);
+                OutVal(440,0,totalsum3,M4Val,false);
+                EndFormat;
+                Gray_Divider(0,1); 
+                totdif1 = totdif1 + totalcost;
+                totdif2 = totdif2 + totalprice;
+                totdif3 = totdif3 + totalsum3;
+                totalcost = 0;
+                totalprice = 0;
+                sumprice = 0;
+                sumrebate = 0; irebate = 0;
+                totalsum3 = 0;
+                curartcode = "";
+              end;
+              if mark==4 then begin
+                mark = 0;
+                Gray_Divider(0,1); 
+                StartFormat(15);
+                OutString(0,0,"Итого",false);
+                if(currentcompany>2)then begin
+                	OutString(20,0,"",false);
+                end;
+                OutString(20,0,"",false);
+								OutString(50,0,"",false);
+								OutString(150,0,"",false);
+								OutString(185,0,"",false);
+								OutString(210,0,"",false);
+								OutString(245,0,"",false);
+                OutVal(280,0,totalcost,M4Val,false);
+                OutVal(330,0,sumprice,M4Val,false);
+                if(irebate>=0)then begin
+									OutVal(370,0,sumrebate/irebate,M4Val,false);
+                end else begin
+									OutVal(370,0,-sumrebate/irebate,M4Val,false);
+                end;
+                OutVal(400,0,totalprice,M4Val,false);
+                OutVal(440,0,totalsum3,M4Val,false);
+                EndFormat;
+                Gray_Divider(0,1); 
+                totdif1 = totdif1 + totalcost;
+                totdif2 = totdif2 + totalprice;
+                totdif3 = totdif3 + totalsum3;
+                StartFormat(15);
+                OutString(0,0,"Баланс",false);
+                OutString(20,0,"",false);
+                if(currentcompany>2)then begin
+                	OutString(20,0,"",false);
+                end;
+								OutString(50,0,"",false);
+								OutString(150,0,"",false);
+								OutString(185,0,"",false);
+								OutString(210,0,"",false);
+								OutString(245,0,"",false);
+                OutVal(280,0,totdif1,M4Val,false);
+                OutString(330,0,"",false);
+                OutString(370,0,"",false);
+                OutVal(400,0,totdif2,M4Val,false);
+                OutVal(440,0,totdif3,M4Val,false);
+                EndFormat;
+                Gray_Divider(0,1); 
+                totaldif1 = totaldif1 + totdif1;
+                totaldif2 = totaldif2 + totdif2;
+                totaldif3 = totaldif3 + totdif3;
+                totdif1 = 0;
+                totdif2 = 0;
+                totdif3 = 0;
+                totalcost = 0;
+                totalprice = 0;
+                sumprice = 0;
+                sumrebate = 0; irebate = 0;
+                totalsum3 = 0;
+                curmn = IVrs.MachineName;
+                curartcode = IVrs.ArtCode;
+              end;
+            end;
+          end else begin
+            if curartcode!=IVrs.ArtCode then begin
+              if mark==1 then begin
+                curartcode = IVrs.ArtCode;
+                mark = 4;
+              end else begin
+                if totqty!=0 then begin
+                  prevnr = prevnr + 1;
+                  StartFormat(15);
+                  OutString(0,0,prevnr,false);
+                  OutString(20,0,curartcode,false);
+                  OutString(50,0,prevspec,false);
+                  tstr = "";
+                  INr.Code = curartcode;
+									readfirstmain(INr,1,true);
+									tstr = GetDI(INr.DispGroups); //Edit***************************Sasha2,17:53 25.01.2016
+									
+									/*prevgroup = INr.DispGroups;
+									gi=0;
+									ExtractObj(INr.DispGroups,gi,prevgroup);
+                  if(nonblank(prevgroup))then begin
+                    DIr.Code = prevgroup;
+                    if(readfirstmain(DIr,1,true))then begin tstr = DIr.Name; end;
+                  end;*/
+                  
+                  if(currentcompany>2)then begin
+										ParseClassification(INr.DispGroups);
+									end else begin
+										OutString(150,0,tstr,false);
+									end;
+                  OutString(185,0,totqty,false);
+                  OutVal(210,0,mcost/totqty,M4Val,false);
+                  OutVal(245,0,mprice/totqty,M4Val,false);
+                  OutVal(280,0,mcost,M4Val,false);
+                  OutVal(330,0,price,M4Val,false);
+                  OutVal(370,0,rebate,M4Val,false);
+                  OutVal(400,0,mprice,M4Val,false);
+                  OutVal(440,0,mprice-mcost*rate,M4Val,false);
+                  totalcost = totalcost + mcost;
+                  totalprice = totalprice + mprice;
+                  sumrebate = sumrebate + rebate; irebate = irebate + totqty;
+                  sumprice = sumprice + price;
+                  totalsum3 = totalsum3 + (mprice-mcost*rate);
+                  EndFormat;
+                end;
+                totqty = 0;
+                mcost = 0;
+                mprice = 0;
+                rebate = 0;
+                price = 0;
+                curartcode = IVrs.ArtCode;
+              end;
+            end;
+          end;
+          if mark==0 then begin
+          loopp = GetLoopPosition(IVrs);
+          Black_Divider(0,1); 
+          StartFormat(15);
+            LMr.Code = IVrs.MachineName;
+            if ReadFirstMain(LMr,1,true) then begin
+            OutString(0,0,LMr.Comment,false);
+            end;
+          EndFormat;
+          Black_Divider(0,1); 
+          StartFormat(15);
+          OutString(0,0,"*** Продажи ***",false);
+          EndFormat;
+          end;
+          if mark==1 then begin
+          StartFormat(15);
+          OutString(0,0,"*** Возвраты ***",false);
+          EndFormat;
+          end;
+          if mark==1 or mark==0 then begin
+          StartFormat(15);
+          
+          endformat;
+          StartFormat(15);
+          OutString(0,0,"№",false);
+          OutString(20,0,"Код",false);
+          OutString(50,0,"Наименование",false);
+          
+          OutString(150,0,"Классификация",false);
+          if(currentcompany>2)then begin
+          	OutString(175,0,"Модель",false);
+          end;
+          OutString(185,0,"К-во",false);
+          OutString(210,0,"Ср.с-ть",false);
+          OutString(245,0,"Ср.цена",false);
+          OutString(280,0,"С-ть",false);
+          OutString(330,0,"Цена",false);
+          OutString(370,0,"Скидка",false);
+          OutString(400,0,"Сумма",false);
+          OutString(440,0,"Прибыль",false);
+          EndFormat;
+            if mark==0 then begin
+              mark = 3;
+            end;
+          end;
+          if mark==3 then begin
+            if IVrs.Quant>0 then begin
+              prevspec = IVrs.Spec;
+              prevgroup = IVrs.DispGroups;
+              gi=0;
+							ExtractObj(INr.DispGroups,gi,prevgroup);
+              totqty = totqty + IVrs.Quant;
+              
+
+              IVr.SerNr = IVrs.IVNr;
+              readfirstmain(IVr,1,true);
+              
+              ivfr = 1; ivto = 1;
+							fr = 1; to1 = 1;
+							if(IVr.CurncyCode!=curncy)then begin
+								ivfr = IVr.FrRate;
+								ivto = IVr.ToRateB1;
+								if(ivfr==0 or ivto==0)then begin
+									ivfr = 1;	ivto = 1;
+								end;
+								GetFullCurncyRate(curncy,IVr.TransDate,fr,to1,to2,br1,br2);
+								if(fr==0 or to1==0)then begin
+									fr = 1;	to1 = 1;
+								end;
+							end;
+              
+              if(IVr.UpdStockFlag>0 and IVr.OrderNr<0)then begin
+            		updst = true;
+            	end else begin
+            		updst = false;
+            	end;
+              mcost = getIHCost(IVr.SerNr,IVrs.RowNr,updst);
+              
+              matrowget(IVr,IVrs.RowNr,IVrw);
+              mprice = mprice + IVrs.Sum/ivfr*ivto*fr/to1;
+              if(IVrs.Sum>=0)then begin
+								price = price + IVrw.Price/ivfr*ivto*fr/to1;
+								rebate = (1-mprice/price)*100;
+              end else begin
+								price = price - IVrw.Price/ivfr*ivto*fr/to1;
+								rebate = -(1-mprice/price)*100;
+              end;
+              
+            end;
+          end;
+          if mark==4 then begin
+            if IVrs.Quant<0 then begin
+              prevspec = IVrs.Spec;
+              prevgroup = IVrs.DispGroups;
+              gi=0;
+							ExtractObj(IVrs.DispGroups,gi,prevgroup);
+              totqty = totqty + IVrs.Quant;
+              IHr.FileName = "IVVc";
+              IHr.TransNr = IVrs.IVNr;
+              IHr.Row = IVrs.RowNr;
+              TrHs1 = true;
+              while(loopkey("FNTransNr",IHr,3,TrHs1))begin
+              		if(IHr.FileName!="IVVc" or IHr.TransNr!=IVrs.IVNr or IHr.Row!=IVrs.RowNr)then begin TrHs1 = false; end;
+              		
+              		if(Trhs1)then begin
+              			 mcost = mcost - IHr.TotCostPrice;
+              		end;
+              end;
+              resetloop(IHr);
+              //mcost = mcost + IVrs.FIFO;
+              IVr.SerNr = IVrs.IVNr;
+              readfirstmain(IVr,1,true);
+              ivfr = 1; ivto = 1;
+							fr = 1; to1 = 1;
+							if(IVr.CurncyCode!=curncy)then begin
+								ivfr = IVr.FrRate;
+								ivto = IVr.ToRateB1;
+								if(ivfr==0 or ivto==0)then begin
+									ivfr = 1;	ivto = 1;
+								end;
+								GetFullCurncyRate(curncy,IVr.TransDate,fr,to1,to2,br1,br2);
+								if(fr==0 or to1==0)then begin
+									fr = 1;	to1 = 1;
+								end;
+							end;
+              matrowget(IVr,IVrs.RowNr,IVrw);
+              mprice = mprice + IVrs.Sum/ivfr*ivto*fr/to1;
+              if(IVrs.Sum>=0)then begin
+								price = price + IVrw.Price/ivfr*ivto*fr/to1;
+								rebate = (1-mprice/price)*100;
+              end else begin
+								price = price - IVrw.Price/ivfr*ivto*fr/to1;
+								rebate = -(1-mprice/price)*100;
+              end;
+              
+            end;
+          end;
+        end;
+      end;  // while
+      if totqty!=0 then begin
+        prevnr = prevnr + 1;
+        StartFormat(15);
+        OutString(0,0,prevnr,false);
+        OutString(20,0,curartcode,false);
+        OutString(50,0,prevspec,false);
+        tstr = "";
+        INr.Code = curartcode;
+				readfirstmain(INr,1,true);
+				tstr = GetDI(INr.DispGroups); //Edit***************************Sasha2,17:53 25.01.2016
+				/*prevgroup = INr.DispGroups;
+				gi=0;
+				ExtractObj(INr.DispGroups,gi,prevgroup);
+        if(nonblank(prevgroup))then begin
+          DIr.Code = prevgroup;
+          if(readfirstmain(DIr,1,true))then begin tstr = DIr.Name; end;
+        end;*/
+        if(currentcompany>2)then begin
+        	ParseClassification(INr.DispGroups);
+        end else begin
+					OutString(150,0,tstr,false);
+        end;
+        OutString(185,0,totqty,false);
+        OutVal(210,0,mcost/totqty,M4Val,false);
+        OutVal(245,0,mprice/totqty,M4Val,false);
+        OutVal(280,0,mcost,M4Val,false);
+        OutVal(330,0,price,M4val,false);
+        OutVal(370,0,rebate,M4Val,false);
+        OutVal(400,0,mprice,M4Val,false);
+        OutVal(440,0,mprice-mcost*rate,M4Val,false);
+        totalcost = totalcost + mcost;
+        totalprice = totalprice + mprice;
+        sumprice = sumprice + price;
+        sumrebate = sumrebate + rebate; irebate = irebate + totqty;
+        totalsum3 = totalsum3 + (mprice-mcost*rate);
+        EndFormat;
+      end;
+      StartFormat(15);
+      Gray_Divider(0,1); 
+      OutString(0,0,"Итого",false);
+      OutString(20,0,"",false);
+      if(currentcompany>2)then begin
+				OutString(20,0,"",false);
+			end;
+			OutString(50,0,"",false);
+			OutString(150,0,"",false);
+			OutString(185,0,"",false);
+			OutString(210,0,"",false);
+			OutString(245,0,"",false);
+      OutVal(280,0,totalcost,M4Val,false);
+      OutVal(330,0,sumprice,M4Val,false);
+			if(irebate>=0)then begin
+				OutVal(370,0,sumrebate/irebate,M4Val,false);
+			end else begin
+				OutVal(370,0,-sumrebate/irebate,M4Val,false);
+			end;
+      OutVal(400,0,totalprice,M4Val,false);
+      OutVal(440,0,totalsum3,M4Val,false);
+      EndFormat;
+      Gray_Divider(0,1); 
+      totdif1 = totdif1 + totalcost;
+      totdif2 = totdif2 + totalprice;
+      totdif3 = totdif3 + totalsum3;
+      totalcost = 0;
+      totalprice = 0;
+      sumprice = 0;
+      sumrebate = 0; irebate = 0;
+      totalsum3 = 0;
+      ResetLoop(IVrs);
+      TrHs = true;
+      totqty = 0;
+      mcost = 0;
+      mprice = 0;
+      rebate = 0;
+      price = 0;
+      SetLoopPosition(IVrs,loopp-1)
+      mark = 1;
+      curartcode = "";
+      prevnr = 0;
+      while (LoopKey("MachineName",IVrs,4,TrHs)) begin
+        testf = true;
+        if nonblank(frmn) then begin
+          if frmn>IVrs.MachineName or IVrs.MachineName>tomn then begin
+          TrHs = false;
+          testf = false;
+          end;
+        end;
+        if testf then begin
+        	if nonblank(frgr) then begin
+        	gi=0;
+					ExtractObj(IVrs.DispGroups,gi,cntgrp);
+        	if(setinset(cntgrp,frgr)==false)then begin
+						testf = false;
+					end;
+            /*if frgr>IVrs.DispGroups or IVrs.DispGroups>togr then begin
+            testf = false;
+            end;*/
+          end; 
+        end;
+        if testf then begin
+          if IVrs.TransDate<sd or IVrs.TransDate>ed then begin
+          testf = false;
+          end;
+        end;
+        if testf then begin
+          if curartcode!=IVrs.ArtCode then begin
+            if mark==1 then begin
+              curartcode = IVrs.ArtCode;
+            end else begin
+              if totqty!=0 then begin
+              prevnr = prevnr + 1;
+              StartFormat(15);
+              OutString(0,0,prevnr,false);
+              OutString(20,0,curartcode,false);
+              OutString(50,0,prevspec,false);
+              tstr = "";
+              INr.Code = curartcode;
+							readfirstmain(INr,1,true);
+							tstr = GetDI(INr.DispGroups); //Edit***************************Sasha2,17:53 25.01.2016
+							/*prevgroup = INr.DispGroups;
+							gi=0;
+							ExtractObj(INr.DispGroups,gi,prevgroup);
+              if(nonblank(prevgroup))then begin
+                DIr.Code = prevgroup;
+                if(readfirstmain(DIr,1,true))then begin tstr = DIr.Name; end;
+              end;*/
+              OutString(150,0,tstr,false);
+              OutString(185,0,totqty,false);
+              OutVal(210,0,mcost/totqty,M4Val,false);
+              OutVal(245,0,mprice/totqty,M4Val,false);
+              OutVal(280,0,mcost,M4Val,false);
+              outval(330,0,price,m4val,false);
+              OutVal(370,0,rebate,M4Val,false);
+              OutVal(400,0,mprice,M4Val,false);
+              OutVal(440,0,mprice-mcost*rate,M4Val,false);
+              totalcost = totalcost + mcost;
+              totalprice = totalprice + mprice;
+              sumprice = sumprice + price;
+              sumrebate = sumrebate + rebate; irebate = irebate + totqty;
+              totalsum3 = totalsum3 + (mprice-mcost*rate);
+              EndFormat;
+              end;
+              totqty = 0;
+              mcost = 0;
+              mprice = 0;
+              rebate = 0;
+              price = 0;
+              curartcode = IVrs.ArtCode;
+            end;
+          end;
+          if mark==1 then begin
+            StartFormat(15);
+            OutString(0,0,"*** Возвраты ***",false);
+            EndFormat;
+            StartFormat(15);
+            OutString(0,0,"№",false);
+            OutString(20,0,"Код",false);
+            OutString(50,0,"Наименование",false);
+            OutString(150,0,"Группа",false);
+            if(currentcompany>2)then begin
+							OutString(20,0,"",false);
+						end;
+            OutString(185,0,"К-во",false);
+            OutString(210,0,"Ср.с-ть",false);
+            OutString(245,0,"Ср.цена",false);
+            OutString(280,0,"С-ть",false);
+            OutString(330,0,"Цена",false);
+						OutString(370,0,"Скидка",false);
+						OutString(400,0,"Сумма",false);
+            OutString(440,0,"Прибыль",false);
+            EndFormat;
+            mark = 4;
+          end;
+          if mark==4 then begin
+            if IVrs.Quant<0 then begin
+              prevspec = IVrs.Spec;
+              prevgroup = IVrs.DispGroups;
+              gi=0;
+							ExtractObj(IVrs.DispGroups,gi,prevgroup);
+              totqty = totqty + IVrs.Quant;
+              IHr.FileName = "IVVc";
+              IHr.TransNr = IVrs.IVNr;
+              IHr.Row = IVrs.RowNr;
+              TrHs1 = true;
+              while(loopkey("FNTransNr",IHr,3,TrHs1))begin
+              		if(IHr.FileName!="IVVc" or IHr.TransNr!=IVrs.IVNr or IHr.Row!=IVrs.RowNr)then begin TrHs1 = false; end;
+              		
+              		if(Trhs1)then begin
+              			 mcost = mcost + IHr.TotCostPrice;
+              		end;
+              end;
+              resetloop(IHr);
+              //mcost = mcost + IVrs.FIFO;
+              IVr.SerNr = IVrs.IVNr;
+              readfirstmain(IVr,1,true);
+              ivfr = 1; ivto = 1;
+							fr = 1; to1 = 1;
+							if(IVr.CurncyCode!=curncy)then begin
+								ivfr = IVr.FrRate;
+								ivto = IVr.ToRateB1;
+								if(ivfr==0 or ivto==0)then begin
+									ivfr = 1;	ivto = 1;
+								end;
+								GetFullCurncyRate(curncy,IVr.TransDate,fr,to1,to2,br1,br2);
+								if(fr==0 or to1==0)then begin
+									fr = 1;	to1 = 1;
+								end;
+							end;
+              matrowget(IVr,IVrs.RowNr,IVrw);
+              mprice = mprice + IVrs.Sum/ivfr*ivto*fr/to1;
+              if(IVrs.Sum>=0)then begin
+								price = price + IVrw.Price/ivfr*ivto*fr/to1;
+								rebate = (1-mprice/price)*100;
+              end else begin
+								price = price - IVrw.Price/ivfr*ivto*fr/to1;
+								rebate = -(1-mprice/price)*100;
+              end;
+            end;
+          end;
+        end;
+      end;
+      if totqty!=0 then begin
+        prevnr = prevnr + 1;
+        StartFormat(15);
+        OutString(0,0,prevnr,false);
+        OutString(20,0,curartcode,false);
+        OutString(50,0,prevspec,false);
+        tstr = "";
+        INr.Code = curartcode;
+				readfirstmain(INr,1,true);
+				prevgroup = INr.DispGroups;
+				gi=0;
+				ExtractObj(INr.DispGroups,gi,prevgroup);
+        if(nonblank(prevgroup))then begin
+          DIr.Code = prevgroup;
+          if(readfirstmain(DIr,1,true))then begin tstr = DIr.Name; end;
+        end;
+        if(currentcompany>2)then begin
+        	ParseClassification(INr.DispGroups);
+        end else begin
+					OutString(150,0,tstr,false);
+        end;
+        OutString(185,0,totqty,false);
+        OutVal(210,0,mcost/totqty,M4Val,false);
+        OutVal(245,0,mprice/totqty,M4Val,false);
+        OutVal(280,0,mcost,M4Val,false);
+        outval(330,0,price,m4val,false);
+        OutVal(370,0,rebate,M4Val,false);
+        OutVal(400,0,mprice,M4Val,false);
+        OutVal(440,0,mprice-mcost*rate,M4Val,false);
+        totalcost = totalcost + mcost;
+        totalprice = totalprice + mprice;
+        sumprice = sumprice + price;
+        sumrebate = sumrebate + rebate; irebate = irebate + totqty;
+        totalsum3 = totalsum3 + (mprice-mcost*rate);
+        EndFormat;
+      end;
+      Gray_Divider(0,1); 
+      StartFormat(15);
+      OutString(0,0,"Итого",false);
+      OutString(20,0,"",false);
+      if(currentcompany>2)then begin
+				OutString(20,0,"",false);
+			end;
+			OutString(50,0,"",false);
+			OutString(150,0,"",false);
+			OutString(185,0,"",false);
+			OutString(210,0,"",false);
+			OutString(245,0,"",false);
+      OutVal(280,0,totalcost,M4Val,false);
+      OutVal(330,0,sumprice,M4Val,false);
+			if(irebate>=0)then begin
+				OutVal(370,0,sumrebate/irebate,M4Val,false);
+			end else begin
+				OutVal(370,0,-sumrebate/irebate,M4Val,false);
+			end;
+			OutVal(400,0,totalprice,M4Val,false);
+      OutVal(440,0,totalsum3,M4Val,false);
+      
+      EndFormat;
+      Gray_Divider(0,1); 
+      totdif1 = totdif1 + totalcost;
+      totdif2 = totdif2 + totalprice;
+      totdif3 = totdif3 + totalsum3;
+      StartFormat(15);
+      OutString(0,0,"Баланс",false);
+      OutString(20,0,"",false);
+      if(currentcompany>2)then begin
+				OutString(20,0,"",false);
+			end;
+			OutString(50,0,"",false);
+			OutString(150,0,"",false);
+			OutString(185,0,"",false);
+			OutString(210,0,"",false);
+			OutString(245,0,"",false);
+      OutVal(280,0,totdif1,M4Val,false);
+      OutString(210,0,"",false);
+			OutString(245,0,"",false);
+      OutVal(400,0,totdif2,M4Val,false);
+      OutVal(440,0,totdif3,M4Val,false);
+      EndFormat;
+      Gray_Divider(0,1); 
+      totaldif1 = totaldif1 + totdif1;
+      totaldif2 = totaldif2 + totdif2;
+      totaldif3 = totaldif3 + totdif3;
+      StartFormat(15);
+      OutString(0,0,"Баланс(Общий)",false);
+      OutString(20,0,"",false);
+      if(currentcompany>2)then begin
+				OutString(20,0,"",false);
+			end;
+			OutString(50,0,"",false);
+			OutString(150,0,"",false);
+			OutString(185,0,"",false);
+			OutString(210,0,"",false);
+			OutString(245,0,"",false);
+      OutVal(280,0,totaldif1,M4Val,false);
+      OutString(20,0,"",false);
+			OutString(50,0,"",false);
+      OutVal(400,0,totaldif2,M4Val,false);
+      OutVal(440,0,totaldif3,M4Val,false);
+      EndFormat;
+      totdif1 = 0;
+      totdif2 = 0;
+      totdif3 = 0;
+      totaldif1 = 0;
+      totaldif2 = 0;
+      totaldif3 = 0;
+      totalcost = 0;
+      totalprice = 0;
+      sumrebate = 0; irebate = 0;
+      sumprice = 0;
+      totalsum3 = 0;
+    end;
+  
+      EndJob;
+  return;
+end;

@@ -1,0 +1,128 @@
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external procedure GetBaseCurncy(Integer,var string);
+
+//SetLangMode(LangRussian,"RUS",0);//Edit ------Dima------16.12.2014
+
+
+global procedure CustDebByCompRn(record RcVc RepSpec)
+begin
+	integer i,mtrw,curcmp;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBrw;
+	record CUVc	CUr;
+	record IVVc IVr;
+	boolean TrHs,testf,findar;
+	record ARVc ARr;
+	string 5 basecur,curr;
+	record LocationVc Locr;
+	array string 100 aloc,acomp;
+	array val sum;
+	val totsum;
+	integer acnt,j;
+	val t,fr,to1,to2,br1,br2;
+
+	//curr = "AZN";
+	GetBaseCurncy(1,curr); //Edit----------------------Dima  28.01.2016
+	if(currentcompany==10)THEN BEGIN
+		curr = "PLN";
+	end;
+	if(currentcompany==11 or currentcompany==12)THEN BEGIN
+		curr = "IRR";
+	end;
+
+	CUr.Code = RepSpec.f1;
+	if(nonblank(RepSpec.f1) and readfirstmain(CUr,1,true))then begin
+		StartReportNoheaderJob(USetStr(31257));
+		curcmp = currentcompany;
+	
+	
+		blockload(CBb);
+		
+		startformat(15);
+			outstring(0,0,USetStr(31258),false);
+			outstring(70,0,CUr.Code,false);
+			outstring(140,0,CUr.Name,false);
+			outstring(250,0,USetStr(31262),false);
+			outstring(300,0,currentdate,false);
+		endformat;
+		
+		startformat(15);
+			outstring(0,0,USetStr(31259),false);
+			outstring(100,0,USetStr(31218),false);
+			outstring(200,0,USetStr(31260) & " " & curr,false);
+		endformat;
+		
+		mtrw = matrowcnt(CBb);
+	
+		For(i=0;i<mtrw;i=i+1) begin
+			matrowget(CBb,i,CBrw);
+			setcompany(i+1,false);
+			fr = 1;
+			to1 = 1;
+		  GetBaseCurncy(1,basecur);
+			if(basecur!=curr)then begin
+		    GetFullCurncyRate(curr,CurrentDate,fr,to1,to2,br1,br2);
+				if(fr==0 or to1==0)then begin
+					fr = 1;
+					to1 = 1;
+				end;
+			end;
+			
+			ARr.CustCode = CUr.Code;
+			TrHs = true;
+			while(loopkey("CustCode",ARr,1,TrHs))begin
+				testf = true;
+				if(ARr.CustCode!=CUr.Code)then begin TrHs = false; testf = false; end;
+				
+				if(testf)then begin
+					
+					IVr.SerNr = ARr.InvoiceNr;
+					if(readfirstmain(IVr,1,true))then begin
+						findar = true;
+						Locr.Code = IVr.Location;
+						readfirstmain(Locr,1,true);
+						For(j=0;j<acnt;j=j+1) begin
+	  					if(aloc[j]==Locr.Name and acomp[j]==CBrw.CompName)then begin
+	  						sum[j] = sum[j] + ARr.BookRVal*fr/to1;
+	  						findar = false;
+	  					end;
+						end; 
+						if(findar)then begin
+							sum[acnt] = ARr.BookRVal*fr/to1;
+							acomp[acnt] = CBrw.CompName;
+							aloc[acnt] = Locr.Name;
+							acnt = acnt + 1;
+						end;
+					end;
+				end;
+			end;
+			resetloop(ARr);
+			
+			resetcompany(curcmp);
+		end; 
+			totsum = 0;
+			For(i=0;i<acnt;i=i+1) begin
+				startformat(15);
+					outstring(0,0,acomp[i],false);
+					outstring(100,0,aloc[i],false);
+					outstring(200,0,sum[i],false);
+				endformat;			
+				totsum = totsum + sum[i];
+			end; 
+			gray_divider(0,1);
+			startformat(15);
+				outstring(0,0,USetStr(31211),false);
+				outstring(200,0,totsum,false);
+			endformat;			
+		
+		endjob;
+	end else begin
+		StartReportNoheaderJob(USetStr(31257));
+			startformat(15);
+				outstring(100,0,USetStr(31261),false);
+			endformat;
+		endjob;
+	end;
+	
+return;
+end;

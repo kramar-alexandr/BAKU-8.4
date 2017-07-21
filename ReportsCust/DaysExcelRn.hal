@@ -1,0 +1,400 @@
+external function string 255 MonthName(Date);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+
+external procedure XmlXlsxWorkBegin(string,string);
+external procedure CreateSheetsXLSX(integer,array string,string,integer,boolean);
+external procedure EndSheet(integer,string,integer);
+external procedure SetSheetsCols(integer,array val,array integer,string);
+external procedure BeginSheetData(integer,string);
+external procedure EndSheetData(integer,string);
+external procedure BeginRow(integer,string,integer,integer,val);
+external procedure EndRow(integer,string,var integer);
+external procedure StringCell(integer,string,var integer,integer,integer,string,var array string,var integer,var integer);
+external procedure NumericCell(integer,string,var integer,integer,integer,val);
+external procedure EmptyCell(integer,string,var integer,integer,integer,integer);
+external procedure MergeCells(integer,string,array string,integer);
+external procedure FillSharedStrings(string,array string,integer,integer,array string);
+external procedure ConvertToXLSX(string,boolean);
+
+SetLangMode(LangRussian,"RUS",0);
+
+global 
+procedure DaysExcelRn(record RcVc RepSpec,var area areatofile)
+begin
+  array string 255 LocArr,MonthArr,NameArr;
+  boolean TrHs,testf,cnf,emptyf,giftf;
+  date startdate,enddate;
+  record IVVc IVr,tIVr;
+  record LocationVc Locr;
+  record GCSVc GCSr;
+  row IVVc IVrw,tIVrw;
+  string 20 key;
+  string 255 tstr,month;
+  integer keycnt,rwcnt,rwcnt2,LAi,MAi,i,j;
+  val sumoborot,sumvozvrat;
+  vector boolean LocInArr,MonthInArr,MonthLoc,LocDayNameObor,LocDayNameVozv;
+  vector string 100 LocName;
+  vector val Oborot,Vozvrat;
+  
+  array string 50 sheetNames;
+	array val sheetColls;
+	array string 21 mergeCell;
+	string 255 fileToSave;
+	integer qtyOfSheets,sheetnum,rownum,colnum,style,qtyOfEmpStr;
+	array string 100 SharedStrings;
+	integer numOfUniqueSharedStrings,numOfSharedStrings,qtyMergeCell;
+	string 6 reportName;
+  array string 255 mas;
+  array integer lvlArray;
+  
+  setexportcodepage("UTF8");
+  
+  if (nonblank(RepSpec.sStartDate)) then begin
+    startdate = RepSpec.sStartDate;
+    enddate = RepSpec.sEndDate;
+  end else begin
+    startdate = StringToDate("01/01/" & getyear(CurrentDate));
+    enddate = StringToDate("31/12/" & getyear(CurrentDate));
+  end;
+  IVr.InvDate = startdate;
+  if (nonblank(RepSpec.ObjStr)) then begin
+    IVr.Location = RepSpec.ObjStr;
+    key = "Location";
+    keycnt = 2;
+  end else begin
+    key = "InvDate";
+    keycnt = 1;
+  end;
+  TrHs = true;
+  while(loopkey(key,IVr,keycnt,TrHs))begin
+    testf = true;
+    if (key=="Location") then begin
+      if (IVr.Location!=RepSpec.ObjStr) then begin TrHs = false; testf = false; end;
+      if (IVr.InvDate>enddate) then begin testf = false; end;
+    end else begin
+      if (IVr.InvDate>enddate) then begin TrHs = false; testf = false; end;
+    end;
+    if (IVr.OKFlag==0) then begin testf = false; end;
+    if (IVr.Invalid==1) then begin testf = false; end;
+    if (IVr.CustCode=="FOB36") then begin testf = false; end;
+    if (testf) then begin
+      if (currentcompany==9) then begin
+        IVr.Location = "CS";
+        if (LocInArr[IVr.Location]==false) then begin
+          LocInArr[IVr.Location] = true;
+          LocArr[LAi] = IVr.Location;
+          LAi = LAi + 1;
+          LocName[IVr.Location] = "CreativeSystem";
+        end;
+      end else begin
+        if (LocInArr[IVr.Location]==false) then begin
+          LocInArr[IVr.Location] = true;
+          LocArr[LAi] = IVr.Location;
+          LAi = LAi + 1;
+          Locr.Code = IVr.Location;
+          if (ReadFirstMain(Locr,1,true)) then begin
+            LocName[IVr.Location] = Locr.Name;
+          end else begin
+            LocName[IVr.Location] = IVr.Location;
+          end;
+        end;
+      end;
+      cnf = false;
+      month = getmonth(IVr.InvDate) & "_" & getyear(IVr.InvDate);
+      if (MonthInArr[month]==false) then begin
+        MonthInArr[month] = true;
+        MonthArr[MAi] = month;
+        MAi = MAi + 1;
+      end;
+      MonthLoc[month & ";" & IVr.Location] = true;
+      tstr = IVr.Location & ";" & month & ";" & getday(IVr.InvDate) & ";";
+      if (IVr.PayDeal=="CN") then begin
+        Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] - IVr.BaseSum4;
+        Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1;
+        cnf = true;
+      end;
+      sumvozvrat = 0;
+      sumoborot = 0;
+      
+      /*
+      
+      
+      
+      rwcnt = matrowcnt(IVr);
+      giftf = false;
+      giftsum = 0;
+      for (i=0;i<rwcnt;i=i+1) begin
+        matrowget(IVr,i,IVrw);
+        if (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) then begin
+          GCSr.SerNr = IVrw.GCNr;
+          readfirstmain(GCSr,1,true);
+          tIVr.SerNr = GCSr.InvSerNr;
+          readfirstmain(tIVr,1,true);
+          rwcnt2 = matrowcnt(tIVr);
+          giftf = false;
+          for (j=0;j<rwcnt2;j=j+1) begin
+            matrowget(IVr,j,tIVrw);
+            if (tIVrw.PayMode=="G") then begin
+              giftf = true;
+              j = rwcnt2;
+            end;
+          end;
+          
+          if (!giftf) then begin
+            giftsum = giftsum + MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+          end;
+        end;
+      end;
+      
+      
+      if (giftsum<=IVr.BaseSum4)
+      */
+      
+      
+      rwcnt = matrowcnt(IVr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        matrowget(IVr,i,IVrw);
+        if (IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
+          giftf = false;
+          for (j=0;j<rwcnt;j=j+1) begin
+            matrowget(IVr,j,tIVrw);
+            if (tIVrw.PayMode=="G") then begin
+              giftf = true;
+              j = rwcnt;
+            end;
+          end;
+          if (!giftf) then begin
+            if (LocDayNameObor[tstr & "GV"]==false) then begin
+              LocDayNameObor[tstr & "GV"] = true;
+              Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + 1;
+            end;
+            sumoborot = sumoborot + MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+          end;
+        end;
+        if (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) then begin
+          GCSr.SerNr = IVrw.GCNr;
+          readfirstmain(GCSr,1,true);
+          tIVr.SerNr = GCSr.InvSerNr;
+          readfirstmain(tIVr,1,true);
+          rwcnt2 = matrowcnt(tIVr);
+          giftf = false;
+          for (j=0;j<rwcnt2;j=j+1) begin
+            matrowget(tIVr,j,tIVrw);
+            if (tIVrw.PayMode=="G") then begin
+              giftf = true;
+              j = rwcnt2;
+            end;
+          end;
+          if (!giftf) then begin
+            if (LocDayNameVozv[tstr & "GV"]==false) then begin
+              LocDayNameVozv[tstr & "GV"] = true;
+              Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] + 1;
+            end;
+            sumvozvrat = sumvozvrat - MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+          end else begin
+            sumoborot = sumoborot - MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+          end;
+        end;
+        if (IVrw.stp==kInvoiceRowTypeNormal) then begin
+          if (cnf) then begin
+            if (LocDayNameVozv[tstr & IVrw.ArtCode]==false) then begin
+              LocDayNameVozv[tstr & IVrw.ArtCode] = true;
+              Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] + 1;
+            end;
+          end else begin
+            if (IVrw.Quant<0) then begin
+              if (LocDayNameVozv[tstr & IVrw.ArtCode]==false) then begin
+                LocDayNameVozv[tstr & IVrw.ArtCode] = true;
+                Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] + 1;
+              end;
+              sumvozvrat = sumvozvrat + MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+            end else begin
+              if (LocDayNameObor[tstr & IVrw.ArtCode]==false) then begin
+                LocDayNameObor[tstr & IVrw.ArtCode] = true;
+                Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + 1;
+              end;
+              sumoborot = sumoborot + MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+            end;
+          end;
+        end;
+      end;
+      if (cnf) then begin
+      end else begin
+        if (Vozvrat[tstr & "naim"]!=0) then begin
+          Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1;
+          Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumvozvrat;
+        end;
+        if (Oborot[tstr & "naim"]!=0) then begin
+          Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1;
+          Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
+        end;
+      end;
+    end;
+  end;
+  
+  reportName = "DaysExcelRn";
+	if(windowsmode==1)then begin
+		fileToSave = "tmpxlsx.xlsx";
+	end else begin
+		fileToSave = "/tmpxlsx.xlsx";
+	end;
+	deletefolder(Left(fileToSave,(len(fileToSave) - 5)));
+  for (MAi=0;MAi<MonthArr.length;MAi=MAi+1) begin
+    for (LAi=0;LAi<LocArr.length;LAi=LAi+1) begin
+      if (MonthLoc[MonthArr[MAi] & ";" & LocArr[LAi]]) then begin
+        sheetNames[qtyOfSheets] = UpperCase(left(MonthName(StringToDate("1/" & left(MonthArr[MAi],(len(MonthArr[MAi]) - 5)) & "/2000")),3)) & " " & LocName[LocArr[LAi]];
+        qtyOfSheets = qtyOfSheets + 1;
+      end;
+    end;
+  end;
+  if (qtyOfSheets==0) then begin
+    emptyf = true;
+    sheetNames[qtyOfSheets] = "Empty";
+    qtyOfSheets = qtyOfSheets + 1;
+  end;
+  
+	sheetColls[0] = 2.86;
+	sheetColls[1] = 6.86;
+	sheetColls[2] = 12.14;
+	sheetColls[3] = 9.14;
+	sheetColls[4] = 9.14;
+	sheetColls[5] = 12.14;
+	sheetColls[6] = 9.14;
+	sheetColls[7] = 9.14;
+  sheetColls[8] = 12.14;
+  qtyMergeCell = 4;
+  mergeCell[0] = "C6:E6";
+  mergeCell[1] = "F6:H6";
+  mergeCell[2] = "I6:I7";
+  mergeCell[3] = "B6:B7";
+	
+	numOfUniqueSharedStrings = 0;
+	numOfSharedStrings = 0;
+	XmlXlsxWorkBegin(fileToSave,reportName);
+	CreateSheetsXLSX(qtyOfSheets,sheetNames,fileToSave,0,true);
+	sheetnum = 0;
+  if (emptyf) then begin
+    sheetnum = sheetnum + 1;
+    SetSheetsCols(sheetnum,sheetColls,lvlArray,fileToSave);
+    BeginSheetData(sheetnum,fileToSave);
+    EndSheetData(sheetnum,fileToSave);
+    MergeCells(sheetnum,fileToSave,mergeCell,qtyMergeCell);
+    EndSheet(sheetnum,fileToSave,0);
+  end;
+  for (MAi=0;MAi<MonthArr.length;MAi=MAi+1) begin
+    for (LAi=0;LAi<LocArr.length;LAi=LAi+1) begin
+    if (MonthLoc[MonthArr[MAi] & ";" & LocArr[LAi]]) then begin
+        sheetnum = sheetnum + 1;
+        SetSheetsCols(sheetnum,sheetColls,lvlArray,fileToSave);
+        BeginSheetData(sheetnum,fileToSave);
+        rownum = 1;
+        
+        colnum = 3;
+        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+          style = 13;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Отчет за день",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+        EndRow(sheetnum,fileToSave,rownum);
+        rownum = rownum + 1;
+        colnum = 2;
+        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+          style = 12;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,LocName[LocArr[LAi]],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+        EndRow(sheetnum,fileToSave,rownum);
+        colnum = 2;
+        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+          style = 12;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,startdate & ":" & enddate,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+        EndRow(sheetnum,fileToSave,rownum);
+        rownum = rownum + 1;
+        colnum = 2;
+        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+          style = 2;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"День",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          style = 3;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Оборот",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          style = 4;
+          qtyOfEmpStr = 1;
+          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+          style = 5;
+          qtyOfEmpStr = 1;
+          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+          style = 3;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Возвраты",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          style = 4;
+          qtyOfEmpStr = 1;
+          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+          style = 5;
+          qtyOfEmpStr = 1;
+          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+          style = 6;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Сумма",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+        EndRow(sheetnum,fileToSave,rownum);
+        colnum = 2;
+        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+          style = 7;
+          qtyOfEmpStr = 1;
+          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+          style = 8;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Приход",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          style = 9;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. чеков",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          style = 10;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. наим.",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          style = 8;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Возврат",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          style = 9;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. чеков",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          style = 10;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. наим.",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          style = 11;
+          qtyOfEmpStr = 1;
+          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+        EndRow(sheetnum,fileToSave,rownum);
+        for (i=1;i<32;i=i+1) begin
+          tstr = LocArr[LAi] & ";" & MonthArr[MAi] & ";" & i & ";";
+          if ((Oborot[tstr & "chek"]!=blankval) or (Vozvrat[tstr & "chek"]!=blankval)) then begin
+            colnum = 2;
+            BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+              style = 16;
+              NumericCell(sheetnum,fileToSave,colnum,rownum,style,i);
+              style = 15;
+              NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "sum"]);
+              style = 17;
+              NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "chek"]);
+              style = 18;
+              NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "naim"]);
+              style = 15;
+              NumericCell(sheetnum,fileToSave,colnum,rownum,style,Vozvrat[tstr & "sum"]);
+              style = 17;
+              NumericCell(sheetnum,fileToSave,colnum,rownum,style,Vozvrat[tstr & "chek"]);
+              style = 18;
+              NumericCell(sheetnum,fileToSave,colnum,rownum,style,Vozvrat[tstr & "naim"]);
+              style = 14;
+              NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "sum"] + Vozvrat[tstr & "sum"]);
+            EndRow(sheetnum,fileToSave,rownum);
+          end;
+        end;
+        colnum = 2;
+        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+          style = 1;
+          qtyOfEmpStr = 8;
+          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+        EndRow(sheetnum,fileToSave,rownum);
+        
+        
+        
+        
+        EndSheetData(sheetnum,fileToSave);
+        MergeCells(sheetnum,fileToSave,mergeCell,qtyMergeCell);
+        EndSheet(sheetnum,fileToSave,0);
+      end;
+    end;
+  end;
+  FillSharedStrings(fileToSave,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings,mas);
+	ConvertToXLSX(fileToSave,false);
+	MilliSleep(2000);
+	addfiletoarea(fileToSave,areatofile,false);
+	delete_file(fileToSave);
+  
+  return;
+end;

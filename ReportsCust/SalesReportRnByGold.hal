@@ -1,0 +1,282 @@
+external procedure GetCurncyRateOnDate(string,date,var val);
+external inner procedure ExtractObj(string,var Integer,var string);
+external inner procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external inner function roundmode SetRoundModeD(Integer);
+external inner function Boolean SetInSet2(string,string);
+external inner function val AbsoluteVal(val);
+
+
+procedure Sort(var array string name, var array val qty, var array val sum,integer cnt)
+begin
+	integer i,j;
+	val fqty,fsum;
+	string 100 fname;
+	
+	if(cnt>1)then begin
+		For(j=0;j<cnt;j=j+1) begin
+			For(i=0;i<cnt-1;i=i+1) begin
+				if(qty[i]<qty[i+1])then begin
+					fname = name[i];
+					fqty = qty[i];
+					fsum = sum[i];
+					name[i] = name[i+1];
+					qty[i] = qty[i+1];
+					name[i] = name[i+1];
+					name[i+1] = fname;
+					qty[i+1] = fqty;
+					name[i+1] = fname;
+				end;
+			end; 
+		end;
+	end;
+
+return;
+end;
+
+
+global
+procedure SalesReportExtRnByGold(record RcVc RepSpec)
+begin
+  record LocalMachineVc LMr;
+  Date sd,ed;
+  Boolean TrHs,testf;
+  record IVVc IVr;
+  row IVVc IVrw;
+  integer i,keyi,mtrw,k;
+  string 20 keystr;
+  record INVc INr;
+  string 100 classname,classcode;
+  record DIVc DIr;
+  val brandfifo;
+  string 5 brandcur;
+  record PLVc PLr;
+  val fr,to1,to2,br1,br2;
+  val ivfr,ivto1;
+  val basesum,curcusm,curprice,fifob1;
+  boolean testf1,userlocation;
+  string 50 location;
+  record UserVc User;
+  integer pos;
+  string 50 uloc;
+  boolean updst;
+  integer total_qty;
+  val total_cost,total_price,total_gp;
+  string 200 classfind,model,brand;
+  array string 100 material,collection;
+  array val matqty,colqty,matsum,colsum;
+  integer matint,colint,j;
+  boolean matfound, colfound;
+  string 100 blankmat,blankcol;
+  val blankmatqty,blankcolqty,blankmatsum,blankcolsum
+
+  SetLangMode(LangRussian,"RUS",0);
+  		
+  	
+    StartReportNoHeaderJob("Отчёт продаж по материалам и коллекциям");
+    
+    sd = RepSpec.sStartDate;
+    ed = RepSpec.sEndDate;
+    location = RepSpec.f1;
+  
+  	matint = 0;
+  	colint = 0;
+  	
+		userlocation = false;
+		User.Code = currentuser;
+		if(readfirstmain(User,1,true))then begin
+			if(nonblank(User.UserLocations) and usercanaction("AllowReportWithUserLoc",false))then begin
+				userlocation = true;
+				pos = 0;
+				ExtractObj(User.UserLocations,pos,uloc);
+				while (nonblank(uloc)) begin
+					if(uloc==location)then begin
+						userlocation = false;
+					end;
+					ExtractObj(User.UserLocations,pos,uloc);
+				end;
+			end;
+		end;
+	
+    if(userlocation)then begin
+			startformat(15);
+				outstring(50,0,"Вам не разрешен отчет по данному складу, выберите пожалуйста ваш склад",false);
+			endformat;
+		end else begin
+			if(nonblank(RepSpec.sStartDate) and nonblank(RepSpec.sEndDate))then begin
+
+				total_qty = 0;
+				total_cost = 0;
+				total_price = 0;
+				total_gp = 0;
+				
+				IVr.TransDate = sd;
+				keyi = 1;
+				keystr = "TransDate";
+				if(nonblank(location))then begin	
+					IVr.Location = location;
+					keyi = 2;
+					keystr = "Location";
+				end;
+			
+				TrHs =true;
+				while(loopkey(keystr,IVr,keyi,TrHs))begin
+					testf = true;
+					if(IVr.InvDate<sd)then begin testf = false; end;
+					if(IVr.InvDate>ed)then begin TrHs = false; testf = false; end;
+					if(nonblank(location) and IVr.Location!=location)then begin TrHs = false; testf = false; end;
+					if(IVr.OKFlag==0)then begin testf = false; end;
+					if(IVr.Invalid>0)then begin testf = false; end;
+				
+					if(testf)then begin
+						mtrw = matrowcnt(IVr);
+						For(i=0;i<mtrw;i=i+1) begin
+							matrowget(IVr,i,IVrw);
+							if(IVrw.stp==kInvoiceRowTypeNormal and nonblank(IVrw.ArtCode))then begin
+								INr.Code = IVrw.ArtCode;
+								readfirstmain(INr,1,true);
+								testf1=true;
+							
+								if(nonblank(RepSpec.f2))then begin
+									testf1=SetInSet2(RepSpec.f2,INr.DispGroups);
+								end;
+									if(testf1)then begin
+										if(nonblank(RepSpec.f4) or nonblank(RepSpec.f5))then begin
+											brand = "";
+											model = "";
+											pos = 0;
+											classfind = "";
+											ExtractObj(INr.DispGroups,pos,classfind);
+											while(nonblank(classfind))begin
+												DIr.Code = classfind;
+												readfirstmain(DIr,1,true);
+												if(DIr.CType=="BRAND")then begin
+													brand = DIr.Code;
+												end;
+												if(DIr.CType=="MODEL")then begin
+													model = DIr.Code;
+												end;
+												ExtractObj(INr.DispGroups,pos,classfind);
+											end;
+											if(nonblank(RepSpec.f4) and brand!=RepSpec.f4)then begin
+												testf1 = false;
+											end;
+											if(nonblank(RepSpec.f5) and model!=RepSpec.f5)then begin
+												testf1 = false;
+											end;
+										end;
+									end;
+								
+								if(testf1)then begin
+										//outstring(0,0,INr.Reference,false);
+										//outstring(0,0,INr.Metal,false);
+										
+										
+										fr = IVr.FrRate;
+										to1 = IVr.ToRateB1;
+										if(fr==0 or to1==0)then begin
+											fr = 1;
+											to1 = 1;
+										end;
+										IVrw.Price = IVrw.Price/fr*to1;
+										IVrw.Sum = IVrw.Sum/fr*to1;
+							
+										matfound = false;
+										For(j=0;j<matint;j=j+1) begin
+	  									if(INr.Metal==material[j])then begin
+												matqty[j] = matqty[j] + IVrw.Quant;
+												matsum[j] = matsum[j] + IVrw.Sum;
+												matfound = true;
+	  									end;
+										end; 
+										if(matfound==false)then begin
+											if(nonblank(INr.Metal))then begin
+												material[matint] = INr.Metal;
+												matqty[matint] = IVrw.Quant;
+												matsum[matint] = IVrw.Sum;
+												matint = matint + 1;
+											end else begin
+												blankmatqty = blankmatqty + IVrw.Quant;
+												blankmatsum = blankmatsum + IVrw.Sum;
+											end;
+										end;
+										
+										colfound = false;
+										For(j=0;j<colint;j=j+1) begin
+	  									if(INr.Reference==collection[j])then begin
+												colqty[j] = colqty[j] + IVrw.Quant;
+												colsum[j] = colsum[j] + IVrw.Sum;
+												colfound = true;
+	  									end;
+										end; 
+										if(colfound==false)then begin
+											if(nonblank(INr.Reference))then begin
+												collection[colint] = INr.Reference;
+												colqty[colint] = IVrw.Quant;
+												colsum[colint] = IVrw.Sum;
+												colint = colint + 1;
+											end else begin
+												blankcolqty = blankcolqty + IVrw.Quant;
+												blankcolsum = blankcolsum + IVrw.Sum;
+											end;
+										end;
+								end;
+							end;
+						end; 
+					end;
+				end;
+				
+				if(blankmatqty!=0 or blankmatsum!=0)then begin
+					material[matint] = "Не указан";
+					matqty[matint] = blankmatqty;
+					matsum[matint] = blankmatsum;
+					matint = matint + 1;
+				end;
+				Sort(material,matqty,matsum,matint);
+				startformat(15);
+					outstring(0,0,"Металл",false);
+					outstring(50,0,"Проданно",false);
+					outstring(100,0,"Сумма",false);
+				endformat;
+				For(i=0;i<matint;i=i+1) begin
+	  			startformat(15);
+						outstring(0,0,material[i],false);
+						outstring(50,0,matqty[i],false);
+						outstring(100,0,matsum[i],false);
+					endformat;
+				end; 
+				
+				
+				
+				startformat(15);
+				endformat;
+				black_divider(0,1);
+				
+				if(blankcolqty!=0 or blankcolsum!=0)then begin
+					collection[colint] = "Не указан";
+					colqty[colint] = blankcolqty;
+					colsum[colint] = blankcolsum;
+					colint = colint + 1;
+				end;
+				Sort(collection,colqty,colsum,colint);
+				startformat(15);
+					outstring(0,0,"Коллекция",false);
+					outstring(50,0,"Проданно",false);
+					outstring(100,0,"Сумма",false);
+				endformat;
+				For(i=0;i<colint;i=i+1) begin
+	  			startformat(15);
+						outstring(0,0,collection[i],false);
+						outstring(50,0,colqty[i],false);
+						outstring(100,0,colsum[i],false);
+					endformat;
+				end; 
+
+			end else begin
+				startformat(15);
+					outstring(100,0,"Определите даты",false);
+				endformat;
+			end;
+		end;
+	EndJob;
+return;
+end;

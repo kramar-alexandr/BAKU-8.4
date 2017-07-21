@@ -1,0 +1,105 @@
+external function string 255 MonthName(Date);
+
+SetLangMode(LangRussian,"RUS",0);
+
+global
+procedure IVbyLocRn(record RcVc RepSpec)
+begin
+	record IVVc IVr;
+	Date sd,ed;
+	boolean TrHs,exportf;
+	string 100 tstr,location;
+	integer k,currcomp,rwcnt,oldcompany;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record LocationVc Locr;
+	
+	vector boolean LocInArr;
+	array string 30 LocArr;
+	integer i;
+	vector boolean MonYearInArr;
+	array string 30 MonYearArr;
+	integer j;
+	vector integer qIVinMonth;
+	array string 30 CompArr;
+	integer CAi;
+	
+	oldcompany = CurrentCompany;
+	i = 0;
+	sd = StringToDate("01/01/14");
+	ed = StringToDate("31/12/15");
+	BlockLoad(Compb);
+	rwcnt = MatRowCnt(Compb);
+	for (k=0;k<rwcnt;k=k+1) begin
+		MatRowGet(Compb,k,Comprw);
+		currcomp = StringToInt(Comprw.CompCode);
+		exportf = false;
+		if (((currcomp>=1 and currcomp<=9) or (currcomp>=13)) and SetCompanyCode(Comprw.CompCode,false) and Comprw.ActiveStatus==0) then begin exportf = true; end;
+		if (exportf) then begin
+			CompArr[CAi] = Comprw.CompName;
+			CAi = CAi + 1;
+			j = 0;
+			TrHs = true;
+			IVr.InvDate = sd;
+			while (LoopKey("InvDate",IVr,1,TrHs)) begin
+				if (IVr.InvDate>ed) then begin TrHs = false; end;
+				if (TrHs and IVr.Invalid==0 and IVr.OKFlag<>0) then begin
+					if (currcomp==9) then Begin
+					 	location = "Creative System";
+					end else begin
+						if nonblank(IVr.Location) then begin
+							Locr.Code = IVr.Location;
+							if (ReadFirstMain(Locr,1,true)) then begin
+								location = Locr.Name;
+							end else begin
+								location = "";
+							end;
+						end else begin
+							location = "";
+						end;
+					end;
+					if !LocInArr[location] then begin
+						LocInArr[location] = true;
+						LocArr[i] = location;
+						i = i + 1;
+					end;
+					tstr = GetYear(IVr.InvDate) & "_" & GetMonth(IVr.InvDate);
+					if !MonYearInArr[tstr] then begin
+						MonYearInArr[tstr] = true;
+						MonYearArr[j] = tstr;
+						j = j + 1;
+					end;
+					qIVinMonth[Comprw.CompName & ":" & tstr & ":" & location] = qIVinMonth[Comprw.CompName & ":" & tstr & ":" & location] + 1;
+				end;
+			end;
+			ResetLoop(IVr);
+		end;
+	end;
+	ResetCompany(oldcompany);
+	StartReportNoHeaderJob("Количество счет-фактур по складам");
+		for (k=0;k<CompArr.length;k=k+1) begin
+			StartFormat(15);
+				OutString(0,0,"Компания - " & CompArr[k],false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"Месяц",false);
+				OutString(70,0,"Склад",false);
+				OutString(150,0,"Количество",false);
+			EndFormat;
+			for (i=0;i<MonYearArr.length;i=i+1) begin
+				for (j=0;j<LocArr.length;j=j+1) begin
+					if (qIVinMonth[CompArr[k] & ":" & MonYearArr[i] & ":" & LocArr[j]]<>0) then begin
+						StartFormat(15);
+								OutString(0,0,MonYearArr[i],false);
+							OutString(70,0,LocArr[j],false);
+							OutString(150,0,qIVinMonth[CompArr[k] & ":" & MonYearArr[i] & ":" & LocArr[j]],false);
+						EndFormat;
+					end;
+				end;
+			end;
+			StartFormat(15);
+			EndFormat;
+		end;
+	EndJob;
+	
+end;

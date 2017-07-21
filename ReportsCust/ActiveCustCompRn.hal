@@ -1,0 +1,235 @@
+external function Boolean SetInSet2(string,string);
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer); 
+external procedure ExtractObj(string,var Integer,var string);
+
+SetLangMode(LangRussian,"RUS",0);
+
+
+
+global
+procedure ActiveCustCompRn(record RcVc RepSpec) //Edit ************************** Sasha2, Friday, 27 June 2013 {
+BEGIN
+  record CUVc CUr;
+  record CSVc CSr;
+  record CCatVc CCatR;
+  record IVvc IVr; 
+  row IVvc IVrw; 
+  record ItemHistvc IHr; 
+  record Uservc Userr;
+  record  CompaniesBlock Companiesb; 
+  row  CompaniesBlock Companiesrw; 
+  record INvc INr;
+  record DIvc DIr;
+  Boolean TrHs,testf;
+  string 255 frcc,tocc;
+  string 255 customer,key,classification,tempGroup,storeGroup; 
+  integer keyCount, pos,posGroup; 
+  Boolean TS,testf1,print; 
+  val finalSum,tempSum,compSum,ivfr,ivto,fr,to1,to2,br1,br2; 
+  Integer rwcnt,i,j,oldcomp;  
+  longint invCount;
+  string 20 curncy; 
+  Array string 50 carncy;
+  Array Boolean achangecrncyf;
+  Integer acrncnt,blcnt;
+
+
+  CntPOSCurrencies(carncy,achangecrncyf,acrncnt);
+  curncy = carncy[0];
+  BlockLoad(Companiesb);
+  blcnt = MatRowCnt(Companiesb);
+  frcc = FirstInRange(RepSpec.f1,20);
+  tocc = LastInRange(RepSpec.f1,20);
+
+
+  startreportnoheaderjob("Статистика клиент-компания");
+  customer = RepSpec.f1;
+
+	Startformat(15);
+		outstring(60,0,"Период:",true);
+		outstring(130,0,RepSpec.sStartDate & chr(58) & RepSpec.sEndDate,true);	
+	endformat;
+
+ 	if (NonBlank(RepSpec.f1)) then begin
+		Startformat(15);
+			outstring(60,0,"Клиент:",true);
+			outstring(130,0,RepSpec.f1,true);	
+		endformat;
+	end else begin;
+		Startformat(15);
+			outstring(60,0,"Клиент:",true);
+			outstring(130,0,"По всем клиентам",true);
+			//goto CustErrorEnd;
+		endformat;
+	end; 
+
+	if (NonBlank(RepSpec.f2)) then begin
+		Startformat(15);
+			outstring(60,0,"Компания:",true);
+			ExtractObj(RepSpec.f2,posGroup,tempGroup);
+			while (nonblank(tempGroup)) begin
+					for (j=1;j<=blcnt;j=j+1) begin
+							MatRowGet(Companiesb,j-1,Companiesrw);
+							if (tempGroup==Companiesrw.CompCode) then begin 
+								Startformat(15);
+									outstring(130,0,Companiesrw.CompName,true) 
+								endformat;
+							end;		
+					end;										 																		
+				ExtractObj(RepSpec.f2,posGroup,tempGroup);
+			end;
+		endformat;
+	end else begin;
+		Startformat(15);
+			outstring(60,0,"Компания:",true);
+			outstring(130,0,"Все компании",true);	
+		endformat;
+	end;
+
+
+	Startformat(15);
+		outstring(50,0,"Код клиента",true);
+		outstring(125,0,"Имя клиента",true);
+		outstring(200,0,"Компания",true);
+		outstring(275,0,"Количество чеков",true);
+		outstring(350,0,"Сумма в AZN",true);
+	endformat;
+
+	Black_Divider(0,1); 
+
+	finalSum = 0;
+	posGroup = 0;
+	storeGroup = "";
+	oldcomp = CurrentCompany;
+
+	if (nonblank(RepSpec.f2)) then begin
+		ExtractObj(RepSpec.f2,posGroup,tempGroup);
+			while (nonblank(tempGroup)) begin
+					storeGroup = storeGroup  & tempGroup& chr(44);										 																		
+				ExtractObj(RepSpec.f2,posGroup,tempGroup);
+			end;
+	 end;
+
+	
+	
+																 
+	for (j=1;j<=blcnt;j=j+1) begin
+		SetCompany(j,false);
+	 	CUr.Code =customer;
+		TrHs = true;
+		compSum = 0;
+		MatRowGet(Companiesb,j-1,Companiesrw);
+	 	if (nonblank(RepSpec.f2) and (SetInSet2(Companiesrw.CompCode,storeGroup)==false)) then begin TrHs = false; end;
+
+	 	while (LoopMain(CUr,1,TrHs)) begin
+			invCount = 0;
+			tempSum = 0;
+			testf = true;
+			if (nonblank(customer) and CUr.Code!=customer) then begin TrHs = false; testf = false; end;	
+			//if (GetCUTurnover(CUr,"","","salesexclvat",RepSpec.sStartDate,RepSpec.sEndDate,"","")==0) then begin testf = false; end;
+      if (NonBlank(RepSpec.f3) and SetInSet(RepSpec.f3,CUr.Classification)==false) then begin testf = false; end; //Edit***************************Sasha2,17:41 04.07.2017
+			if (testf) then begin	
+
+				TS = true;
+				IVr.CustCode = CUr.Code;
+				IVr.InvDate = RepSpec.sStartDate;
+				key = "CustDate";
+				keyCount = 2;
+	
+				/*if (blank(customer) and nonblank(RepSpec.FirstAcc)) then begin
+					IVr.Location = RepSpec.FirstAcc;
+					IVr.InvDate = RepSpec.sStartDate;
+					key = "Location";
+					keyCount = 2;*/
+			
+					/*if (ReadFirstKey("CustDate",IVr,2,false)) then begin
+						if ((IVr.CustCode==CUr.Code and IVr.InvDate>=RepSpec.sStartDate and IVr.InvDate<=RepSpec.sEndDate)==false) then begin TS = true; end;
+					end else begin
+						TS = false;
+					end;*/
+				//end;
+		
+					while (LoopKey(key,IVr,keyCount,TS)) begin
+					testf1 = true;
+						if (IVr.CustCode!=CUr.Code) then begin TS = false; testf1 = false; end;			
+						if (IVr.OKFlag==0) then begin testf1 = false; end;
+						if (IVr.Invalid==1) then begin testf1 = false; end;
+						If(RepSpec.sStartDate>IVr.TransDate) then begin testf1 = false; end;
+						If(IVr.TransDate>RepSpec.sEndDate) then begin TS = false; testf1 = false; end;
+					
+						if (testf1) then begin
+							ivfr = 1; ivto = 1;
+							 fr = 1; to1 = 1;
+				          	ivfr = IVr.FrRate;
+				            ivto = IVr.ToRateB1;
+
+				              	if(ivfr==0 or ivto==0)then begin
+				              		ivfr = 1; ivto = 1;
+				              	end;
+				          		GetFullCurncyRate(curncy,IVr.TransDate,fr,to1,to2,br1,br2);
+				             	if(fr==0 or to1==0)then begin
+				               		fr = 1; to1 = 1;
+				              	end;
+
+							invCount = invCount +1;
+
+								if(IVr.CurncyCode!=curncy)then begin 
+									tempSum = tempSum +IVr.Sum4/ivfr*ivto;
+									compSum = compSum + IVr.Sum4/ivfr*ivto;
+									finalSum = finalSum + IVr.Sum4/ivfr*ivto;
+								end else begin
+									tempSum = tempSum + IVr.Sum4;
+									compSum = compSum + IVr.Sum4;
+									finalSum = finalSum + IVr.Sum4;
+								end;								
+				
+						end;
+
+					end; RESETLOOP(IVr);
+
+						if (tempSum!=0) then begin
+							Startformat(15);
+								outstring(50,0,Cur.Code,true);
+								outstring(125,0,Cur.Name,true);
+								MatRowGet(Companiesb,CurrentCompany-1,Companiesrw);
+								outstring(200,0,Companiesrw.CompName,true);
+								outstring(275,0,invCount,true);
+								outstring(350,0,tempSum,true);
+							EndFormat;
+						end;
+			end;
+
+		end; RESETLOOP(CUr);
+
+		if (compSum!=0) then begin
+			Gray_Divider(0,1);
+			Startformat(15);
+				outstring(50,0,"",true);
+				outstring(125,0,"",true);
+				outstring(200,0,"Итог по компании:",true);
+				outstring(275,0,Companiesrw.CompName,true);
+				outstring(350,0,compSum,true)
+			EndFormat;
+			Gray_Divider(0,1);
+		end;
+
+	end;
+	ResetCompany(oldcomp);
+
+	Black_Divider(0,1);
+		Startformat(15);
+			outstring(50,0,"",true);
+			outstring(125,0,"",true);
+			outstring(200,0,"Итог по выбранным компаниям:",true);
+			outstring(275,0,"",true);
+			outstring(350,0,finalSum,true)
+		EndFormat;
+	Black_Divider(0,1);
+
+	//CustErrorEnd:;
+  endjob; //Edit ************************** Sasha2, Friday, 27 June 2013 }
+
+  
+  RETURN;
+END;

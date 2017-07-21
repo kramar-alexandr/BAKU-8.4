@@ -1,0 +1,137 @@
+external procedure ParsePhones(string, var integer, var array string);
+
+SetLangMode(LangRussian,"RUS",0);
+
+global procedure CUVcPhoneErrorRn(record RcVc RepSpec)
+begin
+  record CUVc CUr;
+  record PhoneVc Phoner;
+  Boolean TrHs;
+  array string 255 phones;
+  integer i,phonesqty,arri,fi;
+  array string 255 CUCodes;
+  vector boolean CodeInArr;
+  array string 20 field;
+  
+  if nonblank(RepSpec.f1) then begin
+    ParsePhones(RepSpec.f1,phonesqty,phones);
+    for (i=0;i<=phonesqty;i=i+1) begin
+      Phoner.PhoneNum = phones[i];
+      TrHs = true;
+      resetloop(Phoner);
+      while loopmain(Phoner,1,TrHs) begin
+        if (Phoner.PhoneNum!=phones[i]) then begin TrHs = false; end;
+        if (TrHs) then begin
+          if (Phoner.CUCode!=RepSpec.f4) then begin
+            if (!CodeInArr[Phoner.CUCode]) then begin
+              CUCodes[arri] = Phoner.CUCode;
+              CodeInArr[CUCodes[arri]] = true;
+              arri = arri + 1;
+            end;
+            field[fi] = "Телефон";
+          end;
+        end;
+      end;
+    end;
+  end;
+  if nonblank(RepSpec.f2) then begin
+    if nonblank(field[fi]) then begin fi = fi + 1; end;
+    ParsePhones(RepSpec.f2,phonesqty,phones);
+    for (i=0;i<=phonesqty;i=i+1) begin
+      Phoner.PhoneNum = phones[i];
+      TrHs = true;
+      resetloop(Phoner);
+      while loopmain(Phoner,1,TrHs) begin
+        if (Phoner.PhoneNum!=phones[i]) then begin TrHs = false; end;
+        if (TrHs) then begin
+          if (Phoner.CUCode!=RepSpec.f4) then begin
+            if (!CodeInArr[Phoner.CUCode]) then begin
+              CUCodes[arri] = Phoner.CUCode;
+              CodeInArr[CUCodes[arri]] = true;
+              arri = arri + 1;
+            end;
+            field[fi] = "Доп. телефон";
+          end;
+        end;
+      end;
+    end;
+  end;
+  if nonblank(RepSpec.f3) then begin
+    if nonblank(field[fi]) then begin fi = fi + 1; end;
+    ParsePhones(RepSpec.f3,phonesqty,phones);
+    for (i=0;i<=phonesqty;i=i+1) begin
+      Phoner.PhoneNum = phones[i];
+      TrHs = true;
+      resetloop(Phoner);
+      while loopmain(Phoner,1,TrHs) begin
+        if (Phoner.PhoneNum!=phones[i]) then begin TrHs = false; end;
+        if (TrHs) then begin
+          if (Phoner.CUCode!=RepSpec.f4) then begin
+           if (!CodeInArr[Phoner.CUCode]) then begin
+              CUCodes[arri] = Phoner.CUCode;
+              CodeInArr[CUCodes[arri]] = true;
+              arri = arri + 1;
+            end;
+            field[fi] = "Мобильный тел.";
+          end;
+        end;
+      end;
+    end;
+  end;
+  
+  
+  
+  startreportnoheaderjob("Ошибка в карточке контакта");
+    startformat(15);
+			outstring(15,0,"Поле(я) с ошибкой",false);
+      for (i=0;i<=fi;i=i+1) begin
+        outstring((90+(i+1)*90),0,field[i],false);
+      end;
+  	endformat;
+    startformat(15);
+		  outstring(15,0,"Содержание поля(ей):",false);
+      for (i=0;i<=fi;i=i+1) begin
+        if nonblank(field[i]) then begin
+          switch (field[i]) begin
+            case "Телефон":
+              outstring((90+(i+1)*90),0,RepSpec.f1,false);
+            case "Доп. телефон":
+              outstring((90+(i+1)*90),0,RepSpec.f2,false);
+            case "Мобильный тел.":
+              outstring((90+(i+1)*90),0,RepSpec.f3,false);
+          end;
+        end;
+      end;
+    endformat;
+    startformat(15);
+    endformat;
+    Black_Divider(0,1);
+    startformat(15);
+			outstring(15,0,"Код контакта",false);
+      outstring(85,0,"Имя",false);
+      outstring(180,0,"Телефон",false);
+      outstring(270,0,"Доп. телефон",false);
+      outstring(360,0,"Мобильный тел.",false);
+      outstring(450,0,"Закрыто",false);
+  	endformat;
+    Black_Divider(0,1);
+    for (i=0;i<arri;i=i+1) begin
+      startformat(15);
+        outstring(15,"DblCUVc",CUCodes[i],false);
+        CUr.Code = CUCodes[i];
+        readfirstmain(CUr,1,true);
+        outstring(85,0,CUr.Name,false);
+        outstring(180,0,CUr.Phone,false);
+        outstring(270,0,CUr.AltPhone,false);
+        outstring(360,0,CUr.Mobile,false);
+        if (CUr.blockedFlag!=0) then begin
+          outstring(450,0,"√",false);
+        end else begin
+          outstring(450,0,"",false);
+        end;
+      endformat;
+    end;
+  endjob;
+  
+  return;
+end;

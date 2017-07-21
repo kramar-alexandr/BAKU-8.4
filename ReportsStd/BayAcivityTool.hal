@@ -1,0 +1,1300 @@
+SetLangMode(LangRussian,"RUS",0);
+external procedure ExtractObj(string,var Integer,var string);
+external function string 50 GetGender(integer);
+
+global procedure BayAcivityRunRn(record RcVc RepSpec)
+begin
+	record CUVc CUr;
+	record LoyaltyCardVc LCr;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record CompaniesBlock CBb;
+	integer i,mtrw;
+	boolean findf,TrHs,testf,testf1;
+	string 20 custcode;
+	date lastdate;
+	time lasttime;
+	string 100 lastloc;
+	array string 20 artcode;
+	array val qty,sum;
+	integer aqty,ai,ivmtrw,ivi;
+	record LocationVc Locr;
+	
+	findf = false;
+	custcode = "";
+	if(nonblank(RepSpec.f1))then begin
+		LCr.SerNr = RepSpec.f1;
+		if(readfirstmain(LCr,1,true))then begin
+			CUr.Code = LCr.CustCode;
+			if(readfirstmain(CUr,1,true)==false)then begin
+				findf = false;
+			end else begin
+				custcode = CUr.Code;
+				findf = true;
+				if (NonBlank(RepSpec.f3) and SetInSet(RepSpec.f3,CUr.Classification)==false) then begin
+				  findf = false; //Edit***************************Sasha2,17:07 04.07.2017
+				end;
+			end;
+		end;
+	end;
+	if(nonblank(RepSpec.f2))then begin
+		CUr.Code = RepSpec.f2;
+		if(readfirstmain(CUr,1,true)==false)then begin
+			findf = false;
+		end else begin
+			LCr.CustCode = CUr.Code;
+			readfirstkey("CustCode",LCr,1,true);
+			custcode = CUr.Code;
+			findf = true;
+			if (NonBlank(RepSpec.f3) and SetInSet(RepSpec.f3,CUr.Classification)==false) then begin
+			  findf = false; //Edit***************************Sasha2,17:07 04.07.2017
+			end;
+		end;
+	end;
+	
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);
+	startreportnoheaderjob("Отчет по активности клиентов с картами лояльности");
+		startformat(15);
+			outstring(0,0,"№ Карты",false);
+			outstring(50,0,"Код клиента",false);
+			outstring(100,0,"Дата последней покупки",false);
+			outstring(150,0,"Бутик",false);
+			outstring(200,0,"Изделие",false);
+			outstring(250,0,"Сумма",false);
+			outstring(300,0,"ФИО",false);
+			outstring(350,0,"Адрес",false);
+			outstring(400,0,"Телефон",false);
+		endformat;
+		
+		if(findf)then begin
+			aqty = 0;
+			lastdate = "";
+			lasttime = "";
+			For(i=0;i<mtrw;i=i+1) begin
+				setcompany(i+1,false);
+					IVr.CustCode = custcode;
+					TrHs = true;
+					while(loopbackkey("CustCode",IVr,1,TrHs)) begin
+						testf = true;
+						if(IVr.CustCode!=custcode)then begin TrHs = false; testf = false; end;
+						if(IVr.OKFlag==0)then begin testf = false; end;
+						if(IVr.Sum4<=0)then begin testf = false; end;
+						if(IVr.Invalid==1)then begin testf = false; end;
+						
+						if(testf)then begin
+							TrHs = false;
+							
+							if(IVr.InvDate<lastdate)then begin
+								testf = false;
+							end;	
+							if(testf)then begin
+								if(IVr.InvDate==lastdate	and lasttime>IVr.TransTime)then begin
+									testf = false;
+								end;
+								
+								if(testf)then begin
+									lastdate = IVr.InvDate;
+									lasttime = IVr.TransTime;
+									Locr.Code = IVr.Location;
+									readfirstmain(Locr,1,true);
+									lastloc = Locr.Code & " " & Locr.Name;
+									
+									ivmtrw = matrowcnt(IVr);
+									aqty = 0;
+									For(ivi=0;ivi<ivmtrw;ivi=ivi+1) begin
+	  								matrowget(IVr,ivi,IVrw);
+	  								if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+	  									artcode[ivi] = IVrw.ArtCode;
+	  									qty[ivi] = IVrw.Quant;
+	  									sum[ivi] = IVrw.Sum;
+	  									aqty = aqty + 1;
+	  								end;
+									end; 
+								end;
+							end;
+							testf = false;							
+						end;
+					end;
+					resetloop(IVr);
+					
+				resetcompany(1);
+			end; 
+			
+			startformat(15);
+				outstring(0,0,LCr.SerNr,false);
+				outstring(50,0,CUr.Code,false);
+				outstring(100,0,lastdate,false);
+				outstring(150,0,lastloc,false);
+				outstring(200,0,artcode[0],false);
+				outstring(250,0,sum[0],false);
+				outstring(300,0,CUr.Name,false);
+				outstring(350,0,CUr.InvAddr0,false);
+				outstring(400,0,CUr.Phone,false);
+			endformat;
+			if(aqty>1)then begin
+				For(i=1;i<aqty;i=i+1) begin
+					startformat(15);
+						outstring(0,0,"",false);
+						outstring(50,0,"",false);
+						outstring(100,0,"",false);
+						outstring(150,0,"",false);
+						outstring(200,0,artcode[i],false);
+						outstring(250,0,sum[i],false);
+						outstring(300,0,"",false);
+						outstring(350,0,"",false);
+						outstring(400,0,"",false);
+					endformat;
+				end;
+			end;
+			gray_divider(0,1);
+			startformat(15);
+			endformat;
+			
+		end else begin
+			if(blank(RepSpec.f1) and blank(RepSpec.f2))then begin
+				LCr.SerNr = "";
+				while(loopmain(LCr,1,true)) begin
+					testf1 = true;
+					if(blank(LCr.CustCode))then begin testf1 = false; end;
+					if(blank(LCr.Closed==1))then begin testf1 = false; end;
+					
+					if(testf1)then begin
+						CUr.Code = LCr.CustCode;
+						custcode = "";
+						readfirstmain(CUr,1,true);
+						if (NonBlank(RepSpec.f3) and SetInSet(RepSpec.f3,CUr.Classification)==false) then begin testf1 = false; end; //Edit***************************Sasha2,17:41 04.07.2017
+						if (testf1) then begin
+						  custcode = CUr.Code;
+  						aqty = 0;
+  						lastdate = "";
+  						lasttime = "";
+  						For(i=0;i<mtrw;i=i+1) begin
+  							setcompany(i+1,false);
+  								IVr.CustCode = custcode;
+  								TrHs = true;
+  								while(loopbackkey("CustCode",IVr,1,TrHs)) begin
+  									testf = true;
+  									if(IVr.CustCode!=custcode)then begin TrHs = false; testf = false; end;
+  									if(IVr.OKFlag==0)then begin testf = false; end;
+  									if(IVr.Sum4<=0)then begin testf = false; end;
+  									if(IVr.Invalid==1)then begin testf = false; end;
+  									
+  									if(testf)then begin
+  										TrHs = false;
+  										if(IVr.InvDate<lastdate)then begin
+  											testf = false;
+  										end;
+  										if(testf)then begin
+  											if(IVr.InvDate==lastdate	and lasttime>IVr.TransTime)then begin
+  												testf = false;
+  											end;
+  											if(testf)then begin
+  												lastdate = IVr.InvDate;
+  												lasttime = IVr.TransTime;
+  												Locr.Code = IVr.Location;
+  												readfirstmain(Locr,1,true);
+  												lastloc = Locr.Code & " " & Locr.Name;
+  								
+  												ivmtrw = matrowcnt(IVr);
+  												aqty = 0;
+  												For(ivi=0;ivi<ivmtrw;ivi=ivi+1) begin
+  													matrowget(IVr,ivi,IVrw);
+  													if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+  														artcode[ivi] = IVrw.ArtCode;
+  														qty[ivi] = IVrw.Quant;
+  														sum[ivi] = IVrw.Sum;
+  														aqty = aqty + 1;
+  													end;
+  												end; 
+  											end;
+  										end;
+  										testf = false;							
+  									end;
+  								end;
+  								resetloop(IVr);
+  				
+  							resetcompany(1);
+  						end; 
+  						if(aqty>0)then begin
+  							startformat(15);
+  								outstring(0,0,LCr.SerNr,false);
+  								outstring(50,0,CUr.Code,false);
+  								outstring(100,0,lastdate,false);
+  								outstring(150,0,lastloc,false);
+  								outstring(200,0,artcode[0],false);
+  								outstring(250,0,sum[0],false);
+  								outstring(300,0,CUr.Name,false);
+  								outstring(350,0,CUr.InvAddr0,false);
+  								outstring(400,0,CUr.Phone,false);
+  							endformat;
+  							if(aqty>1)then begin
+  								For(i=1;i<aqty;i=i+1) begin
+  									startformat(15);
+  										outstring(0,0,"",false);
+  										outstring(50,0,"",false);
+  										outstring(100,0,"",false);
+  										outstring(150,0,"",false);
+  										outstring(200,0,artcode[i],false);
+  										outstring(250,0,sum[i],false);
+  										outstring(300,0,"",false);
+  										outstring(350,0,"",false);
+  										outstring(400,0,"",false);
+  									endformat;
+  								end;
+  							end;
+  							gray_divider(0,1);
+  							startformat(15);
+  							endformat;
+  						end;
+						end;
+					end;
+				end;
+			end;
+		end;
+		
+	endjob;
+return;
+end;
+
+global procedure BayAcivityButiqueRunRn(record RcVc RepSpec)
+begin
+record CUVc CUr;
+	record LoyaltyCardVc LCr;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record CompaniesBlock CBb;
+	record UserVc Userr;
+	row CompaniesBlock CBrw;
+	integer i,mtrw;
+	boolean findf,TrHs,testf,testf1,nextCust;
+	string 20 custcode;
+	date lastBuyDate;
+	time lasttime;
+	string 100 lastloc,temp,companiesStr,salesman;
+	array string 20 artcode,loc,curncy;
+	array date lastDates;
+	array time lastTimes;
+	array longint lastSerNrs;
+	array val qty,sum;
+	integer aqty,ai,ivmtrw,ivi;
+	record LocationVc Locr;
+	date frdate,todate;
+	boolean findloc;
+	record BaseCurBlock BCb;
+	integer pos,companiesLength,shopsLength;
+	array integer companies;
+	array string 20 shops;  
+	longint lastInvoiceNr;
+	vector boolean include;
+	string 20 IncludeIndex;
+  array integer tab;
+  array string 50 compname;
+  string 100 locationname;
+  
+  
+  tab[1] = 0;
+  tab[2] = 50;
+  tab[3] = 100;
+  tab[4] = 130;
+  tab[5] = 180;
+  tab[6] = 210;
+  tab[7] = 250;
+  tab[8] = 270;
+  tab[9] = 300;
+  tab[10] = 350;
+  tab[11] = 390;
+  tab[12] = 440;
+  
+	
+	
+//При просмотре клиентов, кто не совершал покупок, все покупавшие клиенты заносятся в вектор include
+//вместе с названием бутиков, или словом "ALL", если не был выбран бутик.
+//При выводе пролистывается регистр клиентов из которого выводятся все, кто не содержится в векторе include
+	
+	frdate = RepSpec.sStartDate;
+	todate = RepSpec.sEndDate;
+	
+	findf = false;
+	custcode = "";
+	if(nonblank(RepSpec.f1))then begin
+		LCr.SerNr = RepSpec.f1;
+		if(readfirstmain(LCr,1,true))then begin
+			CUr.Code = LCr.CustCode;
+			if(readfirstmain(CUr,1,true)==false)then begin
+				findf = false;
+			end else begin
+				custcode = CUr.Code;
+				findf = true;
+				if (NonBlank(RepSpec.f5) and SetInSet(RepSpec.f5,CUr.Classification)==false) then begin
+				  findf = false; //Edit***************************Sasha2,17:07 04.07.2017
+				end;
+			end;
+		end;
+	end;
+	if(nonblank(RepSpec.f2))then begin
+		CUr.Code = RepSpec.f2;
+		if(readfirstmain(CUr,1,true)==false)then begin
+			findf = false;
+		end else begin
+			LCr.CustCode = CUr.Code;
+			readfirstkey("CustCode",LCr,1,true);
+			custcode = CUr.Code;
+			findf = true;
+			if (NonBlank(RepSpec.f5) and SetInSet(RepSpec.f5,CUr.Classification)==false) then begin
+			  findf = false; //Edit***************************Sasha2,17:07 04.07.2017
+			end;
+		end;
+	end;
+		
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);
+	
+	companiesLength = 0;
+	if (nonblank(RepSpec.f3)) then begin		//Edit----------------------Dima  07.07.2015
+		companiesStr = RepSpec.f3;
+		pos = 0;
+		ExtractObj(companiesStr,pos,temp);
+		while(nonblank(temp)) begin
+			if(nonblank(temp))then begin
+				companies[companiesLength] = StringToInt(temp);
+				if(StringToInt(temp)>0 and StringToInt(temp)<=matrowcnt(CBb))then begin
+					matrowget(CBb,StringToInt(temp)-1,CBrw);
+					compname[companiesLength] = CBrw.CompName;
+				end;
+				companiesLength = companiesLength + 1;
+			end;
+			ExtractObj(companiesStr,pos,temp);
+		end;
+	end else begin			
+		For(i=0;i<mtrw;i=i+1) begin
+		  matrowget(CBb,i,CBrw);
+		  companies[i] = StringToInt(CBrw.CompCode);
+		  compname[i] = CBrw.CompName;
+		  //logtext(0,compname[i]);
+		end;
+		companiesLength = mtrw;
+	end; 												
+	
+	
+	shopsLength = 0;
+	if (RepSpec.flags[1]>0 and nonblank(RepSpec.f4)) then begin
+			pos = 0;
+			ExtractObj(RepSpec.f4,pos,temp);
+			while(nonblank(temp)) begin
+				if(nonblank(temp))then begin
+					shops[shopsLength] = temp;
+					shopsLength = shopsLength + 1;
+				end;
+				ExtractObj(RepSpec.f4,pos,temp);
+			end;
+	end;
+																		//Edit--end--------------------Dima  07.07.2015
+	
+	
+		startreportnoheaderjob("Отчет по активности клиентов по бутикам");
+		startformat(15);
+			outstring(tab[1],0,"№ Карты",false);
+			outstring(tab[2],0,"Код клиента",false);
+			outstring(tab[3],0,"Бутик",false);
+			outstring(tab[4],0,"Кол-во покупок",false);
+			outstring(tab[5],0,"Сумма",false);
+			outstring(tab[6],0,"Дата последней",false);
+			outstring(tab[6],0,"Время последней",false);
+			outstring(tab[6],0,"№ последней с/ф",false);
+			outstring(tab[6],0,"Имя консультанта",false);
+      if(RepSpec.flags[2]==1)then begin
+        outstring(tab[7],0,"Скидка Дня Рождения",false);
+      end;
+			outstring(tab[8],0,"Валюта",false);
+			outstring(tab[9],0,"ФИО",false);
+			outstring(tab[10],0,"Пол",false);
+			outstring(tab[11],0,"Моб.Телефон",false);
+			outstring(tab[12],0,"E-mail",false);
+		endformat;
+		
+		if(findf)then begin
+
+			For(ivi=0;ivi<aqty;ivi=ivi+1) begin
+				qty[ivi] = blankval;
+				sum[ivi] = blankval;
+			end;
+			aqty = 0;
+			lastBuyDate = "";
+			For(i=0;i<companiesLength;i=i+1) begin
+				setcompany(companies[i],false);	//Edit----------------------Dima  06.07.2015
+					blockload(BCb);
+					IVr.CustCode = custcode;
+					IVr.InvDate = frdate;
+					TrHs = true;
+					while(loopkey("CustDate",IVr,2,TrHs)) begin
+						testf = true;
+						if(IVr.CustCode!=custcode)then begin TrHs = false; testf = false; end;
+						if(IVr.InvDate>todate)then begin TrHs = false; testf = false; end;
+						if(IVr.OKFlag==0)then begin testf = false; end;
+						if(IVr.Sum4<=0)then begin testf = false; end;
+						if(IVr.Invalid==1)then begin testf = false; end;
+						if(nonblank(RepSpec.f4) and ((SetInSet(IVr.Location,RepSpec.f4)==false) or blank(IVr.Location)) ) then begin testf = false; end;//Edit--------------Dima  07.07.2015
+						
+						locationname = "";
+						if(testf)then begin
+							if (IVr.InvDate>lastBuyDate) then begin 	//Edit----------------------Dima  07.07.2015
+										lastBuyDate = IVr.InvDate;
+										lastInvoiceNr = IVr.SerNr;
+										lasttime = IVr.TransTime; //Edit***************************Sasha2,17:14 26.06.2017
+							end;						
+							Locr.Code = IVr.Location;
+							if(blank(IVr.Location))then begin
+								//Locr.Code = compname[i];
+								locationname = compname[i];
+							end else begin
+								if(readfirstmain(Locr,1,true)==false)then begin
+									//Locr.Code = compname[i];
+									locationname = compname[i];
+								end else begin
+									locationname = Locr.Code & " " & Locr.Name;
+								end;
+							end;
+							findloc = false;
+							For(ivi=0;ivi<aqty;ivi=ivi+1) begin
+								if(loc[ivi]==locationname)then begin
+									qty[ivi] = qty[ivi] + IVr.TotQty;
+									sum[ivi] = sum[ivi] + IVr.BaseSum4;
+									lastDates[ivi] = lastBuyDate;
+									lastTimes[ivi] = lasttime; //Edit***************************Sasha2,17:15 26.06.2017
+									lastSerNrs[ivi] = lastInvoiceNr;
+									findloc = true;
+								end;
+							end;
+							if(findloc==false)then begin
+								qty[aqty] = qty[aqty] + IVr.TotQty;
+								sum[aqty] = sum[aqty] + IVr.BaseSum4;
+								loc[aqty] = locationname;
+								lastDates[ivi] = lastBuyDate;
+								lastTimes[ivi] = lasttime; //Edit***************************Sasha2,17:15 26.06.2017
+								lastSerNrs[ivi] = lastInvoiceNr;								
+								curncy[aqty] = BCb.BaseCur1;
+								aqty = aqty + 1;
+							end;
+							if(RepSpec.flags[2]==1)then begin
+								startformat(15);
+									outstring(tab[1],0,LCr.SerNr,false);
+									outstring(tab[2],0,CUr.Code,false);
+									outstring(tab[3],0,Locr.Code & " " & Locr.Name,false);
+									outstring(tab[4],0,IVr.TotQty,false);
+									outstring(tab[5],0,IVr.BaseSum4,false);
+									outstring(tab[6],0,IVr.InvDate,false);
+									outstring(tab[6],0,IVr.TransTime,false);
+									outstring(tab[6],0,IVr.SerNr,false);
+									Userr.Code = IVr.SalesMan;
+									ReadFirstMain(Userr,1,true);
+									outstring(tab[6],0,Userr.Name,false);
+                  if (IVr.UsedBirthRebateH==1) then begin
+                    outstring(tab[7],0,"да",false);
+                  end else begin
+                    outstring(tab[7],0,"нет",false);
+                  end;
+                  outstring(tab[8],0,BCb.BaseCur1,false);
+									outstring(tab[9],0,CUr.Name,false);
+									outstring(tab[10],0,GetGender(CUr.Gender),false);
+									outstring(tab[11],0,CUr.Mobile,false);
+									outstring(tab[12],0,CUr.eMail,false);
+								endformat;
+							end;
+						end;
+					end;
+					resetloop(IVr);
+					
+				resetcompany(1);
+			end; 
+			
+			if(aqty>0 and RepSpec.flags[1]==0 and RepSpec.flags[2]==0)then begin	//Edit----------------------Dima  08.07.2015
+				For(i=0;i<aqty;i=i+1) begin
+					startformat(15);
+						outstring(tab[1],0,LCr.SerNr,false);
+						outstring(tab[2],0,CUr.Code,false);
+						outstring(tab[3],0,loc[i],false);
+						outstring(tab[4],0,qty[i],false);
+						outstring(tab[5],0,sum[i],false);
+						outstring(tab[6],0,lastDates[i],false);
+						outstring(tab[6],0,lastTimes[i],false);
+						outstring(tab[6],0,lastSerNrs[i],false);
+						outstring(tab[6],0,"",false);
+						outstring(tab[8],0,curncy[i],false);
+						outstring(tab[9],0,CUr.Name,false);
+						outstring(tab[10],0,GetGender(CUr.Gender),false);
+						outstring(tab[11],0,CUr.Mobile,false);
+						outstring(tab[12],0,CUr.eMail,false);
+					endformat;
+				end;
+			end;
+			gray_divider(0,1);
+			startformat(15);
+			endformat;
+			
+		end else begin
+			if(blank(RepSpec.f1) and blank(RepSpec.f2))then begin
+				CUr.Code = "";
+        while(loopmain(CUr,1,true)) begin
+          LCr.CustCode = CUr.Code;
+          testf = false;
+          if (ReadFirstKey("ActCustCode",LCr,1,true)) then begin testf = true; end;
+          if (RepSpec.flags[3]!=0) then begin testf = true; end;
+          
+          if (NonBlank(RepSpec.f5) and SetInSet(RepSpec.f5,CUr.Classification)==false) then begin testf = false; end; //Edit***************************Sasha2,17:09 04.07.2017
+          if (testf) then begin
+            For(ivi=0;ivi<aqty;ivi=ivi+1) begin
+							qty[ivi] = blankval;
+							sum[ivi] = blankval;
+						end;
+						aqty = 0;
+						custcode = CUr.Code;
+            For(i=0;i<companiesLength;i=i+1) begin
+              setcompany(companies[i],false);
+              blockload(BCb);
+              lastBuyDate = "";
+              IVr.CustCode = custcode;
+              IVr.InvDate = frdate;
+              TrHs = true;
+              while(loopkey("CustDate",IVr,2,TrHs)) begin
+                testf = true;
+                if(IVr.CustCode!=custcode)then begin TrHs = false; testf = false; end;
+                if(IVr.InvDate>todate)then begin TrHs = false; testf = false; end;
+                if(IVr.OKFlag==0)then begin testf = false; end;
+                if(IVr.Sum4<=0)then begin testf = false; end;
+                if(IVr.Invalid==1)then begin testf = false; end;
+                if(nonblank(RepSpec.f4) and ((SetInSet(IVr.Location,RepSpec.f4)==false) or blank(IVr.Location)) ) then begin testf = false; end;//Edit----------------------Dima  07.07.2015
+                
+                
+                if(RepSpec.flags[1]>0 and (testf==true)) then begin		//Edit----------------------Dima  08.07.2015
+                  if (nonblank(RepSpec.f4)) then begin
+                    IncludeIndex = custcode & "*" & IVr.Location;
+                  end else begin
+                    IncludeIndex = custcode & "*ALL";	
+                  end;
+                  include[IncludeIndex] = true;			
+                  testf = false;				
+                end;									
+                
+                if(testf)then begin
+                
+                  if (IVr.InvDate>lastBuyDate) then begin 	//Edit----------------------Dima  07.07.2015
+                      lastBuyDate = IVr.InvDate;
+                      lastInvoiceNr = IVr.SerNr; 
+                      lasttime = IVr.TransTime; //Edit***************************Sasha2,17:14 26.06.2017
+                  end;	
+                
+                  Locr.Code = IVr.Location;
+                  if(blank(IVr.Location))then begin
+										//Locr.Code = compname[i];
+										locationname = compname[i];
+									end else begin
+										if(readfirstmain(Locr,1,true)==false)then begin
+											//Locr.Code = compname[i];
+											locationname = compname[i];
+										end else begin
+											locationname = Locr.Code & " " & Locr.Name;
+										end;
+									end;
+                  findloc = false;
+                  For(ivi=0;ivi<aqty;ivi=ivi+1) begin
+                    if(loc[ivi]==locationname)then begin
+                      qty[ivi] = qty[ivi] + IVr.TotQty;
+                      sum[ivi] = sum[ivi] + IVr.BaseSum4;
+                      lastDates[ivi] = lastBuyDate;
+                      lastTimes[ivi] = lasttime; //Edit***************************Sasha2,17:15 26.06.2017
+                      lastSerNrs[ivi] = lastInvoiceNr;												
+                      findloc = true;
+                    end;
+                  end;
+                  if(findloc==false)then begin
+                    qty[aqty] = qty[aqty] + IVr.TotQty;
+                    sum[aqty] = sum[aqty] + IVr.BaseSum4;
+                    loc[aqty] = locationname;
+                    lastDates[ivi] = lastBuyDate;
+                    lastTimes[ivi] = lasttime; //Edit***************************Sasha2,17:15 26.06.2017
+                    lastSerNrs[ivi] = lastInvoiceNr;											
+                    curncy[aqty] = BCb.BaseCur1;
+                    aqty = aqty + 1;
+                  end;	
+                  
+                  if(RepSpec.flags[2]==1)then begin
+                    startformat(15);
+                      outstring(tab[1],0,LCr.SerNr,false);
+                      outstring(tab[2],0,CUr.Code,false);
+                      outstring(tab[3],0,locationname,false);
+                      outstring(tab[4],0,IVr.TotQty,false);
+                      outstring(tab[5],0,IVr.BaseSum4,false);
+                      outstring(tab[6],0,IVr.InvDate,false);
+                      outstring(tab[6],0,IVr.TransTime,false);
+                      outstring(tab[6],0,IVr.SerNr,false);
+                      Userr.Code = IVr.SalesMan;
+    									ReadFirstMain(Userr,1,true);
+    									outstring(tab[6],0,Userr.Name,false);
+                      if (IVr.UsedBirthRebateH==1) then begin
+                        outstring(tab[7],0,"да",false);
+                      end else begin
+                        outstring(tab[7],0,"нет",false);
+                      end;
+                      outstring(tab[8],0,BCb.BaseCur1,false);
+                      outstring(tab[9],0,CUr.Name,false);
+                      outstring(tab[10],0,GetGender(CUr.Gender),false);
+    									outstring(tab[11],0,CUr.Mobile,false);
+    									outstring(tab[12],0,CUr.eMail,false);
+                    endformat;
+                  end;
+                            
+                end;
+              end;
+              resetloop(IVr);
+              resetcompany(1);
+            end; 
+						if(aqty>0 and RepSpec.flags[1]==0 and RepSpec.flags[2]==0)then begin
+							For(i=0;i<aqty;i=i+1) begin
+								startformat(15);
+									outstring(tab[1],0,LCr.SerNr,false);
+									outstring(tab[2],0,CUr.Code,false);
+									outstring(tab[3],0,loc[i],false);
+									outstring(tab[4],0,qty[i],false);
+									outstring(tab[5],0,sum[i],false);
+									outstring(tab[6],0,lastDates[i],false);
+									outstring(tab[6],0,lastTimes[i],false);
+									outstring(tab[6],0,lastSerNrs[i],false);
+									outstring(tab[6],0,"",false);
+									outstring(tab[8],0,curncy[i],false);
+									outstring(tab[9],0,CUr.Name,false);
+									outstring(tab[10],0,GetGender(CUr.Gender),false);
+      						outstring(tab[11],0,CUr.Mobile,false);
+      						outstring(tab[12],0,CUr.eMail,false);
+								endformat;
+							end;
+							gray_divider(0,1);
+							startformat(15);
+							endformat;
+						end;
+          end;
+        end;
+        resetloop(CUr);
+			end;
+			
+			if (RepSpec.flags[1]>0) then begin //клиенты без покупок	//Edit----------------------Dima  08.07.2015
+					resetloop(LCr);
+					LCr.SerNr = blankval;
+					LCr.CustCode = "";			
+
+				if (blank(RepSpec.f4)) then begin //Locations					
+					while(loopKey("CustCode",LCr,1,true)) begin						
+						IncludeIndex = LCr.CustCode & "*ALL";
+						if ((include[IncludeIndex]==false)) then begin
+									CUr.Code = LCr.CustCode;
+									ReadFirstMain(CUr,1,true);
+									outstring(tab[1],0,LCr.SerNr,false);			
+									outstring(tab[2],0,CUr.Code,false);
+									outstring(tab[3],0,"All boutiques",false);
+									outstring(tab[4],0,"",false);
+									outstring(tab[5],0,"",false);
+									outstring(tab[6],0,"",false);
+									outstring(tab[6],0,"",false);
+									outstring(tab[6],0,"",false);
+									outstring(tab[6],0,"",false);
+									outstring(tab[7],0,"",false);
+                  outstring(tab[8],0,"",false);
+									outstring(tab[9],0,CUr.Name,false);
+      						outstring(tab[10],0,GetGender(CUr.Gender),false);
+      						outstring(tab[11],0,CUr.Mobile,false);
+      						outstring(tab[12],0,CUr.eMail,false);						
+									endformat;
+						end;
+					end;					
+				end else begin
+				
+					while(loopKey("CustCode",LCr,1,true)) begin
+						nextCust = false;
+						for(i=0;i<shopsLength;i=i+1) begin
+							IncludeIndex = LCr.CustCode & "*" & shops[i];
+							
+							if ((include[IncludeIndex]==false)) then begin           	
+										//CUr.Code = LCr.CustCode;
+										//ReadFirstMain(CUr,1,true);            	
+										outstring(tab[1],0,LCr.SerNr,false);			    	
+										outstring(tab[2],0,LCr.CustCode,false);
+										outstring(tab[3],0,shops[i],false);
+										outstring(tab[4],0,"",false);
+										outstring(tab[5],0,"",false);
+										outstring(tab[6],0,"",false);
+										outstring(tab[6],0,"",false);
+										outstring(tab[6],0,"",false);
+										outstring(tab[6],0,"",false);
+										outstring(tab[7],0,"",false);
+                    outstring(tab[8],0,"",false);
+										outstring(tab[9],0,LCr.CustName,false);
+										//outstring(tab[10],0,CUr.InvAddr0,false);
+										//outstring(tab[11],0,CUr.Phone,false);						
+										endformat;
+										nextCust = true;
+							end;
+						end;
+						if(nextCust) then begin
+							gray_divider(0,1);
+							startformat(15);
+							endformat;		
+						end;				
+					end;				
+					
+				end;
+			end;														//Edit--end-----------------------------Dima  08.07.2015
+			
+			
+		end;
+		
+	endjob;
+
+
+return;
+end;
+
+
+global procedure LoyaltyCardCounterRn(record RcVc RepSpec)
+begin
+	string 20 custcode,loyaltycard;
+	record CUVc CUr;
+	record IVVc IVr;
+	record LoyaltyCardVc LCr;
+	record CompaniesBlock CBb;
+	integer mtrw,i,k,arsz;
+	boolean TrHs,testf,findf,TrHsCu,testfCu;
+	val sum,psum;
+	record LocationVc Locationr;
+	integer curcomp;
+	array string 50 loycards;
+	vector boolean culoycard;
+	vector val loysum;
+	
+	curcomp = currentcompany;
+	
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);
+	startreportnoheaderjob("Отчет по накопленным баллам клиента");
+	if(RepSpec.flags[0]==0)then begin
+		startformat(15);
+			outstring(0,0,"Клиент",false);
+			outstring(50,0,"Имя",false);
+			outstring(150,0,"Бутик",false);
+			outstring(250,0,"Сч/ф",false);
+			outstring(300,0,"Дата",false);
+			outstring(350,0,"Карта",false);
+			outstring(1,0,"Баллов",true);
+		endformat;
+	end else begin
+		startformat(15);
+			outstring(0,0,"Клиент",false);
+			outstring(50,0,"Имя",false);
+			outstring(150,0,"Карта",false);
+			outstring(250,0,"",false);
+			outstring(300,0,"Бал на карт.",false);
+			outstring(350,0,"Бал. по док",false);
+			outstring(1,0,"Разн.",true);
+		endformat;
+	end;
+	
+	
+	custcode = RepSpec.f1;
+	loyaltycard = RepSpec.f2;
+	findf = false;
+	sum = 0;
+	
+	if(nonblank(loyaltycard))then begin
+		LCr.SerNr = loyaltycard;
+		if(readfirstmain(LCr,1,true))then begin
+			if(nonblank(LCr.CustCode))then begin
+				CUr.Code = LCr.CustCode;
+				if(readfirstmain(CUr,1,true))then begin
+					custcode = CUr.Code;
+					findf = true;
+				end;
+			end;
+		end;
+	end;
+	
+	CUr.Code = custcode;
+	TrHsCu = true;
+	while(loopmain(CUr,1,TrHsCu))begin
+		sum = 0;
+		psum = 0;
+		arsz = 0;
+		testfCu = true;
+		findf = true;
+		if(nonblank(custcode) and CUr.Code!=custcode)then begin TrHsCu = false; testfCu = false; findf = false; end;	
+	
+		if(findf)then begin
+			For(i=0;i<mtrw;i=i+1) begin
+				setcompany(i+1,false);
+				IVr.CustCode = CUr.Code;
+				TrHs = true;
+				while(loopkey("CustDate",IVr,1,TrHs))begin
+					testf = true;
+					if(IVr.CustCode!=CUr.Code)then begin TrHs = false; testf = false; end;
+					if(IVr.OKFlag==0)then begin testf = false; end;
+					if(IVr.Invalid==1)then begin testf = false; end;
+					if(nonblank(loyaltycard) and (loyaltycard!=IVr.LoyaltyCardNr))then begin testf = false; end;
+					if(IVr.Points==0)then begin testf = false; end;
+				
+					if(testf)then begin
+						Locationr.Code = IVr.Location;
+						readfirstmain(Locationr,1,true);
+						if(RepSpec.flags[0]==0)then begin
+							startformat(15);
+								outstring(0,0,IVr.CustCode,false);
+								outstring(50,0,IVr.Addr0,false);
+								outstring(150,0,Locationr.Name,false);
+								outstring(250,"DblIVVc",IVr.SerNr,false);
+								outstring(300,0,IVr.InvDate,false);
+								outstring(350,0,IVr.LoyaltyCardNr,false);
+								outstring(1,0,IVr.Points,true);
+							endformat;
+						end else begin
+							if(culoycard[CUr.Code & ":" & IVr.LoyaltyCardNr]==false)then begin
+								culoycard[CUr.Code & ":" & IVr.LoyaltyCardNr] = true;
+								loycards[arsz] = IVr.LoyaltyCardNr;
+								loysum[CUr.Code & ":" & IVr.LoyaltyCardNr] = IVr.Points;
+								arsz = arsz + 1;
+							end else begin
+								loysum[CUr.Code & ":" & IVr.LoyaltyCardNr] = loysum[CUr.Code & ":" & IVr.LoyaltyCardNr] + IVr.Points;
+							end;
+						end;
+						sum = sum + IVr.Points;
+					
+					end;
+				end;
+				resetloop(IVr);
+				resetcompany(curcomp);
+			end; 
+			
+			if(RepSpec.flags[0]==0)then begin
+				Gray_Divider(0,1);
+				startformat(15);
+					outstring(0,0,"",false);
+					outstring(50,0,"",false);
+					outstring(100,0,"",false);
+					outstring(150,0,"",false);
+					outstring(200,0,"",false);
+					outstring(350,0,"",false);
+					outstring(1,0,sum,true);
+				endformat;
+			end else begin
+				psum = 0;
+				For(i=0;i<arsz;i=i+1) begin
+					LCr.SerNr = loycards[i];
+					readfirstmain(LCr,1,true);
+					//if(LCr.PointsBalance!=0 or loysum[CUr.Code & ":" & loycards[i]]!=0)then begin
+						startformat(15);
+							outstring(0,0,CUr.Code,false);
+							outstring(50,0,CUr.Name,false);
+							outstring(150,0,loycards[i],false);
+							outstring(150,0,"",false);
+							outstring(300,0,LCr.PointsBalance,false);
+							outstring(350,0,loysum[CUr.Code & ":" & loycards[i]],false);
+							psum = psum + LCr.PointsBalance;
+							outstring(1,0,LCr.PointsBalance-loysum[CUr.Code & ":" & loycards[i]],true);
+						endformat;
+					//end;
+				end; 
+				//if(psum!=0 or sum!=0)then begin
+					gray_divider(0,1);
+					startformat(15);
+						outstring(0,0,CUr.Code,false);
+						outstring(50,0,CUr.Name,false);
+						outstring(100,0,"",false);
+						outstring(150,0,"",false);
+						outstring(300,0,psum,false);
+						outstring(350,0,sum,false);
+						outstring(1,0,psum - sum,true);
+					endformat;
+				//end;
+			end;
+		end;
+	end;
+	endjob;
+
+return;
+end;
+
+
+global updating procedure LoyaltyCardCounterRn(record RcVc RepSpec)
+begin
+	string 20 custcode,loyaltycard;
+	record CUVc CUr;
+	record IVVc IVr;
+	record LoyaltyCardVc LCr;
+	record CompaniesBlock CBb;
+	integer mtrw,i,k,arsz;
+	boolean TrHs,testf,findf,TrHsCu,testfCu;
+	val sum,psum;
+	record LocationVc Locationr;
+	integer curcomp;
+	array string 50 loycards;
+	vector boolean culoycard;
+	vector val loysum;
+	array val loycardssum,loycardsstart;
+	
+	curcomp = currentcompany;
+	
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);
+	startreportnoheaderjob("Отчет по накопленным баллам клиента");
+	if(RepSpec.flags[0]==0)then begin
+		startformat(15);
+			outstring(0,0,"Клиент",false);
+			outstring(50,0,"Имя",false);
+			outstring(150,0,"Бутик",false);
+			outstring(250,0,"Сч/ф",false);
+			outstring(300,0,"Дата",false);
+			outstring(350,0,"Карта",false);
+			outstring(1,0,"Баллов",true);
+		endformat;
+	end else begin
+		startformat(15);
+			outstring(0,0,"Клиент",false);
+			outstring(50,0,"Имя",false);
+			outstring(150,0,"Карта",false);
+			outstring(250,0,"",false);
+			outstring(300,0,"Нач. бал.",false);
+			outstring(300,0,"Бал на карт.",false);
+			outstring(350,0,"Бал. по док",false);
+			outstring(1,0,"Разн.",true);
+		endformat;
+	end;
+	
+	
+	custcode = RepSpec.f1;
+	loyaltycard = RepSpec.f2;
+	findf = false;
+	sum = 0;
+	
+	if(nonblank(loyaltycard))then begin
+		LCr.SerNr = loyaltycard;
+		if(readfirstmain(LCr,1,true))then begin
+			if(nonblank(LCr.CustCode))then begin
+				CUr.Code = LCr.CustCode;
+				if(readfirstmain(CUr,1,true))then begin
+					custcode = CUr.Code;
+					findf = true;
+				end;
+			end;
+		end;
+	end;
+	
+	CUr.Code = custcode;
+	TrHsCu = true;
+	while(loopmain(CUr,1,TrHsCu))begin
+		sum = 0;
+		psum = 0;
+		arsz = 0;
+		testfCu = true;
+		findf = true;
+		if(nonblank(custcode) and CUr.Code!=custcode)then begin TrHsCu = false; testfCu = false; findf = false; end;	
+	
+		if(findf)then begin
+			if(RepSpec.flags[0]==0)then begin
+				LCr.CustCode = CUr.Code;
+				TrHs = true;
+				while(loopkey("CustCode",LCr,1,TrHs))begin
+					if(LCr.CustCode!=CUr.Code)then begin TrHs = false; end;
+					if(TrHs and LCr.StartBalance>0)then begin
+						startformat(15);
+							outstring(0,0,"Начальный баланс а карте",false);
+							outstring(50,0,"",false);
+							outstring(150,0,LCr.SerNr,false);
+							outstring(250,0,"",false);
+							outstring(300,0,"",false);
+							outstring(350,0,LCr.StartBalance,false);
+							outstring(1,0,"",true);
+						endformat;	
+					end;
+				end;
+				resetloop(LCr);
+			end;
+			For(i=0;i<mtrw;i=i+1) begin
+				setcompany(i+1,false);
+				IVr.CustCode = CUr.Code;
+				TrHs = true;
+				while(loopkey("CustDate",IVr,1,TrHs))begin
+					testf = true;
+					if(IVr.CustCode!=CUr.Code)then begin TrHs = false; testf = false; end;
+					if(IVr.OKFlag==0)then begin testf = false; end;
+					if(IVr.Invalid==1)then begin testf = false; end;
+					if(nonblank(loyaltycard) and (loyaltycard!=IVr.LoyaltyCardNr))then begin testf = false; end;
+					if(IVr.Points==0)then begin testf = false; end;
+					if(IVr.LCMLevel!="1")then begin testf = false; end;
+					
+					if(testf)then begin
+						if(RepSpec.flags[0]==0)then begin
+							startformat(15);
+								outstring(0,0,IVr.CustCode,false);
+								outstring(50,0,IVr.Addr0,false);
+								outstring(150,0,IVr.Location,false);
+								outstring(250,"DblIVVc",IVr.SerNr,false);
+								outstring(300,0,IVr.InvDate,false);
+								outstring(350,0,IVr.LoyaltyCardNr,false);
+								outstring(1,0,IVr.Points,true);
+							endformat;
+						end else begin
+							if(culoycard[CUr.Code & ":" & IVr.LoyaltyCardNr]==false)then begin
+								culoycard[CUr.Code & ":" & IVr.LoyaltyCardNr] = true;
+								loycards[arsz] = IVr.LoyaltyCardNr;
+								loysum[CUr.Code & ":" & IVr.LoyaltyCardNr] = IVr.Points;
+								arsz = arsz + 1;
+							end else begin
+								loysum[CUr.Code & ":" & IVr.LoyaltyCardNr] = loysum[CUr.Code & ":" & IVr.LoyaltyCardNr] + IVr.Points;
+							end;
+						end;
+						sum = sum + IVr.Points;
+					
+					end;
+				end;
+				resetloop(IVr);
+				resetcompany(curcomp);
+			end; 
+			
+			if(RepSpec.flags[0]==0)then begin
+				Gray_Divider(0,1);
+				startformat(15);
+					outstring(0,0,"",false);
+					outstring(50,0,"",false);
+					outstring(100,0,"",false);
+					outstring(150,0,"",false);
+					outstring(200,0,"",false);
+					outstring(350,0,"",false);
+					outstring(1,0,sum,true);
+				endformat;
+			end else begin
+				psum = 0;
+				For(i=0;i<arsz;i=i+1) begin
+					LCr.SerNr = loycards[i];
+					readfirstmain(LCr,1,true);
+					loycardsstart[i] = LCr.StartBalance;
+					loycardssum[i] = LCr.PointsBalance;
+					psum = psum + LCr.PointsBalance;
+				end; 
+				if((psum-sum)!=0)then begin
+					gray_divider(0,1);
+					startformat(15);
+						outstring(0,0,CUr.Code,false);
+						outstring(50,0,CUr.Name,false);
+						outstring(100,0,"",false);
+						outstring(150,0,"",false);
+						outstring(300,0,psum,false);
+						outstring(350,0,sum,false);
+						outstring(1,0,psum - sum,true);
+						For(i=0;i<arsz;i=i+1) begin
+	  					outstring(1,0,loycards[i],true);
+	  					outstring(1,0,loycardsstart[i],true);
+	  					outstring(1,0,loycardssum[i],true);
+	  					outstring(1,0,loysum[CUr.Code & ":" & loycards[i]],false);
+						end; 
+					endformat;
+				end;
+			end;
+		end;
+	end;
+	endjob;
+
+return;
+end;
+
+
+global updating procedure LoyaltyCardCounterMn(record RcVc RepSpec)
+begin
+	string 20 custcode,loyaltycard;
+	record CUVc CUr;
+	record IVVc IVr;
+	record LoyaltyCardVc LCr;
+	record CompaniesBlock CBb;
+	integer mtrw,i,k,arsz;
+	boolean TrHs,testf,findf,TrHsCu,testfCu;
+	val sum,psum;
+	record LocationVc Locationr;
+	integer curcomp;
+	array string 50 loycards;
+	vector boolean culoycard;
+	vector val loysum;
+	array val loycardssum;
+	area resarea;
+	
+	curcomp = currentcompany;
+	
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);	
+	findf = false;
+	sum = 0;
+	
+	CUr.Code = custcode;
+	TrHsCu = true;
+	while(loopmain(CUr,1,TrHsCu))begin
+		sum = 0;
+		psum = 0;
+		arsz = 0;
+		testfCu = true;
+		findf = true;
+	
+		if(findf)then begin
+			For(i=0;i<mtrw;i=i+1) begin
+				setcompany(i+1,false);
+				IVr.CustCode = CUr.Code;
+				TrHs = true;
+				while(loopkey("CustDate",IVr,1,TrHs))begin
+					testf = true;
+					if(IVr.CustCode!=CUr.Code)then begin TrHs = false; testf = false; end;
+					if(IVr.OKFlag==0)then begin testf = false; end;
+					if(IVr.Invalid==1)then begin testf = false; end;
+					if(nonblank(loyaltycard) and (loyaltycard!=IVr.LoyaltyCardNr))then begin testf = false; end;
+					if(IVr.Points==0)then begin testf = false; end;
+					if(IVr.LCMLevel!="1")then begin testf = false; end;
+					
+					if(testf)then begin
+						if(culoycard[CUr.Code & ":" & IVr.LoyaltyCardNr]==false)then begin
+							culoycard[CUr.Code & ":" & IVr.LoyaltyCardNr] = true;
+							loycards[arsz] = IVr.LoyaltyCardNr;
+							loysum[CUr.Code & ":" & IVr.LoyaltyCardNr] = IVr.Points;
+							arsz = arsz + 1;
+						end else begin
+							loysum[CUr.Code & ":" & IVr.LoyaltyCardNr] = loysum[CUr.Code & ":" & IVr.LoyaltyCardNr] + IVr.Points;
+						end;
+						sum = sum + IVr.Points;
+					end;
+				end;
+				resetloop(IVr);
+				resetcompany(curcomp);
+			end; 
+			
+			psum = 0;
+			For(i=0;i<arsz;i=i+1) begin
+				LCr.SerNr = loycards[i];
+				readfirstmain(LCr,1,true);
+				loycardssum[i] = LCr.PointsBalance;
+				psum = psum + LCr.PointsBalance;
+			end; 
+			if((psum-sum)!=0)then begin
+				For(i=0;i<arsz;i=i+1) begin
+					LCr.SerNr = loycards[i];
+					readfirstmain(LCr,1,true);
+					if(LCr.LCMLevel=="1")then begin
+						if(loycardssum[i]-loysum[CUr.Code & ":" & loycards[i]]<0)then begin
+							LCr.PointsBalance = LCr.PointsBalance + loysum[CUr.Code & ":" & loycards[i]] - loycardssum[i];
+							recordstore(LCr,true);
+							addtexttoarea(LCr.SerNr & "___" & loysum[CUr.Code & ":" & loycards[i]] - loycardssum[i] & chr(13) & chr(10),resarea);
+						end else begin
+							LCr.StartBalance = loycardssum[i]-loysum[CUr.Code & ":" & loycards[i]];
+							recordstore(LCr,true);
+							addtexttoarea(LCr.SerNr & "___" & - loysum[CUr.Code & ":" & loycards[i]] - loycardssum[i] & chr(13) & chr(10),resarea);
+						end;
+					end;
+				end; 
+			end;
+		end;
+	end;
+	writeareatofile(resarea,"LoyaltyCardsPointsAdd.txt",1);
+
+return;
+end;
+
+global updating procedure FixLoyPaymentsCards()
+begin
+	record PointsHistVc PHr,lPHr;
+	string 20 custcode,loyaltycard;
+	record CUVc CUr;
+	record IVVc IVr;
+	record LoyaltyCardVc LCr;
+	record CompaniesBlock CBb;
+	integer mtrw,i,k,arsz;
+	boolean TrHs,testf,findf,TrHsCu,testfCu,foundf;
+	val sum,psum;
+	record LocationVc Locationr;
+	integer curcomp;
+	array string 50 loycards;
+	vector boolean culoycard;
+	vector val loysum;
+	area resarea;
+	
+	curcomp = currentcompany;
+	
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);
+	
+	
+	
+		while(loopmain(PHr,1,true))begin
+			foundf = false;
+			if(PHr.FileName=="IVVc")then begin
+				For(i=0;i<mtrw;i=i+1) begin
+					setcompany(i+1,false);
+						IVr.SerNr = PHr.TransNr;
+						if(readfirstmain(IVr,1,true))then begin
+						 if(IVr.LoyaltyCardNr==PHr.LMCardNr)then begin
+							foundf = true;
+						 end;
+						end;
+				end;
+				resetcompany(curcomp);
+				if(foundf==false)then begin
+					LCr.SerNr = PHr.LMCardNr;
+					if(readfirstmain(LCr,1,true))then begin
+						if(LCr.LCMLevel=="1")then begin
+							LCr.PointsBalance = LCr.PointsBalance - PHr.Points;
+							logtext(0,LCr.SerNr & "___" & - PHr.Points);
+							addtexttoarea(LCr.SerNr & "___" & - PHr.Points & chr(13) & chr(10),resarea);
+							recordstore(LCr,true);
+							recorddelete(PHr);
+							stepback(PHr);
+						end;
+					end;
+					//logtext(0,PHr.TransNr & "___" & PHr.Location & "___" & PHr.LMCardNr);
+				end;
+			end;
+		end;
+		resetloop(PHr);
+		PHr.SerNr = 99999999;
+		while(loopbackkey("SerNr",PHr,1,true))begin
+			if(PHr.FileName=="IVVc")then begin
+				//IVr.SerNr = PHr.TransNr;
+				//if(IVr.LCMLevel=="1")then begin
+					lPHr.TransNr = PHr.TransNr;
+					lPHr.FileName = PHr.FileName;
+					TrHs = true;
+					while(loopbackkey("TransNr",lPHr,2,TrHs))begin
+						testf = true;
+						if(lPHr.TransNr!=PHr.TransNr)then begin TrHs = false; testf = false; end;
+						if(lPHr.FileName!=PHr.FileName)then begin TrHs = false; testf = false; end;
+						if(lPHr.SerNr==PHr.SerNr)then begin testf = false; end;
+						if(lPHr.LMCardNr!=PHr.LMCardNr)then begin testf = false; end;
+						//if(lPHr.Points==PHr.Points)then begin testf = false; end;
+					
+						if(testf)then begin
+							LCr.SerNr = PHr.LMCardNr;
+							if(readfirstmain(LCr,1,true))then begin
+								if(LCr.LCMLevel=="1")then begin
+									LCr.PointsBalance = LCr.PointsBalance - lPHr.Points;
+									recordstore(LCr,true);
+									recorddelete(lPHr);
+									stepback(lPHr);
+									logtext(0,LCr.SerNr & "___" & - lPHr.Points);
+									addtexttoarea(LCr.SerNr & "___" & - lPHr.Points & chr(13) & chr(10),resarea);
+								end;
+							end else begin
+								recorddelete(lPHr);
+								stepback(lPHr);
+								//logtext(0,"nocard " & lPHr.SerNr & "___" & lPHr.TransNr & "___" & lPHr.LMCardNr & "___" & lPHr.Points);
+							end;
+						end;
+					end;
+					resetloop(lPHr);
+				//end;				
+			end;
+		end;
+		writeareatofile(resarea,"LoyaltyCardsPoints.txt",1);
+	
+	
+
+
+return;
+end;

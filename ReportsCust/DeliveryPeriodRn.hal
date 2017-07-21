@@ -1,0 +1,111 @@
+external function LongInt DateDiff(Date,Date);
+
+
+procedure OutHeaderToExcel(record RcVc RepSpec)	
+begin
+  string 255 tstr; 
+
+  	startformat(15);
+  	OutString(0,0,USetStr(1413),false);	//Enterprise by Hansa, Print Date
+  	OutString(10,0,"",false);
+  	OutString(20,0,"",false);
+  	OutString(30,0,CurrentDate,false);
+  	OutString(40,0,CurrentTime,false);
+  	EndFormat;
+  	OutString(0,0,RepSpec.Period2Str,false);
+  	EndFormat;
+  	EndFormat;  
+	
+end;
+
+global 
+procedure DeliveryPeriodRn(record RcVc RepSpec)
+begin
+	record POVc POr;
+	record ORVc ORr;
+	record CUvc CUr;
+	record SHVc SHr;
+	record APPayHistVc APPayHistr;
+	boolean testf,TrHs,TrHs2;
+	date readyHansa,readySupplier,shipDate,prepayDate;
+	integer delay;
+
+	StartReportJob(USetStr(35017));
+
+	EndHeader;
+	
+	if (RepSpec.Media == mtExcel) then begin	//Edit----------------------Dima  22.06.2015
+  	OutHeaderToExcel(RepSpec);
+  end;
+	
+  StartFormat(15);
+  OutString(15,0,USetStr(35018),false);
+  OutString(80,0,USetStr(35019),false);
+  OutString(150,0,USetStr(35020),false);
+  OutString(210,0,USetStr(35021),false);
+  OutString(260,0,USetStr(35022),false);
+  OutString(310,0,USetStr(35023),false);
+  OutString(360,0,USetStr(35024),false);
+  OutString(410,0,USetStr(35025),false);  
+  EndFormat;
+  Black_Divider(0,1);	
+
+	TrHs = true;
+	POr.TransDate = RepSpec.sStartDate;
+	While(LoopKey("TransDate",POr,1,TrHs)) begin
+		testf = true;
+		if (POr.TransDate>RepSpec.sEndDate) then begin testf=false; TrHs = false; end;
+		
+		if (testf) then begin
+			ORr.SerNr = POr.OrdNr;
+			ReadFirstMain(ORr,1,true);
+			CUr.Code = POr.VECode;
+			ReadFirstMain(CUr,1,true);
+			//readyHansa = AddDay(POr.OKDate,CUr.PlanShipDays);
+			
+			readySupplier = "";
+			if (POr.OrderDoneFlag>0) then begin
+				readySupplier = POr.OrderDoneDate;
+			end;
+			
+			readyHansa = "";
+			APPayHistr.OrderNr = POr.SerNr;
+			TrHs2 = true;
+			While(LoopKey("OrderNr",APPayHistr,1,TrHs2)) begin
+				if (APPayHistr.OrderNr==POr.SerNr and APPayHistr.FileName=="OPVc") then begin
+						prepayDate = APPayHistr.TransDate;
+						TrHs2 = false;
+				end;
+			end;
+			
+			if (NonBlank(prepayDate)) then begin
+				readyHansa = AddDay(prepayDate,CUr.PlanShipDays);
+			end;
+			
+			SHr.OrderNr = ORr.SerNr;
+			if(ReadLastKey("OrderKey",SHr,1,true)) then begin
+					shipDate = SHr.ShipDate;
+			end else begin
+					shipDate = CurrentDate;
+			end;	
+			delay = DateDiff(ORr.PlanShip,shipDate);					
+			
+			StartFormat(15);
+			OutString(15,0,POr.VECode,false);
+ 			OutString(80,0,ORr.OrderClass,false);
+ 			OutString(150,0,POr.InvAddr4,false);
+ 			OutString(210,0,POr.OurContact,false);
+  		OutString(260,0,readyHansa,false);
+  		OutString(310,0,readySupplier,false);
+  		OutString(360,0,ORr.PlanShip,false);
+  	  OutString(410,0,delay,false); 			
+			EndFormat;	
+
+		end;
+	end;
+	
+	
+	EndJob;
+
+return;
+end;

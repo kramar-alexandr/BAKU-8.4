@@ -1,0 +1,854 @@
+external procedure GetCurncyRateOnDate(string,date,var val);
+external procedure ClearValArray(integer,var array val);
+external inner procedure ExtractObj(string,var Integer,var string);
+external inner procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);
+external inner procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);// Edit ************************** Wednesday, 19 June 2013 13:43:37
+external inner function val AbsoluteVal(val);
+external procedure FindFIFOOrigValAndCurncyIV(longint, integer, var val, var string,var val,boolean);
+external inner procedure GetBaseCurncy(Integer,var string);//Edit----------------------Dima  28.01.2016
+
+
+function string 200 ParseClassification(string class)
+begin
+	string 200 res,cl;
+	string 50 category;
+	record DIVc DIr;
+	integer pos,acnt;
+	array string 20 dicnt;
+	record CUVc CUr;
+	
+	acnt = 0;
+	if(nonblank(class))then begin
+		pos = 0;
+		ExtractObj(class,pos,cl);
+		while(nonblank(cl)) begin
+			if(nonblank(cl))then begin
+				DIr.Code = cl;
+				readfirstmain(DIr,1,true);
+				dicnt[acnt] = DIr.Name;
+				acnt = acnt + 1;
+				if ((currentcompany==9) and (DIr.CType=="BRAND")) then begin				//Edit----------------------Dima  20.03.2015
+						category = DIr.CCat;	
+				end;
+			end;
+			ExtractObj(class,pos,cl);
+		end;
+		//CUr.Name = dicnt[0];
+		//readfirstkey("Name",CUr,1,true);
+		//outstring(35,0,CUr.Code,false);// Edit ************************** Friday, June 27, 2014 at 15:57:18
+		
+		switch (currentcompany) begin
+			case 1:outstring(0,0,dicnt[0],false);				 			
+			case 2:	outstring(0,0,dicnt[0],false);						
+			case 3: outstring(0,0,dicnt[0],false);
+							outstring(0,0,dicnt[1],false);													
+			case 4:	outstring(0,0,dicnt[0],false);
+							outstring(0,0,dicnt[1],false);							
+			case 5:	outstring(0,0,dicnt[0],false);
+							outstring(0,0,dicnt[1],false);							
+			case 6:	outstring(0,0,dicnt[0],false);
+							outstring(0,0,dicnt[1],false);							
+			case 7:	outstring(0,0,dicnt[0],false);
+							outstring(0,0,dicnt[1],false);							
+			case 8:	outstring(0,0,dicnt[0],false);
+							outstring(0,0,dicnt[1],false);							
+			case 9:	outstring(0,0,dicnt[1],false);
+							outstring(0,0,dicnt[2],false);
+							outstring(0,0,category,false);
+			case 17: outstring(0,0,dicnt[0],false);
+							outstring(0,0,dicnt[1],false);
+			otherwise
+			        outstring(0,0,dicnt[0],false);
+							outstring(0,0,dicnt[1],false);
+		end;
+	end else begin
+		outstring(0,0,"",false);		
+		if(currentcompany>2)then begin
+			outstring(0,0,"",false);			
+		end;
+		if(currentcompany==9)then begin
+			outstring(0,0,"",false);			
+		end;
+	end;
+	
+	ParseClassification = res;
+return;
+end;
+
+procedure ItemStockIHSerch(record RcVc RepSpec,string item,string location,date sd,date ed,var val qty_start,var val cost_start,var val pu_qty,var val pu_cost,
+                           var val sm_poz_qty,var val sm_neg_qty,var val sm_poz_cost,var val sm_neg_cost,var val iv_poz_qty,
+                           var val iv_neg_qty,var val iv_poz_sum,var val iv_poz_cost,var val iv_neg_sum,var val gp,var val iv_neg_cost,var val sd_qty,var val sd_cost,var val cost_end,var val qty_end,var val srval,var val rpu_qty,var val rpu_cost)
+begin
+  record ItemHistVc IHr,IHrinvr;
+  record StockMovVc SMr;
+  row StockMovVc SMrw;  
+  record IVVc IVr;
+  row IVVc IVrw;
+  Boolean TrHs,testf,testf1;
+  string 100 oldartcode,oldfilename;
+	longint oldsernr;
+  integer oldrow,oldinvalid;
+	val fr,to1,to2,br1,br2,ivfr,ivto;
+  string 20 curncy,brandcur;
+	Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
+  Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52
+  Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51
+  val sign,brandfifo,fifob1;
+  boolean updst;
+  record INVc INr;
+  
+	CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);// Edit ************************** Wednesday, 19 June 2013 13:59:15
+	curncy = acrncy[0];// Edit ************************** Wednesday, 19 June 2013 13:59:14
+  
+	
+	
+  IHr.ArtCode = item;
+  IHr.Location = location;
+  IHr.TransDate = "1/1/2000";
+  TrHs = true;
+  while (LoopKey("ArtCodeLoc",IHr,3,TrHs)) begin
+    testf = true;
+    if (IHr.ArtCode!=item or IHr.Location!=location or IHr.TransDate>ed) then begin testf = false; TrHs = false; end;
+    if (IHr.Invalid!=0) then begin testf = false; end;
+    if(IHr.FileName=="IVVc")then begin
+			IHrinvr.FileName = IHr.FileName;
+			IHrinvr.TransNr = IHr.TransNr;
+			if(readfirstkey("FNTransNr",IHrinvr,2,true))then begin
+				if(IHrinvr.Invalid>0)then begin
+					testf = false;
+				end;
+			end;
+    end;
+    
+    
+    testf1 = true;   
+    if(testf)then begin
+      switch (IHr.FileName) begin
+				case "IVVc":
+					if(IHr.TransDate<sd)then begin
+						if (IHr.StockAffectf==1) then begin
+							if IHr.Qty>0 then begin
+								qty_start = qty_start + IHr.Qty;
+								cost_start = cost_start + IHr.TotCostPrice;
+							end else begin
+								qty_start = qty_start + IHr.Qty;
+								cost_start = cost_start - IHr.TotCostPrice;
+							end;
+						end else begin
+						  if(RepSpec.flags[0]==1)then begin
+						    qty_start = qty_start + IHr.Qty;
+						  end;
+						end;
+					end else begin
+						if(testf1)then begin
+							if IHr.Qty>0 then begin
+								IVr.SerNr = IHr.TransNr;
+								if ReadFirstMain(IVr,1,true) then begin
+									ivfr = 1; ivto = 1;
+									fr = 1; to1 = 1;
+									if(IVr.CurncyCode!=curncy)then begin
+										ivfr = IVr.FrRate;
+										ivto = IVr.ToRateB1;
+										if(ivfr==0 or ivto==0)then begin
+											ivfr = 1;	ivto = 1;
+										end;
+										GetFullCurncyRate(curncy,IVr.TransDate,fr,to1,to2,br1,br2);
+										if(fr==0 or to1==0)then begin
+											fr = 1;	to1 = 1;
+										end;
+									end;
+									MatRowGet(IVr,IHr.Row,IVrw);
+									sign = 1;
+									
+									if(IVrw.Quant<0)then begin
+										sign = -1;
+									end;
+									if(IHr.Invalid==1)then begin
+									  sign = -sign;
+									end;
+									if(IVr.InvType==kInvoiceTypeCredit)then begin
+										iv_poz_sum = iv_poz_sum - IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1; 
+										gp = gp - IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;//Sum AZN
+									end else begin
+										iv_poz_sum = iv_poz_sum + IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1; 
+										gp = gp + IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;//Sum AZN
+									end;
+									
+									if(IHr.StockAffectf>0)then begin
+                    updst = true;
+                  end else begin
+                    updst = false;
+                  end;
+									FindFIFOOrigValAndCurncyIV(IVr.SerNr,IHr.Row,brandfifo,brandcur,fifob1,updst);
+                  if(fifob1==0)then begin
+                    INr.Code = IVrw.ArtCode;
+                    readfirstmain(INr,1,true);
+                    fifob1 = INr.WeighedAvPrice*IVrw.Quant;
+                  end;
+                  fifob1 = AbsoluteVal(fifob1/IVrw.Quant);
+                  gp = gp + fifob1*fr/to1*IHr.Qty;									
+								end;
+							end else begin
+								IVr.SerNr = IHr.TransNr;
+								if ReadFirstMain(IVr,1,true) then begin
+									ivfr = 1; ivto = 1;
+									fr = 1; to1 = 1;
+									if(IVr.CurncyCode!=curncy)then begin
+										ivfr = IVr.FrRate;
+										ivto = IVr.ToRateB1;
+										if(ivfr==0 or ivto==0)then begin
+											ivfr = 1;	ivto = 1;
+										end;
+										GetFullCurncyRate(curncy,IVr.TransDate,fr,to1,to2,br1,br2);
+										if(fr==0 or to1==0)then begin
+											fr = 1;	to1 = 1;
+										end;
+									end;
+									MatRowGet(IVr,IHr.Row,IVrw);
+									sign = 1;
+									if(IVrw.Quant<0)then begin
+										sign = -1;
+									end;
+									
+									if(IHr.Invalid==1)then begin
+									  sign = -sign;
+									end;
+									if(IVr.InvType==kInvoiceTypeCredit)then begin
+										iv_neg_sum = iv_neg_sum - IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;
+										gp = gp - IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;//SumAZN
+									end else begin
+										iv_neg_sum = iv_neg_sum + IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;
+										gp = gp + IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;//SumAZN
+									end;
+									//gp = gp + IVrw.rowGP;
+									
+									
+									if(IHr.StockAffectf>0)then begin
+                    updst = true;
+                  end else begin
+                    updst = false;
+                  end;
+									FindFIFOOrigValAndCurncyIV(IVr.SerNr,IHr.Row,brandfifo,brandcur,fifob1,updst);
+                  if(fifob1==0)then begin
+                    INr.Code = IVrw.ArtCode;
+                    readfirstmain(INr,1,true);
+                    fifob1 = INr.WeighedAvPrice*IVrw.Quant;
+                  end;
+                  fifob1 = AbsoluteVal(fifob1/IVrw.Quant);
+                  gp = gp + fifob1*fr/to1*IHr.Qty;
+									
+								end;
+							end;
+						end;
+						if (IHr.StockAffectf==1) then begin
+							if IHr.Qty>0 then begin
+								iv_poz_qty = iv_poz_qty + IHr.Qty;
+								iv_poz_cost = iv_poz_cost + IHr.TotCostPrice;
+								cost_end = cost_end + IHr.TotCostPrice;
+								qty_end = qty_end + IHr.Qty;
+							end else begin
+								iv_neg_qty = iv_neg_qty + (-IHr.Qty);
+								iv_neg_cost = iv_neg_cost + IHr.TotCostPrice;
+								cost_end = cost_end - IHr.TotCostPrice;
+								qty_end = qty_end + IHr.Qty;
+							end;
+						end else begin
+						  if(RepSpec.flags[0]==1)then begin
+						    if(IHr.Qty>0)then begin
+                  iv_poz_qty = iv_poz_qty + IHr.Qty;
+                  qty_end = qty_end + IHr.Qty;
+                end else begin
+                  iv_neg_qty = iv_neg_qty + (-IHr.Qty);
+                  qty_end = qty_end + IHr.Qty;
+                end;
+						  end;
+						end;
+					end;
+				case "PUVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start = qty_start + IHr.Qty;
+						cost_start = cost_start + IHr.TotCostPrice;
+					end else begin
+						pu_qty = pu_qty + IHr.Qty;
+						pu_cost = pu_cost + IHr.TotCostPrice;
+						cost_end = cost_end + IHr.TotCostPrice;
+						qty_end = qty_end + IHr.Qty;
+					end;
+				case "SRVc":
+					if(IHr.TransDate<sd)then begin
+						if(IHr.Qty>0)then begin
+							cost_start = cost_start + IHr.TotCostPrice;
+						end else begin
+							cost_start = cost_start - IHr.TotCostPrice;
+						end;
+					end else begin
+						if(IHr.Qty>0)then begin
+							cost_end = cost_end + IHr.TotCostPrice;
+							srval = srval + IHr.TotCostPrice;
+						end else begin
+							cost_end = cost_end - IHr.TotCostPrice;
+							srval = srval - IHr.TotCostPrice;
+						end;
+					end;
+				case "SHVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start = qty_start + IHr.Qty;
+						cost_start = cost_start - IHr.TotCostPrice;
+						if(RepSpec.flags[0]==1)then begin
+						  qty_start = qty_start - IHr.Qty;
+						end;
+					end else begin
+						cost_end = cost_end - IHr.TotCostPrice;
+						qty_end = qty_end + IHr.Qty;
+						iv_neg_qty = iv_neg_qty + (-IHr.Qty);
+						if(RepSpec.flags[0]==1)then begin
+						  qty_end = qty_end - IHr.Qty;
+              iv_neg_qty = iv_neg_qty - (-IHr.Qty);
+						end;
+						iv_neg_cost = iv_neg_cost + IHr.TotCostPrice;
+					end;
+				case "SDVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start = qty_start + IHr.Qty;
+						cost_start = cost_start - IHr.TotCostPrice;
+					end else begin
+						sd_qty = sd_qty + (-IHr.Qty);
+						sd_cost = sd_cost + IHr.TotCostPrice;
+						cost_end = cost_end - IHr.TotCostPrice;
+						qty_end = qty_end + IHr.Qty;
+					end;
+				case "StockMovVc":
+					if(IHr.TransDate<sd)then begin
+						if IHr.Qty>0 then begin
+							qty_start = qty_start + IHr.Qty;
+							cost_start = cost_start + IHr.TotCostPrice;
+						end else begin
+							qty_start = qty_start + IHr.Qty;
+							cost_start = cost_start - IHr.TotCostPrice;
+						end;
+					end else begin
+						if IHr.Qty>0 then begin
+							sm_poz_qty = sm_poz_qty + IHr.Qty;
+							sm_poz_cost = sm_poz_cost + IHr.TotCostPrice; 
+							cost_end = cost_end + IHr.TotCostPrice;
+							qty_end = qty_end + IHr.Qty;
+						end else begin
+							sm_neg_qty = sm_neg_qty + (-IHr.Qty);
+							sm_neg_cost = sm_neg_cost + IHr.TotCostPrice;
+							cost_end = cost_end - IHr.TotCostPrice;
+							qty_end = qty_end + IHr.Qty;
+						end;
+					end;
+				case "RetVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start = qty_start + IHr.Qty;
+						cost_start = cost_start + IHr.TotCostPrice;
+						if(RepSpec.flags[0]==1)then begin
+						  qty_start = qty_start - IHr.Qty;
+						end;
+					end else begin
+						cost_end = cost_end + IHr.TotCostPrice;
+						qty_end = qty_end + IHr.Qty;
+						iv_poz_qty = iv_poz_qty + IHr.Qty;
+						if(RepSpec.flags[0]==1)then begin
+						  qty_end = qty_end - IHr.Qty;
+              iv_poz_qty = iv_poz_qty - IHr.Qty;
+						end;
+						iv_poz_cost = iv_poz_cost + IHr.TotCostPrice;
+					end;
+				case "RetPUVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start = qty_start + IHr.Qty;
+						cost_start = cost_start - IHr.TotCostPrice;
+					end else begin
+						rpu_qty = rpu_qty + (-IHr.Qty);
+						rpu_cost = rpu_cost + IHr.TotCostPrice;
+						cost_end = cost_end - IHr.TotCostPrice;
+						qty_end = qty_end + IHr.Qty;
+					end;
+			end;
+		end;
+  end; // while
+
+  return;
+end;
+
+procedure ItemStockCombination(record RcVc RepSpec,string group,date sd,date ed,string location)
+begin
+  record INVc INr;
+  Boolean TrHs,testf;
+  integer i,reprownr,mark,gi;
+  val rate,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost;
+  array val totals;
+  record PLVc PLr;
+  val price;
+  string 200 curgr,curgr1;
+  string 10 basecur;
+  
+  //SetLangMode(LangRussian,"RUS",0);
+  
+  
+  ClearValArray(23,totals);
+  TrHs = true;
+  INr.DispGroups = group;// Edit ************************** Tuesday, 30 October 2012 15:54:00
+  reprownr = 0;
+//  GetCurncyRateOnDate("AZN",CurrentDate,rate);	//Edit----------------------Dima  28.01.2016
+	GetBaseCurncy(1,basecur);
+  GetCurncyRateOnDate(basecur,CurrentDate,rate);//Edit----------------------Dima  28.01.2016
+  mark = 0;
+  while (LoopKey("MyDispGroups",INr,1,TrHs)) begin// Edit ************************** Tuesday, 30 October 2012 15:53:4115:22 17.11.2015
+    testf = true;
+    gi=0;
+    ExtractObj(INr.DispGroups,gi,curgr);
+    if (nonblank(group) and (curgr!=group)) then begin// Edit ************************** Tuesday, 30 October 2012 15:54:26
+			TrHs = false;
+			testf = false;
+    end;
+    if(RepSpec.flags[1]==1 and INr.ConsgType==0)then begin testf = false; end;
+    if(RepSpec.flags[2]==1 and INr.ConsgType==1)then begin testf = false; end;
+    if(RepSpec.flags[3]==1 and INr.ConsgType==2)then begin testf = false; end;
+    //if(INr.NotForSales>0)then begin testf=false; end;
+    
+    if(testf)then begin
+      reprownr = reprownr + 1;
+      qty_start = 0;
+      cost_start = 0;
+      pu_qty = 0;
+      pu_cost = 0;
+      sd_qty = 0;
+      sd_cost = 0;
+      sm_poz_qty = 0;
+      sm_neg_qty = 0;
+      sm_poz_cost = 0;
+      sm_neg_cost = 0;
+      iv_poz_qty = 0;
+      iv_neg_qty = 0;
+      iv_poz_sum = 0;
+      iv_poz_cost = 0;
+      iv_neg_sum = 0;
+      iv_neg_cost = 0;
+      cost_end = 0;
+      qty_end = 0;
+      gp = 0;
+	  rpu_cost = 0;
+	  rpu_qty = 0;
+      ItemStockIHSerch(RepSpec,INr.Code,location,sd,ed,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost);
+      if (qty_start==0 and pu_qty==0 and sd_qty==0 and sm_poz_qty==0 and sm_neg_qty==0 and iv_poz_qty==0 and iv_neg_qty==0 and rpu_qty==0 and cost_start==0 and cost_end==0) then begin
+        reprownr = reprownr - 1;
+      end else begin
+        StartFormat(15);
+          OutString(0,0,reprownr,false);
+          OutString(20,0,INr.Code,false);
+          //if(currentcompany==9)then begin
+						OutString(25,0,INr.AlternativeCode,false);
+					//end;
+          OutString(30,0,INr.Name,false);
+          
+          ParseClassification(INr.DispGroups);
+          if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+            //OutString(50,0,INr.InPrice,false);
+            
+            if(qty_start>0)then begin
+							OutString(50,0,cost_start/qty_start,false);
+            end else begin
+            	OutString(50,0,INr.InPrice,false);
+            end;
+          end;
+          // Edit Start ---------------------------------------------- Edit Start
+	//Tuesday, 30 October 2012 16:22:25
+					price = 0;
+          PLr.PLCode = "RRP";
+          PLr.ArtCode = INr.Code;
+          readfirstmain(PLr,2,true);
+          price = PLr.ExVatPrice;
+          //OutString(60,0,INr.UPrice1,false);
+          OutString(60,0,price,false);
+          
+	// Edit End ---------------------------------------------- Edit End
+	
+          //  Состояло
+          OutString(70,0,qty_start,false);//Кол-во
+          totals[0] = totals[0] + qty_start;
+          
+          if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+            OutVal(80,0,cost_start,M4Val,false);//Сумма
+            totals[1] = totals[1] + cost_start;
+          end;
+          //  Поступило
+          OutString(90,0,pu_qty,false);//Поступило кол-во
+          totals[2] = totals[2] + pu_qty;
+          
+          OutString(100,0,sm_poz_qty,false);//Поступило кол-во внутр
+          totals[3] = totals[3] + sm_poz_qty;
+          
+          if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+            OutVal(110,0,pu_cost,M4Val,false);//Поступило Сумма
+            totals[4] = totals[4] + pu_cost;
+          
+            OutVal(120,0,sm_poz_cost,M4Val,false);//Поступило Сумма внутр
+            totals[5] = totals[5] + sm_poz_cost;
+          end;
+          //  Возврат покупателей
+          OutString(130,0,iv_poz_qty,false);	//Возврат покупателей к-во
+          totals[6] = totals[6] + iv_poz_qty;
+          
+          if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+            OutVal(140,0,iv_poz_sum,M4Val,false);//Возврат покупателей сумма
+            OutVal(145,0,iv_poz_cost,M4Val,false);//Возврат покупателей сумма
+            totals[7] = totals[7] + iv_poz_sum;
+            totals[18] = totals[18] + iv_poz_cost;//Кост продаж
+          end;
+          //  Отпущено
+          OutString(150,0,iv_neg_qty,false);//Отпущено кол-во
+          totals[8] = totals[8] + iv_neg_qty;
+          
+          OutString(160,0,sm_neg_qty,false);//Отпущено кол-во внур
+          totals[9] = totals[9] + sm_neg_qty;
+          
+          if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+            OutVal(170,0,iv_neg_sum,M4Val,false);//Отпущено сумма
+            totals[10] = totals[10] + iv_neg_sum;
+            totals[19] = totals[19] + iv_neg_cost;
+            OutVal(180,0,sm_neg_cost,M4Val,false);//Отпущено сумма внутр
+            OutVal(185,0,iv_neg_cost,M4Val,false);//Отпущено сумма себестоимость// Edit ************************** Wednesday, 12 November 2014 16:40:34
+            totals[11] = totals[11] + sm_neg_cost;
+          end;
+          
+          //Возврат поставщикам
+          
+          OutString(190,0,rpu_qty,false);//Возврат поставщикам кол-во
+          totals[12] = totals[12] + rpu_qty;
+          
+          if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+            OutVal(200,0,rpu_cost,M4Val,false);//Возврат поставщикам сумма
+            totals[13] = totals[13] + rpu_cost;
+          end;
+		  //Edit-------------------Vitalii 15:11 17.11.2015
+		  OutString(203,0,sd_qty,false);//Списание кол-во
+          totals[21] = totals[21] + sd_qty;
+		  if(RepSpec.flags[0]==0)then begin
+            OutVal(206,0,sd_cost,M4Val,false);//Списание сумма
+            totals[22] = totals[22] + sd_cost;
+          end;
+          if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+            OutVal(210,0,gp,M4Val,false);//Прибыль
+            totals[14] = totals[14] + gp;
+          end;          
+         
+          OutVal(220,0,qty_start+qty_end,M4Val,false);//остаток кол-во
+          totals[15] = totals[15] + qty_start+qty_end;
+          
+          if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+            OutVal(230,0,(cost_start+cost_end),M4Val,false);//сумма себестоимости
+            totals[16] = totals[16] + (cost_start+cost_end);
+          end;
+          //переоценка
+          OutVal(235,0,srval,M4Val,false);//переоценка
+          totals[20] = totals[20] + srval;// Edit ************************** Friday, 26 December 2014 13:40:11;
+          
+          OutVal(240,0,(qty_start+pu_qty+sm_poz_qty+iv_poz_qty-iv_neg_qty-sm_neg_qty-sd_qty)*price,M4Val,false);//сумма цена
+          totals[17] = totals[17] + (qty_start+pu_qty+sm_poz_qty+iv_poz_qty-iv_neg_qty-sm_neg_qty-sd_qty)*price;
+        EndFormat;
+      end;
+    end; // testf
+  end; // while
+  
+  StartFormat(15);
+		OutString(0,0,USetStr(12010),false);
+		//OutString(20,0,"",false);
+		if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+      OutString(20,0,"",false);
+    end;
+		//if(currentcompany==9)then begin
+			OutString(25,0,"",false);
+		//end;
+		OutString(30,0,"",false);
+		if(currentcompany>2)then begin
+			OutString(40,0,"",false);
+			OutString(40,0,"",false);
+			//OutString(40,0,"",false);
+		end else begin
+			OutString(40,0,"",false);
+		end;
+		OutString(50,0,"",false);
+		OutString(60,0,"",false);
+		//  Состояло
+		OutVal(70,0,totals[0],m4val,false);
+		if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+      OutVal(80,0,totals[1],m4val,false);
+		end;
+		//  Поступило
+		OutVal(90,0,totals[2],m4val,false);
+		OutVal(100,0,totals[3],m4val,false);
+		if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+      OutVal(110,0,totals[4],m4val,false);
+      OutVal(120,0,totals[5],m4val,false);
+		end;
+		//  Возврат покупателей
+		OutVal(130,0,totals[6],m4val,false);
+		if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+      OutVal(140,0,totals[7],m4val,false);
+      OutVal(145,0,totals[18],m4val,false);// Edit ************************** Friday, 14 November 2014 11:53:37
+		end;
+		//  Отпущено
+		OutVal(150,0,totals[8],m4val,false);
+		OutVal(160,0,totals[9],m4val,false);
+		if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+      OutVal(170,0,totals[10],m4val,false);
+      OutVal(180,0,totals[11],m4val,false);
+      OutVal(185,0,totals[19],m4val,false);// Edit ************************** Friday, 14 November 2014 10:28:05
+		end;
+		//Возврат поставщикам
+		OutVal(190,0,totals[12],m4val,false);
+		if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+      OutVal(200,0,totals[13],m4val,false);
+		end;
+		//Edit-------------------Vitalii 15:13 17.11.2015
+		OutVal(203,0,totals[21],m4val,false);
+		if(RepSpec.flags[0]==0)then begin
+		OutVal(206,0,totals[22],m4val,false);
+		end;
+		if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+      OutVal(210,0,totals[14],m4val,false);
+		end;
+		OutVal(220,0,totals[15],m4val,false);
+		if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+      OutVal(230,0,totals[16],m4val,false);
+		end;
+		OutVal(235,0,totals[20],m4val,false);// Edit ************************** Friday, 26 December 2014 13:40:51
+		OutVal(240,0,totals[17],m4val,false);
+  EndFormat;
+  return;
+end;
+
+global
+procedure ItemSaldoRn(record RcVc RepSpec)
+begin
+  record LocationVc Locr,Loc2r;
+  Date sd,ed;
+  string 20 location;
+  string 5 group;
+  Boolean TrHs;
+  array string 10 locar;
+  integer i,si,ei,gi;
+  string 20 curobj;
+  record UserVc User;
+  boolean userlocation;
+  integer pos;
+	string 50 uloc;
+
+  SetLangMode(LangRussian,"RUS",0);
+  
+    StartReportNoHeaderJob(USetStr(31080));
+    
+    sd = RepSpec.sStartDate;
+    ed = RepSpec.sEndDate;
+    
+    location = RepSpec.f1;
+    group = RepSpec.f2;
+    
+    userlocation = false;
+		User.Code = currentuser;
+		if(readfirstmain(User,1,true))then begin
+			if(nonblank(User.UserLocations) and usercanaction("AllowReportWithUserLoc",false))then begin
+				userlocation = true;
+				pos = 0;
+				ExtractObj(User.UserLocations,pos,uloc);
+				while (nonblank(uloc)) begin
+					if(uloc==location)then begin
+						userlocation = false;
+					end;
+					ExtractObj(User.UserLocations,pos,uloc);
+				end;
+			end;
+		end;
+    
+    if(userlocation)then begin
+			startformat(15);
+				outstring(50,0,USetStr(31014),false);
+			endformat;
+		end else begin
+			if blankdate(sd) then begin
+				StartFormat(15);
+				OutString(0,0,USetStr(31088),false);
+				EndFormat;
+			end else begin 
+				StartFormat(15);
+				OutString(0,0,USetStr(31080),false);
+				EndFormat;
+						
+				StartFormat(15);
+						OutString(0,0,USetStr(31102),false);
+						OutString(100,0,RepSpec.sStartDate & ":" & RepSpec.sEndDate,false);
+				endformat;
+				if(nonblank(RepSpec.f1))then begin
+					StartFormat(15);
+							OutString(0,0,USetStr(31202),false);
+							OutString(100,0,RepSpec.f1,false);
+					endformat;
+				end else begin
+						StartFormat(15);
+							OutString(0,0,USetStr(31202),false);
+							OutString(100,0,USetStr(31089),false);
+					endformat;
+				end;
+				if(nonblank(RepSpec.f2))then begin
+					StartFormat(15);
+							OutString(0,0,USetStr(31228),false);
+							OutString(100,0,ParseClassification(RepSpec.f2),false);
+					endformat;
+				end else begin
+						StartFormat(15);
+							OutString(0,0,USetStr(31228),false);
+							OutString(100,0,USetStr(31089),false);
+					endformat;
+				end;
+			
+				
+				Locr.Code = location;
+			
+				TrHs = true;
+				while (Loopmain(Locr,1,TrHs)) begin
+					if (nonblank(location) and (Locr.Code!=location)) then begin
+						TrHs = false;
+					end;
+					if(TrHs)then begin
+								StartFormat(15);
+							OutString(0,0,Locr.Code,false);
+							EndFormat;
+							StartFormat(15);
+							OutString(0,0,"",false);
+							OutString(20,0,"",false);
+							//if(currentcompany==9)then begin
+								OutString(25,0,"",false);
+							//end;
+							OutString(30,0,"",false);
+							if(currentcompany>2)then begin
+								OutString(40,0,"",false);
+								OutString(40,0,"",false);
+							end else begin
+								OutString(40,0,"",false);
+							end;
+							//OutString(40,0,"",false);
+							if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+							OutString(50,0,"",false);
+							end;
+							OutString(60,0,"",false);
+							OutString(70,0,USetStr(31090),false);
+              OutString(80,0,"",false);
+							OutString(90,0,USetStr(5051),false);
+							OutString(100,0,"",false);
+							if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+                OutString(110,0,"",false);
+                OutString(120,0,"",false);
+							end;
+							OutString(130,0,USetStr(31091),false);
+							if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+                OutString(140,0,"",false);
+                OutString(145,0,"",false);
+							end;
+							OutString(150,0,USetStr(31084),false);
+							OutString(160,0,"",false);
+							if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+                OutString(170,0,"",false);
+                OutString(180,0,"",false);
+                OutString(185,0,"",false);// Edit ************************** Wednesday, 12 November 2014 16:40:56
+							end;
+							OutString(190,0,USetStr(31111),false);
+							if(RepSpec.flags[0]==0)then begin//Edit-------------------Vitalii 15:42 17.11.2015
+							OutString(200,0,"",false);
+							end;
+							OutString(210,0,USetStr(31153),false);
+							EndFormat;
+							StartFormat(15);
+							OutString(0,0,"№",false);
+							OutString(20,0,USetStr(12501),false);
+							//if(currentcompany==9)then begin
+								OutString(25,0,USetStr(31018),false);
+							//end;
+							OutString(30,0,USetStr(8105),false);
+							//OutString(35,0,"Код поставщика",false);
+							OutString(40,0,USetStr(31105),false);							
+							if(currentcompany>2)then begin
+								OutString(40,0,USetStr(31120),false);	
+							end;
+							if(currentcompany==9)then begin
+								OutString(40,0,USetStr(9131),false);		//Edit----------------------Dima  20.03.2015
+							end;								 
+							if(RepSpec.flags[0]==0)then begin
+							  OutString(50,0,USetStr(18240),false);
+							end;
+							OutString(60,0,USetStr(12754),false);
+							//  Состояло
+							OutString(70,0,USetStr(31121),false);
+							if(RepSpec.flags[0]==0)then begin
+                OutString(80,0,USetStr(31122),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:52
+							end;
+							//  Поступило
+							OutString(90,0,USetStr(31121),false);
+							OutString(100,0,USetStr(31092),false);
+							if(RepSpec.flags[0]==0)then begin
+                OutString(110,0,USetStr(31122),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:36
+                OutString(120,0,USetStr(31093),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:36
+							end;
+							//  Возврат покупателей
+							OutString(130,0,USetStr(31121),false);
+							if(RepSpec.flags[0]==0)then begin
+                OutString(140,0,USetStr(31122),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:32
+                OutString(145,0,USetStr(18240),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:32							
+							end;
+							//  Отпущено
+							OutString(150,0,USetStr(31121),false);
+							OutString(160,0,USetStr(31092),false);
+							if(RepSpec.flags[0]==0)then begin
+                OutString(170,0,USetStr(31122),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:30
+                OutString(180,0,USetStr(31093),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:29
+                OutString(185,0,USetStr(31099),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:30
+							end;
+							//Возврат поставщикам
+							OutString(190,0,USetStr(31121),false);
+							if(RepSpec.flags[0]==0)then begin
+                OutString(200,0,USetStr(31122),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:28
+							end;
+				OutString(203,0,USetStr(31121),false);//Edit-------------------Vitalii 15:41 17.11.2015
+							if(RepSpec.flags[0]==0)then begin
+				OutString(206,0,USetStr(31122),false);
+				OutString(210,0,USetStr(31135),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:27
+							end;
+							OutString(220,0,USetStr(31094),false);
+							if(RepSpec.flags[0]==0)then begin
+                OutString(230,0,USetStr(31095),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:25
+							end;
+							OutString(235,0,USetStr(9651),false);// Edit ************************** Friday, 26 December 2014 13:41:40
+							OutString(240,0,USetStr(31096),false);
+							EndFormat;
+							ItemStockCombination(RepSpec,group,sd,ed,Locr.Code);
+					end;
+				end;  // while
+			end; 
+		end;   
+    EndJob;
+  return;
+end;
+
+
+
+global procedure ItemSaldoRClassReportDefaults(integer wn)
+begin
+	record RcVc RepSpec;
+	record UserVc User;
+	integer i;
+	string 20 loc;
+	
+	getwindowrecord(wn,RepSpec);
+	User.Code = currentuser;
+	if(readfirstmain(User,1,true))then begin
+		if(nonblank(User.UserLocations) and usercanaction("AllowReportWithUserLoc",false))then begin
+			i = 0;
+			ExtractObj(User.UserLocations,i,loc);
+			RepSpec.f1 = loc;
+			putwindowrecord(wn,RepSpec);
+		end;
+	end;
+return;
+end;

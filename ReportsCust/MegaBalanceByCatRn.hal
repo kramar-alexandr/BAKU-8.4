@@ -1,0 +1,550 @@
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external procedure GetOnAccBalance(record RcVc,string,string,Boolean,Integer,var val,var val,var val,var val,var val,var val,var val,record SMVc,
+                   Array string,Array val,var Integer);
+external procedure GetFindCustBalance(string,LongInt,var val,var val,var val,var val,Integer,Integer,Integer,Integer,Integer,Integer,Boolean,var Boolean);
+external procedure PrintStockStat1ByCat(integer,date,date,string,array string,var val);
+external procedure PrintStockIn2ByCat(integer,date,date,string,array string);
+external procedure PrintStockCLOut31ByCat(integer,date,date,string,array string);
+external procedure PrintCashIn412ByCat(array val,array val,array val,array val,array val,integer);
+external procedure PrintCLIn43ByCat(integer,date,date,string,array string);
+external procedure PrintCUDEb445ByCat(date,date,string);
+external procedure PrintCLIn5ByCat(integer,date,date,string,array string,var val);
+external procedure PrintCLOut61ByCat(integer,date,date,string,array string);
+external procedure PrintStockSelRet468ByCat(integer,date,date,string,array string);
+//external procedure PrintStockVEPAy6ByCat(array val,array val,array val,array val,integer);
+external procedure PrintStockVEPAy6ByCat(record RcVc,array string,integer);//Edit***********************Vitalii 10:20 01.09.2014
+
+external procedure PrintStockVECred7ByCat(date,date,integer,array string,var val,string);
+external procedure PrintStockIVDeb8ByCat(date,date,integer,array string,var val,string);
+
+external procedure PrintStockRetFob9ByCat(integer,date,date,string,array string);
+external procedure PrintRates10ByCat(date);
+external function string 255 PrepareDispGroups(string);
+
+
+SetLangMode(LangRussian,"RUS",0);
+
+global procedure MegaBalanceByCatRn(record RcVc RepSpec)
+begin
+array string 100 aBrands;
+
+array val aBrandsCashEUR;
+array val aBrandsCashAZN;
+array val aBrandsCashUSD;
+val BrandsCashUSDtotal;
+array val aBrandsCCAZN;
+array val aBrandsCCUSD;
+val BrandsCCUSDtotal;
+array val aBrandPercent;
+
+array val aBrandsPaymAZN;
+array val aBrandsPaymEUR;
+array val aBrandsPaymCHF;
+array val aBrandsPaymUSD;
+
+val CUIVAZN;
+val CUIVEUR;
+val CUIVCHF;
+val CUIVUSD;
+
+val CUIPAZN;
+val CUIPEUR;
+val CUIPCHF;
+val CUIPUSD;
+
+array val aVEVIAZN;
+array val aVEVIEUR;
+array val aVEVICHF;
+array val aVEVIUSD;
+
+array val aVEOPAZN;
+array val aVEOPEUR;
+array val aVEOPCHF;
+array val aVEOPUSD;
+
+val CUIVTotalUSD;
+val VEVITotalUSD;
+
+val CUDebSum,CUPrepaySum;
+val VEDebSum,VEPrepaySum;
+
+val rateUSD,rateEUR,rateAZN,rateCHF;
+
+integer brandscnt;
+record DIVc DIr;
+boolean testf,TrHs;
+integer i,j,br,sign,keyi,mtrw;	
+record INVc INr;
+record ItemHistVc IHr;
+string 20 incurncy,keystr;
+date curdate;
+val t,fr,to1,to2,br1,br2;
+string 50 location;
+record IVVc IVr;
+row IVVc IVrw;
+record CLOutVc CLoutr;
+record OPrsVc OPrsr;
+record IPrsVc IPrsr;
+record IPVc IPr;
+row IPVc IPrw;
+record CUVc CUr;
+record OPVc OPr;
+row OPVc OPrw;
+record ARVc ARr;
+val sum,sum2,rval,sumbooked,sumnow,sumincur,sumdiff;
+record SMVc CurTotalsr;
+Array string 10 debaccs;
+Array val debbal;
+Integer debcnt;
+record VIVc VIr;
+row VIVc VIrw;
+record ORVc ORr;
+val turn,limit,due,balp,onacc;
+Date sd,ed;
+record CSVc CSr;
+string 255 dealer,tstr;
+record MailSettingsBlock MBr;
+record CUVc InvoiceToCUr;
+record CreditLimitBlock CreditLimitRec;
+LongInt limitdays;
+Boolean limitdaysf;
+Boolean TrHs1,ccatfind;
+val totusd;
+
+	sd = RepSpec.sStartDate;
+	ed = RepSpec.sEndDate;
+	brandscnt = 0;
+	DIr.CType = "TYPE";
+	TrHs = true;
+	while(loopkey("CType",DIr,1,TrHs)) begin
+		if(DIr.CType!="TYPE")then begin TrHs = false; end;
+		
+		if(TrHs)then begin
+			if(nonblank(DIr.CCat))then begin
+				ccatfind = false;
+				For(i=0;i<brandscnt;i=i+1) begin
+					if(aBrands[i]==DIr.CCat)then begin 
+						ccatfind = true;
+					end;
+				end;
+				if(ccatfind==false)then begin 
+					aBrands[brandscnt] = DIr.CCat;
+					brandscnt = brandscnt + 1;
+				end;
+			end;
+		end;
+	end;
+	aBrands[brandscnt] = "Other";
+	brandscnt = brandscnt + 1;
+	
+	location = RepSpec.f1;
+	
+	startreportnoheaderjob("Баланс");
+	
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(0,0,"Баланс " & RepSpec.sStartDate & " - " & RepSpec.sEndDate,false);
+			outstring(100,0,"Всего",false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  		outstring(150+i*50,0,aBrands[i],false);
+			end; 
+		endformat;
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(0,0,"Статья баланса",false);
+		endformat;
+								
+		TrHs = true;
+		IVr.InvDate=RepSpec.sStartDate;
+		IVr.Location = location;
+		if(nonblank(location))then begin
+			keyi = 2;
+			keystr = "Location";
+		end else begin
+			keyi = 1;
+			keystr = "InvDate";
+		end;
+		
+		while(loopkey(keystr,IVr,keyi,TrHs))begin
+			testf = true;
+			if(IVr.InvDate>RepSpec.sEndDate)then begin TrHs = false; testf = false; end;
+			if(nonblank(location) and location!=IVr.Location)then begin TrHs = false; testf = false; end;
+			if(IVr.OKFlag==0)then begin testf = false; end;
+			if(IVr.Invalid>0)then begin testf = false; end;
+			
+			if(testf)then begin
+				fr = IVr.FrRate;
+				to1 = IVr.ToRateB1;
+				if(fr==0 or to1==0)then begin
+					fr=1;
+					to1=1;
+				end;
+				For(i=0;i<brandscnt;i=i+1) begin
+	  			aBrandPercent[i] = 0;
+				end; 
+				mtrw = matrowcnt(IVr);
+				For(i=0;i<mtrw;i=i+1) begin
+					matrowget(IVr,i,IVrw);
+					if(IVrw.stp==kInvoiceRowTypeNormal and IVrw.Sum>=0)then begin
+						INr.Code = IVrw.ArtCode;
+						readfirstmain(INr,1,true);
+						For(j=0;j<brandscnt;j=j+1) begin
+	  					if(setinset(aBrands[j],PrepareDispGroups(INr.DispGroups)))then begin
+	  						aBrandPercent[j] = aBrandPercent[j] + IVrw.Sum;
+	  					end;
+						end; 
+					end;
+				end;
+				For(j=0;j<brandscnt;j=j+1) begin
+					aBrandPercent[j] = aBrandPercent[j]/IVr.Sum4;
+				end;
+				For(i=0;i<mtrw;i=i+1) begin
+					matrowget(IVr,i,IVrw);
+					if(IVrw.stp==kInvoiceRowTypeCashPayment)then begin
+						For(j=0;j<brandscnt;j=j+1) begin
+							switch(IVrw.CurncyCode)begin
+								case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IVrw.Sum * aBrandPercent[j];						
+								case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IVrw.Sum * aBrandPercent[j];
+								case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IVrw.Sum * aBrandPercent[j];
+								//otherwise aBrandsCashAZN[j] = aBrandsCashAZN[j] + IVrw.Sum * aBrandPercent[j];
+							end;
+						end; 
+					end;
+					if(IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
+						For(j=0;j<brandscnt;j=j+1) begin
+							aBrandsCCAZN[j] = aBrandsCCAZN[j] + IVrw.Sum * aBrandPercent[j];
+						end;
+					end;
+					if(IVrw.stp==kInvoiceRowTypePrepayment)then begin
+						For(j=0;j<brandscnt;j=j+1) begin
+							switch(IVr.CurncyCode)begin
+								case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IVrw.Sum * aBrandPercent[j];
+								case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IVrw.Sum * aBrandPercent[j];
+								case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IVrw.Sum * aBrandPercent[j];
+								//otherwise aBrandsCashAZN[j] = aBrandsCashAZN[j] + IVrw.Sum * aBrandPercent[j];
+							end;
+						end; 
+					end;
+				end;
+				
+				TrHs1=true;
+				IPrsr.IVNr = IVr.SerNr;
+				IPrsr.TransType = 1;
+				while(loopkey("IVKey",IPrsr,2,TrHs1))begin
+					if(IPrsr.IVNr!=IVr.SerNr)then begin TrHs1 = false; end;
+					if(IPrsr.TransType!=1)then begin TrHs1 = false; end;
+					
+					if(TrHs)then begin
+						IPr.SerNr = IPrsr.TransNr;
+						if(readfirstmain(IPr,1,true))then begin
+							mtrw = matrowcnt(IPrsr);
+							For(i=0;i<mtrw;i=i+1) begin
+	  						matrowget(IPr,i,IPrw);
+	  						if(IPrw.InvoiceNr==IVr.SerNr)then begin
+									GetFullCurncyRate(IPrw.BankCurncy,IPr.TransDate,fr,to1,to2,br1,br2);
+									if(fr==0 or to1==0)then begin
+										fr=1;
+										to1=1;
+									end;
+	  							if(left(IPr.PayMode,1)=="C" or left(IPr.PayMode,1)=="K")then begin
+	  								if(IPrw.BankVal<0)then begin logtext(0,"***********************  " & IVr.SerNr); end;
+	  								For(j=0;j<brandscnt;j=j+1) begin
+											switch(IPrw.BankCurncy)begin
+												case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IPrw.BankVal * aBrandPercent[j];
+												case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IPrw.BankVal * aBrandPercent[j];
+												case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IPrw.BankVal * aBrandPercent[j];
+											end;
+										end; 
+										//BrandsCashUSDtotal = BrandsCashUSDtotal + IPrw.BankVal/fr*to1;
+	  							end;
+	  							if(left(IPr.PayMode,1)=="B")then begin
+	  								For(j=0;j<brandscnt;j=j+1) begin
+	  										switch(IPrw.BankCurncy)begin
+													case "AZN": aBrandsCCAZN[j] = aBrandsCCAZN[j] + IPrw.BankVal * aBrandPercent[j];
+													case "USD": aBrandsCCUSD[j] = aBrandsCCUSD[j] + IPrw.BankVal * aBrandPercent[j];
+												end;
+										end;
+	  							end;
+	  						end;
+							end; 
+						end;
+					end;
+				end;
+				resetloop(IPrsr);
+			end;
+		end;
+		
+
+		For(i=0;i<brandscnt;i=i+1) begin
+			DIr.Code = aBrands[i];
+			readfirstmain(DIr,1,true);
+			CUr.Name = DIr.Name;
+			readfirstkey("Name",CUr,1,true);
+			OPrsr.VECode = CUr.Code;
+			OPrsr.TransDate = RepSpec.sStartDate;
+			
+			TrHs = true;
+			while(loopmain(OPrsr,2,TrHs))begin
+				testf = true;
+				//if(OPrsr.VECode!=CUr.Code)then begin TrHs = false; testf = false; end;
+				if(OPrsr.TransDate>RepSpec.sEndDate)then begin TrHs = false; testf = false; end;
+				if(OPrsr.TransType!=1)then begin testf = false; end;
+				//if(OPrsr.OKFlag==0)then begin testf = false; end;
+				
+				if(testf)then begin
+					OPr.SerNr = OPrsr.TransNr;
+					if(readfirstmain(OPr,1,true))then begin
+						mtrw = matrowcnt(OPr);
+						for(j=0;j<mtrw;j=j+1)begin
+							matrowget(OPr,j,OPrw);
+							if(OPrw.VECode==OPrsr.VECode)then begin
+								if(OPrsr.VINr==OPrw.VISerNr and OPrsr.VINr>0)then begin
+									switch(OPrw.RecCurncy)begin
+										case "AZN": aBrandsPaymAZN[i] = aBrandsPaymAZN[i] + OPrw.RecVal;
+										case "EUR": aBrandsPaymEUR[i] = aBrandsPaymEUR[i] + OPrw.RecVal;
+										case "CHF":	aBrandsPaymCHF[i] = aBrandsPaymCHF[i] + OPrw.RecVal;
+										case "USD": aBrandsPaymUSD[i] = aBrandsPaymUSD[i] + OPrw.RecVal;
+									end;
+								end;
+								if(OPrsr.ChequeNr==OPrw.PrepayNr and OPrsr.ChequeNr>0)then begin
+									switch(OPrw.RecCurncy)begin
+										case "AZN": aBrandsPaymAZN[i] = aBrandsPaymAZN[i] + OPrw.RecVal;
+										case "EUR": aBrandsPaymEUR[i] = aBrandsPaymEUR[i] + OPrw.RecVal;
+										case "CHF":	aBrandsPaymCHF[i] = aBrandsPaymCHF[i] + OPrw.RecVal;
+										case "USD": aBrandsPaymUSD[i] = aBrandsPaymUSD[i] + OPrw.RecVal;
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+			resetloop(OPrsr);
+		end; 
+			
+		
+		/*BlockLoad(CreditLimitRec);
+	  CUr.Code = "";
+		while(loopmain(CUr,1,true))begin
+			IPrsr.CustCode = CUr.Code;
+			IPrsr.CustDate = "";
+			TrHs = true;
+			while(loopmain(IPrsr,2,TrHs))begin
+				if(IPrsr.CustCode!=CUr.Code)then begin TrHs = false; end;
+				if(IPrsr.CustDate>ed)then begin TrHs = false; end;
+				
+				if(TrHs)then begin
+					switch(IPrsr.TransType)begin
+						case 0:	IVr.SerNr = IPrsr.TransNr;
+										if(readfirstmain(IVr,1,true)) begin
+											testf = true;
+											if(nonblank(location) and location!=IVr.Location)then begin testf = false; end;
+											
+											if(testf)then begin
+												switch(IVr.CurncyCode)begin
+													case"AZN":CUIVAZN = CUIVAZN + IVr.Sum4;
+													case"EUR":CUIVEUR = CUIVEUR + IVr.Sum4;
+													case"CHF":CUIVCHF = CUIVCHF + IVr.Sum4;
+													case"USD":CUIVUSD = CUIVUSD + IVr.Sum4;
+												end;
+												if(IVr.InvType==kInvoiceTypeCredit)then begin
+													switch(IVr.CurncyCode)begin
+														case"AZN":CUIVAZN = CUIVAZN - IVr.Sum4;
+														case"EUR":CUIVEUR = CUIVEUR - IVr.Sum4;
+														case"CHF":CUIVCHF = CUIVCHF - IVr.Sum4;
+														case"USD":CUIVUSD = CUIVUSD - IVr.Sum4;
+													end;
+												end;
+												if(IVr.InvType==kInvoiceTypeCash)then begin
+													switch(IVr.CurncyCode)begin
+														case"AZN":CUIVAZN = CUIVAZN - IVr.Sum4;
+														case"EUR":CUIVEUR = CUIVEUR - IVr.Sum4;
+														case"CHF":CUIVCHF = CUIVCHF - IVr.Sum4;
+														case"USD":CUIVUSD = CUIVUSD - IVr.Sum4;
+													end;
+												end;
+												CUDebSum = 0;
+												if(IVr.InvType==kInvoiceTypeNormal)then begin
+													mtrw = matrowcnt(IVr);
+													For(i=0;i<mtrw;i=i+1) begin
+														matrowget(IVr,i,IVrw);
+														if(IVrw.stp==kInvoiceRowTypeCashPayment)then begin
+															GetFullCurncyRate(IVrw.CurncyCode,IVr.TransDate,fr,to1,to2,br1,br2);
+															if(fr==0 or to1==0)then begin
+																fr = 1;
+																to1 =1;
+															end;
+															if(IVr.FrRate!=0)then begin
+																CUDebSum = CUDebSum + IVrw.Sum*fr/to1*IVr.ToRateB1/IVr.FrRate;
+															end else begin
+																CUDebSum = CUDebSum + IVrw.Sum*fr/to1;
+															end;
+														end;
+														if(IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
+															if(IVr.FrRate!=0)then begin
+																CUDebSum = CUDebSum + IVrw.Sum*IVr.ToRateB1/IVr.FrRate;
+															end else begin
+																CUDebSum = CUDebSum + IVrw.Sum;
+															end;
+														end;
+														if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
+															if(IVr.FrRate!=0)then begin
+																CUDebSum = CUDebSum + IVrw.Sum*IVr.ToRateB1/IVr.FrRate;
+															end else begin
+																CUDebSum = CUDebSum + IVrw.Sum;
+															end;
+														end; 													
+													end; 
+													switch(IVr.CurncyCode)begin
+														case"AZN":CUIVAZN = CUIVAZN - CUDebSum;
+														case"EUR":CUIVEUR = CUIVEUR - CUDebSum;
+														case"CHF":CUIVCHF = CUIVCHF - CUDebSum;
+														case"USD":CUIVUSD = CUIVUSD - CUDebSum;
+													end;
+												end;
+											end;
+										end;
+						case 1: IPr.SerNr = IPrsr.TransNr;
+										if(readfirstmain(IPr,1,true))then begin
+											mtrw = matrowcnt(IPr);
+											For(i=0;i<mtrw;i=i+1) begin
+												matrowget(IPr,i,IPrw);
+												if(IPrw.CustCode==CUr.Code)then begin
+													if(IPrsr.IVNr>0 and IPrw.InvoiceNr==IPrsr.IVNr)then begin
+														testf = true;
+														IVr.SerNr = IPrw.InvoiceNr;
+														if(readfirstmain(IVr,1,true))then begin 
+															if(nonblank(location) and location!=IVr.Location)then begin testf = false; end;
+														end;
+														
+														if(testf)then begin
+															switch(IPrw.InvCurncy)begin
+																case"AZN":CUIPAZN = CUIPAZN + IPrw.InvVal;
+																case"EUR":CUIPEUR = CUIPEUR + IPrw.InvVal;
+																case"CHF":CUIPCHF = CUIPCHF + IPrw.InvVal;
+																case"USD":CUIPUSD = CUIPUSD + IPrw.InvVal;
+															end;
+														end;
+													end;
+													if(IPrsr.IVNr<0 and IPrw.InvoiceNr<0)then begin
+														testf = true;
+														ORr.SerNr = IPrw.OrderNr;
+														if(readfirstmain(ORr,1,true))then begin
+															if(nonblank(location) and location!=ORr.Location)then begin testf = false; end;
+														end;
+														if(testf)then begin
+															switch(IPrw.RecCurncy)begin
+																case"AZN":CUIPAZN = CUIPAZN + IPrw.RecVal;
+																case"EUR":CUIPEUR = CUIPEUR + IPrw.RecVal;
+																case"CHF":CUIPCHF = CUIPCHF + IPrw.RecVal;
+																case"USD":CUIPUSD = CUIPUSD + IPrw.RecVal;
+															end;
+														end;
+													end;
+												end;	  
+											end; 
+										end;
+					end;
+				end;
+			end;
+			resetloop(IPrsr);*/
+			
+			/*TrHs = false;
+			OPrsr.VECode = CUr.Code;
+			For(i=0;i<brandscnt;i=i+1) begin
+				DIr.Code = aBrands[i];
+				readfirstmain(DIr,1,true);
+	  		if(CUr.Name==DIr.Name)then begin
+	  			br = i;
+	  			TrHs = true;
+	  		end;
+			end; 
+			while(loopmain(OPrsr,1,TrHs))begin
+				if(OPrsr.VECode!=CUr.Code)then begin TrHs = false; end;
+				if(OPrsr.TransDate>ed)then begin TrHs = false; end;
+				
+				if(TrHs)then begin	
+					switch(OPrsr.TransType)begin
+						case 0:	VIr.SerNr = OPrsr.TransNr;
+										if(readfirstmain(VIr,1,true)) begin
+											switch(VIr.CurncyCode)begin
+												case"AZN":aVEVIAZN[br] = aVEVIAZN[br] + VIr.PayVal;
+												case"EUR":aVEVIEUR[br] = aVEVIEUR[br] + VIr.PayVal;
+												case"CHF":aVEVICHF[br] = aVEVICHF[br] + VIr.PayVal;
+												case"USD":aVEVIUSD[br] = aVEVIUSD[br] + VIr.PayVal;
+											end;
+											if(VIr.InvType==kInvoiceTypeCredit)then begin
+												switch(VIr.CurncyCode)begin
+													case"AZN":aVEVIAZN[br] = aVEVIAZN[br] - VIr.PayVal;
+													case"EUR":aVEVIEUR[br] = aVEVIEUR[br] - VIr.PayVal;
+													case"CHF":aVEVICHF[br] = aVEVICHF[br] - VIr.PayVal;
+													case"USD":aVEVIUSD[br] = aVEVIUSD[br] - VIr.PayVal;
+												end;
+											end;
+										end;
+						case 1: OPr.SerNr = OPrsr.TransNr;
+										if(readfirstmain(OPr,1,true))then begin
+											mtrw = matrowcnt(OPr);
+											For(i=0;i<mtrw;i=i+1) begin
+												matrowget(OPr,i,OPrw);
+												if(OPrw.VECode==CUr.Code)then begin
+													if(OPrsr.VINr>0 and OPrw.VISerNr==OPrsr.VINr)then begin
+														switch(OPrw.PInvCurncy)begin
+															case"AZN":aVEOPAZN[br] = aVEOPAZN[br] + OPrw.PInvVal;
+															case"EUR":aVEOPEUR[br] = aVEOPEUR[br] + OPrw.PInvVal;
+															case"CHF":aVEOPCHF[br] = aVEOPCHF[br] + OPrw.PInvVal;
+															case"USD":aVEOPUSD[br] = aVEOPUSD[br] + OPrw.PInvVal;
+														end;
+													end;
+													if(OPrsr.VINr<0 and OPrw.VISerNr<0)then begin
+														switch(OPrw.RecCurncy)begin
+															case"AZN":aVEOPAZN[br] = aVEOPAZN[br] + OPrw.RecVal;
+															case"EUR":aVEOPEUR[br] = aVEOPEUR[br] + OPrw.RecVal;
+															case"CHF":aVEOPCHF[br] = aVEOPCHF[br] + OPrw.RecVal;
+															case"USD":aVEOPUSD[br] = aVEOPUSD[br] + OPrw.RecVal;
+														end;
+													end;
+												end;	  
+											end; 
+										end;
+					end;
+				end;
+			end;
+			resetloop(OPrsr);
+		end;*/
+		
+		PrintStockStat1ByCat(brandscnt,sd,ed,location,aBrands,totusd);
+		//PrintStockStat1(aBrandsBalEUR,aBrandsBalCHF,aBrandsBalUSD,brandscnt);
+		PrintStockIn2ByCat(brandscnt,sd,ed,location,aBrands);
+		//PrintStockIn2(aBrandsPUEUR,aBrandsPUCHF,aBrandsPUUSD,brandscnt);
+		//PrintStockCLOut31(BrandsCLOutAZN,BrandsCLOutEUR,BrandsCLOutCHF,BrandsCLOutUSD,brandscnt);
+		PrintStockCLOut31ByCat(brandscnt,sd,ed,location,aBrands);
+		PrintCashIn412ByCat(aBrandsCashAZN,aBrandsCashEUR,aBrandsCashUSD,aBrandsCCAZN,aBrandsCCUSD,brandscnt);
+		PrintCLIn43ByCat(brandscnt,sd,ed,location,aBrands);
+		PrintCUDEb445ByCat(sd,ed,location);
+	
+		PrintStockSelRet468ByCat(brandscnt,sd,ed,location,aBrands);
+		PrintCLIn5ByCat(brandscnt,sd,ed,location,aBrands,totusd);
+		//PrintStockSel47(aBrandsSelEUR,aBrandsSelCHF,aBrandsSelUSD,brandscnt);
+//		PrintStockVEPAy6ByCat(aBrandsPaymAZN,aBrandsPaymEUR,aBrandsPaymCHF,aBrandsPaymUSD,brandscnt);
+		//Edit***********************Vitalii 18:03 28.08.2014
+		PrintStockVEPAy6ByCat(RepSpec,aBrands,brandscnt);
+		PrintCLOut61ByCat(brandscnt,sd,ed,location,aBrands);
+		PrintStockVECred7ByCat(sd,ed,brandscnt,aBrands,totusd,location);
+		PrintStockIVDeb8ByCat(sd,ed,brandscnt,aBrands,totusd,location);
+		PrintStockRetFob9ByCat(brandscnt,sd,ed,location,aBrands);
+		startformat(15);
+			outstring(0,0,"10",false);
+			outstring(50,0,"АКТИВ",false);
+			outstring(150,0,totusd,false);
+		endformat;
+		
+		PrintRates10ByCat(ed);
+		
+				
+			
+	endjob;
+	
+	
+return;
+end;

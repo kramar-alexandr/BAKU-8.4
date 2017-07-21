@@ -1,0 +1,512 @@
+//SetLangMode(LangRussian,"ENG",0);
+external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
+external function roundmode DefaultRoundMode();
+external procedure ExtractObj(string,var Integer,var string);
+external function val AbsoluteVal(val); //Edit***************************Sasha2,9:41 31.03.2015
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+
+//SetLangMode(LangPolish,"POL",0);
+
+//Edit***************************Sasha2,8:31 31.03.2015 {
+procedure HTItemClass(string a,var string res)
+begin
+  res = "";
+  
+  if (nonblank(a)) then begin
+    res = /*USetStr(31044)*/"Marka";
+    res = res & ": " & a;
+  end else begin
+    res = /*USetStr(31227)*/"Wszystkie marki";
+  end;
+  return;
+end; //Edit***************************Sasha2,8:31 31.03.2015 }
+
+procedure CleanUpVector(var vector longint docslist,integer docslistcnt)
+begin
+  integer i;
+  
+    for (i=0;i<docslistcnt;i=i+1) begin
+      docslist[i] = -1;
+    end;
+  return;
+end;
+
+procedure HeaderLocations(string a,  var string res)	//Edit----------------------Dima  23.02.2015
+begin
+  if (blank(a)) then begin
+     res = USetStr(8961);
+  end else begin
+     res = USetStr(2768);
+     res = res &": " & a;
+  end;
+return;
+end;
+
+function val CheckSign(val qty)
+begin
+  val res;
+    if (qty<0) then begin
+      res = -1;
+    end else begin
+      res = 1;
+    end;
+   CheckSign = res;
+  return;
+end;
+
+global
+procedure StanMagazynuRn(record RcVc RepSpec)
+begin
+  record INVc INr;
+  record ItemHistVc IHr;
+  record BaseCurBlock BCb;
+  record CYBlock CYB;
+  record LocationVc Locr;	//Edit----------------------Dima  17.04.2015
+  record DIVc DIr;
+  string 250 tstr;
+  string 50 location,brand,key,baseCur,itemtyp,itemBrand;
+  integer rw,rwcnt,i,pos,vecSize,j;
+  val TotalCost,TotalQty,SubTotalCost,SubTotalQty,GeneralTotalCost;
+	Boolean testf,TrHs2,testf2,curdatef;
+	array integer outstrpos;
+	date costdate;
+	boolean TrHs;
+	vector val brandsCost;
+	vector string 30 brandsName;
+	array string 30 brands;
+	val fr,to1,to2,br1,br2; //Edit***************************Sasha2,10:06 14.05.2015
+	string 6 crncy; //Edit***************************Sasha2,10:08 14.05.2015
+
+	//	RepSpec.ArtMode = 0 - Detailed
+	//	RepSpec.ArtMode = 1 - Consolidated
+
+  StartReportJob("Stan magazynu");
+  rw=1;
+  Header(rw,"Stan na Dzien: " & RepSpec.d1,1);
+  rw = rw + 1;
+  HeaderLocations(RepSpec.f1,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  Header(rw,"Wartosci w PLN",1);
+  rw = rw + 1; 
+  HTItemClass(RepSpec.f2,tstr);
+  if (nonblank(tstr)) then begin //Edit***************************Sasha2,10:17 30.03.2015 {
+    Header(rw,tstr,0);
+    rw = rw + 1;
+  end; //Edit***************************Sasha2,10:17 30.03.2015 } 
+	EndHeader;
+	
+	if (BlankDate(RepSpec.d1)) then begin
+	 RepSpec.d1 = CurrentDate;
+	end;
+	if (RepSpec.d1==CurrentDate) then begin
+	 curdatef = true;
+	end;
+	if (Blank(RepSpec.f1) and (RepSpec.ArtMode==0)) then begin
+	 goto LStanMagazynuRn;
+	end;
+	
+	BlockLoad(BCb);
+	baseCur = BCb.BaseCur1;	
+	
+	TotalQty = 0;
+	TotalCost = 0;
+	location = RepSpec.f1;
+	
+	if (RepSpec.Media==mtExcel) then begin
+	  BlockLoad(CYB);
+	  StartFormat(15);
+	   OutString(0,0,"STAN NA DZIEN",false);
+	  EndFormat;
+	  StartFormat(15);
+	   OutString(0,0,CurrentDate,false);
+	  EndFormat;
+	  StartFormat(15);
+	   OutString(0,0,"",false);
+	  EndFormat;
+	  StartFormat(15);
+	   OutString(0,0,"ZESTAWIENIE WYKONANE DLA MAGAZYNOW",false);
+	  EndFormat;
+	  StartFormat(15);
+	   OutString(0,0,location & "     " & CYB.BusinessName,false);
+	  EndFormat;
+	  StartFormat(15);
+	   OutString(0,0,"",false);
+	  EndFormat;
+	end;
+	
+	outstrpos[0] = 0;
+	outstrpos[1] = 150;
+	outstrpos[2] = 210;
+	outstrpos[3] = 260;
+	outstrpos[4] = 310;
+	outstrpos[5] = 360;
+	
+	
+	
+	if ((RepSpec.ArtMode==2) and nonblank(RepSpec.f2)) then begin //consolidated by brand
+		brand = "";
+		pos = 0;
+		vecSize = 0;
+		ExtractObj(RepSpec.f2,pos,brand);
+		while (nonblank(brand)) begin
+			brandsCost[brand] = 0;
+			brands[vecSize] = brand;
+			vecSize=vecSize+1;
+			DIr.Code = brand;
+			if (ReadFirstMain(DIr,1,true)) then begin
+			brandsName[brand] = DIr.Name;
+			end;
+			ExtractObj(RepSpec.f2,pos,brand);
+		end;	
+	end;
+	
+	if ((RepSpec.ArtMode==2) and blank(RepSpec.f2)) then begin //consolidated by brand
+		DIr.CType = "BRAND";
+		TrHs = true;
+		vecSize = 0;
+		While(LoopKey("CType",DIr,1,TrHs))  begin	
+			if (DIr.CType != "BRAND") then begin TrHs = false; end;
+			if (TrHs) then begin
+				brandsCost[DIr.Code] = 0;
+				brandsName[DIr.Code] = DIr.Name;
+				brands[vecSize] = DIr.Code;
+				vecSize=vecSize+1;
+			end;					
+		end;
+	end;
+
+
+	StartFormat(15);
+		switch(RepSpec.ArtMode) begin
+			case 0:
+	  				OutString(outstrpos[0],0,"NAZWA TOWARU",false);			
+						OutString(outstrpos[1],0,"INDEKS",false);
+						OutString(outstrpos[2],0,"TYP",false);			
+						OutString(outstrpos[3],0,"STAN",false);	
+						OutString(outstrpos[4],0,"J.M.",false);
+						OutString(outstrpos[5],0,"WARTOSC ZAKUPU",false);
+			case 1:															//Edit----------------------Dima  17.04.2015
+	  				OutString(outstrpos[0],0,"NAZWA MAGAZYNU",false);			
+						OutString(outstrpos[1],0,"WARTOSC",false);
+			case 2:															//Edit----------------------Dima  20.04.2015
+	  				OutString(outstrpos[0],0,"BRAND",false);			
+						OutString(outstrpos[1],0,"WARTOSC",false);						
+		end;
+	EndFormat;
+	Black_Divider(0,1);
+	
+	crncy = "PLN";
+			
+	if (RepSpec.ArtMode==0) then begin		//Detailed
+	
+			INr.Code = "";
+			while (LoopMain(INr,1,true)) begin
+			  testf = true;
+			  
+			  
+  		  if(nonblank(RepSpec.f2))then begin
+  		    testf = false;
+					brand = "";
+					pos = 0;
+					ExtractObj(INr.DispGroups,pos,brand);
+					while (nonblank(brand)) begin
+						if(nonblank(brand) and setinset(brand,RepSpec.f2)) then begin
+							testf = true;
+							pos = 255;
+						end;
+						ExtractObj(INr.DispGroups,pos,brand);
+					end;
+  		  end;
+  		  
+  		  if(INr.Terminated>0)then begin testf = false; end;// Edit ************************** Monday, 20 April 2015 17:55:35
+  		  
+  		  if (testf) then begin
+  		    switch (INr.ConsgType) begin
+  		      case 0:
+  		        itemtyp = "Towar";
+  		      case 1:
+  		        itemtyp = "Consigment";
+  		      case 2:
+  		        itemtyp = "LowCost";
+  		    end;
+  		    SubTotalCost = 0;
+			    SubTotalQty = 0;
+  		    IHr.ArtCode = INr.Code;
+  		    IHr.Location = location;
+  		    if (curdatef) then begin
+  		      key = "ActiveLocQty";
+  		    end else begin
+  		      key = "ArtCodeLoc";
+  		    end;
+  		    TrHs2 = true;
+  		    while (Loopkey(key,IHr,2,TrHs2)) begin
+  		      testf2 = true;
+  		      if (IHr.ArtCode!=INr.Code or location!=IHr.Location) then begin TrHs2 = false; testf2 = false; end;
+  		      if (IHr.TransDate>RepSpec.d1 or IHr.StockAffectf!=1) then begin testf2 = false; end;
+  		      if (testf2) then begin
+  		        if (NonBlankDate(IHr.InDate)) then begin
+  		          costdate = IHr.InDate;
+  		        end else begin
+  		          costdate = IHr.TransDate;
+  		        end;
+  		        if (curdatef) then begin
+                GetFullCurncyRate(crncy,costdate,fr,to1,to2,br1,br2);
+			          SubTotalQty = SubTotalQty + IHr.RemQty;
+			          SubTotalCost = SubTotalCost + (IHr.RemCostPrice*fr/to1);
+  		        end else begin
+                GetFullCurncyRate(crncy,costdate,fr,to1,to2,br1,br2);
+  		          SubTotalQty = SubTotalQty + IHr.Qty;
+  		          SubTotalCost = SubTotalCost + (IHr.TotCostPrice*fr/to1) * CheckSign(IHr.Qty);
+  		        end;
+  		      end;
+  		    end; RESETLOOP(IHr);
+  		    if(SubTotalQty==0)then begin
+  		    	SubTotalCost = 0;// Edit ************************** Wednesday, 6 January 2016 11:41:22
+  		    end;
+  		    SubTotalCost = Round(SubTotalCost,DefaultCurRoundOff);
+  		    if (SubTotalQty!=0 /*or SubTotalCost!=0*/) then begin     
+  		      StartFormat(15);
+  		    	  OutString(outstrpos[0],0,INr.Name,false);			
+  		    		OutString(outstrpos[1],0,INr.Code,false);
+  		    		OutString(outstrpos[2],0,itemtyp,false);			
+  		    		OutString(outstrpos[3],0,SubTotalQty,false);	
+  		    		OutString(outstrpos[4],0,INr.Unittext,false);
+  		    		OutString(outstrpos[5],0,SubTotalCost,false);
+  		    	EndFormat;
+  		    	TotalQty = TotalQty + SubTotalQty;
+  		      TotalCost = TotalCost + SubTotalCost;
+  		    end;
+  		  end;
+  		  
+  		  if(TotalQty==0)then begin
+  		  	TotalCost = 0;// Edit ************************** Wednesday, 6 January 2016 11:42:49
+  		  end;
+			end;
+	end;
+	
+	
+	
+	if (RepSpec.ArtMode==1) then begin		//Consolidated						//Edit----------------------Dima  17.04.2015
+		GeneralTotalCost = 0;
+
+		while (LoopMain(Locr,1,true)) begin
+				INr.Code = "";
+				TotalCost = 0;
+				TotalQty = 0;
+				location = Locr.Code;				
+				while (LoopMain(INr,1,true)) begin
+				  testf = true;
+				  
+				  
+  			  if(nonblank(RepSpec.f2))then begin
+  			    testf = false;
+						brand = "";
+						pos = 0;
+						ExtractObj(INr.DispGroups,pos,brand);
+						while (nonblank(brand)) begin
+							if(nonblank(brand) and setinset(brand,RepSpec.f2))then begin
+								testf = true;
+								pos = 255;
+							end;
+							ExtractObj(INr.DispGroups,pos,brand);
+						end;
+  			  end;
+  			  
+  			  if(INr.Terminated>0)then begin testf = false; end;// Edit ************************** Monday, 20 April 2015 17:55:35
+  			  
+  			  if (testf) then begin
+
+  			    SubTotalCost = 0;
+				    SubTotalQty = 0;
+  			    IHr.ArtCode = INr.Code;
+  			    IHr.Location = location;
+  			    if (curdatef) then begin
+  			      key = "ActiveLocQty";
+  			    end else begin
+  			      key = "ArtCodeLoc";
+  			    end;
+  			    TrHs2 = true;
+  			    while (Loopkey(key,IHr,2,TrHs2)) begin
+  			      testf2 = true;
+  			      if (IHr.ArtCode!=INr.Code or location!=IHr.Location) then begin TrHs2 = false; testf2 = false; end;
+  			      if (IHr.TransDate>RepSpec.d1 or IHr.StockAffectf!=1) then begin testf2 = false; end;
+  			      if (testf2) then begin
+  			        if (NonBlankDate(IHr.InDate)) then begin
+  			          costdate = IHr.InDate;
+  			        end else begin
+  			          costdate = IHr.TransDate;
+  			        end;
+  			        if (curdatef) then begin
+				          GetFullCurncyRate(crncy,costdate,fr,to1,to2,br1,br2);
+				          SubTotalQty = SubTotalQty + IHr.RemQty;
+				          SubTotalCost = SubTotalCost + (IHr.RemCostPrice*fr/to1);
+  			        end else begin
+  			          GetFullCurncyRate(crncy,costdate,fr,to1,to2,br1,br2);
+  			          SubTotalQty = SubTotalQty + IHr.Qty;
+  			          SubTotalCost = SubTotalCost + (IHr.TotCostPrice*fr/to1) * CheckSign(IHr.Qty);
+  			        end;
+  			      end;
+  			    end; RESETLOOP(IHr);
+  			    SubTotalCost = Round(SubTotalCost,DefaultCurRoundOff);
+  			    if (SubTotalQty!=0 or SubTotalCost!=0) then begin     
+  			    	TotalQty = TotalQty + SubTotalQty;
+  			      TotalCost = TotalCost + SubTotalCost;
+  			    end;
+  			  end;
+				end;
+				
+				if(TotalQty==0)then begin
+					TotalCost = 0;
+				end;
+				
+				RESETLOOP(INr);
+			  if (TotalCost!=0) then begin
+			    StartFormat(15);
+			      OutString(outstrpos[0],0,Locr.Name,false);			
+				    OutString(outstrpos[1],0,TotalCost,false);
+				  EndFormat;
+			  end;
+				GeneralTotalCost = GeneralTotalCost + TotalCost;
+		end;
+	end;
+	
+	
+	
+		
+	if (RepSpec.ArtMode==2) then begin		//Consolidated by brand						//Edit----------------------Dima  20.04.2015
+				TotalCost = 0;
+				INr.Code = "";		
+				while (LoopMain(INr,1,true)) begin
+				  testf = false;
+				  
+				  //--------------check-----------------
+					brand = "";
+					pos = 0;
+					itemBrand = "";
+					ExtractObj(INr.DispGroups,pos,brand);
+					while (nonblank(brand)) begin
+						DIr.Code = brand;
+						ReadFirstMain(DIr,1,true);
+						if (DIr.CType=="BRAND") then begin
+							itemBrand = brand;
+						end;
+						ExtractObj(INr.DispGroups,pos,brand);
+					end;						
+					
+					for(j=0;j<vecSize;j=j+1) begin
+						if (brands[j] == itemBrand) then begin
+							testf = true;
+							j=vecSize;
+						end;					
+					end;
+					
+					if(INr.Terminated>0)then begin testf = false; end;// Edit ************************** Monday, 20 April 2015 17:55:35
+					//--------------check-----------------
+
+  			  if (testf) then begin
+
+  			    SubTotalCost = 0;
+				    SubTotalQty = 0;
+  			    IHr.ArtCode = INr.Code;
+  			    IHr.Location = location;
+  			    if (curdatef) then begin
+  			      key = "ActiveLocQty";
+  			    end else begin
+  			      key = "ArtCodeLoc";
+  			    end;
+  			    TrHs2 = true;
+  			    while (Loopkey(key,IHr,2,TrHs2)) begin
+  			      testf2 = true;
+  			      if (IHr.ArtCode!=INr.Code ) then begin TrHs2 = false; testf2 = false; end;
+  			      if (nonblank(location) and location!=IHr.Location ) then begin TrHs2 = false; testf2 = false; end;
+  			      if (IHr.TransDate>RepSpec.d1 or IHr.StockAffectf!=1) then begin testf2 = false; end;
+  			      if (testf2) then begin
+  			        if (NonBlankDate(IHr.InDate)) then begin
+  			          costdate = IHr.InDate;
+  			        end else begin
+  			          costdate = IHr.TransDate;
+  			        end;
+  			        if (curdatef) then begin
+  			          GetFullCurncyRate(crncy,costdate,fr,to1,to2,br1,br2);
+				          SubTotalQty = SubTotalQty + IHr.RemQty;
+				          SubTotalCost = SubTotalCost + (IHr.RemCostPrice*fr/to1);
+  			        end else begin
+  			          GetFullCurncyRate(crncy,costdate,fr,to1,to2,br1,br2);
+  			          SubTotalQty = SubTotalQty + IHr.Qty;
+  			          SubTotalCost = SubTotalCost + (IHr.TotCostPrice*fr/to1) * CheckSign(IHr.Qty);
+  			        end;
+  			      end;
+  			    end; RESETLOOP(IHr);
+  			    if(SubTotalQty==0)then begin
+  			    	SubTotalCost = 0;
+  			    end;
+  			    SubTotalCost = Round(SubTotalCost,DefaultCurRoundOff);
+  			    if (SubTotalCost!=0) then begin     
+							brandsCost[itemBrand] = brandsCost[itemBrand] + SubTotalCost;
+  			      TotalCost = TotalCost + SubTotalCost;
+  			    end;
+  			  end;
+				end;
+				RESETLOOP(INr);
+
+		end;
+	
+	if (RepSpec.ArtMode==2) then begin 
+		for(i=0;i<vecSize;i=i+1) begin
+		  if (brandsCost[brands[i]]!=0) then begin
+		    StartFormat(15);
+		      OutString(outstrpos[0],0,brandsName[brands[i]],false);			
+			    OutString(outstrpos[1],0,brandsCost[brands[i]],false);
+			  EndFormat;
+		  end;	
+		end;
+	end;
+	
+	
+	switch (RepSpec.ArtMode)  begin
+		case 0:
+	
+				if (TotalQty!=0 or TotalCost!=0) then begin
+  				Black_Divider(0,1);
+  				StartFormat(15);
+  				  OutString(outstrpos[0],0,"",false);
+  			    OutString(outstrpos[1],0,"",false);
+  			    OutString(outstrpos[2],0,"Totals:",false);
+  			    if (TotalQty!=0) then begin
+  			      OutString(outstrpos[3],0,TotalQty,false);	
+  				    OutString(outstrpos[4],0,"",false);	
+  				    OutString(outstrpos[5],0,TotalCost,false);	
+  			    end;		
+  				EndFormat;
+				end;
+				
+		case 1:
+  				Black_Divider(0,1);
+  				StartFormat(15);
+  				  OutString(outstrpos[0],0,"",false);
+  			    OutString(outstrpos[1],0,GeneralTotalCost,false);
+  			  EndFormat;  		
+		case 2:
+  				Black_Divider(0,1);
+  				StartFormat(15);
+  				  OutString(outstrpos[0],0,"",false);
+  				  if (TotalQty!=0) then begin
+  			      OutString(outstrpos[1],0,TotalCost,false);
+  			    end;
+  			  EndFormat;  			  
+	end;
+	
+	if (crncy!="PLN") then begin
+	  Black_Divider(0,1);
+	  StartFormat(15);
+	    OutString(0,0,"Report currency has been changed from PLN to another one",false);
+	  EndFormat; 
+	end;
+	
+LStanMagazynuRn:;
+	
+	EndJob;
+
+return;
+end;

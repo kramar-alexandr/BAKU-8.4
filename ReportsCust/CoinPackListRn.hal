@@ -1,0 +1,101 @@
+external procedure GetCurncyRateOnDate(string,date,var val);
+external inner procedure ExtractObj(string,var Integer,var string);
+external inner procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);// Edit ************************** Wednesday, 19 June 2013 13:43:37
+external inner procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);// Edit ************************** Wednesday, 19 June 2013 14:02:13
+external procedure FindFIFOOrigValAndCurncyIV(longint,integer, var val, var string,var val,boolean);// Edit ************************** Tuesday, 2 July 2013 10:40:37
+external function Date DateFromString(string,string);
+
+global
+procedure CoinPackListRn(record RcVc RepSpec)
+begin
+  record CoinPackListVc CoinPackListr;
+  record CoinPackListHistVc CoinPackListHistr;
+  integer rwcnt,i,pos,qty; 
+  Boolean TrHs,TrHs1,testf;
+  Date sd,ed;
+  string 30 keyName;
+  
+    StartReportNoHeaderJob("Coin PackLists report");
+    
+    sd = RepSpec.sStartDate;
+    ed = RepSpec.sEndDate;
+    if (BlankDate(sd)) then begin
+      sd = CurrentDate;
+      ed = CurrentDate;
+    end;
+    
+    if blankdate(sd) then begin
+      StartFormat(15);
+      OutString(0,0,"Define the period",false);
+      EndFormat;
+      goto LCoinPackListRn;
+    end;
+    
+    StartFormat(15);
+    		OutString(0,0,"Period:",false);
+    		OutString(50,0,sd & ":" & ed,false);
+    endformat;
+    
+    gray_divider(0,1);
+    pos = 0;
+    StartFormat(15);
+      OutString(pos,0,"Type",false); pos = pos + 30;
+      OutString(pos,0,"SKU Number",false); pos = pos + 50;
+      OutString(pos,0,"EAN",false); pos = pos + 70;
+      OutString(pos,0,"Description",false); pos = pos + 70;
+      OutString(pos,0,"Qty",false); pos = pos + 30;
+      OutString(pos,0,"Transport bill",false); pos = pos + 50;
+      OutString(pos,0,"Transport date",false); pos = pos + 50;
+      OutString(pos,0,"Import date",false); pos = pos + 50;
+      OutString(pos,0,"Client code",false); pos = pos + 50;
+    EndFormat;
+    black_divider(0,1);
+    
+    if (NonBlank(RepSpec.f1)) then begin
+      keyName = "TransportBill";
+      CoinPackListHistr.TransportBill = RepSpec.f1;
+    end else begin
+      keyName = "TransDate";
+      CoinPackListHistr.ImpDate = sd;
+    end;
+    TrHs = true;
+    while (LoopKey(keyName,CoinPackListHistr,1,TrHs)) begin
+      testf = true;
+      if (Blank(RepSpec.f1) and CoinPackListHistr.ImpDate<sd) then begin testf = false; end;
+      if (Blank(RepSpec.f1) and CoinPackListHistr.ImpDate>ed) then begin testf = false; TrHs = false; end;
+      if (NonBlank(RepSpec.f1) and RepSpec.f1!=CoinPackListHistr.TransportBill) then begin testf = false; TrHs = false; end;
+      if (testf) then begin
+        CoinPackListr.TransportBill = CoinPackListHistr.TransportBill;
+        TrHs1 = true;
+        while (LoopKey("TransportBill",CoinPackListr,1,TrHs1)) begin
+          testf = true;
+          if (CoinPackListr.TransportBill!=CoinPackListHistr.TransportBill) then begin testf = false; TrHs1 = false; end;
+          if (testf) then begin
+            pos = 0;
+            StartFormat(15);
+              OutString(pos,0,CoinPackListr.RecordType,false); pos = pos + 30;
+              OutString(pos,0,CoinPackListr.SKUNumber,false); pos = pos + 50;
+              OutString(pos,0,CoinPackListr.EAN,false); pos = pos + 70;
+              OutString(pos,0,Trim(CoinPackListr.ItemDescription),false); pos = pos + 70;
+              qty = StringToInt(CoinPackListr.Quantity);
+              if (qty==0) then begin
+                OutString(pos,0,"",false); pos = pos + 30;
+              end else begin
+                OutString(pos,0,qty,false); pos = pos + 30;
+              end;
+              OutString(pos,0,CoinPackListr.TransportBill,false); pos = pos + 50;
+              OutString(pos,0,DateFromString(CoinPackListr.TransportBillDate,"YYYYMMDD"),false); pos = pos + 50;
+              OutString(pos,0,CoinPackListr.ImpDate,false); pos = pos + 50;
+              OutString(pos,0,CoinPackListr.StoreID2,false); pos = pos + 50;
+            EndFormat;
+          end;
+        end; RESETLOOP(CoinPackListr);
+        Gray_Divider(0,1); 
+      end;
+    end;
+    
+LCoinPackListRn:;
+  
+    EndJob;
+  return;
+end;
