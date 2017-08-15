@@ -1,0 +1,91 @@
+remote updating procedure LinkIVtoLoyaltyCard(string,string,var record LoyaltyCardVc,var longint);
+
+global
+updating procedure LinkIVDsm()
+BEGIN
+  record RcVc RepSpec;
+  record LoyaltyCardVc LCr;
+  record CUVc CUr;
+  integer wn,nwn;
+  boolean testf;
+  
+  wn = curwindow;
+  if (WindowState(wn)==Rs_normal) then begin
+    getwindowrecord(wn,LCr);
+    CUr.Code = LCr.CustCode;
+    testf = true;
+    if (ReadFirstMain(CUr,1,true)==true) then begin
+      if (CUr.blockedFlag==1) then begin 
+        MessageBox(26436,"");
+        testf = false;
+      end;  
+      if (CUr.CUType!=1) then begin 
+        MessageBox(26437,"");
+        testf = false;
+      end;
+    end else begin 
+      MessageBox(20859,"");
+      testf = false;
+    end;
+    if (testf) then begin
+      RepSpec.f2 = LCr.SerNr;
+      nwn = OpenWindow("LinkIVVClass",0,wn,"","",RepSpec);
+      SelectWindow(nwn);
+    end;
+  end else begin
+    MessageBox(1356,"");
+  end;
+	
+  RETURN;
+END;
+
+global
+updating procedure LinkIVVClassOnOKWindow()
+begin
+  Integer wn,mwn;
+  record RCVc RepSpec;
+  record LoyaltyCardVc LCr;
+  longint err;
+
+  wn = CurWindow;
+  mwn = MotherWindow(wn);
+	DeselectWindow(wn,true);
+	GetWindowRecord(wn,RepSpec);
+	if (nonblank(RepSpec.f1)) then begin
+    LinkIVtoLoyaltyCard(RepSpec.f1,RepSpec.f2,LCr,err);
+    if (err==-1) then begin
+      PutWindowRecord(mwn,LCr);
+      WindowDoOK(mwn,0);
+      CloseWindow(wn);
+    end else begin
+      MessageBox(err,"");
+    end;
+	end;
+  
+  return;
+end;
+
+global
+function string 40 LCCashbackCorrectionDClassSpecPasteName(Integer wn,string defpsname)
+begin
+  string 255 psname;
+  record LCCashbackCorrectionVc LCCbCr;
+  row LCCashbackCorrectionVc LCCbCrw;
+  Integer rownr;
+  
+  psname = defpsname;
+  switch (WindowActiveField(wn)) begin
+    case "ITCode":
+      GetWindowRecord(wn,LCCbCr);
+      rownr = WindowActiveRow(wn);
+      if (rownr>=0) then begin
+        MatRowGet(LCCbCr,rownr,LCCbCrw);
+      end;
+      switch (LCCbCrw.CodeType) begin
+        case 0: psname = "ITSClass";
+        case 1: psname = "INSClass";
+      end;
+  end;
+  LCCashbackCorrectionDClassSpecPasteName = psname;
+  return;
+end;
