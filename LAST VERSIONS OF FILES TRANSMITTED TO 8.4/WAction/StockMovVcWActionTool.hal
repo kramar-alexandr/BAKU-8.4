@@ -1,0 +1,50 @@
+external function string 255 FindINObjects(string,string);
+external function Boolean GetFirstItem(var string,var record INVc);
+external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
+external function Boolean FindItemVAR(string,var string,var string,var string,var string);
+external procedure AddToStrArray(string,var array string);
+
+global
+function Boolean StockMovVc_PasteArtCode(var record StockMovVc StockMovp,Integer rownr,Integer changed,var array string aWarning)
+BEGIN
+  Boolean res;
+  record INVc INr;
+  row StockMovVc StockMovrw;
+  string 60 sz,msk,mskrep;
+  string 200 varsubset;
+  Boolean itemfound;
+
+  MatRowGet(StockMovp,rownr,StockMovrw);  
+  if ((changed!=0) or ((blank(StockMovrw.Spec)) and (nonblank(StockMovrw.ArtCode)))) then begin
+    res = true;
+    itemfound = GetFirstItem(StockMovrw.ArtCode,INr);
+    if (itemfound==false) then begin
+      itemfound = ReadFirstItem(StockMovrw.ArtCode,INr,true,true);
+      if (FindItemVAR(INr.Code,sz,msk,mskrep,varsubset)) then begin
+        INr.Code = StockMovrw.ArtCode;
+      end;
+    end;
+    if (itemfound) then begin
+      StockMovrw.Coefficient = INr.UnitCoefficient;
+      StockMovrw.ArtCode = INr.Code;
+      StockMovrw.Spec = INr.Name;
+      StockMovrw.BasePrice = INr.UPrice1;
+      StockMovrw.Objects = FindINObjects(INr.Objects,INr.Group);
+      StockMovrw.UnitXval = INr.Width;
+      StockMovrw.UnitYval = INr.Height;
+      StockMovrw.UnitZval = INr.Depth;
+      StockMovrw.BarCode = INr.BarCode;
+      MatRowPut(StockMovp,rownr,StockMovrw);
+      AddToStrArray(INr.WarnText1,aWarning);
+      if (INr.ItemType!=kItemTypeStocked) then begin
+        AddToStrArray(USetStr(1301),aWarning);
+      end;      
+    end else begin
+      if (nonblank(StockMovrw.ArtCode)) then begin
+        AddToStrArray(USetStr(1120) & StockMovrw.ArtCode,aWarning);
+      end;
+    end;
+  end;
+  StockMovVc_PasteArtCode = res;
+  RETURN;
+END;
