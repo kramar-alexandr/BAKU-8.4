@@ -1,3 +1,4 @@
+external procedure AutomatedSalesOrderly(string);
 external procedure SumBalRnVectors(string,LongInt,Boolean,vector val,vector val,vector val,vector val,vector val,vector val,vector Boolean,Array record UserDefRepLinesVc,Integer);
 external procedure ListPerTrans(record RcVc);
 external procedure FindAccSD(Date,var Date,var Boolean);
@@ -803,7 +804,7 @@ begin
   record UserDefRepVc UserDefRepr;
   record UserDefRepLinesVc UserDefRepLinesr;
   record CYBlock CYb;
-  Boolean PLf,headerf,resUseAccum,AGrs,negf;
+  Boolean PLf,headerf,resUseAccum,AGrs,negf,testf;
   record ConsolidationBlock cr;
   string 255 tstr,notstr,per1,per2,ckey;
   val Goms;
@@ -893,7 +894,11 @@ begin
       tstr = tstr & notstr;
       OutString(4,0,tstr,true);
       tstr = USetStr(3152);
-      tstr = tstr & notstr;
+      if (nonblank(RepSpec.FirstAcc)) then begin
+        tstr = tstr & notstr & " " & USetStr(3176) & " """ & RepSpec.FirstAcc &  """";
+      end else begin
+        tstr = tstr & notstr;
+      end;
       OutString(5,0,tstr,true);
     end;
     if (RepSpec.Comparison==3) then begin
@@ -904,7 +909,11 @@ begin
       tstr = tstr & notstr;
       OutString(4,0,tstr,true);
       tstr = USetStr(3155);
-      tstr = tstr & notstr;
+      if (nonblank(RepSpec.FirstAcc)) then begin
+        tstr = tstr & notstr & " " & USetStr(3176) & " """ & RepSpec.FirstAcc &  """";
+      end else begin
+        tstr = tstr & notstr;
+      end;
       OutString(5,0,tstr,true);
     end;
     if (RepSpec.Comparison==4) then begin
@@ -985,36 +994,51 @@ begin
         AccListPerBal(RepSpec,PLf,UserDefRepLinesr,tmpS3ba,tmpPba,tmpEba,tmpS4ba,tmpS5ba,tmpS6ba,negf,Goms,resUseAccum,AccumStartDate,true);
         RepSpec.CurncyCode = tempcur;// Edit ************************** Thursday, 12 February 2015 11:26:10
       case kRsTypeSum:
-        negf = false;
-        if (UserDefRepLinesr.AccType==kAccTypeAsset) then begin
-          if (CYb.NS0[0]!=0) then begin
-            negf = true;
+        testf = true;
+        
+        if (RepSpec.AccSpec==3 and HasLocalization("FIN")) then begin
+          if (S3ba[UserDefRepLinesr.IdKey]==0 and
+              Pba[UserDefRepLinesr.IdKey]==0 and
+              Eba[UserDefRepLinesr.IdKey]==0 and
+              S4ba[UserDefRepLinesr.IdKey]==0 and
+              S5ba[UserDefRepLinesr.IdKey]==0 and
+              S6ba[UserDefRepLinesr.IdKey]==0) then begin
+            testf = false;
           end;
         end;
-        if (UserDefRepLinesr.AccType==kAccTypeLiability) then begin
-          if (CYb.NS0[1]!=0) then begin
-            negf = true;
+        
+        if (testf) then begin
+          negf = false;
+          if (UserDefRepLinesr.AccType==kAccTypeAsset) then begin
+            if (CYb.NS0[0]!=0) then begin
+              negf = true;
+            end;
           end;
-        end;
-        if (UserDefRepLinesr.AccType==kAccTypeEquity) then begin
-          if (CYb.NS0[2]!=0) then begin
-            negf = true;
+          if (UserDefRepLinesr.AccType==kAccTypeLiability) then begin
+            if (CYb.NS0[1]!=0) then begin
+              negf = true;
+            end;
           end;
-        end;
-        if (UserDefRepLinesr.AccType==kAccTypeIncome) then begin
-          if (CYb.NS0[3]!=0) then begin
-            negf = true;
+          if (UserDefRepLinesr.AccType==kAccTypeEquity) then begin
+            if (CYb.NS0[2]!=0) then begin
+              negf = true;
+            end;
           end;
-        end;
-        if (UserDefRepLinesr.AccType==kAccTypeExpense) then begin
-          if (CYb.NS0[4]!=0) then begin
-            negf = true;
+          if (UserDefRepLinesr.AccType==kAccTypeIncome) then begin
+            if (CYb.NS0[3]!=0) then begin
+              negf = true;
+            end;
           end;
-        end;                        
-        if (nonblank(UserDefRepLinesr.Comment)) then begin
-          GetUserDefRepDescription(UserDefRepLinesr,RepSpec.Language,tstr);        
-          AGrSumLine(RepSpec,0,tstr,"",UserDefRepLinesr.SpecCode,S3ba[UserDefRepLinesr.IdKey],Pba[UserDefRepLinesr.IdKey],Eba[UserDefRepLinesr.IdKey],
-                     S4ba[UserDefRepLinesr.IdKey],S5ba[UserDefRepLinesr.IdKey],S6ba[UserDefRepLinesr.IdKey],negf,Goms,PLf,resUseAccum,"",UserDefRepLinesr.IdKey,false,true);
+          if (UserDefRepLinesr.AccType==kAccTypeExpense) then begin
+            if (CYb.NS0[4]!=0) then begin
+              negf = true;
+            end;
+          end;                        
+          if (nonblank(UserDefRepLinesr.Comment)) then begin
+            GetUserDefRepDescription(UserDefRepLinesr,RepSpec.Language,tstr);        
+            AGrSumLine(RepSpec,0,tstr,"",UserDefRepLinesr.SpecCode,S3ba[UserDefRepLinesr.IdKey],Pba[UserDefRepLinesr.IdKey],Eba[UserDefRepLinesr.IdKey],
+                       S4ba[UserDefRepLinesr.IdKey],S5ba[UserDefRepLinesr.IdKey],S6ba[UserDefRepLinesr.IdKey],negf,Goms,PLf,resUseAccum,"",UserDefRepLinesr.IdKey,false,true);
+          end;
         end;
       case kRsTypeText:
         GetUserDefRepDescription(UserDefRepLinesr,RepSpec.Language,tstr);        
@@ -1052,5 +1076,6 @@ procedure BalRn(record RcVc RepSpec)
 begin
 //  BalRn_Old(RepSpec);
   BalRn_New(RepSpec);
+  AutomatedSalesOrderly("HasIntegratedNL+Run_BalRn");
   return;
 end;

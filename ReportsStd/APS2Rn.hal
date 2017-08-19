@@ -1,3 +1,5 @@
+external function Boolean HasContactClassification();
+external procedure AddCurncyTotalsToTotalCurncyTotals(array string,array val,array val,array val,Integer,array string,array val,array val,array val,var Integer);
 external function Integer GetIntYc(Date);
 external procedure YcToStr(Integer,var string);
 external function Boolean SetInSet2(string,string);
@@ -7,25 +9,24 @@ external procedure HTCustClassType(string,var string);
 external procedure BeginCurncyTotals(var Integer);
 external procedure AddCurncyTotals(var array string,var array val,var Integer,string,val);
 external procedure PrintCurncyTotals(array string,array val,array val,array val,Integer,Integer,Integer,Integer,Integer,Boolean,Integer);
-external procedure PrintPrepaymentsNrsOP(record RcVc,string,Boolean,Integer,Integer);
+external procedure PrintPrepaymentsNrsOP(record RcVc,Boolean,string,Boolean,Integer,Integer);
 external function string 255 CreateInvoiceNumber(LongInt,string);
 external function val DivRateToBase1(string,val,val,val,val,val,val,roundmode);
 external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
 external function LongInt DateDiff(Date,Date);
-external updating procedure OneAPSFormOpenOnDate(record RcVc,record CUVc,Integer,var val,var val);
+external updating procedure OneAPSFormOpenOnDate(record RcVc,record CUVc,Integer,var val,var val,var val);
 external procedure VendAged(record CUVc,var val,var val,var val,var val,var val,var val,var val,var val,var val,var val);
 external procedure APGetOnAccBalance(record RcVc,record CUVc,Boolean,var val,var val,var val,var val,var val,var val,var val,
-                   Array string,Array val,var Integer);
+                   Array string,Array val,var Integer,Array string,Array val,var Integer);
 external procedure GetBaseCurncy(Integer,var string);
 external procedure PrintAPSForm(record RcVc,record CUVc,
-                                val,val,val,val,val,val,val,
+                                val,val,val,val,val,val,val,val,val,
                                 Integer,Integer,
                                 val,val,val,val,val,val,val,val,
                                 Array Integer,Array LongInt,Array LongInt,Array LongInt,
                                 Array Date,Array Date,Array val,Array val,Array val,Array val,Array val,
                                 Array string,Array string,Integer);
 external procedure CalcInt2(Boolean,val,LongInt,val,var val);
-external function Integer GetVATLaw();
 external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
 external procedure HTObj(string,var string);
 external procedure HTInvSel(Integer, var string);
@@ -48,8 +49,10 @@ BEGIN
   record OPrsVc OPrsr;
   record PurgeTRVc PurgeTRr;
   record TRVc TRr;
+  record BaseCurBlock BCb;
   
   BlockLoad(IIRec);
+  BlockLoad(BCb);
   OPrsr.VINr = APp.SerNr;
   OPrsr.TransType = kOPrsTransTypeInvoice;
   if (ReadFirstKey("VIKey",OPrsr,2,true)) then begin
@@ -85,6 +88,9 @@ BEGIN
   aInvDate[acnt] = VIp.InvDate;
   aDueDate[acnt] = APp.DueDate;
   aRVal[acnt] = APp.RVal;
+  if (RepSpec.flags[4]==0) then begin
+    VIp.PayVal = MulRateToBase1(VIp.CurncyCode,VIp.PayVal,VIp.FrRate,VIp.ToRateB1,VIp.ToRateB2,VIp.BaseRate1,VIp.BaseRate2,DefaultCurRoundOff);
+  end;
   aSum4[acnt] = VIp.PayVal;
   if (nonblank(VIp.VATVal)) then begin // Yes, should be Full VAT value
     aRVAT[acnt] = VIp.VATVal;
@@ -95,26 +101,27 @@ BEGIN
   aIntVal[acnt] = blankval;
   if (RepSpec.flags[4]!=0) then begin
     aCurncyCode[acnt] = APp.CurncyCode;
+  end else begin
+    aCurncyCode[acnt] = BCb.BaseCur1;
   end;
-  switch (GetVATLaw) begin
-    case 7://vatDanish
-      if (maxintdays!=-1) then begin
-        intdays = -alatedays[acnt];
-        if (intdays>maxintdays) then begin intdays = maxintdays; end;
-        if (intdays>0) then begin
-          CalcInt2(false,aRVal[acnt],intdays,IIRec.IntRate,t);
-          aIntVal[acnt] = t;
-        end;
-      end;
-    otherwise
+  if (HasLocalization("DEN")) then begin
+    if (maxintdays!=-1) then begin
       intdays = -alatedays[acnt];
+      if (intdays>maxintdays) then begin intdays = maxintdays; end;
       if (intdays>0) then begin
-        if ((VIp.InvType!=kInvoiceTypeCredit and VIp.InvType!=kInvoiceTypeCreditSpecialSales) and (VIp.InvType!=kInvoiceTypeInterest)) then begin
-          t = MulRateToBase1(APp.CurncyCode,aRVal[acnt],VIp.FrRate,VIp.ToRateB1,VIp.ToRateB2,VIp.BaseRate1,VIp.BaseRate2,DefaultCurRoundOff);
-          CalcInt2(false,t,intdays,IIRec.IntRate,t);
-          aIntVal[acnt] = t;
-        end;
+        CalcInt2(false,aRVal[acnt],intdays,IIRec.IntRate,t);
+        aIntVal[acnt] = t;
       end;
+    end;
+  end else begin
+    intdays = -alatedays[acnt];
+    if (intdays>0) then begin
+      if ((VIp.InvType!=kInvoiceTypeCredit and VIp.InvType!=kInvoiceTypeCreditSpecialSales) and (VIp.InvType!=kInvoiceTypeInterest)) then begin
+        t = MulRateToBase1(APp.CurncyCode,aRVal[acnt],VIp.FrRate,VIp.ToRateB1,VIp.ToRateB2,VIp.BaseRate1,VIp.BaseRate2,DefaultCurRoundOff);
+        CalcInt2(false,t,intdays,IIRec.IntRate,t);
+        aIntVal[acnt] = t;
+      end;
+    end;
   end;
   if (APp.CurncyCode==VEp.VECurncyCode) then begin
    intvp = aIntVal[acnt];
@@ -209,15 +216,17 @@ BEGIN
     Header(rw,tstr,1);
     rw = rw + 1;
   end;
-  HTCustClass(RepSpec.f4,tstr);
-  if (nonblank(tstr)) then begin
-    Header(rw,tstr,1);
-    rw = rw + 1;
-  end; 
-  HTCustClassType(RepSpec.f5,tstr);
-  if (nonblank(tstr)) then begin
-    Header(rw,tstr,1);
-    rw = rw + 1;
+  if (HasContactClassification) then begin
+    HTCustClass(RepSpec.f4,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end; 
+    HTCustClassType(RepSpec.f5,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;
   end;
   tstr = RepSpec.d1;
   if (nonblank(tstr)) then begin
@@ -257,14 +266,15 @@ BEGIN
 END;
 
 global
-procedure APSrList(record RcVc RepSpec,record CUVc VEp,val ARSSum,val ARSOnAccBal,val ARSIntSum,val s0,val s1,val s16,val s31,val s61,val s91,val s121,val s151,
+procedure APSrList(record RcVc RepSpec,record CUVc VEp,val ARSSum,val ARSOnAccBal,val ARSOnAccBalb1,val ARSIntSum,val s0,val s1,val s16,val s31,val s61,val s91,val s121,val s151,
                    Array Integer aRwtype,Array LongInt aInvoiceNr,Array string aRecNr,Array LongInt alatedays,Array LongInt aRemndr,
                    Array Date aInvDate,Array Date aDueDate,Array val aIntVal,Array val aRVal,Array val aRVAT,Array val aSum4,
-                   Array string aVEInvNo,Array string aCurncyCode,Integer acnt)
+                   Array string aVEInvNo,Array string aCurncyCode,Integer acnt,
+                   Array string aonacccur,Array val aonaccv1,Integer onacccurcnt)
 BEGIN
   Integer i;
   Boolean testf;
-  string 255 tstr;
+  string 255 tstr,basecur1;
   val arsum;
   array val av1;
   array val av2;
@@ -273,18 +283,23 @@ BEGIN
   Integer curcnt;
   Boolean printedcuf;
   record AgedBlock Ab;
+  array val avonacc2;
+  array val avonacc3;
   record VIVc VIr;// Edit ************************** Thursday, 15 May 2014 13:00:56
   record POVc POr;// Edit ************************** Thursday, 15 May 2014 13:00:57
   record ORVc ORr; //Edit***************************Sasha2,14:41 29.07.2014
   string 100 ortstr,ortypetstr;
-  
+
   BlockLoad(Ab);
   BeginCurncyTotals(curcnt);
+  AddCurncyTotalsToTotalCurncyTotals(aonacccur,aonaccv1,avonacc2,avonacc3,onacccurcnt,acur,av1,av2,av3,curcnt);
+  GetBaseCurncy(1,basecur1);
   for (i=0;i<acnt;i=i+1) begin
     testf = true;
     if (testf) then begin
       if (!printedcuf) then begin
         Gray_Divider(0,1);
+        StartFormat(15);
         OutString(0,"DblCUVc",VEp.Code,false);
         OutString(100,0,VEp.Name,false);
         if (RepSpec.flags[4]==1) then begin  
@@ -306,8 +321,7 @@ BEGIN
 	// Edit End ---------------------------------------------- Edit End
 	
         printedcuf = true;
-      end;
-      
+      end;      
       //if (RepSpec.Media==mtFile) or (RepSpec.Media==mtExcel) then begin// Edit ************************** Thursday, 15 May 2014 13:00:23
       //  OutString(0,0,"1",false);
       //  OutString(50,0,"2",false);
@@ -325,6 +339,8 @@ BEGIN
       end;
       outstring(0,0,ortypetstr,false);// Edit ************************** Thursday, 15 May 2014 13:00:30
       outstring(100,"DblPOVc",ortstr,false);// Edit ************************** Thursday, 15 May 2014 13:00:31
+      
+      
       
       tstr = CreateInvoiceNumber(aInvoiceNr[i],"");
       if (nonblank(aVEInvNo[i])) then begin
@@ -373,7 +389,16 @@ BEGIN
         OutVal(480,0,aRVal[i],M4Val,true);
       end;
       EndFormat;
-      AddCurncyTotals(acur,av1,curcnt,aCurncyCode[i],aRVal[i]);
+      if (RepSpec.flags[4]==1) then begin
+        AddCurncyTotals(acur,av1,curcnt,aCurncyCode[i],aRVal[i]);
+      end else begin
+        if (aCurncyCode[i]!=VEp.VECurncyCode) and (VEp.VECurncyCode!=basecur1) then begin
+          AddCurncyTotals(acur,av1,curcnt,aCurncyCode[i],aRVal[i]);
+        end else begin
+          AddCurncyTotals(acur,av1,curcnt,"",aRVal[i]);
+        end;
+      end;
+      
       if (RepSpec.flags[14]!=0) then begin
         AddCurncyTotals(acur,av2,curcnt,aCurncyCode[i],aRVAT[i]);
       end;
@@ -383,6 +408,7 @@ BEGIN
   if (ARSOnAccBal!=0) then begin
     if (!printedcuf) then begin
       Gray_Divider(0,1);
+      StartFormat(15);
       OutString(0,"DblCUVc",VEp.Code,false);
       OutString(100,0,VEp.Name,false);
       if (RepSpec.flags[4]==1) then begin  
@@ -398,37 +424,44 @@ BEGIN
     end;
     StartFormat(15);
     OutString(200,0,USetStr(11857),false);
-    OutVal(1,0,ARSOnAccBal,M4Val,true);
+    if (RepSpec.flags[4]!=0) then begin
+      OutVal(1,0,ARSOnAccBal,M4Val,true);
+      arsum = arsum + ARSOnAccBal;
+    end else begin
+      OutVal(1,0,ARSOnAccBalb1,M4Val,true);
+      arsum = arsum + ARSOnAccBalb1;
+    end;
     EndFormat;
-    AddCurncyTotals(acur,av1,curcnt,"",ARSOnAccBal);
-    arsum = arsum + ARSOnAccBal;
     if (RepSpec.flags[13]!=0) then begin
-      PrintPrepaymentsNrsOP(RepSpec,VEp.Code,nonblankdate(RepSpec.d1),300,1);
+      if (RepSpec.flags[2]==0) then begin
+        PrintPrepaymentsNrsOP(RepSpec,RepSpec.flags[4]!=0,VEp.Code,nonblankdate(RepSpec.d1),300,440);
+      end else begin
+        PrintPrepaymentsNrsOP(RepSpec,RepSpec.flags[4]!=0,VEp.Code,nonblankdate(RepSpec.d1),300,1);
+      end;
     end;            
   end;
   if (printedcuf) then begin
     Black_Divider(370,1);
   end;
-/*  
-  StartFormat(15);
-  switch (GetVATLaw) begin
-    case 7://vatDanish
-      OutVal(360,0,ARSIntSum,M4Val,true);
+  if (RepSpec.flags[4]!=0) then begin
+    PrintCurncyTotals(acur,av2,av1,av3,curcnt,390,480,-1,320,false,RepSpec.PocketPC);
+  end else begin
+    if (arsum!=0) then begin
+      StartFormat(15);
+       OutVal(1,0,arsum,M4Val,true);
+      EndFormat;
+    end;
   end;
-  OutVal(1,0,arsum,M4Val,true);
-  EndFormat;
-*/
-  PrintCurncyTotals(acur,av2,av1,av3,curcnt,390,480,-1,320,false,RepSpec.PocketPC);
   RETURN;
 END;
 
-updating procedure OneAPSFormOpen(record RcVc RepSpec,record CUVc VEp,Integer reportmode,var val balp,var val vatp)
+updating procedure OneAPSFormOpen(record RcVc RepSpec,record CUVc VEp,Integer reportmode,var val balp,var val balpb1,var val vatp)
 BEGIN
   record APVc APr;
   record VIVc VIr;
   Integer rwcnt;
   Boolean TrHs;
-  val ARSSum;
+  val ARSSum,ARSSumb1;
   val ARSIntSum;
   val ARSSumNotLate;
   val ARSSumLate;
@@ -438,10 +471,11 @@ BEGIN
   val ARSsact,ARSs0,ARSs1,ARSs16,ARSs31,ARSs61,ARSs91,ARSs121,ARSs151;
   val ARSStartBal;
   val ARSOnAccBal;
+  val ARSOnAccBalb1;
   val intv;
   LongInt latedays,maxintdays;
   Boolean testf;
-  val rval,rval2;
+  val rval,rvalb1,rval2;
   val fr,to1,to2,br1,br2;
   Boolean onaccf;
   record SMVc CurTotalsr;
@@ -467,6 +501,9 @@ BEGIN
   Array string 10 credaccs;
   Array val credbal;
   Integer credcnt;
+  array val av1;
+  array string 20 acur;
+  Integer curcnt;
   
   GetBaseCurncy(1,basecur1);
   if (blank(VEp.VECurncyCode)) then begin
@@ -479,8 +516,7 @@ BEGIN
   end;
   GetFullCurncyRate(VEp.VECurncyCode,CurrentDate,fr,to1,to2,br1,br2);
   rwcnt = 0;
-  APGetOnAccBalance(RepSpec,VEp,false,rval,rval2,ARSOnAccBal,sumbooked,sumnow,sumcurncy,sumdiff,credaccs,credbal,credcnt);//ObjStr
-  if (RepSpec.flags[4]==0) then begin ARSOnAccBal = rval; end;
+  APGetOnAccBalance(RepSpec,VEp,false,ARSOnAccBalb1,rval2,ARSOnAccBal,sumbooked,sumnow,sumcurncy,sumdiff,credaccs,credbal,credcnt,acur,av1,curcnt);//ObjStr
   if (VEp.Code!=APr.VECode) then begin
     if (ARSOnAccBal!=0) then begin onaccf = true; end;
   end;
@@ -528,28 +564,37 @@ BEGIN
         end else begin
           APr.RVal = APr.RVal - VIr.HoldSum;
         end;
+        APr.BookRVal = APr.BookRVal - MulRateToBase1(VIr.CurncyCode,VIr.HoldSum,VIr.FrRate,VIr.ToRateB1,VIr.ToRateB2,VIr.BaseRate1,VIr.BaseRate2,DefaultCurRoundOff);
         if (VIr.InvType!=kInvoiceTypeCredit and VIr.InvType!=kInvoiceTypeCreditSpecialSales) then begin
           if (APr.RVal<0) then begin
             APr.RVal = 0;
           end;
+          if (APr.BookRVal<0) then begin
+            APr.BookRVal = 0;
+          end;
         end;
         if (VIr.Closed!=0) then begin
           APr.RVal = 0;
+          APr.BookRVal = 0;
         end;
       end;
       if ((RepSpec.flags[0]==0) or (latedays<0)) then begin
         if (VIr.CurncyCode==VEp.VECurncyCode) then begin
           rval = APr.RVal;
+          rvalb1 = APr.BookRVal;
         end else begin
           if (blank(VEp.VECurncyCode)) or (VEp.VECurncyCode==basecur1) then begin
             rval = APr.BookRVal;
+            rvalb1 = APr.BookRVal;
           end else begin
             rval = DivRateToBase1(VEp.VECurncyCode,APr.BookRVal,fr,to1,to2,br1,br2,DefaultCurRoundOff);
+            rvalb1 = rval;
           end;
         end;
         switch (RepSpec.flags[0]) begin
           case 0:
             ARSSum = ARSSum + rval;
+            ARSSumb1 = ARSSumb1 + rvalb1;
             if (latedays>-1) then begin//-2???
               ARSSumNotLate = ARSSumNotLate + rval;
               ARSNotLateCount = ARSNotLateCount + 1;
@@ -568,6 +613,7 @@ BEGIN
           case 2:
             if (latedays<=-1) then begin//-2???
               ARSSum = ARSSum + rval;
+              ARSSumb1 = ARSSumb1 + rvalb1;
               ARSSumLate = ARSSumLate + rval;
               ARSLateCount = ARSLateCount + 1;
               AddAPSRow(aRwtype,aInvoiceNr,aRecNr,alatedays,aRemndr,aInvDate,aDueDate,aIntVal,aRVal,aRVAT,aSum4,aVEInvNo,aCurncyCode,acnt,
@@ -581,6 +627,8 @@ BEGIN
 L20OneAPSFormOpen:;
   end;
   VendAged(VEp,ARSARSum,ARSsact,ARSs0,ARSs1,ARSs16,ARSs31,ARSs61,ARSs91,ARSs121,ARSs151);
+  ARSARSum = ARSARSum + ARSOnAccBal;
+  ARSs0 = ARSs0 + ARSOnAccBal;
   testf = true;
   if (RepSpec.flags[1]==1) then begin
     if (ARSARSum==0) then begin
@@ -595,14 +643,17 @@ L20OneAPSFormOpen:;
   if (testf) then begin
     switch (reportmode) begin
       case 0: 
-          PrintAPSForm(RepSpec,VEp,ARSSum,ARSOnAccBal,ARSIntSum,ARSSumLate,ARSARSum,ARSStartBal,ARSSumNotLate,ARSLateCount,ARSNotLateCount,
+          PrintAPSForm(RepSpec,VEp,ARSSum,ARSOnAccBal,ARSOnAccBalb1,ARSSumb1,ARSIntSum,ARSSumLate,ARSARSum,ARSStartBal,ARSSumNotLate,ARSLateCount,ARSNotLateCount,
                        ARSs0,ARSs1,ARSs16,ARSs31,ARSs61,ARSs91,ARSs121,ARSs151,aRwtype,aInvoiceNr,alatedays,aRemndr,aInvDate,aDueDate,aIntVal,aRVal,aRVAT,aSum4,aDebVal,aVEInvNo,aCurncyCode,acnt); 
 //        UpdateVEBal(VEp->Code,&ARSr.ARSum,&CurrentDate); is it needed        
       case 1: 
-        balp = balp + ARSOnAccBal;
-        APSrList(RepSpec,VEp,ARSSum,ARSOnAccBal,ARSIntSum,ARSs0,ARSs1,ARSs16,ARSs31,ARSs61,ARSs91,ARSs121,ARSs151,aRwtype,aInvoiceNr,aRecNr,alatedays,aRemndr,aInvDate,aDueDate,aIntVal,aRVal,aRVAT,aSum4,aVEInvNo,aCurncyCode,acnt); 
+        APSrList(RepSpec,VEp,ARSSum,ARSOnAccBal,ARSOnAccBalb1,ARSIntSum,ARSs0,ARSs1,ARSs16,ARSs31,ARSs61,ARSs91,ARSs121,ARSs151,aRwtype,aInvoiceNr,aRecNr,alatedays,aRemndr,aInvDate,aDueDate,aIntVal,aRVal,aRVAT,aSum4,aVEInvNo,aCurncyCode,acnt,acur,av1,curcnt); 
     end;
   end;
+  balpb1 = balpb1 + ARSOnAccBalb1;
+  balpb1 = balpb1 + ARSSumb1;
+
+  balp = balp + ARSOnAccBal;
   balp = balp + ARSSum;
   RETURN;
 END;
@@ -611,15 +662,15 @@ global
 updating procedure DoAPSForms(record RcVc RepSpec,Integer reportmode)
 BEGIN
   record CUVc VEr;
-  Boolean VEs;
+  Boolean VEs,manycurf;
   string 255 frve,tove;
-  string 255 a,b;
-  val TotSum,TotVat;
+  string 255 a,b,lastcrncy;
+  val TotSum,TotSumB1,TotVat;
   Boolean skip;
   Boolean skip2;
   Array string 20 ac;
   Date d1;
-
+  
   d1 = RepSpec.d1;  
   frve = FirstInRange(RepSpec.f1,20);
   tove = LastInRange(RepSpec.f1,20);
@@ -679,10 +730,14 @@ BEGIN
         skip = false;
         if (skip==false) then begin
           if (blankdate(d1)) then begin
-            OneAPSFormOpen(RepSpec,VEr,reportmode,TotSum,TotVat);
+            OneAPSFormOpen(RepSpec,VEr,reportmode,TotSum,TotSumB1,TotVat);
           end else begin
-            OneAPSFormOpenOnDate(RepSpec,VEr,reportmode,TotSum,TotVat);
+            OneAPSFormOpenOnDate(RepSpec,VEr,reportmode,TotSum,TotSumB1,TotVat);
           end;
+          if (lastcrncy!=VEr.VECurncyCode) and nonblank(lastcrncy) then begin
+            manycurf = true;
+          end;
+          lastcrncy = VEr.VECurncyCode;
         end;
       end;
     end;
@@ -700,7 +755,11 @@ BEGIN
      if (RepSpec.flags[14]!=0) then begin
        OutVal(390,0,TotVat,M4Val,true);
      end;
-     OutVal(480,0,TotSum,M4Val,true);
+     if (manycurf or RepSpec.flags[4]==0) then begin
+       OutVal(480,0,TotSumB1,M4Val,true);
+      end else begin
+       OutVal(480,0,TotSum,M4Val,true);
+      end;
     EndFormat;
     EndJob;
   end;
