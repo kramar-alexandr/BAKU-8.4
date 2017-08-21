@@ -1,0 +1,3529 @@
+external procedure FindNLAccBal(string,string,string,Integer,Date,Date,Integer,Integer,Boolean,string,Integer,string,string,var val);
+external procedure YcToStr(Integer,var string);
+external function Boolean CorspTRTest(record TRVc,record AccVc,Integer,var val,var val);
+external procedure ReadCorspTRRowSums(record TRVc,record AccVc,record AccVc,var val,var val,string);
+external procedure GetObjs(string,string,var string);
+external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
+external function string 200 ValToMyString(val,integer);
+remote function boolean CompanyIsJWLikeCompany(Integer);
+external function Integer InString2(string,string);
+
+SetLangMode(LangRussian,"RUS",0);
+
+procedure OutMyString(integer p1,integer p2,val str,boolean alight)
+begin
+	
+	if(str!=0)then begin
+		outstring(p1,p2,str,alight);
+	end else begin
+		outstring(p1,p2,"",alight);
+	end;
+
+return;
+end;
+
+global
+procedure DirectorWeekRn(record RcVc RepSpec)
+begin
+	record MainVc mainr;
+	record TRVc TRr,tempTRr,tempTRr2;
+	row TRVc TRrw,tempTRrw,tempTRrw2,tempTRrw3;
+	record ObjVc Objr;
+	record IVVc IVr;
+	record IPVc IPr;
+	record CLInVc CLInr;
+	row CLInVc CLInrw;
+	record CLOutVc CLOutr;
+	row CLOutVc CLOutrw;
+	record CurncyCodeVc CCr;
+	record AccVc Accr50,Accr58,Accr59,Accr591,Accr4403,Accr51,Accr52,Accr8403,Accr76,Accr7505,Accr53,Accr601;
+	array string 5 CurList;
+	integer i,j,k,l,rwcnt,rwcnt2,curi;
+	boolean TrHs,testf,done,f;
+	Date tempDate;
+	val BeginBalance50, BeginBalance51, BeginBalance53,
+		SaldoEndPeriod53,
+		BeginBalance50n51, BeginBalance50n51n53,
+		SaldoEndPeriod50n51,
+		
+		BeginBalance50AZN,		  BeginBalance50USD,		  BeginBalance50EUR,
+		BeginBalance53AZN,		  BeginBalance53USD,		  BeginBalance53EUR,
+		BeginBalance50n53AZN,	  BeginBalance50n53USD,	  BeginBalance50n53EUR,
+    BeginBalance52,
+		SaldoEndPeriod50AZN,	  SaldoEndPeriod50USD,	  SaldoEndPeriod50EUR,
+		SaldoEndPeriod53AZN,	  SaldoEndPeriod53USD,	  SaldoEndPeriod53EUR,
+		SaldoEndPeriod50n53AZN,	SaldoEndPeriod50n53USD,	SaldoEndPeriod50n53EUR,
+    Balance52AZN,		        Balance52USD,		        Balance52EUR,
+		SaldoEndPeriod52,
+		AZNTermDeb,  AZNDeb,  USDDeb,  EURDeb,	BaseDeb,
+		AZNTermCred, AZNCred, USDCred, EURCred,	BaseCred,
+    Base52Conv,Base52Cred,Base52Deb,
+		convtotal1,convtotal2,convtotal3,convtotal4,convtotal5,// Edit ************************** Wednesday, 26 August 2015 11:49:59
+    AZN52Deb,EUR52Deb,USD52Deb,AZN52Conv,EUR52Conv,USD52Conv,AZN52Cred,EUR52Cred,USD52Cred,
+
+		BalItem1,BalItem2,
+		SaldoEndPeriod51,
+		corspdebval,corspcredval,tempBal,
+		handed53,kursovaya,kursovaya53,kursovaya52,
+		fr,to1USD,to2,br1,br2,to1EUR;
+	string 20 store,store2;
+	array integer tab;
+  array boolean tabprintf;
+	integer step;
+	string 5 tempStr;
+	string 200 tempComm;
+	boolean compf;
+  roundmode rnd;
+  
+  rnd = DefaultCurRoundoff;
+  rnd.decimals = 0;
+  rnd.step = kRoundingStepNone;
+  rnd.mode = kRoundingModeHalfDown;
+  
+	BeginBalance50 = 0;
+	BeginBalance51 = 0;
+	BeginBalance53 = 0;
+	BeginBalance50n51 = 0;
+	BeginBalance50n51n53 = 0;
+	BeginBalance50AZN = 0;
+	BeginBalance50USD = 0;
+	BeginBalance50EUR = 0;
+	BeginBalance53AZN = 0;
+	BeginBalance53USD = 0;
+	BeginBalance53EUR = 0;
+	tempBal = 0;
+	BalItem1 = 0;
+	BalItem2 = 0;
+	SaldoEndPeriod53 = 0;
+	SaldoEndPeriod53AZN = 0;
+	SaldoEndPeriod53USD = 0;
+	SaldoEndPeriod53EUR = 0;
+	SaldoEndPeriod50n51 = 0;
+	SaldoEndPeriod51 = 0;
+	SaldoEndPeriod50USD = 0;
+	SaldoEndPeriod50EUR = 0;
+	SaldoEndPeriod50AZN = 0;
+	corspdebval = blankval;
+	corspcredval = blankval;
+	handed53 = 0;
+	kursovaya = 0;
+	convtotal1 = 0;
+	convtotal2 = 0;
+	convtotal3 = 0;
+	convtotal4 = 0;
+	convtotal5 = 0;
+  AZN52Deb = 0;
+  EUR52Deb = 0;
+  USD52Deb = 0;
+  AZN52Conv = 0;
+  EUR52Conv = 0;
+  USD52Conv = 0;
+  AZN52Cred = 0;
+  EUR52Cred = 0;
+  USD52Cred = 0;
+	if (CompanyIsJWLikeCompany(CurrentCompany)) then begin
+	  compf = true;
+	end else begin
+	  compf = false;
+	end;
+	
+	curi = 0;
+	while(loopmain(CCr,1,true)) begin
+		CurList[curi] = CCr.CurncyCode;
+		curi = curi + 1;
+	end;
+	
+	Accr50.AccNumber = "50";
+	ReadFirstMain(Accr50,1,true);
+	Accr51.AccNumber = "51";
+	ReadFirstMain(Accr51,1,true);
+  Accr52.AccNumber = "52";
+	ReadFirstMain(Accr52,1,true);
+	Accr58.AccNumber = "58";
+	ReadFirstMain(Accr58,1,true);
+  Accr59.AccNumber = "59";
+	ReadFirstMain(Accr59,1,true);
+  Accr591.AccNumber = "59/1";
+	ReadFirstMain(Accr591,1,true);
+	Accr4403.AccNumber = "44/03";
+	ReadFirstMain(Accr4403,1,true);
+	Accr8403.AccNumber = "84/03";
+	ReadFirstMain(Accr8403,1,true);
+	Accr76.AccNumber = "76";
+	ReadFirstMain(Accr76,1,true);
+	Accr7505.AccNumber = "75/05";
+	ReadFirstMain(Accr7505,1,true);
+	Accr53.AccNumber = "53";
+	ReadFirstMain(Accr53,1,true);
+	Accr601.AccNumber = "60/1";
+	ReadFirstMain(Accr601,1,true);
+	
+	mainr.AccNumber = "50";
+	mainr.TransDate = RepSpec.sStartDate;
+	TrHs = true;
+	while (LoopMain(mainr,2,TrHs)) begin
+		if ((mainr.AccNumber != "50") or (mainr.TransDate > RepSpec.sEndDate))  then begin
+			TrHs = false;
+		end;
+		if (TrHs) then begin
+			TRr.Number = mainr.TransNr;
+			TRr.IntYc = mainr.IntYc;
+			if (ReadFirstMain(TRr,2,true)) then begin
+				if (mainr.TransDate == TRr.TransDate) then begin
+					rwcnt = MatRowCnt(TRr);
+					switch (TRr.IntYc) begin
+            case IVYc:
+              IVr.SerNr = TRr.Number;
+              if (ReadFirstMain(IVr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case IPYc:
+              IPr.SerNr = TRr.Number;
+              if (ReadFirstMain(IPr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case CLInYc:
+              CLInr.SerNr = TRr.Number;
+              if (ReadFirstMain(CLInr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case CLOutYc:
+              CLOutr.SerNr = TRr.Number;
+              if (ReadFirstMain(CLOutr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+          end;
+          for (i=0;i<rwcnt;i=i+1) begin
+						MatRowGet(TRr,i,TRrw);
+						done = false;
+						if ((TRrw.AccNumber == "50") and (TRrw.ovst <> 1) and SetInSet(RepSpec.ObjStr,TRrw.Objects)) then begin
+							switch (TRr.IntYc) begin
+								case IVYc:
+									if (f) then begin
+										tempTRrw.Comment = "СЧ/КЛ." & IVr.SerNr;
+										tempTRrw.ExtraComment = TRr.Comment;
+									end;
+								case IPYc:
+									if (f) then begin
+										tempTRrw.Comment = "ПЛ/КЛ." & IPr.SerNr;
+										tempTRrw.ExtraComment = TRr.Comment;
+									end;
+								case CLInYc:
+									if (f) then begin
+										tempTRrw.Comment = "ПКО." & CLInr.SerNr;
+										rwcnt2 = MatRowCnt(CLInr);
+										for (k=0;k<rwcnt2;k=k+1) begin
+											MatRowGet(CLInr,k,CLInrw);
+											if nonblank(CLInrw.Comment) and (CLInrw.Comment!="") and (((CLInrw.Sum == TRrw.CurDebVal) or (CLInrw.Sum == -TRrw.CurCredVal)) and ((nonblank(CLInrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLInrw.Objects,TRrw.Objects)) or (blank(CLInrw.Objects)))) then begin
+												tempTRrw.ExtraComment = CLInrw.Comment;
+                        CLInrw.Comment = "";
+                        matrowput(CLInr,k,CLInrw);
+                        k = rwcnt2;
+											end;
+										end;
+										if blank(tempTRrw.ExtraComment) then begin
+											tempTRrw.ExtraComment = CLInr.CorspComment;
+										end;
+									end;
+								case CLOutYc:
+									if (f) then begin
+										tempTRrw.Comment = "РКО." & CLOutr.SerNr;
+										rwcnt2 = MatRowCnt(CLOutr);
+										for (k=0;k<rwcnt2;k=k+1) begin
+											MatRowGet(CLOutr,k,CLOutrw);
+											if nonblank(CLOutrw.Comment) and (CLOutrw.Comment!="") and (((CLOutrw.Sum == TRrw.CurCredVal) or (CLOutrw.Sum == -TRrw.CurDebVal)) and ((nonblank(CLOutrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLOutrw.Objects,TRrw.Objects)) or (blank(CLOutrw.Objects)))) then begin
+												tempTRrw.ExtraComment = CLOutrw.Comment;
+                        CLOutrw.Comment = "";
+                        matrowput(CLOutr,k,CLOutrw);
+                        k = rwcnt2;
+											end;
+										end;
+										if blank(tempTRrw.ExtraComment) then begin
+											tempTRrw.ExtraComment = CLOutr.CorspComment;
+										end;
+									end;
+								otherwise
+									YcToStr(TRr.IntYc,tempStr);
+									tempTRrw.Comment = tempStr & "." & TRr.Number;
+									tempTRrw.ExtraComment = TRr.Comment;
+							end;
+							tempTRrw.ReconDate = mainr.TransDate;	//в столбик Дата
+							tempTRrw.Curncy = TRrw.Curncy;			//валюта
+							tempTRrw.CurDebVal = TRrw.CurDebVal;	//в столбики Поступления AZN/EUR/USD
+							tempTRrw.CurCredVal = TRrw.CurCredVal;	//в столбики Расходы AZN/EUR/USD
+							tempTRrw.DebVal = TRrw.DebVal;			//в столбик ПЛ/КЛоступления В осн. валюте
+							tempTRrw.CredVal = TRrw.CredVal;		//в столбик Расходы В осн. валюте
+							if ((TRr.IntYc == IVYc) and (TRrw.CredVal <> 0)) then begin
+								tempTRrw.CurDebVal = - TRrw.CurCredVal;
+								tempTRrw.CurCredVal = - TRrw.CurDebVal;
+								tempTRrw.DebVal = - TRrw.CredVal;
+								tempTRrw.CredVal = - TRrw.DebVal;
+							end;
+							
+							corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr58,i,corspdebval,corspcredval);
+							if testf then begin
+              	for (k=0;k<rwcnt;k=k+1) begin
+									MatRowGet(TRr,k,tempTRrw2);
+									if ((tempTRrw2.AccNumber == "58") and (tempTRrw2.ovst <> 1) and (tempTRrw2.CredVal==corspcredval) and (tempTRrw2.DebVal==corspdebval)) then begin
+                    if (tempTRrw2.CredVal!=0) then begin
+                      tempTRrw.CurCredVal = -tempTRrw2.CurCredVal;
+                      tempTRrw.CredVal = -tempTRrw2.CredVal;
+                    end else begin
+                      tempTRrw.CurCredVal = tempTRrw2.CurDebVal;
+                      tempTRrw.CredVal = tempTRrw2.DebVal;
+                    end;
+                    tempTRrw.MyVal1 = blankval;
+                    tempTRrw.MyVal2 = blankval;
+                    tempTRrw.CurDebVal = blankval;
+                    tempTRrw.DebVal = blankval;
+									end;
+								end;
+							end;
+							
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr59,i,corspdebval,corspcredval);
+							if testf then begin
+              	for (k=0;k<rwcnt;k=k+1) begin
+									MatRowGet(TRr,k,tempTRrw2);
+									if ((tempTRrw2.AccNumber == "59") and (tempTRrw2.ovst <> 1) and (tempTRrw2.CredVal==corspcredval) and (tempTRrw2.DebVal==corspdebval)) then begin
+                    if (tempTRrw2.CredVal!=0) then begin
+                      tempTRrw.CurCredVal = -tempTRrw2.CurCredVal;
+                      tempTRrw.CredVal = -tempTRrw2.CredVal;
+                    end else begin
+                      tempTRrw.CurCredVal = tempTRrw2.CurDebVal;
+                      tempTRrw.CredVal = tempTRrw2.DebVal;
+                    end;
+                    tempTRrw.MyVal1 = blankval;
+                    tempTRrw.MyVal2 = blankval;
+                    tempTRrw.CurDebVal = blankval;
+                    tempTRrw.DebVal = blankval;
+									end;
+								end;
+							end;
+              
+							corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr591,i,corspdebval,corspcredval);
+							if testf then begin
+              	for (k=0;k<rwcnt;k=k+1) begin
+									MatRowGet(TRr,k,tempTRrw2);
+									if ((tempTRrw2.AccNumber == "59/1") and (tempTRrw2.ovst <> 1) and (tempTRrw2.CredVal==corspcredval) and (tempTRrw2.DebVal==corspdebval)) then begin
+                    if (tempTRrw2.CredVal!=0) then begin
+                      tempTRrw.CurCredVal = -tempTRrw2.CurCredVal;
+                      tempTRrw.CredVal = -tempTRrw2.CredVal;
+                    end else begin
+                      tempTRrw.CurCredVal = tempTRrw2.CurDebVal;
+                      tempTRrw.CredVal = tempTRrw2.DebVal;
+                    end;
+                    tempTRrw.MyVal1 = blankval;
+                    tempTRrw.MyVal2 = blankval;
+                    tempTRrw.CurDebVal = blankval;
+                    tempTRrw.DebVal = blankval;
+									end;
+								end;
+							end;
+              
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr50,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 11:01:28
+							if (testf and (corspdebval==TRrw.CredVal or corspcredval==TRrw.DebVal) and (TRr.IntYc != IVYc) and (TRr.IntYc != IPYc)) then begin
+								store = "";
+								GetObjs("STORE",TRrw.Objects,store);
+								for (k=0;k<rwcnt;k=k+1) begin
+									MatRowGet(TRr,k,tempTRrw2);
+									if (tempTRrw2.AccNumber == "50") and (tempTRrw2.ovst <> 1) then begin 
+										if ((tempTRrw2.CredVal == TRrw.DebVal) and (tempTRrw2.DebVal == TRrw.CredVal)) then begin
+											store2 = "";
+											GetObjs("STORE",tempTRrw2.Objects,store2);
+											if ((store == store2) and nonblank(store) and nonblank(store2)) or (blank(store) and blank(store2)) then begin
+												if (TRrw.CredVal!=0) then begin
+													tempTRrw.MyVal1 = -TRrw.CurCredVal;
+													tempTRrw.MyVal2 = -TRrw.CredVal;
+												end else begin
+													tempTRrw.MyVal1 = TRrw.CurDebVal;
+													tempTRrw.MyVal2 = TRrw.DebVal;
+												end;
+												tempTRrw.CurDebVal = blankval;
+												tempTRrw.DebVal = blankval;
+												tempTRrw.CurCredVal = blankval;
+												tempTRrw.CredVal = blankval;
+											end else begin
+												if (TRrw.DebVal!=0) then begin
+													TRrw.CredVal = -TRrw.DebVal;
+													TRrw.DebVal = blankval;
+													TRrw.CurCredVal = -TRrw.CurDebVal;
+													TRrw.CurDebVal = blankval;
+												end;
+												tempTRrw.CurDebVal = TRrw.CurDebVal;
+												tempTRrw.CurCredVal = TRrw.CurCredVal;
+												tempTRrw.DebVal = TRrw.DebVal;
+												tempTRrw.CredVal = TRrw.CredVal;
+											end;
+										end else begin
+											if i != k then begin
+												if ((tempTRrw2.CredVal == TRrw.DebVal) or (tempTRrw2.DebVal == TRrw.CredVal)) and (tempTRrw2.Objects == TRrw.Objects) then begin
+													testf = CorspTRTest(TRr,Accr8403,k,corspdebval,corspcredval);
+													if testf then begin
+														if (TRrw.CredVal!=0) then begin
+															tempTRrw.MyVal1 = -TRrw.CurCredVal;
+															tempTRrw.MyVal2 = -TRrw.CredVal;
+														end else begin
+															tempTRrw.MyVal1 = TRrw.CurDebVal;
+															tempTRrw.MyVal2 = TRrw.DebVal;
+														end;
+														tempTRrw.CurDebVal = blankval;
+														tempTRrw.DebVal = blankval;
+														tempTRrw.CurCredVal = blankval;
+														tempTRrw.CredVal = blankval;
+													end;
+												end;
+											end;
+										end;
+									end;
+								end;
+							end;
+							testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+							
+							testf = CorspTRTest(TRr,Accr8403,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								tempTRrw.MyVal3 = - corspdebval + corspcredval;
+								kursovaya = kursovaya - corspdebval + corspcredval;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+              
+              testf = CorspTRTest(TRr,Accr52,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+							
+							testf = CorspTRTest(TRr,Accr76,i,corspdebval,corspcredval);//Edit-------------------Vitalii 14:48 28.08.2015
+							if (testf and (SetInSet("E131",TRrw.Objects) or SetInSet("E98",TRrw.Objects))) then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								if SetInSet("E131",TRrw.Objects) then begin
+									BalItem1 = BalItem1 - TRrw.CredVal + TRrw.DebVal;
+								end;
+								if SetInSet("E98",TRrw.Objects) then begin
+									BalItem2 = BalItem2 + TRrw.CredVal - TRrw.DebVal;
+								end;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+              
+              testf = CorspTRTest(TRr,Accr601,i,corspdebval,corspcredval);//Edit-------------------Vitalii 14:48 28.08.2015
+							if (testf) then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                BalItem2 = BalItem2 + TRrw.CredVal - TRrw.DebVal;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+              
+							testf = CorspTRTest(TRr,Accr7505,i,corspdebval,corspcredval);
+							if (testf) then begin
+								if (TRrw.DebVal!=0) then begin
+									TRrw.CredVal = -TRrw.DebVal;
+									TRrw.DebVal = blankval;
+									TRrw.CurCredVal = -TRrw.CurDebVal;
+									TRrw.CurDebVal = blankval;
+									tempTRrw.CurDebVal = TRrw.CurDebVal;
+									tempTRrw.CurCredVal = TRrw.CurCredVal;
+									tempTRrw.DebVal = TRrw.DebVal;
+									tempTRrw.CredVal = TRrw.CredVal;
+								end;
+							end;
+							testf = CorspTRTest(TRr,Accr53,i,corspdebval,corspcredval);
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								handed53 = handed53 + TRrw.CredVal;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+							
+							if (!done) then begin
+								if ((RepSpec.ArtMode == 1) and (TRr.IntYc == IVYc) and nonblank(TRrw.DebVal)) then begin
+									MatRowPut(tempTRr2,l,tempTRrw);
+									l = l + 1;
+								end else begin
+									MatRowPut(tempTRr,j,tempTRrw);
+									j = j + 1;
+								end;
+							end;
+							tempTRrw.ReconDate = "";
+							tempTRrw.Curncy = "";
+							tempTRrw.CurDebVal = blankval;
+							tempTRrw.CurCredVal = blankval;
+							tempTRrw.DebVal = blankval;
+							tempTRrw.CredVal = blankval;
+							tempTRrw.MyVal1 = blankval;// Edit ************************** Wednesday, 26 August 2015 11:34:24
+							tempTRrw.MyVal2 = blankval;// Edit ************************** Wednesday, 26 August 2015 11:34:24
+							tempTRrw.MyVal3 = blankval;
+							tempTRrw.Comment = "";
+							tempTRrw.ExtraComment = "";
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	ResetLoop(mainr);
+	mainr.AccNumber = "51";
+	mainr.TransDate = RepSpec.sStartDate;
+	TrHs = true;
+	while (LoopMain(mainr,2,TrHs)) begin
+		if ((mainr.AccNumber != "51") or (mainr.TransDate > RepSpec.sEndDate))  then begin
+			TrHs = false;	
+		end;
+		if (TrHs) then begin
+			TRr.Number = mainr.TransNr;
+			TRr.IntYc = mainr.IntYc;
+			if (ReadFirstMain(TRr,2,true)) then begin
+				if (mainr.TransDate == TRr.TransDate) then begin
+					rwcnt = MatRowCnt(TRr);
+          switch (TRr.IntYc) begin
+            case IVYc:
+              IVr.SerNr = TRr.Number;
+              if (ReadFirstMain(IVr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case IPYc:
+              IPr.SerNr = TRr.Number;
+              if (ReadFirstMain(IPr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case CLInYc:
+              CLInr.SerNr = TRr.Number;
+              if (ReadFirstMain(CLInr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case CLOutYc:
+              CLOutr.SerNr = TRr.Number;
+              if (ReadFirstMain(CLOutr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+          end;
+					for (i=0;i<rwcnt;i=i+1) begin
+						MatRowGet(TRr,i,TRrw);
+						if ((TRrw.AccNumber == "51") and (TRrw.ovst <> 1) and SetInSet(RepSpec.ObjStr,TRrw.Objects)) then begin
+							switch (TRr.IntYc) begin
+								case IVYc:
+									if (f) then begin
+										tempTRrw.Comment = "СЧ/КЛ." & IVr.SerNr;
+										tempTRrw.ExtraComment = TRr.Comment;
+									end;
+								case IPYc:
+									if (f) then begin
+										tempTRrw.Comment = "ПЛ/КЛ." & IPr.SerNr;
+										tempTRrw.ExtraComment = TRr.Comment;
+									end;
+								case CLInYc:
+									if (f) then begin
+										tempTRrw.Comment = "ПКО." & CLInr.SerNr;
+										rwcnt2 = MatRowCnt(CLInr);
+										for (k=0;k<rwcnt2;k=k+1) begin
+											MatRowGet(CLInr,k,CLInrw);
+											if nonblank(CLInrw.Comment) and (CLInrw.Comment!="") and (((CLInrw.Sum == TRrw.CurDebVal) or (CLInrw.Sum == -TRrw.CurCredVal)) and ((nonblank(CLInrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLInrw.Objects,TRrw.Objects)) or (blank(CLInrw.Objects)))) then begin
+												tempTRrw.ExtraComment = CLInrw.Comment;
+                        CLInrw.Comment = "";
+                        matrowput(CLInr,k,CLInrw);
+                        k = rwcnt2;
+											end;
+										end;
+										if blank(tempTRrw.ExtraComment) then begin
+											tempTRrw.ExtraComment = CLInr.CorspComment;
+										end;
+									end;
+								case CLOutYc:
+									if (f) then begin
+										tempTRrw.Comment = "РКО." & CLOutr.SerNr;
+										rwcnt2 = MatRowCnt(CLOutr);
+										for (k=0;k<rwcnt2;k=k+1) begin
+											MatRowGet(CLOutr,k,CLOutrw);
+											if nonblank(CLOutrw.Comment) and (CLOutrw.Comment!="") and (((CLOutrw.Sum == TRrw.CurCredVal) or (CLOutrw.Sum == -TRrw.CurDebVal)) and ((nonblank(CLOutrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLOutrw.Objects,TRrw.Objects)) or (blank(CLOutrw.Objects)))) then begin
+												tempTRrw.ExtraComment = CLOutrw.Comment;
+                        CLOutrw.Comment = "";
+                        matrowput(CLOutr,k,CLOutrw);
+                        k = rwcnt2;
+											end;
+										end;
+										if blank(tempTRrw.ExtraComment) then begin
+											tempTRrw.ExtraComment = CLOutr.CorspComment;
+										end;
+									end;
+								otherwise
+									YcToStr(TRr.IntYc,tempStr);
+									tempTRrw.Comment = tempStr & "." & TRr.Number;
+									tempTRrw.ExtraComment = TRr.Comment;
+							end;
+							tempTRrw.ReconDate = mainr.TransDate;
+							tempTRrw.Curncy = "TER";				//валюта
+							tempTRrw.CurDebVal = TRrw.DebVal;		//в столбики Поступления AZN терминал
+							tempTRrw.CurCredVal = TRrw.CredVal;		//в столбики Расходы AZN терминал
+							tempTRrw.DebVal = TRrw.DebVal;
+							tempTRrw.CredVal = TRrw.CredVal;
+							
+							testf = CorspTRTest(TRr,Accr50,i,corspdebval,corspcredval);
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+              
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr601,i,corspdebval,corspcredval);//Edit-------------------Vitalii 11:15 16.02.2016
+							if (testf) then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                BalItem2 = BalItem2 + TRrw.CredVal - TRrw.DebVal;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+              
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr76,i,corspdebval,corspcredval);//Edit-------------------Vitalii 14:48 28.08.2015
+							if (testf and (SetInSet("E131",TRrw.Objects) or SetInSet("E98",TRrw.Objects))) then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								if SetInSet("E131",TRrw.Objects) then begin
+									BalItem1 = BalItem1 - TRrw.CredVal + TRrw.DebVal;
+								end;
+								if SetInSet("E98",TRrw.Objects) then begin
+									BalItem2 = BalItem2 + TRrw.CredVal - TRrw.DebVal;
+								end;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+							
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval);
+							if (testf and (corspdebval==TRrw.CredVal or corspcredval==TRrw.DebVal) and (TRr.IntYc != IVYc) and (TRr.IntYc != IPYc)) then begin
+								store = "";
+								GetObjs("STORE",TRrw.Objects,store);
+								if nonblank(store) then begin
+									for (k=0;k<rwcnt;k=k+1) begin
+										MatRowGet(TRr,k,tempTRrw2);
+										if (tempTRrw2.AccNumber == "51") and (tempTRrw2.ovst <> 1) then begin 
+											if ((tempTRrw2.CredVal == TRrw.DebVal) and (tempTRrw2.DebVal == TRrw.CredVal)) then begin
+												store2 = "";
+												GetObjs("STORE",tempTRrw2.Objects,store2);
+												if (store == store2) then begin
+													if (TRrw.CredVal!=0) then begin
+														tempTRrw.MyVal1 = -TRrw.CredVal;
+														tempTRrw.MyVal2 = -TRrw.CredVal;
+													end else begin
+														tempTRrw.MyVal1 = TRrw.DebVal;
+														tempTRrw.MyVal2 = TRrw.DebVal;
+													end;
+													tempTRrw.CurDebVal = blankval;
+													tempTRrw.DebVal = blankval;
+													tempTRrw.CurCredVal = blankval;
+													tempTRrw.CredVal = blankval;
+												end else begin
+													if (TRrw.DebVal!=0) then begin
+														TRrw.CredVal = -TRrw.DebVal;
+														TRrw.DebVal = blankval;
+														TRrw.CurCredVal = -TRrw.DebVal;
+														TRrw.CurDebVal = blankval;
+													end;
+													tempTRrw.CurDebVal = TRrw.DebVal;
+													tempTRrw.CurCredVal = TRrw.CredVal;
+													tempTRrw.DebVal = TRrw.DebVal;
+													tempTRrw.CredVal = TRrw.CredVal;
+												end;
+											end else begin
+												if i != k then begin
+													if ((tempTRrw2.CredVal == TRrw.DebVal) or (tempTRrw2.DebVal == TRrw.CredVal)) and (tempTRrw2.Objects == TRrw.Objects) then begin
+														testf = CorspTRTest(TRr,Accr8403,k,corspdebval,corspcredval);
+														if testf then begin
+															if (TRrw.CredVal!=0) then begin
+																tempTRrw.MyVal1 = -TRrw.CurCredVal;
+																tempTRrw.MyVal2 = -TRrw.CredVal;
+															end else begin
+																tempTRrw.MyVal1 = TRrw.CurDebVal;
+																tempTRrw.MyVal2 = TRrw.DebVal;
+															end;
+															tempTRrw.CurDebVal = blankval;
+															tempTRrw.DebVal = blankval;
+															tempTRrw.CurCredVal = blankval;
+															tempTRrw.CredVal = blankval;
+														end;
+													end;
+												end;
+											end;
+										end;
+									end;
+								end;
+							end;
+              
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr52,i,corspdebval,corspcredval);
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+							
+              testf = CorspTRTest(TRr,Accr8403,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal1 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal1 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								tempTRrw.MyVal3 = - corspdebval + corspcredval;
+								kursovaya = kursovaya - corspdebval + corspcredval;
+								tempTRrw.CurDebVal = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.CurCredVal = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+							
+							if ((RepSpec.ArtMode == 1) and (TRr.IntYc == IVYc) and nonblank(TRrw.DebVal)) then begin
+								MatRowPut(tempTRr2,l,tempTRrw);
+								l = l + 1;
+							end else begin
+								MatRowPut(tempTRr,j,tempTRrw);
+								j = j + 1;
+							end;
+							tempTRrw.ReconDate = "";
+							tempTRrw.Curncy = "";
+							tempTRrw.CurDebVal = blankval;
+							tempTRrw.CurCredVal = blankval;
+							tempTRrw.DebVal = blankval;
+							tempTRrw.CredVal = blankval;
+							tempTRrw.MyVal1 = blankval;// Edit ************************** Wednesday, 26 August 2015 11:34:24
+							tempTRrw.MyVal2 = blankval;// Edit ************************** Wednesday, 26 August 2015 11:34:24
+							tempTRrw.Comment = "";
+							tempTRrw.ExtraComment = "";
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	ResetLoop(mainr);
+	mainr.AccNumber = "53";
+	mainr.TransDate = RepSpec.sStartDate;
+	TrHs = true;
+	while (LoopMain(mainr,2,TrHs)) begin
+		if ((mainr.AccNumber != "53") or (mainr.TransDate > RepSpec.sEndDate))  then begin
+			TrHs = false;
+		end;
+		if (TrHs) then begin
+			TRr.Number = mainr.TransNr;
+			TRr.IntYc = mainr.IntYc;
+			if (ReadFirstMain(TRr,2,true)) then begin
+				if (mainr.TransDate == TRr.TransDate) then begin
+					rwcnt = MatRowCnt(TRr);
+					for (i=0;i<rwcnt;i=i+1) begin
+						MatRowGet(TRr,i,TRrw);
+						done = false;
+						if ((TRrw.AccNumber == "53") and (TRrw.ovst <> 1) and SetInSet(RepSpec.ObjStr,TRrw.Objects)) then begin
+							testf = CorspTRTest(TRr,Accr8403,i,corspdebval,corspcredval);
+							if testf then begin
+								kursovaya53 = kursovaya53 - corspdebval + corspcredval;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+  
+  
+  ResetLoop(mainr);
+  mainr.AccNumber = "52";
+	mainr.TransDate = RepSpec.sStartDate;
+	TrHs = true;
+	while (LoopMain(mainr,2,TrHs)) begin
+		if ((mainr.AccNumber != "52") or (mainr.TransDate > RepSpec.sEndDate))  then begin
+			TrHs = false;
+		end;
+		if (TrHs) then begin
+			TRr.Number = mainr.TransNr;
+			TRr.IntYc = mainr.IntYc;
+			if (ReadFirstMain(TRr,2,true)) then begin
+      	if (mainr.TransDate == TRr.TransDate) then begin
+					rwcnt = MatRowCnt(TRr);
+					switch (TRr.IntYc) begin
+            case IVYc:
+              IVr.SerNr = TRr.Number;
+              if (ReadFirstMain(IVr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case IPYc:
+              IPr.SerNr = TRr.Number;
+              if (ReadFirstMain(IPr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case CLInYc:
+              CLInr.SerNr = TRr.Number;
+              if (ReadFirstMain(CLInr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case CLOutYc:
+              CLOutr.SerNr = TRr.Number;
+              if (ReadFirstMain(CLOutr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+          end;
+          for (i=0;i<rwcnt;i=i+1) begin
+						MatRowGet(TRr,i,TRrw);
+						done = false;
+						if ((TRrw.AccNumber == "52") and (TRrw.ovst <> 1) and SetInSet(RepSpec.ObjStr,TRrw.Objects)) then begin
+							switch (TRr.IntYc) begin
+								case IVYc:
+									if (f) then begin
+										tempTRrw.Comment = "СЧ/КЛ." & IVr.SerNr;
+										tempTRrw.ExtraComment = TRr.Comment;
+									end;
+								case IPYc:
+									if (f) then begin
+										tempTRrw.Comment = "ПЛ/КЛ." & IPr.SerNr;
+										tempTRrw.ExtraComment = TRr.Comment;
+									end;
+								case CLInYc:
+									if (f) then begin
+										tempTRrw.Comment = "ПКО." & CLInr.SerNr;
+										rwcnt2 = MatRowCnt(CLInr);
+										for (k=0;k<rwcnt2;k=k+1) begin
+											MatRowGet(CLInr,k,CLInrw);
+											if nonblank(CLInrw.Comment) and (CLInrw.Comment!="") and (((CLInrw.Sum == TRrw.CurDebVal) or (CLInrw.Sum == -TRrw.CurCredVal)) and ((nonblank(CLInrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLInrw.Objects,TRrw.Objects)) or (blank(CLInrw.Objects)))) then begin
+												tempTRrw.ExtraComment = CLInrw.Comment;
+                        CLInrw.Comment = "";
+                        matrowput(CLInr,k,CLInrw);
+                        k = rwcnt2;
+											end;
+										end;
+										if blank(tempTRrw.ExtraComment) then begin
+											tempTRrw.ExtraComment = CLInr.CorspComment;
+										end;
+									end;
+								case CLOutYc:
+									if (f) then begin
+										tempTRrw.Comment = "РКО." & CLOutr.SerNr;
+										rwcnt2 = MatRowCnt(CLOutr);
+										for (k=0;k<rwcnt2;k=k+1) begin
+											MatRowGet(CLOutr,k,CLOutrw);
+											if nonblank(CLOutrw.Comment) and (CLOutrw.Comment!="") and (((CLOutrw.Sum == TRrw.CurCredVal) or (CLOutrw.Sum == -TRrw.CurDebVal)) and ((nonblank(CLOutrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLOutrw.Objects,TRrw.Objects)) or (blank(CLOutrw.Objects)))) then begin
+												tempTRrw.ExtraComment = CLOutrw.Comment;
+                        CLOutrw.Comment = "";
+                        matrowput(CLOutr,k,CLOutrw);
+                        k = rwcnt2;
+											end;
+										end;
+										if blank(tempTRrw.ExtraComment) then begin
+											tempTRrw.ExtraComment = CLOutr.CorspComment;
+										end;
+									end;
+								otherwise
+									YcToStr(TRr.IntYc,tempStr);
+									tempTRrw.Comment = tempStr & "." & TRr.Number;
+									tempTRrw.ExtraComment = TRr.Comment;
+							end;
+							tempTRrw.ReconDate = mainr.TransDate;
+							tempTRrw.Curncy = TRrw.Curncy & "52";
+							tempTRrw.MyVal7 = TRrw.CurDebVal;
+              if (!setinset("7",tempTRrw.TFromCode)) then begin
+                tempTRrw.TFromCode = tempTRrw.TFromCode & "7,";
+              end;
+							tempTRrw.MyVal9 = TRrw.CurCredVal;
+              if (!setinset("9",tempTRrw.TFromCode)) then begin
+                tempTRrw.TFromCode = tempTRrw.TFromCode & "9,";
+              end;
+							tempTRrw.DebVal = TRrw.DebVal;
+							tempTRrw.CredVal = TRrw.CredVal;
+							if ((TRr.IntYc == IVYc) and (TRrw.CredVal <> 0)) then begin
+								tempTRrw.MyVal7 = - TRrw.CurCredVal;
+                if (!setinset("7",tempTRrw.TFromCode)) then begin
+                  tempTRrw.TFromCode = tempTRrw.TFromCode & "7,";
+                end;
+								tempTRrw.MyVal9 = - TRrw.CurDebVal;
+                if (!setinset("9",tempTRrw.TFromCode)) then begin
+                  tempTRrw.TFromCode = tempTRrw.TFromCode & "9,";
+                end;
+								tempTRrw.DebVal = - TRrw.CredVal;
+								tempTRrw.CredVal = - TRrw.DebVal;
+							end;
+							
+							corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr58,i,corspdebval,corspcredval);
+							if testf then begin
+              	for (k=0;k<rwcnt;k=k+1) begin
+									MatRowGet(TRr,k,tempTRrw2);
+									if ((tempTRrw2.AccNumber == "58") and (tempTRrw2.ovst <> 1) and (tempTRrw2.CredVal==corspcredval) and (tempTRrw2.DebVal==corspdebval)) then begin
+                    if (tempTRrw2.CredVal!=0) then begin
+                      tempTRrw.MyVal9 = -tempTRrw2.CurCredVal;
+                      tempTRrw.CredVal = -tempTRrw2.CredVal;
+                    end else begin
+                      tempTRrw.MyVal9 = tempTRrw2.CurDebVal;
+                      tempTRrw.CredVal = tempTRrw2.DebVal;
+                    end;
+                    if (!setinset("9",tempTRrw.TFromCode)) then begin
+                      tempTRrw.TFromCode = tempTRrw.TFromCode & "9,";
+                    end;
+                    tempTRrw.MyVal8 = blankval;
+                    tempTRrw.MyVal2 = blankval;
+                    tempTRrw.MyVal7 = blankval;
+                    tempTRrw.DebVal = blankval;
+									end;
+								end;
+							end;
+							
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr59,i,corspdebval,corspcredval);
+							if testf then begin
+              	for (k=0;k<rwcnt;k=k+1) begin
+									MatRowGet(TRr,k,tempTRrw2);
+									if ((tempTRrw2.AccNumber == "59") and (tempTRrw2.ovst <> 1) and (tempTRrw2.CredVal==corspcredval) and (tempTRrw2.DebVal==corspdebval)) then begin
+                    if (tempTRrw2.CredVal!=0) then begin
+                      tempTRrw.MyVal9 = -tempTRrw2.CurCredVal;
+                      tempTRrw.CredVal = -tempTRrw2.CredVal;
+                    end else begin
+                      tempTRrw.MyVal9 = tempTRrw2.CurDebVal;
+                      tempTRrw.CredVal = tempTRrw2.DebVal;
+                    end;
+                    if (!setinset("9",tempTRrw.TFromCode)) then begin
+                      tempTRrw.TFromCode = tempTRrw.TFromCode & "9,";
+                    end;
+                    tempTRrw.MyVal8 = blankval;
+                    tempTRrw.MyVal2 = blankval;
+                    tempTRrw.MyVal7 = blankval;
+                    tempTRrw.DebVal = blankval;
+									end;
+								end;
+							end;
+              
+							corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr591,i,corspdebval,corspcredval);
+							if testf then begin
+              	for (k=0;k<rwcnt;k=k+1) begin
+									MatRowGet(TRr,k,tempTRrw2);
+									if ((tempTRrw2.AccNumber == "59/1") and (tempTRrw2.ovst <> 1) and (tempTRrw2.CredVal==corspcredval) and (tempTRrw2.DebVal==corspdebval)) then begin
+                    if (tempTRrw2.CredVal!=0) then begin
+                      tempTRrw.MyVal9 = -tempTRrw2.CurCredVal;
+                      tempTRrw.CredVal = -tempTRrw2.CredVal;
+                    end else begin
+                      tempTRrw.MyVal9 = tempTRrw2.CurDebVal;
+                      tempTRrw.CredVal = tempTRrw2.DebVal;
+                    end;
+                    if (!setinset("9",tempTRrw.TFromCode)) then begin
+                      tempTRrw.TFromCode = tempTRrw.TFromCode & "9,";
+                    end;
+                    tempTRrw.MyVal8 = blankval;
+                    tempTRrw.MyVal2 = blankval;
+                    tempTRrw.MyVal7 = blankval;
+                    tempTRrw.DebVal = blankval;
+									end;
+								end;
+							end;
+              
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr52,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 11:01:28
+							if (testf and (corspdebval==TRrw.CredVal or corspcredval==TRrw.DebVal) and (TRr.IntYc != IVYc) and (TRr.IntYc != IPYc)) then begin
+								store = "";
+								GetObjs("STORE",TRrw.Objects,store);
+								for (k=0;k<rwcnt;k=k+1) begin
+									MatRowGet(TRr,k,tempTRrw2);
+									if (tempTRrw2.AccNumber == "52") and (tempTRrw2.ovst <> 1) then begin 
+										if ((tempTRrw2.CredVal == TRrw.DebVal) and (tempTRrw2.DebVal == TRrw.CredVal)) then begin
+											store2 = "";
+											GetObjs("STORE",tempTRrw2.Objects,store2);
+											if ((store == store2) and nonblank(store) and nonblank(store2)) or (blank(store) and blank(store2)) then begin
+												if (TRrw.CredVal!=0) then begin
+													tempTRrw.MyVal8 = -TRrw.CurCredVal;
+													tempTRrw.MyVal2 = -TRrw.CredVal;
+												end else begin
+													tempTRrw.MyVal8 = TRrw.CurDebVal;
+													tempTRrw.MyVal2 = TRrw.DebVal;
+												end;
+                        if (!setinset("8",tempTRrw.TFromCode)) then begin
+                          tempTRrw.TFromCode = tempTRrw.TFromCode & "8,";
+                        end;
+												tempTRrw.MyVal7 = blankval;
+												tempTRrw.DebVal = blankval;
+												tempTRrw.MyVal9 = blankval;
+												tempTRrw.CredVal = blankval;
+											end else begin
+												if (TRrw.DebVal!=0) then begin
+													TRrw.CredVal = -TRrw.DebVal;
+													TRrw.DebVal = blankval;
+													TRrw.MyVal9 = -TRrw.CurDebVal;
+													TRrw.MyVal7 = blankval;
+												end;
+												tempTRrw.MyVal7 = TRrw.CurDebVal;
+                        if (!setinset("7",tempTRrw.TFromCode)) then begin
+                          tempTRrw.TFromCode = tempTRrw.TFromCode & "7,";
+                        end;
+												tempTRrw.MyVal9 = TRrw.CurCredVal;
+                        if (!setinset("9",tempTRrw.TFromCode)) then begin
+                          tempTRrw.TFromCode = tempTRrw.TFromCode & "9,";
+                        end;
+												tempTRrw.DebVal = TRrw.DebVal;
+												tempTRrw.CredVal = TRrw.CredVal;
+											end;
+										end else begin
+											if i != k then begin
+												if ((tempTRrw2.CredVal == TRrw.DebVal) or (tempTRrw2.DebVal == TRrw.CredVal)) and (tempTRrw2.Objects == TRrw.Objects) then begin
+													testf = CorspTRTest(TRr,Accr8403,k,corspdebval,corspcredval);
+													if testf then begin
+														if (TRrw.CredVal!=0) then begin
+															tempTRrw.MyVal8 = -TRrw.CurCredVal;
+															tempTRrw.MyVal2 = -TRrw.CredVal;
+														end else begin
+															tempTRrw.MyVal8 = TRrw.CurDebVal;
+															tempTRrw.MyVal2 = TRrw.DebVal;
+														end;
+                            if (!setinset("8",tempTRrw.TFromCode)) then begin
+                              tempTRrw.TFromCode = tempTRrw.TFromCode & "8,";
+                            end;
+                            tempTRrw.MyVal7 = blankval;
+														tempTRrw.DebVal = blankval;
+														tempTRrw.MyVal9 = blankval;
+														tempTRrw.CredVal = blankval;
+													end;
+												end;
+											end;
+										end;
+									end;
+								end;
+							end;
+							testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal8 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal8 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                if (!setinset("8",tempTRrw.TFromCode)) then begin
+                  tempTRrw.TFromCode = tempTRrw.TFromCode & "8,";
+                end;
+                tempTRrw.MyVal7 = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.MyVal9 = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+							
+              testf = CorspTRTest(TRr,Accr50,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal8 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal8 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                if (!setinset("8",tempTRrw.TFromCode)) then begin
+                  tempTRrw.TFromCode = tempTRrw.TFromCode & "8,";
+                end;
+                tempTRrw.MyVal7 = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.MyVal9 = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+              testf = CorspTRTest(TRr,Accr8403,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							if testf then begin
+              	if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal8 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal8 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                if (!setinset("8",tempTRrw.TFromCode)) then begin
+                  tempTRrw.TFromCode = tempTRrw.TFromCode & "8,";
+                end;
+                tempTRrw.MyVal3 = - corspdebval + corspcredval;
+								kursovaya52 = kursovaya52 - corspdebval + corspcredval;
+								tempTRrw.MyVal7 = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.MyVal9 = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+              
+              /*testf = CorspTRTest(TRr,Accr52,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal8 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal8 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                if (!setinset("8",tempTRrw.TFromCode)) then begin
+                  tempTRrw.TFromCode = tempTRrw.TFromCode & "8,";
+                end;
+                tempTRrw.MyVal7 = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.MyVal9 = blankval;
+								tempTRrw.CredVal = blankval;
+							end;*/
+							
+							testf = CorspTRTest(TRr,Accr76,i,corspdebval,corspcredval);//Edit-------------------Vitalii 14:48 28.08.2015
+							if (testf and (SetInSet("E131",TRrw.Objects) or SetInSet("E98",TRrw.Objects))) then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal8 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal8 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                if (!setinset("8",tempTRrw.TFromCode)) then begin
+                  tempTRrw.TFromCode = tempTRrw.TFromCode & "8,";
+                end;
+								if SetInSet("E131",TRrw.Objects) then begin
+									BalItem1 = BalItem1 - TRrw.CredVal + TRrw.DebVal;
+								end;
+								if SetInSet("E98",TRrw.Objects) then begin
+									BalItem2 = BalItem2 + TRrw.CredVal - TRrw.DebVal;
+								end;
+								tempTRrw.MyVal7 = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.MyVal9 = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+              
+              testf = CorspTRTest(TRr,Accr601,i,corspdebval,corspcredval);//Edit-------------------Vitalii 14:48 28.08.2015
+							if (testf) then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal8 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal8 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                if (!setinset("8",tempTRrw.TFromCode)) then begin
+                  tempTRrw.TFromCode = tempTRrw.TFromCode & "8,";
+                end;
+                BalItem2 = BalItem2 + TRrw.CredVal - TRrw.DebVal;
+								tempTRrw.MyVal7 = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.MyVal9 = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+              
+							testf = CorspTRTest(TRr,Accr7505,i,corspdebval,corspcredval);
+							if (testf) then begin
+								if (TRrw.DebVal!=0) then begin
+									TRrw.CredVal = -TRrw.DebVal;
+									TRrw.DebVal = blankval;
+									TRrw.MyVal9 = -TRrw.CurDebVal;
+									TRrw.MyVal7 = blankval;
+									tempTRrw.MyVal7 = TRrw.CurDebVal;
+                  if (!setinset("7",tempTRrw.TFromCode)) then begin
+                    tempTRrw.TFromCode = tempTRrw.TFromCode & "7,";
+                  end;
+									tempTRrw.MyVal9 = TRrw.CurCredVal;
+                  if (!setinset("9",tempTRrw.TFromCode)) then begin
+                    tempTRrw.TFromCode = tempTRrw.TFromCode & "9,";
+                  end;
+									tempTRrw.DebVal = TRrw.DebVal;
+									tempTRrw.CredVal = TRrw.CredVal;
+								end;
+							end;
+							testf = CorspTRTest(TRr,Accr53,i,corspdebval,corspcredval);
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									tempTRrw.MyVal8 = -TRrw.CurCredVal;
+									tempTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									tempTRrw.MyVal8 = TRrw.CurDebVal;
+									tempTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                if (!setinset("8",tempTRrw.TFromCode)) then begin
+                  tempTRrw.TFromCode = tempTRrw.TFromCode & "8,";
+                end;
+								handed53 = handed53 + TRrw.CredVal;
+								tempTRrw.MyVal7 = blankval;
+								tempTRrw.DebVal = blankval;
+								tempTRrw.MyVal9 = blankval;
+								tempTRrw.CredVal = blankval;
+							end;
+							
+							if (!done) then begin
+								if ((RepSpec.ArtMode == 1) and (TRr.IntYc == IVYc) and nonblank(TRrw.DebVal)) then begin
+									MatRowPut(tempTRr2,l,tempTRrw);
+									l = l + 1;
+								end else begin
+									MatRowPut(tempTRr,j,tempTRrw);
+									j = j + 1;
+								end;
+							end;
+							tempTRrw.ReconDate = "";
+							tempTRrw.Curncy = "";
+							tempTRrw.MyVal7 = blankval;
+							tempTRrw.MyVal9 = blankval;
+							tempTRrw.DebVal = blankval;
+							tempTRrw.CredVal = blankval;
+							tempTRrw.MyVal8 = blankval;// Edit ************************** Wednesday, 26 August 2015 11:34:24
+							tempTRrw.MyVal2 = blankval;// Edit ************************** Wednesday, 26 August 2015 11:34:24
+							tempTRrw.MyVal3 = blankval;
+							tempTRrw.Comment = "";
+							tempTRrw.ExtraComment = "";
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+  
+  
+	rwcnt = MatRowCnt(tempTRr);
+	for (i=0;i<rwcnt;i=i+1) begin
+		MatRowGet(tempTRr,i,tempTRrw);
+		if (right(tempTRrw.Curncy,2)=="52") then begin
+      f = true;
+    end else begin
+      f = false;
+    end;
+    tempTRrw.Curncy = left(tempTRrw.Curncy,3);
+		MatRowPut(tempTRr,i,tempTRrw);
+    switch (tempTRrw.Curncy) begin
+    
+      case "TER":
+        if (tempTRrw.CurDebVal!=blankval) then begin tabprintf[2] = true; end;
+        if (tempTRrw.MyVal1!=blankval) then begin tabprintf[10] = true; end;
+        if (tempTRrw.CurCredVal!=blankval) then begin tabprintf[19] = true; end;
+      case "AZN":
+        if (f and (tempTRrw.MyVal7!=blankval)) then begin tabprintf[3] = true; end;
+        if (tempTRrw.CurDebVal!=blankval) then begin tabprintf[6] = true; end;
+        if (f and (tempTRrw.MyVal8!=blankval)) then begin tabprintf[11] = true; end;
+        if (tempTRrw.MyVal1!=blankval) then begin tabprintf[14] = true; end;
+        if (f and (tempTRrw.MyVal9!=blankval)) then begin tabprintf[20] = true; end;
+        if (tempTRrw.CurCredVal!=blankval) then begin tabprintf[23] = true; end;
+      case "EUR":
+        if (f and (tempTRrw.MyVal7!=blankval)) then begin tabprintf[4] = true; end;
+        if (tempTRrw.CurDebVal!=blankval) then begin tabprintf[7] = true; end;
+        if (f and (tempTRrw.MyVal8!=blankval)) then begin tabprintf[12] = true; end;
+        if (tempTRrw.MyVal1!=blankval) then begin tabprintf[15] = true; end;
+        if (f and (tempTRrw.MyVal9!=blankval)) then begin tabprintf[21] = true; end;
+        if (tempTRrw.CurCredVal!=blankval) then begin tabprintf[24] = true; end;
+      case "USD":
+        if (f and (tempTRrw.MyVal7!=blankval)) then begin tabprintf[5] = true; end;
+        if (tempTRrw.CurDebVal!=blankval) then begin tabprintf[8] = true; end;
+        if (f and (tempTRrw.MyVal8!=blankval)) then begin tabprintf[13] = true; end;
+        if (tempTRrw.MyVal1!=blankval) then begin tabprintf[16] = true; end;
+        if (f and (tempTRrw.MyVal9!=blankval)) then begin tabprintf[22] = true; end;
+        if (tempTRrw.CurCredVal!=blankval) then begin tabprintf[25] = true; end;
+    end;
+    if (tempTRrw.DebVal!=blankval) then begin tabprintf[9] = true; end;
+    if (tempTRrw.MyVal2!=blankval) then begin tabprintf[17] = true; end;
+    if (tempTRrw.MyVal3!=blankval) then begin tabprintf[18] = true; end;
+    if (tempTRrw.CredVal!=blankval) then begin tabprintf[26] = true; end;
+	end;
+	if (RepSpec.ArtMode == 1) then begin
+		rwcnt2 = MatRowCnt(tempTRr2);
+		for (i=0;i<rwcnt2;i=i+1) begin
+			MatRowGet(tempTRr2,i,tempTRrw);
+			if (right(tempTRrw.Curncy,2)=="52") then begin
+      
+        f = true;
+      end else begin
+        f = false;
+      end;
+      tempTRrw.Curncy = left(tempTRrw.Curncy,3);
+			MatRowPut(tempTRr2,i,tempTRrw);
+      if (f) then begin
+        switch (tempTRrw.Curncy) begin
+          case "AZN":
+            if (tempTRrw.MyVal7!=blankval) then begin tabprintf[3] = true; end;
+          case "EUR":
+            if (tempTRrw.MyVal7!=blankval) then begin tabprintf[4] = true; end;
+          case "USD":
+            if (tempTRrw.MyVal7!=blankval) then begin tabprintf[5] = true; end;
+        end;
+      end;
+      switch (tempTRrw.Curncy) begin
+        case "TER":
+          if (tempTRrw.CurDebVal!=blankval) then begin tabprintf[2] = true; end;
+        case "AZN":
+          if (tempTRrw.CurDebVal!=blankval) then begin tabprintf[6] = true; end;
+        case "EUR":
+          if (tempTRrw.CurDebVal!=blankval) then begin tabprintf[7] = true; end;
+        case "USD":
+          if (tempTRrw.CurDebVal!=blankval) then begin tabprintf[8] = true; end;
+      end;
+      
+      if (tempTRrw.DebVal!=blankval) then begin tabprintf[9] = true; end;
+      if (f) then begin
+      switch (tempTRrw.Curncy) begin
+          case "AZN":
+            if (tempTRrw.MyVal8!=blankval) then begin tabprintf[11] = true; end;
+          case "EUR":
+            if (tempTRrw.MyVal8!=blankval) then begin tabprintf[12] = true; end;
+          case "USD":
+            if (tempTRrw.MyVal8!=blankval) then begin tabprintf[13] = true; end;
+        end;
+      end;
+      
+      switch (tempTRrw.Curncy) begin
+        case "TER":
+          if (tempTRrw.MyVal1!=blankval) then begin tabprintf[10] = true; end;
+        case "AZN":
+          if (tempTRrw.MyVal1!=blankval) then begin tabprintf[14] = true; end;
+        case "EUR":
+          if (tempTRrw.MyVal1!=blankval) then begin tabprintf[15] = true; end;
+        case "USD":
+          if (tempTRrw.MyVal1!=blankval) then begin tabprintf[16] = true; end;
+      end;
+      if (tempTRrw.MyVal2!=blankval) then begin tabprintf[17] = true; end;
+      
+      if (tempTRrw.MyVal3!=blankval) then begin tabprintf[18] = true; end;
+		end;
+		rwcnt2 = MatRowCnt(tempTRr2);
+		for (j=0;j<rwcnt2-1;j=j+1) begin
+			for (i=0;i<rwcnt2-1;i=i+1) begin
+				MatRowGet(tempTRr2,i,tempTRrw);
+				MatRowGet(tempTRr2,i+1,tempTRrw2);
+				if (tempTRrw.ReconDate > tempTRrw2.ReconDate) then begin
+					MatRowPut(tempTRr2,i,tempTRrw2);
+					MatRowPut(tempTRr2,i+1,tempTRrw);
+				end;
+			end;
+		end;
+		for (i=0;i<rwcnt2;i=i+1) begin
+			MatRowGet(tempTRr2,i,tempTRrw);
+      tempTRrw.MyVal6 = tempTRrw.MyVal3;
+			switch (tempTRrw.Curncy) begin
+				case "TER":
+					tempTRrw.NomVal = tempTRrw.CurDebVal;
+          tempTRrw.MyVal5 = tempTRrw.MyVal1;
+          tempTRrw.MyVal1 = 0;
+          tempTRrw.CurDebVal = 0;
+				case "AZN":
+					tempTRrw.CredVal2 = tempTRrw.CurDebVal;
+          tempTRrw.MyVal1 = tempTRrw.MyVal1;
+          tempTRrw.MyVal10 = tempTRrw.MyVal7;
+          tempTRrw.MyVal13 = tempTRrw.MyVal8;
+          if (!setinset("13",tempTRrw.TFromCode)) then begin
+            tempTRrw.TFromCode = tempTRrw.TFromCode & "13,";
+          end;
+          tempTRrw.MyVal7 = 0;
+          if (!setinset("7",tempTRrw.TFromCode)) then begin
+            j = InString2(tempTRrw.TFromCode,"7");
+            tempTRrw.TFromCode = left(tempTRrw.TFromCode,j) & right(tempTRrw.TFromCode,(len(tempTRrw.TFromCode)-j-2));
+          end;
+          tempTRrw.MyVal8 = 0;
+          if (!setinset("8",tempTRrw.TFromCode)) then begin
+            j = InString2(tempTRrw.TFromCode,"8");
+            tempTRrw.TFromCode = left(tempTRrw.TFromCode,j) & right(tempTRrw.TFromCode,(len(tempTRrw.TFromCode)-j-2));
+          end;
+          tempTRrw.CurDebVal = 0;
+				case "EUR":
+					tempTRrw.DebVal2 = tempTRrw.CurDebVal;
+          tempTRrw.MyVal11 = tempTRrw.MyVal7;
+          tempTRrw.MyVal3 = tempTRrw.MyVal1;
+          tempTRrw.MyVal14 = tempTRrw.MyVal8;
+          tempTRrw.MyVal1 = 0;
+          tempTRrw.MyVal7 = 0;
+          if (!setinset("7",tempTRrw.TFromCode)) then begin
+            j = InString2(tempTRrw.TFromCode,"7");
+            tempTRrw.TFromCode = left(tempTRrw.TFromCode,j) & right(tempTRrw.TFromCode,(len(tempTRrw.TFromCode)-j-2));
+          end;
+          tempTRrw.MyVal8 = 0;
+          if (!setinset("8",tempTRrw.TFromCode)) then begin
+            j = InString2(tempTRrw.TFromCode,"8");
+            tempTRrw.TFromCode = left(tempTRrw.TFromCode,j) & right(tempTRrw.TFromCode,(len(tempTRrw.TFromCode)-j-2));
+          end;
+          tempTRrw.CurDebVal = 0;
+				case "USD":
+					tempTRrw.Qty = tempTRrw.CurDebVal;
+          tempTRrw.MyVal4 = tempTRrw.MyVal1;
+          tempTRrw.MyVal12 = tempTRrw.MyVal7;
+          tempTRrw.MyVal15 = tempTRrw.MyVal8;
+          tempTRrw.MyVal1 = 0;
+          tempTRrw.MyVal7 = 0;
+          if (!setinset("7",tempTRrw.TFromCode)) then begin
+            j = InString2(tempTRrw.TFromCode,"7");
+            tempTRrw.TFromCode = left(tempTRrw.TFromCode,j) & right(tempTRrw.TFromCode,(len(tempTRrw.TFromCode)-j-2));
+          end;
+          tempTRrw.MyVal8 = 0;
+          if (!setinset("8",tempTRrw.TFromCode)) then begin
+            j = InString2(tempTRrw.TFromCode,"8");
+            tempTRrw.TFromCode = left(tempTRrw.TFromCode,j) & right(tempTRrw.TFromCode,(len(tempTRrw.TFromCode)-j-2));
+          end;
+          tempTRrw.CurDebVal = 0;
+			end;
+			MatRowPut(tempTRr2,i,tempTRrw);
+		end;
+		for (j=0;j<rwcnt2-1;j=j+1) begin
+			MatRowGet(tempTRr2,j,tempTRrw);
+			for (i=j + 1;i<rwcnt2;i=i+1) begin
+				MatRowGet(tempTRr2,i,tempTRrw2);
+				if (tempTRrw.ReconDate == tempTRrw2.ReconDate) then begin
+					tempTRrw.CredVal2 = tempTRrw.CredVal2 + tempTRrw2.CredVal2;
+					tempTRrw.DebVal2 = tempTRrw.DebVal2 + tempTRrw2.DebVal2;
+					tempTRrw.Qty = tempTRrw.Qty + tempTRrw2.Qty;
+					tempTRrw.NomVal = tempTRrw.NomVal + tempTRrw2.NomVal;
+					tempTRrw.DebVal = tempTRrw.DebVal + tempTRrw2.DebVal;
+					tempTRrw.MyVal1 = tempTRrw.MyVal1 + tempTRrw2.MyVal1;
+          tempTRrw.MyVal2 = tempTRrw.MyVal2 + tempTRrw2.MyVal2;
+					tempTRrw.MyVal3 = tempTRrw.MyVal3 + tempTRrw2.MyVal3;
+          tempTRrw.MyVal4 = tempTRrw.MyVal4 + tempTRrw2.MyVal4;
+					tempTRrw.MyVal5 = tempTRrw.MyVal5 + tempTRrw2.MyVal5;
+          tempTRrw.MyVal10 = tempTRrw.MyVal10 + tempTRrw2.MyVal10;
+          tempTRrw.MyVal11 = tempTRrw.MyVal11 + tempTRrw2.MyVal11;
+          tempTRrw.MyVal12 = tempTRrw.MyVal12 + tempTRrw2.MyVal12;
+          tempTRrw.MyVal13 = tempTRrw.MyVal13 + tempTRrw2.MyVal13;
+          tempTRrw.MyVal14 = tempTRrw.MyVal14 + tempTRrw2.MyVal14;
+          tempTRrw.MyVal15 = tempTRrw.MyVal15 + tempTRrw2.MyVal15;
+          MatRowPut(tempTRr2,j,tempTRrw);
+					MatRowDelete(tempTRr2,i);
+					i = i - 1;
+					rwcnt2 = rwcnt2 - 1;
+				end;
+			end;
+		end;
+		rwcnt = MatRowCnt(tempTRr);
+		for (i=0;i<rwcnt2;i=i+1) begin
+			MatRowGet(tempTRr2,i,tempTRrw);
+			tempTRrw3.NomVal = tempTRrw.NomVal;
+      tempTRrw3.MyVal10 = tempTRrw.MyVal10;
+      tempTRrw3.MyVal11 = tempTRrw.MyVal11;
+      tempTRrw3.MyVal12 = tempTRrw.MyVal12;
+			tempTRrw3.CredVal2 = tempTRrw.CredVal2;
+			tempTRrw3.DebVal2 = tempTRrw.DebVal2;
+			tempTRrw3.Qty = tempTRrw.Qty;
+			tempTRrw3.DebVal = tempTRrw.DebVal;
+      tempTRrw3.MyVal5 = tempTRrw.MyVal5;
+      tempTRrw3.MyVal13 = tempTRrw.MyVal13;
+      tempTRrw3.MyVal14 = tempTRrw.MyVal14;
+      tempTRrw3.MyVal15 = tempTRrw.MyVal15;
+      tempTRrw3.MyVal1 = tempTRrw.MyVal1;
+      tempTRrw3.MyVal3 = tempTRrw.MyVal3;
+      tempTRrw3.MyVal4 = tempTRrw.MyVal4;
+      tempTRrw3.MyVal2 = tempTRrw.MyVal2;
+			tempTRrw3.Comment = "СЧ/КЛ.";
+			tempTRrw3.ReconDate = tempTRrw.ReconDate;
+			tempTRrw3.Curncy = "IVV";
+			MatRowPut(tempTRr,rwcnt + i,tempTRrw3);
+		end;
+	end;
+	rwcnt = MatRowCnt(tempTRr);
+	for (j=0;j<rwcnt-1;j=j+1) begin
+		for (i=0;i<rwcnt-1;i=i+1) begin
+			MatRowGet(tempTRr,i,tempTRrw);
+			MatRowGet(tempTRr,i+1,tempTRrw2);
+			if (tempTRrw.ReconDate > tempTRrw2.ReconDate) then begin
+				MatRowPut(tempTRr,i,tempTRrw2);
+				MatRowPut(tempTRr,i+1,tempTRrw);
+			end;
+		end;
+	end;
+  AZNTermDeb = 0;
+	AZNTermCred = 0;
+	AZNDeb = 0;
+	AZNCred = 0;
+	EURDeb = 0;
+	EURCred = 0;
+	USDDeb = 0;
+	USDCred = 0;
+	BaseDeb = 0;
+	BaseCred = 0;
+	
+  tabprintf[1] = true;
+  tabprintf[27] = true;
+  tabprintf[28] = true;
+  if (compf==false) then begin
+    tabprintf[9] = false;
+    tabprintf[17] = false;
+    tabprintf[18] = false;
+    tabprintf[26] = false;
+  end;
+  j = 0;
+  for (i=1;i<=28;i=i+1) begin
+    if (tabprintf[i]) then begin j = j + 1; end;
+  end;
+  step = Round((480/(j+1)),rnd);
+  tab[1]  = 0;
+  j = 1;
+  for (i=2;i<=28;i=i+1) begin
+    if (tabprintf[i]) then begin
+      tab[i] = tab[j] + step;
+      j = i;
+    end;
+  end;
+	
+	StartReportNoHeaderJob("Еженедельный отчет директоров");
+		StartFormat(15);
+			OutString(0,0,"",false);
+			if nonblank(RepSpec.ObjStr) then begin
+				Objr.Code = RepSpec.ObjStr;
+				ReadFirstMain(Objr,1,true);
+				OutString(15,0,Objr.Code & " " & Objr.Comment,false);
+			end else begin
+				OutString(15,0,"",false);
+			end;
+			OutString(120,0,"",false);
+			OutString(130,0,"",false);
+			OutString(140,0,"",false);
+			OutString(150,0,"",false);
+			OutString(265,0,RepSpec.sStartDate & " : " & RepSpec.sEndDate,false);
+		EndFormat;
+		StartFormat(15);
+		EndFormat;
+		FindNLAccBal("51",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,"",0,"","",BeginBalance51);
+		tempBal = 0;
+		for (i=0;i<curi;i=i+1) begin
+			if left(CurList[i],3)=="USD" then begin
+				FindNLAccBal("50",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				BeginBalance50USD = BeginBalance50USD + tempBal;
+			end;
+		end;
+		tempBal = 0;
+		for (i=0;i<curi;i=i+1) begin
+			if left(CurList[i],3)=="EUR" then begin
+				FindNLAccBal("50",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				BeginBalance50EUR = BeginBalance50EUR + tempBal;
+			end;
+		end;
+		tempBal = 0;
+		for (i=0;i<curi;i=i+1) begin
+			if left(CurList[i],3)=="AZN" then begin
+				FindNLAccBal("50",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				BeginBalance50AZN = BeginBalance50AZN + tempBal;
+			end;
+		end;
+		FindNLAccBal("50",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,"",0,"","",BeginBalance50);
+		tempBal = 0;
+		for (i=0;i<curi;i=i+1) begin
+			if left(CurList[i],3)=="USD" then begin
+				FindNLAccBal("53",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				BeginBalance53USD = BeginBalance53USD + tempBal;
+			end;
+		end;
+		tempBal = 0;
+		for (i=0;i<curi;i=i+1) begin
+			if left(CurList[i],3)=="EUR" then begin
+				FindNLAccBal("53",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				BeginBalance53EUR = BeginBalance53EUR + tempBal;
+			end;
+		end;
+		tempBal = 0;
+		for (i=0;i<curi;i=i+1) begin
+			if left(CurList[i],3)=="AZN" then begin
+				FindNLAccBal("53",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				BeginBalance53AZN = BeginBalance53AZN + tempBal;
+			end;
+		end;
+    
+		FindNLAccBal("53",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,"",0,"","",BeginBalance53);
+		BeginBalance50n51 = BeginBalance50 + BeginBalance51;
+		BeginBalance50n51n53 = BeginBalance50n51 + BeginBalance53;
+		BeginBalance50n53USD = BeginBalance50USD + BeginBalance53USD;
+		BeginBalance50n53EUR = BeginBalance50EUR + BeginBalance53EUR;
+		BeginBalance50n53AZN = BeginBalance50AZN + BeginBalance53AZN;
+		StartFormat(15);
+		if (compf) then begin
+		//Остаток на...
+				OutString(0,0,"Остаток на " & RepSpec.sStartDate & ":",false);
+			EndFormat;
+			tempBal = 0;
+			for (i=0;i<curi;i=i+1) begin
+				if left(CurList[i],3)=="USD" then begin
+					FindNLAccBal("52",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+					Balance52USD = Balance52USD + tempBal;
+				end;
+			end;
+			tempBal = 0;
+			for (i=0;i<curi;i=i+1) begin
+				if left(CurList[i],3)=="EUR" then begin
+					FindNLAccBal("52",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+					Balance52EUR = Balance52EUR + tempBal;
+				end;
+			end;
+			tempBal = 0;
+			for (i=0;i<curi;i=i+1) begin
+				if left(CurList[i],3)=="AZN" then begin
+					FindNLAccBal("52",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+					Balance52AZN = Balance52AZN + tempBal;
+				end;
+			end;
+			f = false;
+			if ((Balance52USD!=0) or (Balance52EUR!=0)) then begin
+				if (Balance52USD!=0) then begin
+					StartFormat(15);
+						if (!f) then begin
+							OutString(0,0,"",false);
+							OutString(15,0,"Остаток по расчетному счету в валюте:",false);
+							f = true;
+						end else begin
+							OutString(0,0,"",false);
+							OutString(15,0,"",false);
+						end;
+						OutString(60,0,Balance52USD,false);
+						OutString(90,0,"USD",false);
+					EndFormat;
+				end;
+				if (Balance52EUR!=0) then begin
+					StartFormat(15);
+						if (!f) then begin
+							OutString(0,0,"",false);
+							OutString(15,0,"Остаток по расчетному счету в валюте:",false);
+							f = true;
+						end else begin
+							OutString(0,0,"",false);
+							OutString(15,0,"",false);
+						end;
+						OutString(60,0,Balance52EUR,false);
+						OutString(90,0,"EUR",false);
+					EndFormat;
+				end;
+				if (Balance52AZN!=0) then begin
+					StartFormat(15);
+						if (!f) then begin
+							OutString(0,0,"",false);
+							OutString(15,0,"Остаток по расчетному счету в валюте:",false);
+							f = true;
+						end else begin
+							OutString(0,0,"",false);
+							OutString(15,0,"",false);
+						end;
+						OutString(60,0,Balance52AZN,false);
+						OutString(90,0,"AZN",false);
+					EndFormat;
+				end;
+				StartFormat(15);
+				EndFormat;
+				if (f) then begin
+					FindNLAccBal("52",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,"",0,"","",BeginBalance52);
+					Gray_Divider(25,120);
+					StartFormat(15);
+						OutString(0,0,"",false);
+						OutString(25,0,"Сумма в осн. вал.",false);
+						OutString(60,0,BeginBalance52,false);
+						OutString(90,0,"AZN",false);
+						if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+							OutString(110,0,"В USD по курсу: " & RepSpec.vals0,false);
+							OutMyString(160,0,BeginBalance52/RepSpec.vals0,false);
+						end;
+					EndFormat;
+					Gray_Divider(25,120);
+					StartFormat(15);
+					EndFormat;
+					BeginBalance50n51n53 = BeginBalance50n51n53 + BeginBalance52;
+				end;
+			end;
+			/*BeginBalance50n53USD = BeginBalance50n53USD + Balance52USD;
+			BeginBalance50n53EUR = BeginBalance50n53EUR + Balance52EUR;
+			BeginBalance50n53AZN = BeginBalance50n53AZN + Balance52AZN;*/ //Edit-------------------Vitalii 18:02 17.07.2017
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"Остаток общего счета",false);
+				OutString(60,0,BeginBalance50n53USD,false);
+				OutString(90,0,"USD",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(60,0,BeginBalance50n53EUR,false);
+				OutString(90,0,"EUR",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(60,0,BeginBalance50n53AZN,false);
+				OutString(90,0,"AZN",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(60,0,BeginBalance51,false);
+				OutString(90,0,"AZN терминал",false);
+			EndFormat;
+      //Edit-------------------Vitalii 18:02 17.07.2017
+      if (Balance52USD!=0) then begin
+        StartFormat(15);
+          OutString(0,0,"",false);
+          OutString(15,0,"",false);
+          OutString(60,0,Balance52USD,false);
+          OutString(90,0,"USD банк",false);
+        EndFormat;
+      end;
+      if (Balance52EUR!=0) then begin
+        StartFormat(15);
+          OutString(0,0,"",false);
+          OutString(15,0,"",false);
+          OutString(60,0,Balance52EUR,false);
+          OutString(90,0,"EUR банк",false);
+        EndFormat;
+      end;
+      if (Balance52AZN!=0) then begin
+        StartFormat(15);
+          OutString(0,0,"",false);
+          OutString(15,0,"",false);
+          OutString(60,0,Balance52AZN,false);
+          OutString(90,0,"AZN банк",false);
+        EndFormat;
+      end;
+      
+			Gray_Divider(25,120);
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(25,0,"Сумма в осн. вал.",false);
+				OutString(60,0,BeginBalance50n51n53,false);
+				OutString(90,0,"AZN",false);
+				if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+					OutString(110,0,"В USD по курсу: " & RepSpec.vals0,false);
+					OutMyString(160,0,BeginBalance50n51n53/RepSpec.vals0,false);
+				end;
+			EndFormat;
+			StartFormat(15);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"Деньги в офисе",false);
+				OutString(60,0,BeginBalance53USD,false);
+				OutString(90,0,"USD",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(60,0,BeginBalance53EUR,false);
+				OutString(90,0,"EUR",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(60,0,BeginBalance53AZN,false);
+				OutString(90,0,"AZN",false);
+			EndFormat;
+			Gray_Divider(25,120);
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(25,0,"Сумма в осн. вал.",false);
+				OutString(60,0,BeginBalance53,false);
+				OutString(90,0,"AZN",false);
+				
+				if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+					OutString(110,0,"В USD по курсу: " & RepSpec.vals0,false);
+					OutMyString(160,0,BeginBalance53/RepSpec.vals0,false);
+				end;
+			EndFormat;
+			StartFormat(15);
+			EndFormat;
+		//Остаток на... по валютам
+			if ((BeginBalance50USD!=0) or (BeginBalance50EUR!=0) or (BeginBalance51!=0)) then begin
+				if (BeginBalance50USD!=0) then begin
+					StartFormat(15);
+						OutString(0,0,"Остаток на " & RepSpec.sStartDate & " по валютам:",false);
+						OutString(15,0,"",false);
+						OutString(60,0,BeginBalance50USD,false);
+						OutString(90,0,"USD",false);
+					EndFormat;
+				end;
+				if (BeginBalance50EUR!=0) then begin
+					StartFormat(15);
+						OutString(0,0,"",false);
+						OutString(15,0,"",false);
+						OutString(60,0,BeginBalance50EUR,false);
+						OutString(90,0,"EUR",false);
+					EndFormat;
+				end;
+				if (BeginBalance50AZN!=0) then begin
+					StartFormat(15);
+						OutString(0,0,"",false);
+						OutString(15,0,"",false);
+						OutString(60,0,BeginBalance50AZN,false);
+						OutString(90,0,"AZN",false);
+					EndFormat;
+				end;
+				if (BeginBalance51!=0) then begin
+					StartFormat(15);
+						OutString(0,0,"",false);
+						OutString(15,0,"",false);
+						OutString(60,0,BeginBalance51,false);
+						OutString(90,0,"AZN терминал",false);
+					EndFormat;
+				end;
+				StartFormat(15);
+				EndFormat;
+			end;
+		end else begin
+			if ((BeginBalance50AZN!=0) or (BeginBalance51!=0)) then begin
+				StartFormat(15);
+					OutString(0,0,"Остаток на " & RepSpec.sStartDate & " по валютам:",false);
+				EndFormat;
+				if (BeginBalance50AZN!=0) then begin
+					StartFormat(15);
+						OutString(0,0,"",false);
+						OutString(15,0,"",false);
+						OutString(60,0,BeginBalance50AZN,false);
+						OutString(90,0,"AZN",false);
+					EndFormat;
+				end;
+				if (BeginBalance51!=0) then begin
+					StartFormat(15);
+						OutString(0,0,"",false);
+						OutString(15,0,"",false);
+						OutString(60,0,BeginBalance51,false);
+						OutString(90,0,"AZN терминал",false);
+					EndFormat;
+				end;
+				StartFormat(15);
+				EndFormat;
+			end;
+		end;
+		Black_Divider(0,1);
+	//Шапка таблицы
+  /*tab[1]  -              Дата
+    tab[2]  - Поступления:       AZN терминал
+    tab[3]  - Поступления:       AZN банк
+    tab[4]  - Поступления:       EUR банк
+    tab[5]  - Поступления:       USD банк
+    tab[6]  - Поступления:       AZN 
+    tab[7]  - Поступления:       EUR
+    tab[8]  - Поступления:       USD
+    tab[9]  - Поступления:       В осн. валюте
+    tab[10] - Конвертация/банк:  AZN терминал
+    tab[11] - Конвертация/банк:  AZN банк
+    tab[12] - Конвертация/банк:  EUR банк
+    tab[13] - Конвертация/банк:  USD банк
+    tab[14] - Конвертация/банк:  AZN
+    tab[15] - Конвертация/банк:  EUR
+    tab[16] - Конвертация/банк:  USD
+    tab[17] - Конвертация/банк:  В осн. валюте
+    tab[18] -              Курсовая
+    tab[19] - Расходы:           AZN терминал
+    tab[20] - Расходы:           AZN банк
+    tab[21] - Расходы:           EUR банк
+    tab[22] - Расходы:           USD банк
+    tab[23] - Расходы:           AZN
+    tab[24] - Расходы:           EUR
+    tab[25] - Расходы:           USD
+    tab[26] - Расходы:           В осн. валюте
+    tab[27] -              Докум.
+    tab[28] -              Коммент.*/
+//---------------------------------------------------------------------------------------------------------------------------------------------
+    StartFormat(15);
+      OutString(tab[1],0,"Дата",false);
+      j = 0;
+      k = 0;
+      f = false;
+      for (i=2;i<10;i=i+1) begin
+        if (tabprintf[i]) then begin
+          f = true;
+          i = 10;
+        end;
+      end;
+      if (f) then begin
+        for (i=2;i<10;i=i+1) begin
+          if (tabprintf[i]) then begin
+            k = i;
+            i = 10;
+          end;
+        end;
+        for (i=10;i<29;i=i+1) begin
+          if (tabprintf[i]) then begin
+            j = i;
+            i = 29;
+          end;
+        end;
+        tab[31] = tab[k] + (tab[j]-tab[k])/2;
+        tab[41] = tab[k];
+        tab[42] = tab[j] - 3;
+        if (RepSpec.Media==mtExcel) then begin
+          j = 0;
+          for (i=2;i<10;i=i+1) begin
+            if (tabprintf[i]) then begin
+              j = j + 1;
+            end;
+          end;
+          for (i=0;i<Round((j-1)/2,rnd);i=i+1) begin
+            OutString(0,0,"",false);
+          end;
+        end;
+        OutStringCut(tab[31]-12,tab[31]+12,0,"Поступления",true,0);
+        if (RepSpec.Media==mtExcel) then begin
+          for (i=0;i<(j-1-Round((j-1)/2,rnd));i=i+1) begin
+            OutString(0,0,"",false);
+          end;
+        end;
+      end;
+        //OutStringCut(integer x, integer y,
+        //			   integer und, string str,
+        //			   boolean bool, integer ovst)
+        //x    - начальная координата ячейки, в которую печатается
+        //y    - конечная координата ячейки
+        //und  - подчеркивание: 0 - нет / !=0 - да
+        //str  - строка для вывода
+        //bool - перенос ?
+        //ovst - зачеркивание: 0-нет / !=0-да
+      j = 0;
+      k = 0;
+      f = false;
+      for (i=10;i<18;i=i+1) begin
+        if (tabprintf[i]) then begin
+          f = true;
+          i = 18;
+        end;
+      end;
+      if (f) then begin
+        for (i=10;i<18;i=i+1) begin
+          if (tabprintf[i]) then begin
+            k = i;
+            i = 18;
+          end;
+        end;
+        for (i=18;i<29;i=i+1) begin
+          if (tabprintf[i]) then begin
+            j = i;
+            i = 29;
+          end;
+        end;
+        tab[32] = tab[k] + (tab[j]-tab[k])/2;
+        tab[43] = tab[k] + 3;
+        tab[44] = tab[j] - 3;
+                if (RepSpec.Media==mtExcel) then begin
+          j = 0;
+          for (i=10;i<18;i=i+1) begin
+            if (tabprintf[i]) then begin
+              j = j + 1;
+            end;
+          end;
+          for (i=0;i<Round((j-1)/2,rnd);i=i+1) begin
+            OutString(0,0,"",false);
+          end;
+        end;
+        OutStringCut(tab[32]-13,tab[32]+13,0,"Конвертация/банк",true,0);
+        if (RepSpec.Media==mtExcel) then begin
+          for (i=0;i<(j-1-Round((j-1)/2,rnd));i=i+1) begin
+            OutString(0,0,"",false);
+          end;
+        end;
+      end;
+      j = 0;
+      k = 0;
+      f = false;
+      for (i=19;i<27;i=i+1) begin
+        if (tabprintf[i]) then begin
+          f = true;
+          i = 27;
+        end;
+      end;
+      if (f) then begin
+        for (i=19;i<27;i=i+1) begin
+          if (tabprintf[i]) then begin
+            k = i;
+            i = 27;
+          end;
+        end;
+        j = 27;
+        tab[33] = tab[k] + (tab[j]-tab[k])/2;
+        tab[45] = tab[k] + 3;
+        tab[46] = tab[j] - 3;
+                if (RepSpec.Media==mtExcel) then begin
+          j = 0;
+          for (i=19;i<27;i=i+1) begin
+            if (tabprintf[i]) then begin
+              j = j + 1;
+            end;
+          end;
+          for (i=0;i<(Round((j-1)/2,rnd)+1);i=i+1) begin
+            OutString(0,0,"",false);
+          end;
+        end;
+        OutStringCut(tab[33]-12,tab[32]+12,0,"Расходы",true,0);
+        if (RepSpec.Media==mtExcel) then begin
+          for (i=0;i<(j-1-Round((j-1)/2,rnd));i=i+1) begin
+            OutString(0,0,"",false);
+          end;
+        end;
+      end;
+      tab[34] = tab[27] + (480-tab[27])/2;
+      OutStringCut(tab[34]-12,tab[34]+12,0,"Примечание",false,0);
+    EndFormat;
+
+    if (tab[31]!=0) then begin Black_Divider(tab[41],tab[42]); end;
+    if (tab[32]!=0) then begin Black_Divider(tab[43],tab[44]); end;
+    if (tab[33]!=0) then begin Black_Divider(tab[45],tab[46]); end;
+    if (tab[34]!=0) then begin Black_Divider(tab[27]+3,480); end;
+		StartFormat(15);
+			if (tabprintf[1]) then begin
+				OutString(tab[1],0,"",false);
+			end;
+      if (tabprintf[2]) then begin
+      	OutString(tab[2],0,"AZN терминал",false);
+      end;
+      if (tabprintf[3]) then begin
+      	OutString(tab[3],0,"AZN банк",false);
+      end;
+      if (tabprintf[4]) then begin
+      	OutString(tab[4],0,"EUR банк",false);
+      end;
+      if (tabprintf[5]) then begin
+      	OutString(tab[5],0,"USD банк",false);
+      end;
+      if (tabprintf[6]) then begin
+      	OutString(tab[6],0,"AZN",false); 
+      end;
+      if (tabprintf[7]) then begin
+      	OutString(tab[7],0,"EUR",false);
+      end;
+      if (tabprintf[8]) then begin
+      	OutString(tab[8],0,"USD",false);
+      end;
+      if (tabprintf[9]) then begin
+      	OutString(tab[9],0,"В осн. валюте",false);
+        if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+          OutString(tab[9]+25,0,"В USD по курсу: " & RepSpec.vals0,false);
+        end;
+      end;
+      if (tabprintf[10]) then begin
+      	OutString(tab[10],0,"AZN терминал",false);
+      end;
+      if (tabprintf[11]) then begin
+      	OutString(tab[11],0,"AZN банк",false);
+      end;
+      if (tabprintf[12]) then begin
+      	OutString(tab[12],0,"EUR банк",false);
+      end;
+      if (tabprintf[13]) then begin
+      	OutString(tab[13],0,"USD банк",false);
+      end;
+      if (tabprintf[14]) then begin
+      	OutString(tab[14],0,"AZN",false);
+      end;
+      if (tabprintf[15]) then begin
+      	OutString(tab[15],0,"EUR",false);
+      end;
+      if (tabprintf[16]) then begin
+      	OutString(tab[16],0,"USD",false);
+      end;
+      if (tabprintf[17]) then begin
+      	OutString(tab[17],0,"В осн. валюте",false);
+        if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+          OutString(tab[17]+25,0,"В USD по курсу: " & RepSpec.vals0,false);
+        end;
+      end;
+			if (tabprintf[18]) then begin
+				OutString(tab[18],0,"Курсовая",false);
+			end;
+      if (tabprintf[19]) then begin
+      	OutString(tab[19],0,"AZN терминал",false);
+      end;
+      if (tabprintf[20]) then begin
+      	OutString(tab[20],0,"AZN банк",false);
+      end;
+      if (tabprintf[21]) then begin
+      	OutString(tab[21],0,"EUR банк",false);
+      end;
+      if (tabprintf[22]) then begin
+      	OutString(tab[22],0,"USD банк",false);
+      end;
+      if (tabprintf[23]) then begin
+      	OutString(tab[23],0,"AZN",false);
+      end;
+      if (tabprintf[24]) then begin
+      	OutString(tab[24],0,"EUR",false);
+      end;
+      if (tabprintf[25]) then begin
+      	OutString(tab[25],0,"USD",false);
+      end;
+      if (tabprintf[26]) then begin
+      	OutString(tab[26],0,"В осн. валюте",false);
+        if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+          OutString(tab[26]+25,0,"В USD по курсу: " & RepSpec.vals0,false);
+        end;
+      end;
+			if (tabprintf[27]) then begin
+				OutString(tab[27],0,"Докум.",false);
+			end;
+			if (tabprintf[28]) then begin
+				OutString(tab[28],0,"Коммент.",false);
+			end;
+		EndFormat;
+
+		rwcnt = MatRowCnt(tempTRr);
+		for (i=0;i<rwcnt;i=i+1) begin
+			MatRowGet(tempTRr,i,tempTRrw);
+			if (tempTRrw.ReconDate <> tempDate) then begin
+				tempDate = tempTRrw.ReconDate;
+				Black_Divider(0,1);
+        StartFormat(15);
+          if (tabprintf[1]) then begin
+          	OutString(tab[1],0,tempDate,false);
+          end;
+        if (compf) then begin
+          if (tabprintf[2]) then begin
+          	OutString(tab[2],0,"",false);
+          end;
+          if (tabprintf[3]) then begin
+          	OutString(tab[3],0,"",false);
+          end;
+          if (tabprintf[4]) then begin
+          	OutString(tab[4],0,"",false);
+          end;
+          if (tabprintf[5]) then begin
+          	OutString(tab[5],0,"",false);
+          end;
+          if (tabprintf[6]) then begin
+          	OutString(tab[6],0,"",false);
+          end;
+          if (tabprintf[7]) then begin
+          	OutString(tab[7],0,"",false);
+          end;
+          if (tabprintf[8]) then begin
+          	OutString(tab[8],0,"",false);
+          end;
+          tempStr = "EUR";
+          GetFullCurncyRate(tempStr,tempDate,fr,to1EUR,to2,br1,br2);
+          if (tabprintf[9]) then begin
+          	OutString(tab[9],0,"EUR: " & ValToMyString(to1EUR,5),false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutString(tab[9]+25,0,"",false);
+            end;
+          end;
+          if (tabprintf[10]) then begin
+          	OutString(tab[10],0,"",false);
+          end;
+          if (tabprintf[11]) then begin
+          	OutString(tab[11],0,"",false);
+          end;
+          if (tabprintf[12]) then begin
+          	OutString(tab[12],0,"",false);
+          end;
+          if (tabprintf[13]) then begin
+          	OutString(tab[13],0,"",false);
+          end;
+          if (tabprintf[14]) then begin
+          	OutString(tab[14],0,"",false); 
+          end;
+          if (tabprintf[15]) then begin
+          	OutString(tab[15],0,"",false);
+          end;
+          if (tabprintf[16]) then begin
+          	OutString(tab[16],0,"",false);
+          end;
+          if (tabprintf[17]) then begin
+          	OutString(tab[17],0,"EUR: " & ValToMyString(to1EUR,5),false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutString(tab[17]+25,0,"",false);
+            end;
+          end;
+          if (tabprintf[18]) then begin
+          	OutString(tab[18],0,"",false);
+          end;
+          if (tabprintf[19]) then begin
+          	OutString(tab[19],0,"",false);
+          end;
+          if (tabprintf[20]) then begin
+          	OutString(tab[20],0,"",false);
+          end;
+          if (tabprintf[21]) then begin
+          	OutString(tab[21],0,"",false);
+          end;
+          if (tabprintf[22]) then begin
+          	OutString(tab[22],0,"",false);
+          end;
+          if (tabprintf[23]) then begin
+          	OutString(tab[23],0,"",false);
+          end;
+          if (tabprintf[24]) then begin
+          	OutString(tab[24],0,"",false);
+          end;
+          if (tabprintf[25]) then begin
+          	OutString(tab[25],0,"",false);
+          end;
+          if (tabprintf[26]) then begin
+          	OutString(tab[26],0,"EUR: " & ValToMyString(to1EUR,5),false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutString(tab[26]+25,0,"",false);
+            end;
+          end;
+          if (tabprintf[27]) then begin
+          	OutString(tab[27],0,"",false);
+          end;
+          if (tabprintf[28]) then begin
+          	OutString(tab[28],0,"Курс на " & tempDate,false);
+          end;
+        EndFormat;
+        Gray_Divider(0,1);
+        StartFormat(15);
+          if (tabprintf[1]) then begin
+          	OutString(tab[1],0,"",false);
+          end;
+          if (tabprintf[2]) then begin
+          	OutString(tab[2],0,"",false);
+          end;
+          if (tabprintf[3]) then begin
+          	OutString(tab[3],0,"",false);
+          end;
+          if (tabprintf[4]) then begin
+          	OutString(tab[4],0,"",false);
+          end;
+          if (tabprintf[5]) then begin
+          	OutString(tab[5],0,"",false);
+          end;
+          if (tabprintf[6]) then begin
+          	OutString(tab[6],0,"",false);
+          end;
+          if (tabprintf[7]) then begin
+          	OutString(tab[7],0,"",false);
+          end;
+          if (tabprintf[8]) then begin
+          	OutString(tab[8],0,"",false);
+          end;
+          tempStr = "USD";
+          GetFullCurncyRate(tempStr,tempDate,fr,to1USD,to2,br1,br2);
+          if (tabprintf[9]) then begin
+          	OutString(tab[9],0,"USD: " & ValToMyString(to1USD,5),false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutString(tab[9]+25,0,"",false);
+            end;
+          end;
+          if (tabprintf[10]) then begin
+          	OutString(tab[10],0,"",false);
+          end;
+          if (tabprintf[11]) then begin
+          	OutString(tab[11],0,"",false);
+          end;
+          if (tabprintf[12]) then begin
+          	OutString(tab[12],0,"",false);
+          end;
+          if (tabprintf[13]) then begin
+          	OutString(tab[13],0,"",false);
+          end;
+          if (tabprintf[14]) then begin
+          	OutString(tab[14],0,"",false); 
+          end;
+          if (tabprintf[15]) then begin
+          	OutString(tab[15],0,"",false);
+          end;
+          if (tabprintf[16]) then begin
+          	OutString(tab[16],0,"",false);
+          end;
+          if (tabprintf[17]) then begin
+          	OutString(tab[17],0,"USD: " & ValToMyString(to1USD,5),false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutString(tab[17]+25,0,"",false);
+            end;
+          end;
+          if (tabprintf[18]) then begin
+          	OutString(tab[18],0,"",false);
+          end;
+          if (tabprintf[19]) then begin
+          	OutString(tab[19],0,"",false);
+          end;
+          if (tabprintf[20]) then begin
+          	OutString(tab[20],0,"",false);
+          end;
+          if (tabprintf[21]) then begin
+          	OutString(tab[21],0,"",false);
+          end;
+          if (tabprintf[22]) then begin
+          	OutString(tab[22],0,"",false);
+          end;
+          if (tabprintf[23]) then begin
+          	OutString(tab[23],0,"",false);
+          end;
+          if (tabprintf[24]) then begin
+          	OutString(tab[24],0,"",false);
+          end;
+          if (tabprintf[25]) then begin
+          	OutString(tab[25],0,"",false);
+          end;
+          if (tabprintf[26]) then begin
+          	OutString(tab[26],0,"USD: " & ValToMyString(to1USD,5),false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutString(tab[26]+25,0,"",false);
+            end;
+          end;
+          if (tabprintf[27]) then begin
+          	OutString(tab[27],0,"",false);
+          end;
+          if (tabprintf[28]) then begin
+          	OutString(tab[28],0,"Курс на " & tempDate,false);
+          end;
+        EndFormat;
+        Gray_Divider(0,1);
+        StartFormat(15);
+          if (tabprintf[1]) then begin
+            OutString(tab[1],0,"",false);
+          end;
+        end;
+			end else begin
+				Gray_Divider(0,1);
+				StartFormat(15);
+					if (tabprintf[1]) then begin
+						OutString(tab[1],0,"",false);
+					end;
+			end;
+			switch (tempTRrw.Curncy) begin
+				case "AZN":
+          if (tabprintf[2]) then begin
+          	OutString(tab[2],0,"",false);
+          end;
+          if (tabprintf[3]) then begin
+          	OutString(tab[3],0,tempTRrw.MyVal7,false);
+            AZN52Deb = AZN52Deb + tempTRrw.MyVal7;
+          end;
+          if (setinset("7",tempTRrw.TFromCode)) then begin
+            Base52Deb = Base52Deb + tempTRrw.DebVal;
+          end;
+          if (tabprintf[4]) then begin
+          	OutString(tab[4],0,"",false);
+          end;
+          if (tabprintf[5]) then begin
+          	OutString(tab[5],0,"",false);
+          end;
+          if (tabprintf[6]) then begin
+          	OutString(tab[6],0,tempTRrw.CurDebVal,false);
+            AZNDeb = AZNDeb + tempTRrw.CurDebVal;
+
+          end;
+          if (tabprintf[7]) then begin
+          	OutString(tab[7],0,"",false);
+          end;
+          if (tabprintf[8]) then begin
+          	OutString(tab[8],0,"",false);
+          end;
+          if (tabprintf[9]) then begin
+          	OutString(tab[9],0,tempTRrw.DebVal,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[9]+25,0,tempTRrw.DebVal/RepSpec.vals0,false);
+            end;
+          end;
+          if (tabprintf[10]) then begin
+          	OutString(tab[10],0,"",false);
+          end;
+          if (tabprintf[11]) then begin
+          	OutString(tab[11],0,tempTRrw.MyVal8,false);
+            AZN52Conv = AZN52Conv + tempTRrw.MyVal8;
+          end;
+          if (setinset("8",tempTRrw.TFromCode)) then begin
+            Base52Conv = Base52Conv + tempTRrw.MyVal2;
+          end;
+          if (tabprintf[12]) then begin
+          	OutString(tab[12],0,"",false);
+          end;
+          if (tabprintf[13]) then begin
+          	OutString(tab[13],0,"",false);
+          end;
+          if (tabprintf[14]) then begin
+          	OutString(tab[14],0,tempTRrw.MyVal1,false); 
+            convtotal2 = convtotal2 + tempTRrw.MyVal1;
+          end;
+          if (tabprintf[15]) then begin
+          	OutString(tab[15],0,"",false);
+          end;
+          if (tabprintf[16]) then begin
+          	OutString(tab[16],0,"",false);
+          end;
+          if (tabprintf[17]) then begin
+          	OutString(tab[17],0,tempTRrw.MyVal2,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[17]+25,0,tempTRrw.MyVal2/RepSpec.vals0,false);
+            end;
+          end;
+					if (tabprintf[18]) then begin
+						OutString(tab[18],0,tempTRrw.MyVal3,false);
+					end;
+          if (tabprintf[19]) then begin
+          	OutString(tab[19],0,"",false);
+          end;
+          if (tabprintf[20]) then begin
+          	OutString(tab[20],0,tempTRrw.MyVal9,false);
+            AZN52Cred = AZN52Cred + tempTRrw.MyVal9;
+          end;
+          if (setinset("9",tempTRrw.TFromCode)) then begin
+            Base52Cred = Base52Cred + tempTRrw.CredVal;
+          end;
+          if (tabprintf[21]) then begin
+          	OutString(tab[21],0,"",false);
+          end;
+          if (tabprintf[22]) then begin
+          	OutString(tab[22],0,"",false);
+          end;
+          if (tabprintf[23]) then begin
+          	OutString(tab[23],0,tempTRrw.CurCredVal,false);
+            AZNCred = AZNCred + tempTRrw.CurCredVal;
+          end;
+          if (tabprintf[24]) then begin
+          	OutString(tab[24],0,"",false);
+          end;
+          if (tabprintf[25]) then begin
+          	OutString(tab[25],0,"",false);
+          end;
+          if (tabprintf[26]) then begin
+          	OutString(tab[26],0,tempTRrw.CredVal,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[26]+25,0,tempTRrw.CredVal/RepSpec.vals0,false);
+            end;
+          end;
+				case "EUR":
+          if (tabprintf[2]) then begin
+          	OutString(tab[2],0,"",false);
+          end;
+          if (tabprintf[3]) then begin
+          	OutString(tab[3],0,"",false);
+          end;
+          if (tabprintf[4]) then begin
+          	OutString(tab[4],0,tempTRrw.MyVal7,false);
+            EUR52Deb = EUR52Deb + tempTRrw.MyVal7;
+          end;
+          if (setinset("7",tempTRrw.TFromCode)) then begin
+            Base52Deb = Base52Deb + tempTRrw.DebVal;
+          end;
+          if (tabprintf[5]) then begin
+          	OutString(tab[5],0,"",false);
+          end;
+          if (tabprintf[6]) then begin
+          	OutString(tab[6],0,"",false);
+          end;
+          if (tabprintf[7]) then begin
+          	OutString(tab[7],0,tempTRrw.CurDebVal,false);
+            EURDeb = EURDeb + tempTRrw.CurDebVal;
+          end;
+          if (tabprintf[8]) then begin
+          	OutString(tab[8],0,"",false);
+          end;
+          if (tabprintf[9]) then begin
+          	OutString(tab[9],0,tempTRrw.DebVal,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[9]+25,0,tempTRrw.DebVal/RepSpec.vals0,false);
+            end;
+          end;
+          if (tabprintf[10]) then begin
+          	OutString(tab[10],0,"",false);
+          end;
+          if (tabprintf[11]) then begin
+          	OutString(tab[11],0,"",false);
+          end;
+          if (tabprintf[12]) then begin
+          	OutString(tab[12],0,tempTRrw.MyVal8,false);
+            EUR52Conv = EUR52Conv + tempTRrw.MyVal8;
+          end;
+          if (setinset("8",tempTRrw.TFromCode)) then begin
+            Base52Conv = Base52Conv + tempTRrw.MyVal2;
+          end;
+          if (tabprintf[13]) then begin
+          	OutString(tab[13],0,"",false);
+          end;
+          if (tabprintf[14]) then begin
+          	OutString(tab[14],0,"",false); 
+          end;
+          if (tabprintf[15]) then begin
+          	OutString(tab[15],0,tempTRrw.MyVal1,false);
+            convtotal3 = convtotal3 + tempTRrw.MyVal1;
+          end;
+          if (tabprintf[16]) then begin
+          	OutString(tab[16],0,"",false);
+          end;
+          if (tabprintf[17]) then begin
+          	OutString(tab[17],0,tempTRrw.MyVal2,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[17]+25,0,tempTRrw.MyVal2/RepSpec.vals0,false);
+            end;
+          end;
+					if (tabprintf[18]) then begin
+						OutString(tab[18],0,tempTRrw.MyVal3,false);
+					end;
+          if (tabprintf[19]) then begin
+          	OutString(tab[19],0,"",false);
+          end;
+          if (tabprintf[20]) then begin
+          	OutString(tab[20],0,"",false);
+          end;
+          if (tabprintf[21]) then begin
+          	OutString(tab[21],0,tempTRrw.MyVal9,false);
+            EUR52Cred = EUR52Cred + tempTRrw.MyVal9;
+          end;
+          if (setinset("9",tempTRrw.TFromCode)) then begin
+            Base52Cred = Base52Cred + tempTRrw.CredVal;
+          end;
+          if (tabprintf[22]) then begin
+          	OutString(tab[22],0,"",false);
+          end;
+          if (tabprintf[23]) then begin
+          	OutString(tab[23],0,"",false);
+          end;
+          if (tabprintf[24]) then begin
+          	OutString(tab[24],0,tempTRrw.CurCredVal,false);
+            EURCred = EURCred + tempTRrw.CurCredVal;
+          end;
+          if (tabprintf[25]) then begin
+          	OutString(tab[25],0,"",false);
+          end;
+          if (tabprintf[26]) then begin
+          	OutString(tab[26],0,tempTRrw.CredVal,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[26]+25,0,tempTRrw.CredVal/RepSpec.vals0,false);
+            end;
+          end;
+				case "USD":
+          if (tabprintf[2]) then begin
+            OutString(tab[2],0,"",false);
+          end;
+          if (tabprintf[3]) then begin
+            OutString(tab[3],0,"",false);
+          end;
+          if (tabprintf[4]) then begin
+            OutString(tab[4],0,"",false);
+          end;
+          if (tabprintf[5]) then begin
+            OutString(tab[5],0,tempTRrw.MyVal7,false);
+            USD52Deb = USD52Deb + tempTRrw.MyVal7;
+          end;
+          if (setinset("7",tempTRrw.TFromCode)) then begin
+            Base52Deb = Base52Deb + tempTRrw.DebVal;
+          end;
+          if (tabprintf[6]) then begin
+            OutString(tab[6],0,"",false);
+          end;
+          if (tabprintf[7]) then begin
+            OutString(tab[7],0,"",false);
+          end;
+          if (tabprintf[8]) then begin
+            OutString(tab[8],0,tempTRrw.CurDebVal,false);
+            USDDeb = USDDeb + tempTRrw.CurDebVal;
+          end;
+          if (tabprintf[9]) then begin
+            OutString(tab[9],0,tempTRrw.DebVal,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[9]+25,0,tempTRrw.DebVal/RepSpec.vals0,false);
+            end;
+          end;
+          if (tabprintf[10]) then begin
+            OutString(tab[10],0,"",false);
+          end;
+          if (tabprintf[11]) then begin
+            OutString(tab[11],0,"",false);
+          end;
+          if (tabprintf[12]) then begin
+            OutString(tab[12],0,"",false);
+          end;
+          if (tabprintf[13]) then begin
+            OutString(tab[13],0,tempTRrw.MyVal8,false);
+            USD52Conv = USD52Conv + tempTRrw.MyVal15;
+          end;
+          if (setinset("8",tempTRrw.TFromCode)) then begin
+            Base52Conv = Base52Conv + tempTRrw.MyVal2;
+          end;
+          if (tabprintf[14]) then begin
+            OutString(tab[14],0,"",false); 
+          end;
+          if (tabprintf[15]) then begin
+            OutString(tab[15],0,"",false);
+          end;
+          if (tabprintf[16]) then begin
+            OutString(tab[16],0,tempTRrw.MyVal1,false);
+            convtotal4 = convtotal4 + tempTRrw.MyVal1;	
+          end;
+          if (tabprintf[17]) then begin
+            OutString(tab[17],0,tempTRrw.MyVal2,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[17]+25,0,tempTRrw.MyVal2/RepSpec.vals0,false);
+            end;
+          end;
+					if (tabprintf[18]) then begin
+						OutString(tab[18],0,tempTRrw.MyVal3,false);
+					end;
+          if (tabprintf[19]) then begin
+            OutString(tab[19],0,"",false);
+          end;
+          if (tabprintf[20]) then begin
+            OutString(tab[20],0,"",false);
+          end;
+          if (tabprintf[21]) then begin
+            OutString(tab[21],0,"",false);
+          end;
+          if (tabprintf[22]) then begin
+            OutString(tab[22],0,tempTRrw.MyVal9,false);
+            USD52Cred = USD52Cred + tempTRrw.MyVal9;
+          end;
+          if (setinset("9",tempTRrw.TFromCode)) then begin
+            Base52Cred = Base52Cred + tempTRrw.CredVal;
+          end;
+          if (tabprintf[23]) then begin
+            OutString(tab[23],0,"",false);
+          end;
+          if (tabprintf[24]) then begin
+            OutString(tab[24],0,"",false);
+          end;
+          if (tabprintf[25]) then begin
+            OutString(tab[25],0,tempTRrw.CurCredVal,false);
+            USDCred = USDCred + tempTRrw.CurCredVal;
+          end;
+          if (tabprintf[26]) then begin
+            OutString(tab[26],0,tempTRrw.CredVal,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[26]+25,0,tempTRrw.CredVal/RepSpec.vals0,false);
+            end;
+          end;
+				case "TER":
+          if (tabprintf[2]) then begin
+          	OutString(tab[2],0,tempTRrw.CurDebVal,false);
+            AZNTermDeb = AZNTermDeb + tempTRrw.CurDebVal;
+          end;
+          if (tabprintf[3]) then begin
+            OutString(tab[3],0,"",false);
+          end;
+          if (tabprintf[4]) then begin
+            OutString(tab[4],0,"",false);
+          end;
+          if (tabprintf[5]) then begin
+            OutString(tab[5],0,"",false);
+          end;
+          if (tabprintf[6]) then begin
+          	OutString(tab[6],0,"",false);
+          end;
+          if (tabprintf[7]) then begin
+          	OutString(tab[7],0,"",false);
+          end;
+          if (tabprintf[8]) then begin
+          	OutString(tab[8],0,"",false);
+          end;
+          if (tabprintf[9]) then begin
+          	OutString(tab[9],0,tempTRrw.DebVal,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[9]+25,0,tempTRrw.DebVal/RepSpec.vals0,false);
+            end;
+          end;
+          if (tabprintf[10]) then begin
+          	OutString(tab[10],0,tempTRrw.MyVal1,false);
+            convtotal1 = convtotal1 + tempTRrw.MyVal1;
+          end;
+          if (tabprintf[11]) then begin
+            OutString(tab[11],0,"",false);
+          end;
+          if (tabprintf[12]) then begin
+            OutString(tab[12],0,"",false);
+          end;
+          if (tabprintf[13]) then begin
+            OutString(tab[13],0,"",false);
+          end;
+          if (tabprintf[14]) then begin
+          	OutString(tab[14],0,"",false); 
+          end;
+          if (tabprintf[15]) then begin
+          	OutString(tab[15],0,"",false);
+          end;
+          if (tabprintf[16]) then begin
+          	OutString(tab[16],0,"",false);
+          end;
+          if (tabprintf[17]) then begin
+          	OutString(tab[17],0,tempTRrw.MyVal2,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[17]+25,0,tempTRrw.MyVal2/RepSpec.vals0,false);
+            end;
+          end;
+					if (tabprintf[18]) then begin
+						OutString(tab[18],0,tempTRrw.MyVal3,false);
+					end;
+          if (tabprintf[19]) then begin
+          	OutString(tab[19],0,tempTRrw.CurCredVal,false);
+            AZNTermCred = AZNTermCred + tempTRrw.CurCredVal;
+          end;
+          if (tabprintf[20]) then begin
+            OutString(tab[20],0,"",false);
+          end;
+          if (tabprintf[21]) then begin
+            OutString(tab[21],0,"",false);
+          end;
+          if (tabprintf[22]) then begin
+            OutString(tab[22],0,"",false);
+          end;
+          if (tabprintf[23]) then begin
+          	OutString(tab[23],0,"",false);
+          end;
+          if (tabprintf[24]) then begin
+          	OutString(tab[24],0,"",false);
+          end;
+          if (tabprintf[25]) then begin
+          	OutString(tab[25],0,"",false);
+          end;
+          if (tabprintf[26]) then begin
+          	OutString(tab[26],0,tempTRrw.CredVal,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[26]+25,0,tempTRrw.CredVal/RepSpec.vals0,false);
+            end;
+          end;
+				case "IVV":
+          if (tabprintf[2]) then begin
+          	OutString(tab[2],0,tempTRrw.NomVal,false);
+          end;
+          AZNTermDeb = AZNTermDeb + tempTRrw.NomVal;
+          if (tabprintf[3]) then begin
+            OutString(tab[3],0,tempTRrw.MyVal10,false);
+            AZN52Deb = AZN52Deb + tempTRrw.MyVal10;
+          end;
+          if (tabprintf[4]) then begin
+            OutString(tab[4],0,tempTRrw.MyVal11,false);
+            EUR52Deb = EUR52Deb + tempTRrw.MyVal11;
+          end;
+          if (tabprintf[5]) then begin
+            OutString(tab[5],0,tempTRrw.MyVal12,false);
+            USD52Deb = USD52Deb + tempTRrw.MyVal12;
+          end;
+          if (tabprintf[6]) then begin
+          	OutString(tab[6],0,tempTRrw.CredVal2,false);
+            AZNDeb = AZNDeb + tempTRrw.CredVal2;
+          end;
+          if (tabprintf[7]) then begin
+          	OutString(tab[7],0,tempTRrw.DebVal2,false);
+            EURDeb = EURDeb + tempTRrw.DebVal2;
+          end;
+          if (tabprintf[8]) then begin
+          	OutString(tab[8],0,tempTRrw.Qty,false);
+            USDDeb = USDDeb + tempTRrw.Qty;
+          end;
+          if (tabprintf[9]) then begin
+          	OutString(tab[9],0,tempTRrw.DebVal,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[9]+25,0,tempTRrw.DebVal/RepSpec.vals0,false);
+            end;
+          end;
+          if (tabprintf[10]) then begin
+          	OutString(tab[10],0,tempTRrw.MyVal5,false);
+            convtotal1 = convtotal1 + tempTRrw.MyVal5;
+          end;
+          if (tabprintf[11]) then begin
+            OutString(tab[11],0,tempTRrw.MyVal13,false);
+            AZN52Conv = AZN52Conv + tempTRrw.MyVal13;
+          end;
+          if (setinset("13",tempTRrw.TFromCode)) then begin
+            Base52Conv = Base52Conv + tempTRrw.MyVal2;
+          end;
+          if (tabprintf[12]) then begin
+            OutString(tab[12],0,tempTRrw.MyVal14,false);
+            EUR52Conv = EUR52Conv + tempTRrw.MyVal14;
+          end;
+          if (setinset("14",tempTRrw.TFromCode)) then begin
+            Base52Conv = Base52Conv + tempTRrw.MyVal2;
+          end;
+          if (tabprintf[13]) then begin
+            OutString(tab[13],0,tempTRrw.MyVal15,false);
+            USD52Conv = USD52Conv + tempTRrw.MyVal15;
+          end;
+          if (setinset("15",tempTRrw.TFromCode)) then begin
+            Base52Conv = Base52Conv + tempTRrw.MyVal2;
+          end;
+          if (tabprintf[14]) then begin
+          	OutString(tab[14],0,tempTRrw.MyVal1,false); 
+            convtotal2 = convtotal2 + tempTRrw.MyVal1;
+          end;
+          if (tabprintf[15]) then begin
+          	OutString(tab[15],0,tempTRrw.MyVal3,false);
+            convtotal3 = convtotal3 + tempTRrw.MyVal3;
+          end;
+          if (tabprintf[16]) then begin
+          	OutString(tab[16],0,tempTRrw.MyVal4,false);
+            convtotal4 = convtotal4 + tempTRrw.MyVal4;
+          end;
+          if (tabprintf[17]) then begin
+          	OutString(tab[17],0,tempTRrw.MyVal2,false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutMyString(tab[17]+25,0,tempTRrw.MyVal2/RepSpec.vals0,false);
+            end;
+          end;
+					if (tabprintf[18]) then begin
+						OutString(tab[18],0,tempTRrw.MyVal6,false);
+					end;
+          if (tabprintf[19]) then begin
+          	OutString(tab[19],0,"",false);
+          end;
+          if (tabprintf[20]) then begin
+          	OutString(tab[20],0,"",false);
+          end;
+          if (tabprintf[21]) then begin
+          	OutString(tab[21],0,"",false);
+          end;
+          if (tabprintf[22]) then begin
+          	OutString(tab[22],0,"",false);
+          end;
+          if (tabprintf[23]) then begin
+          	OutString(tab[23],0,"",false);
+          end;
+          if (tabprintf[24]) then begin
+          	OutString(tab[24],0,"",false);
+          end;
+          if (tabprintf[25]) then begin
+          	OutString(tab[25],0,"",false);
+          end;
+          if (tabprintf[26]) then begin
+          	OutString(tab[26],0,"",false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutString(tab[26]+25,0,"",false);
+            end;
+          end;
+			end;
+			BaseDeb = BaseDeb + tempTRrw.DebVal;
+			BaseCred = BaseCred + tempTRrw.CredVal;
+			convtotal5 = convtotal5 + tempTRrw.MyVal2;
+			
+			switch (FirstTransTypeInRange(tempTRrw.Comment)) begin
+				case IVYc:
+					OutStringID(tab[27],"DblIVVc",tempTRrw.Comment,false,FirstTransInRange(tempTRrw.Comment));
+				case IPYc:
+					OutStringID(tab[27],"DblIPVcID",tempTRrw.Comment,false,FirstTransInRange(tempTRrw.Comment));
+				case CLInYc:
+					OutStringID(tab[27],"DblCLInID",tempTRrw.Comment,false,FirstTransInRange(tempTRrw.Comment));
+				case CLOutYc:
+					OutStringID(tab[27],"DblCLOutID",tempTRrw.Comment,false,FirstTransInRange(tempTRrw.Comment));
+				otherwise
+					OutStringID(tab[27],"DblTrans",tempTRrw.Comment,false,CurrentCompany);
+			end;
+				if (tabprintf[28]) then begin
+					OutString(tab[28],0,tempTRrw.ExtraComment,false);
+				end;
+			EndFormat;
+		end;
+		//Итого
+		Black_Divider(0,1)
+		StartFormat(15);
+			if (tabprintf[1]) then begin
+				OutString(tab[1],0,"Итого",false);
+			end;
+      if (tabprintf[2]) then begin
+      	OutString(tab[2],0,AZNTermDeb,false);
+      end;
+      if (tabprintf[3]) then begin
+      	OutString(tab[3],0,AZN52Deb,false);
+      end;
+      if (tabprintf[4]) then begin
+      	OutString(tab[4],0,EUR52Deb,false);
+      end;
+      if (tabprintf[5]) then begin
+      	OutString(tab[5],0,USD52Deb,false);
+      end;
+      if (tabprintf[6]) then begin
+      	OutString(tab[6],0,AZNDeb,false);
+      end;
+      if (tabprintf[7]) then begin
+      	OutString(tab[7],0,EURDeb,false);
+      end;
+      if (tabprintf[8]) then begin
+      	OutString(tab[8],0,USDDeb,false);
+      end;
+      if (tabprintf[9]) then begin
+      	OutString(tab[9],0,BaseDeb,false);
+        if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+          OutMyString(tab[9]+25,0,BaseDeb/RepSpec.vals0,false);
+        end;
+      end;
+      if (tabprintf[10]) then begin
+      	OutString(tab[10],0,convtotal1,false); 
+      end;
+      if (tabprintf[11]) then begin
+      	OutString(tab[11],0,AZN52Conv,false);
+      end;
+      if (tabprintf[12]) then begin
+      	OutString(tab[12],0,EUR52Conv,false);
+      end;
+      if (tabprintf[13]) then begin
+      	OutString(tab[13],0,USD52Conv,false);
+      end;
+      if (tabprintf[14]) then begin
+      	OutString(tab[14],0,convtotal2,false); 
+      end;
+      if (tabprintf[15]) then begin
+      	OutString(tab[15],0,convtotal3,false);
+      end;
+      if (tabprintf[16]) then begin
+      	OutString(tab[16],0,convtotal4,false);
+      end;
+      if (tabprintf[17]) then begin
+      	OutString(tab[17],0,convtotal5,false);
+        if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+          OutMyString(tab[17]+25,0,convtotal5/RepSpec.vals0,false);
+        end;
+      end;
+			if (tabprintf[18]) then begin
+				OutString(tab[18],0,kursovaya + kursovaya52,false);
+			end;
+      if (tabprintf[19]) then begin
+      	OutString(tab[19],0,AZNTermCred,false);
+      end;
+      if (tabprintf[20]) then begin
+      	OutString(tab[20],0,AZN52Cred,false);
+      end;
+      if (tabprintf[21]) then begin
+      	OutString(tab[21],0,EUR52Cred,false);
+      end;
+      if (tabprintf[22]) then begin
+      	OutString(tab[22],0,USD52Cred,false);
+      end;
+      if (tabprintf[23]) then begin
+      	OutString(tab[23],0,AZNCred,false);
+      end;
+      if (tabprintf[24]) then begin
+      	OutString(tab[24],0,EURCred,false);
+      end;
+      if (tabprintf[25]) then begin
+      	OutString(tab[25],0,USDCred,false);
+      end;
+      if (tabprintf[26]) then begin
+      	OutString(tab[26],0,BaseCred,false);
+        if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+          OutMyString(tab[26]+25,0,BaseCred/RepSpec.vals0,false);
+        end;
+      end;
+		EndFormat;
+		Gray_Divider(0,1)
+		StartFormat(15);
+		EndFormat;
+		//Оборот\Расход AZN
+		StartFormat(15);
+			OutString(0,0,"",false);
+			OutString(15,0,"Оборот AZN:",false);
+      OutString(44,0,BaseDeb,false);
+      if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+				OutString(69,0,"В USD по курсу: " & RepSpec.vals0,false);
+				OutMyString(93,0,BaseDeb/RepSpec.vals0,false);
+				OutString(118,0,"",false);
+			end else begin
+				OutString(69,0,"",false);
+				OutString(93,0,"",false);
+				OutString(118,0,"",false);
+			end;
+			OutString(142,0,"Расход AZN:",false);
+			OutString(167,0,BaseCred,false);
+      if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+				OutString(180,0,"В USD по курсу: " & RepSpec.vals0,false);
+				OutMyString(200,0,BaseCred/RepSpec.vals0,false);
+			end;
+		EndFormat;
+		StartFormat(15);
+		EndFormat;
+		// Табл. 2,3
+		Black_Divider(15,93);
+		Black_Divider(142,216);
+    Black_Divider(284,358);
+		StartFormat(15);
+			OutString(0,0,"",false);
+			OutString(15,0,"Касса",false);
+			OutString(44,0,"Сумма",false);
+			OutString(69,0,"Валюта",false);
+			if(RepSpec.vals0!=0)then begin
+				OutString(93,0,"В USD по курсу: " & RepSpec.vals0,false);
+			end;
+			OutString(118,0,"",false);
+			OutString(142,0,"Терминал",false);
+			OutString(167,0,"Сумма",false);
+			OutString(191,0,"Валюта",false);
+			if(RepSpec.vals0!=0)then begin
+				OutString(200,0,"В USD по курсу: " & RepSpec.vals0,false);
+			end;
+      OutString(240,0,"",false);
+			OutString(284,0,"Банк",false);
+			OutString(309,0,"Сумма",false);
+			OutString(333,0,"Валюта",false);
+			if(RepSpec.vals0!=0)then begin
+				OutString(342,0,"В USD по курсу: " & RepSpec.vals0,false);
+			end;
+		EndFormat;
+		Black_Divider(15,93);
+		Black_Divider(142,216);
+    Black_Divider(284,358);
+		StartFormat(15);
+			OutString(0,0,"",false);
+			OutString(15,0,"Приход",false);// Касса - Приход
+			OutString(44,0,BaseDeb - AZNTermDeb - Base52Deb,false);
+			OutString(69,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutMyString(93,0,(BaseDeb - AZNTermDeb - Base52Deb)/RepSpec.vals0,false);
+			end;
+			OutString(118,0,"",false);
+			OutString(142,0,"Приход",false);
+			OutString(167,0,AZNTermDeb,false);
+			OutString(191,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutMyString(200,0,(AZNTermDeb)/RepSpec.vals0,false);
+			end;
+      OutString(240,0,"",false);
+			OutString(284,0,"Приход",false);
+			OutString(309,0,Base52Deb,false);
+			OutString(333,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutString(342,0,(Base52Deb)/RepSpec.vals0,false);
+			end;
+		EndFormat;
+		Gray_Divider(15,93);
+		Gray_Divider(142,216);
+    Gray_Divider(284,358);
+		StartFormat(15);
+			OutString(0,0,"",false);
+			OutString(15,0,"Расход",false);// Касса - Расход
+			OutString(44,0,BaseCred - AZNTermCred - Base52Cred,false);
+			OutString(69,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutMyString(93,0,(BaseCred - AZNTermCred - Base52Cred)/RepSpec.vals0,false);
+			end;
+			OutString(118,0,"",false);
+			OutString(142,0,"Расход",false);
+			OutString(167,0,AZNTermCred,false);
+			OutString(191,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutMyString(200,0,(AZNTermCred)/RepSpec.vals0,false);
+			end;
+      OutString(240,0,"",false);
+			OutString(284,0,"Расход",false);
+			OutString(309,0,Base52Cred,false);
+			OutString(333,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutString(342,0,(Base52Cred)/RepSpec.vals0,false);
+			end;
+		EndFormat;
+		Gray_Divider(15,93);
+		Gray_Divider(142,216);
+    Gray_Divider(284,358);
+		SaldoEndPeriod51 = BeginBalance51 + AZNTermDeb - AZNTermCred + convtotal1;// Edit ************************** Thursday, 27 August 1515 15:22:19
+		StartFormat(15);
+			OutString(0,0,"",false);
+			OutString(15,0,"Конв/банк",false);
+			OutString(44,0,convtotal2,false);
+			OutString(69,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutMyString(93,0,(convtotal2)/RepSpec.vals0,false);
+			end;
+			OutString(118,0,"",false);
+			OutString(142,0,"Конв/банк",false);
+			OutString(167,0,convtotal1,false);
+			OutString(191,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutMyString(200,0,(convtotal1)/RepSpec.vals0,false);
+			end;
+      OutString(240,0,"",false);
+			OutString(284,0,"Конв/банк",false);
+			OutString(309,0,Base52Conv,false);
+			OutString(333,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutString(342,0,(Base52Conv)/RepSpec.vals0,false);
+			end;
+		EndFormat;
+		Gray_Divider(15,93);
+    Black_Divider(142,216);
+    Black_Divider(284,358);
+		StartFormat(15);
+			OutString(0,0,"",false);
+			OutString(15,0,"Сдано",false);
+			OutString(44,0,handed53,false);
+			OutString(69,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutMyString(93,0,(handed53)/RepSpec.vals0,false);
+			end;
+			OutString(118,0,"",false);
+			OutString(142,0,"Остаток",false);
+			OutString(167,0,SaldoEndPeriod51,false);
+			OutString(191,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutMyString(200,0,(SaldoEndPeriod51)/RepSpec.vals0,false);
+			end;
+      OutString(240,0,"",false);
+			OutString(284,0,"К сдаче",false);
+      SaldoEndPeriod52 = BeginBalance52 + Base52Deb - Base52Cred + Base52Conv;
+			OutString(309,0,SaldoEndPeriod52 - kursovaya52,false);
+			OutString(333,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutString(342,0,(SaldoEndPeriod52 - kursovaya52)/RepSpec.vals0,false);
+			end;
+		EndFormat;
+		Black_Divider(142,216);
+		if (compf) or (BalItem1 != 0) then begin
+			Gray_Divider(15,93);
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"Приход за товар",false);
+				OutString(44,0,BalItem1,false);
+				OutString(69,0,"AZN",false);
+				if(RepSpec.vals0!=0)then begin
+					OutMyString(93,0,(BalItem1)/RepSpec.vals0,false);
+				end;
+		end else begin
+      StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,"",false);
+				OutString(69,0,"",false);
+				if(RepSpec.vals0!=0)then begin
+					OutString(93,0,"",false);
+				end;
+    end;
+      OutString(118,0,"",false);
+      OutString(142,0,"",false);
+      OutString(167,0,"",false);
+      OutString(191,0,"",false);
+      if(RepSpec.vals0!=0)then begin
+        OutString(200,0,"",false);
+      end;
+      OutString(240,0,"",false);
+      OutString(284,0,"Курсовая",false);
+      OutString(309,0,kursovaya52,false);
+      OutString(333,0,"AZN",false);
+      if(RepSpec.vals0!=0)then begin
+        OutString(342,0,(kursovaya52)/RepSpec.vals0,false);
+      end;
+    EndFormat;
+    Black_Divider(284,358);
+		if (compf) or (BalItem2 != 0) then begin
+			Gray_Divider(15,93);
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"Расход за товар",false);
+				OutString(44,0,BalItem2,false);
+				OutString(69,0,"AZN",false);
+				if(RepSpec.vals0!=0)then begin
+					OutMyString(93,0,(BalItem2)/RepSpec.vals0,false);
+				end;
+    end else begin
+      StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,"",false);
+				OutString(69,0,"",false);
+				if(RepSpec.vals0!=0)then begin
+					OutString(93,0,"",false);
+				end;
+		end;
+      OutString(118,0,"",false);
+      OutString(142,0,"",false);
+      OutString(167,0,"",false);
+      OutString(191,0,"",false);
+      if(RepSpec.vals0!=0)then begin
+        OutString(200,0,"",false);
+      end;
+      OutString(240,0,"",false);
+      OutString(284,0,"К сдаче",false);
+      OutString(309,0,SaldoEndPeriod52,false);
+      OutString(333,0,"AZN",false);
+      if(RepSpec.vals0!=0)then begin
+        OutString(342,0,(SaldoEndPeriod52)/RepSpec.vals0,false);
+      end;
+    EndFormat;
+		Black_Divider(15,93);
+	// к сдаче
+    SaldoEndPeriod50n51 = BeginBalance50n51 + (BaseDeb - Base52Deb) - (BaseCred - Base52Cred) + (convtotal5 - Base52Conv);// Edit ************************** Thursday, 27 August 2015 15:22:15
+		SaldoEndPeriod50USD = BeginBalance50USD + USDDeb - USDCred + convtotal4;// Edit ************************** Thursday, 27 August 2015 15:22:15
+		SaldoEndPeriod50EUR = BeginBalance50EUR + EURDeb - EURCred + convtotal3;// Edit ************************** Thursday, 27 August 2015 15:22:16
+		SaldoEndPeriod50AZN = BeginBalance50AZN + AZNDeb - AZNCred + convtotal2;// Edit ************************** Thursday, 27 August 2015 15:22:17
+		if (compf) or (kursovaya != 0) then begin
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"К сдаче",false);
+				OutString(44,0,SaldoEndPeriod50n51 - kursovaya,false);
+				OutString(69,0,"AZN",false);
+				if(RepSpec.vals0!=0)then begin
+					OutMyString(93,0,(SaldoEndPeriod50n51 - kursovaya)/RepSpec.vals0,false);
+				end;
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"Курсовая",false);
+				OutString(44,0,kursovaya,false);
+				OutString(69,0,"AZN",false);
+				if(RepSpec.vals0!=0)then begin
+					OutMyString(93,0,(kursovaya)/RepSpec.vals0,false);
+				end;
+			EndFormat;
+			Black_Divider(15,93);
+		end;
+		StartFormat(15);
+			OutString(0,0,"",false);
+			OutString(15,0,"К сдаче",false);
+			OutString(44,0,SaldoEndPeriod50n51,false);
+			OutString(69,0,"AZN",false);
+			if(RepSpec.vals0!=0)then begin
+				OutMyString(93,0,(SaldoEndPeriod50n51)/RepSpec.vals0,false);
+			end;
+		EndFormat;
+		
+		StartFormat(15);
+		EndFormat;
+		StartFormat(15);
+			OutString(0,0,"",false);
+			OutString(15,0,"К сдаче по валютам",false);
+		EndFormat;
+		if (compf) or (SaldoEndPeriod50USD != 0) then begin
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,SaldoEndPeriod50USD,false);
+				OutString(69,0,"USD",false);
+			EndFormat;
+		end;
+		if (compf) or (SaldoEndPeriod50EUR != 0) then begin
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,SaldoEndPeriod50EUR,false);
+				OutString(69,0,"EUR",false);
+			EndFormat;
+		end;
+		if (compf) or (SaldoEndPeriod50AZN != 0) then begin
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,SaldoEndPeriod50AZN,false);
+				OutString(69,0,"AZN",false);
+			EndFormat;
+		end;
+		if (compf) or (SaldoEndPeriod51 != 0) then begin
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,SaldoEndPeriod51,false);
+				OutString(69,0,"AZN терминал",false);
+			EndFormat;
+		end;
+		if (compf) then begin
+			for (i=0;i<curi;i=i+1) begin
+				if left(CurList[i],3)=="USD" then begin
+					FindNLAccBal("53",RepSpec.ObjStr,"",0,"",AddDay(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+					SaldoEndPeriod53USD = SaldoEndPeriod53USD + tempBal;
+				end;
+			end;
+			tempBal = 0;
+			for (i=0;i<curi;i=i+1) begin
+				if left(CurList[i],3)=="EUR" then begin
+					FindNLAccBal("53",RepSpec.ObjStr,"",0,"",AddDay(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+					SaldoEndPeriod53EUR = SaldoEndPeriod53EUR + tempBal;
+				end;
+			end;
+			tempBal = 0;
+			for (i=0;i<curi;i=i+1) begin
+				if left(CurList[i],3)=="AZN" then begin
+					FindNLAccBal("53",RepSpec.ObjStr,"",0,"",AddDay(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+					SaldoEndPeriod53AZN = SaldoEndPeriod53AZN + tempBal;
+				end;
+			end;
+			FindNLAccBal("53",RepSpec.ObjStr,"",0,"",AddDay(RepSpec.sEndDate,1),0,0,false,"",0,"","",SaldoEndPeriod53);
+			StartFormat(15);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"Деньги в офисе",false);
+				OutString(44,0,SaldoEndPeriod53USD,false);
+				OutString(69,0,"USD",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,SaldoEndPeriod53EUR,false);
+				OutString(69,0,"EUR",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,SaldoEndPeriod53AZN,false);
+				OutString(69,0,"AZN",false);
+			EndFormat;
+			Gray_Divider(25,90);
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(25,0,"Сумма в осн. вал.",false);
+				OutString(44,0,SaldoEndPeriod53,false);
+				OutString(69,0,"AZN",false);
+				if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+					OutString(110,0,"В USD по курсу: " & RepSpec.vals0,false);
+					OutMyString(160,0,(SaldoEndPeriod53)/RepSpec.vals0,false);
+				end;
+			EndFormat;
+			Gray_Divider(25,90);
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(25,0,"Курсовая",false);
+				OutString(44,0,kursovaya53,false);
+				OutString(69,0,"AZN",false);
+				if(RepSpec.vals0!=0)then begin
+					OutString(110,0,"В USD по курсу: " & RepSpec.vals0,false);
+					OutMyString(160,0,(kursovaya53)/RepSpec.vals0,false);
+				end;
+			EndFormat;
+			Gray_Divider(25,90);
+			StartFormat(15);
+			EndFormat;
+			SaldoEndPeriod50n53USD = SaldoEndPeriod50USD + SaldoEndPeriod53USD;
+			SaldoEndPeriod50n53EUR = SaldoEndPeriod50EUR + SaldoEndPeriod53EUR;
+			SaldoEndPeriod50n53AZN = SaldoEndPeriod50AZN + SaldoEndPeriod53AZN;
+      Balance52USD = 0;
+      Balance52EUR = 0;
+      Balance52AZN = 0;
+      tempBal = 0;
+      for (i=0;i<curi;i=i+1) begin
+        if left(CurList[i],3)=="USD" then begin
+          FindNLAccBal("52",RepSpec.ObjStr,"",0,"",AddDay(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+          Balance52USD = Balance52USD + tempBal;
+        end;
+      end;
+      tempBal = 0;
+      for (i=0;i<curi;i=i+1) begin
+        if left(CurList[i],3)=="EUR" then begin
+          FindNLAccBal("52",RepSpec.ObjStr,"",0,"",AddDay(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+          Balance52EUR = Balance52EUR + tempBal;
+        end;
+      end;
+      tempBal = 0;
+      for (i=0;i<curi;i=i+1) begin
+        if left(CurList[i],3)=="AZN" then begin
+          FindNLAccBal("52",RepSpec.ObjStr,"",0,"",AddDay(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+          Balance52AZN = Balance52AZN + tempBal;
+        end;
+      end;
+      if ((Balance52USD!=0) or (Balance52EUR!=0)) then begin
+        f = false;
+        if (Balance52USD!=0) then begin
+          if (!f) then begin
+            StartFormat(15);
+              OutString(0,0,"",false);
+              OutString(15,0,"Остаток по расчетному счету в валюте:",false);
+            EndFormat;
+            f = true;
+          end;
+          StartFormat(15);
+            OutString(0,0,"",false);
+            OutString(25,0,"",false);
+            OutString(44,0,Balance52USD,false);
+            OutString(69,0,"USD",false);
+          EndFormat;
+        end;
+        if (Balance52EUR!=0) then begin
+          if (!f) then begin
+            StartFormat(15);
+              OutString(0,0,"",false);
+              OutString(15,0,"Остаток по расчетному счету в валюте:",false);
+            EndFormat;
+            f = true;
+          end;
+          StartFormat(15);
+            OutString(0,0,"",false);
+            OutString(25,0,"",false);
+            OutString(44,0,Balance52EUR,false);
+            OutString(69,0,"EUR",false);
+          EndFormat;
+        end;
+        if (Balance52AZN!=0) then begin
+          if (!f) then begin
+            StartFormat(15);
+              OutString(0,0,"",false);
+              OutString(15,0,"Остаток по расчетному счету в валюте:",false);
+            EndFormat;
+            f = true;
+          end;
+          StartFormat(15);
+            OutString(0,0,"",false);
+            OutString(25,0,"",false);
+            OutString(44,0,Balance52AZN,false);
+            OutString(69,0,"AZN",false);
+          EndFormat;
+        end;
+        if (f) then begin
+          FindNLAccBal("52",RepSpec.ObjStr,"",0,"",AddDay(RepSpec.sEndDate,1),0,0,false,"",0,"","",SaldoEndPeriod52);
+          Gray_Divider(25,90);
+          StartFormat(15);
+            OutString(0,0,"",false);
+            OutString(25,0,"Сумма в осн. вал.",false);
+            OutString(44,0,SaldoEndPeriod52,false);
+            OutString(69,0,"AZN",false);
+            if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+              OutString(110,0,"В USD по курсу: " & RepSpec.vals0,false);
+              OutMyString(160,0,SaldoEndPeriod52/RepSpec.vals0,false);
+            end;
+          EndFormat;
+          Gray_Divider(25,90);
+          StartFormat(15);
+            OutString(0,0,"",false);
+            OutString(25,0,"Курсовая",false);
+            OutString(44,0,kursovaya52,false);
+            OutString(69,0,"AZN",false);
+            if(RepSpec.vals0!=0)then begin
+              OutString(110,0,"В USD по курсу: " & RepSpec.vals0,false);
+              OutMyString(160,0,(kursovaya52)/RepSpec.vals0,false);
+            end;
+          EndFormat;
+          Gray_Divider(25,90);
+          StartFormat(15);
+          EndFormat;
+          SaldoEndPeriod50n51 = SaldoEndPeriod50n51 + SaldoEndPeriod52;
+        end;
+      end;
+      /*SaldoEndPeriod50n53USD = SaldoEndPeriod50n53USD + Balance52USD;
+      SaldoEndPeriod50n53EUR = SaldoEndPeriod50n53EUR + Balance52EUR;
+      SaldoEndPeriod50n53AZN = SaldoEndPeriod50n53AZN + Balance52AZN;*///Edit-------------------Vitalii 14:21 04.07.2017
+      StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"Остаток общего счета",false);
+				OutString(44,0,SaldoEndPeriod50n53USD,false);
+				OutString(69,0,"USD",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,SaldoEndPeriod50n53EUR,false);
+				OutString(69,0,"EUR",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,SaldoEndPeriod50n53AZN,false);
+				OutString(69,0,"AZN",false);
+			EndFormat;
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(15,0,"",false);
+				OutString(44,0,SaldoEndPeriod51,false);
+				OutString(69,0,"AZN терминал",false);
+			EndFormat;
+      if (Balance52USD!=0) then begin
+        StartFormat(15);
+          OutString(0,0,"",false);
+          OutString(15,0,"",false);
+          OutString(44,0,Balance52USD,false);
+          OutString(69,0,"USD банк",false);
+        EndFormat;
+      end;
+      if (Balance52EUR!=0) then begin
+        StartFormat(15);
+          OutString(0,0,"",false);
+          OutString(15,0,"",false);
+          OutString(44,0,Balance52EUR,false);
+          OutString(69,0,"EUR банк",false);
+        EndFormat;
+      end;if (Balance52AZN!=0) then begin
+        StartFormat(15);
+          OutString(0,0,"",false);
+          OutString(15,0,"",false);
+          OutString(44,0,Balance52AZN,false);
+          OutString(69,0,"AZN банк",false);
+        EndFormat;
+      end;
+			Gray_Divider(25,90);
+			StartFormat(15);
+				OutString(0,0,"",false);
+				OutString(25,0,"Сумма в осн. вал.",false);
+				OutString(44,0,SaldoEndPeriod50n51 + SaldoEndPeriod53,false);
+				OutString(69,0,"AZN",false);
+				if(RepSpec.vals0!=0)then begin// Edit ************************** Wednesday, 24 February 2016 10:05:01
+					OutString(110,0,"В USD по курсу: " & RepSpec.vals0,false);
+					OutMyString(160,0,(SaldoEndPeriod50n51 + SaldoEndPeriod53)/RepSpec.vals0,false);
+				end;
+			EndFormat;
+		end;
+	EndJob;
+	
+	return;
+end;

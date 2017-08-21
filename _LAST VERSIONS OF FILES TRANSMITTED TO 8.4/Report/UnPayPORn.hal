@@ -1,0 +1,220 @@
+SetLangMode(LangRussian,"RUS",0);
+
+
+global procedure UnPayPORn(record RcVc RepSpec)
+begin
+Record CUVc CUr;
+boolean TrHs,testf,cutestf,cuheader;
+boolean viTrHs,ViTestf;
+record POVc POr;
+row POVc POrw;
+record VIVc VIr;
+row VIVc VIrw;
+record APVc APr;
+val podolg;
+record OPrsVc OPrsr;
+boolean opTrHs,optestf;
+record OPVc OPr;
+row OPVc OPrw;
+integer mtrw,i;
+val payval;
+Record OPPVc OPPr;
+val puval,credaval;
+		
+		
+	startreportnoheaderjob("отчет по неоплаченным заказам поставщика");
+	
+	
+	startFormat(15);
+		outstring(0,0,"Поставщик",false);
+		outstring(100,0,"Наименование",false);
+		outstring(170,0,"№ зак. пост.",false);
+		outstring(240,0,"Усл. опл.",false);
+		outstring(300,0,"Запл. Дата отгр.",false);
+		outstring(350,0,"Сумма заказа",false);
+		outstring(400,0,"Сумма платежей",false);
+		outstring(450,0,"Сумма отгруженно",false);
+		outstring(500,0,"",true);
+		outstring(1,0,"Сумма",true);
+	endformat;
+	
+	cutestf = true;
+	CUr.Code = RepSpec.f1;
+	while(loopkey("VEActCode",CUr,1,cutestf))begin
+		cuheader = false;
+		if(nonblank(RepSpec.f1) and RepSpec.f1!=CUr.Code)then begin cutestf=false; end;
+		
+		if(cutestf)then begin
+			credaval = 0;
+			
+			APr.VECode = CUr.Code;
+			TrHs = true;
+			While(loopkey("VECode",APr,1,TrHs)) begin
+	  		testf = true;
+	  		if(APr.VECode!=CUr.Code)then begin TrHs = false; testf = false; end;
+	  		if(APr.RVal>0)then begin testf = false; end;
+	  		
+	  		if(testf)then begin
+	  			credaval = credaval - APr.RVal;
+	  		end;
+			end; 
+			resetloop(APr);
+			
+			POr.VECode = CUr.Code;
+			TrHs = true;
+			While(loopkey("VECode",POr,1,TrHs))begin
+				if(POr.VECode!=CUr.Code)then begin TrHs = false; end;
+				podolg = 0;
+				payval = 0;
+				puval = 0;
+				podolg = podolg + POr.Sum4;
+				if(POr.SerNr==1345)then begin
+					startformat(15);
+						outstring(0,0,"PO" & podolg,false);
+					endformat;
+				end;
+				if(TrHs)then begin
+					
+					mtrw = matrowcnt(POr);
+					For(i=0;i<mtrw;i=i+1) begin
+	  				matrowget(POr,i,POrw);
+	  				puval = POrw.Sum/POrw.Quant*POrw.Shipd2;
+					end; 
+					
+					
+					VIr.POSerNr = POr.SerNr;
+					viTrHs = true;
+					while (LoopKey("POSerNr",VIr,1,viTrHs)) begin
+						if(VIr.POSerNr!=POr.SerNr)then begin viTrHs=false; end;
+						
+						if(viTrHs and VIr.OKFlag==1)then begin
+							podolg = podolg - VIr.PayVal;
+							if(POr.SerNr==1345)then begin
+								startformat(15);
+									outstring(0,0,"VI" & podolg,false);
+								endformat;
+							end;
+							mtrw = matrowcnt(VIr);
+							For(i=0;i<mtrw;i=i+1) begin
+	  						matrowget(VIr,i,VIrw);
+	  						if(VIrw.stp==kInvoiceRowTypePrepayment)then begin
+	  							podolg = podolg + VIrw.PrepayAmount;
+	  							if(POr.SerNr==1345)then begin
+										startformat(15);
+											outstring(0,0,"PP" & podolg,false);
+										endformat;
+									end;
+	  						end;
+							end; 
+							APr.SerNr = VIr.SerNr;
+							payval = payval + VIr.PayVal;
+							if(readfirstkey("SerNr",APr,1,true))then begin
+								podolg = podolg + APr.RVal;
+								if(POr.SerNr==1345)then begin
+									startformat(15);
+										outstring(0,0,"AP" & podolg,false);
+									endformat;
+								end;
+								payval = payval - APr.RVal;
+							end;
+						end;
+					end;
+					resetloop(VIr);
+					
+					OPrsr.VECode = CUr.Code;
+					opTrHs = true;
+					while(loopmain(OPrsr,1,opTrHs))begin
+						optestf = true;
+						if(OPrsr.VECode!=CUr.Code)then begin opTrHs=false; optestf = false; end;
+						if(OPrsr.TransType!=1)then begin optestf = false; end;
+						
+						if(optestf)then begin
+							OPr.SerNr = OPrsr.TransNr;
+							if(readfirstmain(OPr,1,true))then begin
+								mtrw = matrowcnt(OPr);
+								For(i=0;i<mtrw;i=i+1) begin
+	  							matrowget(OPr,i,OPrw);
+	  							if(OPrw.VECode==CUr.Code and OPrw.OrderNr==POr.SerNr)then begin
+	  								podolg = podolg - OPrw.RecVal;
+	  								if(POr.SerNr==1345)then begin
+											startformat(15);
+												outstring(0,0,"OP" & podolg,false);
+											endformat;
+										end;
+	  								OPPr.SerNr = OPrw.PrepayNr;
+	  								if(readfirstmain(OPPr,1,true))then begin
+	  									payval = payval + OPPr.PPVal;
+	  								end;
+	  							end;
+								end; 
+							end;
+						end;
+					end;
+					resetloop(OPrsr);
+					
+					
+					if(podolg>0 or credaval>0)then begin
+						if(cuheader==false)then begin
+							gray_divider(0,1);
+							startformat(15);
+								outstring(0,"DblCUVc",CUr.Code,false);
+								outstring(100,0,CUr.Name,false);
+							endformat;
+							startformat(15);
+								outstring(0,0,"Вид-номер счета",false);
+								//outstring(100,0,CUr.Name,false);
+							endformat;
+							cuheader = true;
+						end;
+					end;
+					
+					if(podolg>0)then begin
+						if(cuheader==false)then begin
+							gray_divider(0,1);
+							startformat(15);
+								outstring(0,"DblCUVc",CUr.Code,false);
+								outstring(100,0,CUr.Name,false);
+							endformat;
+							startformat(15);
+								outstring(0,0,"Вид-номер счета",false);
+								//outstring(100,0,CUr.Name,false);
+							endformat;
+							cuheader = true;
+						end;
+						startFormat(15);
+							outstring(0,0,POr.InvAddr4,false);
+							outstring(100,0,"",false);
+							outstring(170,"DblPOVc",POr.SerNr,false);
+							outstring(240,0,POr.PayDeal,false);
+							outstring(300,0,POr.PlanShip,false);
+							outstring(350,0,POr.Sum4,false);
+							outstring(400,0,payval,false);
+							outstring(450,0,puval,false);
+							outstring(500,0,POr.CurncyCode,true);
+							outstring(1,0,podolg,true);
+						endformat;
+					end;
+				end;
+			end;
+			resetloop(POr);
+			
+			if(credaval>0)then begin
+				startFormat(15);
+					outstring(0,0,"",false);
+					outstring(100,0,"",false);
+					outstring(170,0,"",false);
+					outstring(240,0,"",false);
+					outstring(300,0,"",false);
+					outstring(350,0,"Аванс",false);
+					outstring(400,0,credaval,false);
+					outstring(450,0,"",false);
+					outstring(500,0,"",true);
+					outstring(1,0,"",true);
+				endformat;
+			end;
+		end;
+	end;
+
+	endjob;
+return;
+end;

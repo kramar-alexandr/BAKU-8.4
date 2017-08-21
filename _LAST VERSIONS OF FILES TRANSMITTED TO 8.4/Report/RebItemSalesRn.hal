@@ -1,0 +1,223 @@
+external procedure FindItemStartBalanceQty(string, string, date,var val,var val);
+external procedure FindItemTurnOver(string,string,Date,Date,var val, var val); 
+external procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);
+external procedure ExtractObj(string,var Integer,var string);
+external procedure FindItemSales(string,string,date,date,var val,var val,var val);
+
+
+//SetLangMode(LangRussian,"RUS",0);	//Edit------------Dima 09.12.2014
+
+
+procedure FillSM(var record SMVc SMr, record RebVc Rebr)
+begin
+	integer mtrw,i;
+	integer smmtrw,smi;
+	row RebVc Rebrw;
+	row SMVc SMrw;
+	boolean found;
+	
+	
+	mtrw = matrowcnt(Rebr);
+	For(i=0;i<mtrw;i=i+1) begin
+	  matrowget(Rebr,i,Rebrw);
+	  found = false;
+	  smmtrw = matrowcnt(SMr);
+	  For(smi=0;smi<smmtrw;smi=smi+1) begin
+	  	matrowget(SMr,smi,SMrw);
+	  	if(Rebrw.ITCode==SMrw.Objects)then begin
+	  		found = true;
+	  	end;
+		end; 
+		if(found==FALSE)then begin
+			SMrw.Objects = Rebrw.ITCode;
+			matrowput(SMr,smmtrw,SMrw);
+		end;
+	end; 
+	
+return;
+end;
+
+global updating procedure RebItemSalesRn(record RcVc RepSpec)
+begin
+date sd,ed;
+record RebVc Rebr;
+row RebVc Rebrw;
+boolean findf,TrHs,testf;
+record INVc INr;
+integer i,mtrw;
+record SMVc SMr;
+row SMVc SMrw;
+val qty,cost;
+val turnqty,turncost;
+val salecost,salesum,saleqty;
+record BaseCurBlock BCb;
+Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
+Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52
+Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51
+record DIVc DIr;
+string 100 class;
+integer cnt;
+val totalqty,totalcost;
+val totalturnqty,totalturncost;
+val totalsalecost,totalsalesum,totalsaleqty;
+string 255 brand,type; //Edit***************************Sasha2,14:40 28.01.2016
+
+CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);
+
+	blockload(BCb);
+
+	startreportnoheaderjob(USetStr(31200));
+	
+	StartFormat(15);
+		outstring(0,0,USetStr(31200),false);	
+	endformat;
+	
+	totalqty = 0;
+	totalcost = 0;
+	totalsalecost = 0;
+	totalsalesum = 0;
+	totalsaleqty = 0;
+	
+	StartFormat(15);
+		outstring(0,0,USetStr(31201),false);
+		outstring(0,0,RepSpec.sStartDate & " : " & RepSpec.sEndDate,false);
+	endformat;
+	StartFormat(15);
+		outstring(0,0,USetStr(31202),false);
+		if(nonblank(RepSpec.f1))then begin
+			outstring(0,0,RepSpec.f1,false);
+		end else begin
+			outstring(0,0,USetStr(31215),false);
+		end;
+	endformat;
+	
+	
+	StartFormat(15);
+		outstring(0,0,USetStr(31203),false);
+		outstring(0,0,USetStr(31204),false);
+		outstring(0,0,USetStr(31205),false);
+		outstring(0,0,USetStr(31206),false);
+		outstring(0,0,USetStr(31207),false);
+		outstring(0,0,USetStr(31213) & BCb.BaseCur1,false);
+		outstring(0,0,USetStr(31208),false);
+		outstring(0,0,USetStr(31210) & acrncy[0],false);
+		outstring(0,0,USetStr(31212) & BCb.BaseCur1,false);
+		outstring(0,0,USetStr(31209),false);
+		outstring(0,0,USetStr(31214) & BCb.BaseCur1,false);
+	endformat;
+	
+	Rebr.Code = "";
+	findf = false;
+	TrHs = true;
+	recordnew(SMr);
+	while(loopmain(Rebr,1,TrHs))begin
+		testf = true;
+		if(nonblank(RepSpec.f2) and RepSpec.f2!=Rebr.Code)then begin TrHs = false; testf = false;  end;
+		if(nonblank(Rebr.FromDate) and nonblank(Rebr.ToDate))then begin
+			if(testf)then begin
+				if(dateinrange(Rebr.FromDate,RepSpec.sStartDate,RepSpec.sEndDate) and dateinrange(Rebr.ToDate,RepSpec.sStartDate,RepSpec.sEndDate))then begin
+					mtrw = matrowcnt(Rebr);
+					if(mtrw>0)then begin
+						FillSM(SMr,Rebr);
+						findf = true;
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	if(findf)then begin
+		
+		mtrw = matrowcnt(SMr);
+		For(i=0;i<mtrw;i=i+1) begin
+	  	matrowget(SMr,i,SMrw);
+			INr.Code = SMrw.Objects;
+			if(readfirstmain(INr,1,true))then begin
+				FindItemStartBalanceQty(INr.Code,RepSpec.f1,RepSpec.sStartDate,qty,cost);
+				FindItemTurnOver(INr.Code,RepSpec.f1,RepSpec.sStartDate,RepSpec.sEndDate,turnqty,turncost); 
+				FindItemSales(INr.Code,RepSpec.f1,RepSpec.sStartDate,RepSpec.sEndDate,salecost,salesum,saleqty);
+				startformat(15);
+					outstring(0,0,INr.Code,false);
+					outstring(40,0,INr.Name,false);
+					cnt = 0;
+					brand = "";
+      		type = "";
+      		ExtractObj(INr.DispGroups,cnt,class);
+      		while (NonBlank(class)) begin
+      		  DIr.Code = class;
+      		  if (readfirstmain(DIr,1,true)) then begin
+      		    if (DIr.CType=="BRAND") then begin
+      		      brand = DIr.Name;
+      		    end;
+      		    if (DIr.CType=="TYPE") then begin
+      		      type = DIr.Name;
+      		    end;
+      		  end;
+      		  ExtractObj(INr.DispGroups,cnt,class);
+      		end;
+      		outstring(250,0,brand,false);
+      		outstring(250,0,type,false);
+					
+					/*ExtractObj(INr.DispGroups,cnt,class);
+					if(nonblank(class))then begin
+						Dir.Code = class;
+						if(readfirstmain(DIr,1,true))then begin
+							outstring(250,0,DIr.Name,false);
+						end else begin
+							outstring(250,0,"",false);
+						end;
+					end else begin
+						outstring(250,0,"",false);
+					end;
+					ExtractObj(INr.DispGroups,cnt,class);
+					if(nonblank(class))then begin
+						Dir.Code = class;
+						if(readfirstmain(DIr,1,true))then begin
+							outstring(250,0,DIr.Name,false);
+						end else begin
+							outstring(250,0,"",false);
+						end;
+					end else begin
+						outstring(250,0,"",false);
+					end;*/
+					
+					outstring(250,0,qty,false);
+					outstring(290,0,cost,false);
+					outstring(330,0,saleqty,false);
+					outstring(370,0,salesum,false);
+					outstring(370,0,salecost,false);
+					outstring(410,0,turnqty+qty,false);
+					outstring(450,0,turncost+cost,false);
+					totalqty = totalqty + qty;
+					totalcost = totalcost + cost;
+					totalturnqty = totalturnqty + turnqty;
+					totalturncost = totalturncost + turncost;
+					totalsalecost = totalsalecost + salecost;
+					totalsalesum = totalsalesum + salesum;
+					totalsaleqty = totalsaleqty + saleqty;
+					
+					
+				endformat;
+	  	end;
+		end; 
+		
+		startformat(15);
+					outstring(0,0,USetStr(31211),false);
+					outstring(0,0,"",false);
+					outstring(0,0,"",false);
+					outstring(0,0,"",false);
+					outstring(250,0,totalqty,false);
+					outstring(290,0,totalcost,false);
+					outstring(330,0,totalsaleqty,false);
+					outstring(370,0,totalsalesum,false);
+					outstring(370,0,totalsalecost,false);
+					outstring(410,0,totalturnqty+totalqty,false);
+					outstring(450,0,totalturncost+totalcost,false);
+				endformat;
+	
+	end;
+	
+	endjob;
+	
+return;
+end;

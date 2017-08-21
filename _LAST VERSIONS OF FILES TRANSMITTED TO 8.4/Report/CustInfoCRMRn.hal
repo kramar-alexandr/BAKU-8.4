@@ -1,0 +1,522 @@
+external function Boolean SetInSet2(string,string);
+external function longint DateDiff(date,date);
+
+	SetLangMode(LangRussian,"RUS",0);
+
+
+function string 200 prepareStr(string input)
+begin
+integer i,length;
+string 200 res;
+  length = len(input);
+  For(i=0;i<length;i=i+1) begin
+	  if(mid(input,i,1)==chr(34))then begin
+	    res = res;
+	  end else begin
+	    res = res & mid(input,i,1);
+	  end;	  
+	end; 
+  
+  prepareStr = res;
+return;
+end;
+
+
+//return string representation from CUvc
+global function string 50 GetGender(integer gender)
+begin
+string 50 res;
+	switch (gender) begin
+		case 0: res = USetStr(35090);
+		case 1: res = USetStr(35091);
+		case 2: res = USetStr(35092);
+		case 3: res = "Unknown";
+	end;
+	
+GetGender = res;
+return;	  
+end;
+
+
+global function string 50 GetMaritalStatus(integer marstatus)
+begin
+string 50 res;
+	switch (marstatus) begin
+		case 0: res = USetStr(35093);
+		case 1: res = USetStr(35094);
+		case 2: res = USetStr(35095);
+		case 3: res = USetStr(35096);
+		case 4: res = "Unknown";
+	end;
+	
+GetMaritalStatus = res;
+return;	  
+end;
+
+global function string 255 GetInformationSource(record CUVc CUr)
+begin
+string 255 res;
+string 5 delimiter;
+
+	delimiter = ", ";
+
+	if (CUr.ItaldizainSite!=0) then begin
+		res =  "www.italdizain.az";
+	end;
+	if (CUr.Instagram!=0) then begin
+		res = res & delimiter & "Instagram";
+	end;
+	if (CUr.Facebook!=0) then begin
+		res = res & delimiter & "Facebook";
+	end;
+	if (CUr.Advertising!=0) then begin
+		res = res & delimiter & "Наружная реклама";
+	end;
+	if (CUr.Radio!=0) then begin
+		res = res & delimiter & "Радио";
+	end;
+	if (nonblank(CUr.OtherInformationSource)) then begin
+		res = res & delimiter & CUr.OtherInformationSource;
+	end;				
+	
+	if (Left(res,Len(delimiter))==delimiter) then begin
+		res = Right(res,Len(res)-Len(delimiter));
+	end;
+
+GetInformationSource = res;
+return;
+end;
+
+
+
+global function string 255 GetCommunicationMethods(record CUVc CUr)
+begin
+string 255 res;
+string 5 delimiter;
+
+	delimiter = ", ";
+	
+	if (CUr.AllowSendSMS) then begin
+		res = "SMS";
+	end;	
+	if (CUr.AllowSendeMail) then begin
+		res = res & delimiter & "E-Mail";
+	end;	
+	if (CUr.AllowSendCall) then begin
+		res = res & delimiter & "Phone";
+	end;	
+	if (CUr.AllowWhatsApp) then begin
+		res = res & delimiter & "WhatsApp";
+	end;	
+	if (CUr.AllowSendkMail) then begin
+		res = res & delimiter & "Post";
+	end;	
+	
+	if (Left(res,Len(delimiter))==delimiter) then begin
+		res = Right(res,Len(res)-Len(delimiter));
+	end;				
+
+GetCommunicationMethods = res;
+return;
+end;
+
+
+
+global procedure CustInfoCRMRn(record RcVc RepSpec)
+begin
+	record CUVc CUr;
+	string 50 keystr,frcode,tocode;
+	integer keyint;
+	boolean TrHs,testf;
+	record LetVc Letr;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBrw;
+	integer i,mtrw,curcomp;
+	record IVVc IVr;
+	boolean active;
+	string 100 companyname;
+	record GlobalLocationVc Glocr;
+	
+	curcomp = currentcompany;
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);
+	
+	frcode = firstinrange(RepSpec.ObjStr,20);
+	tocode = lastinrange(RepSpec.ObjStr,20);
+	keystr = "Code";
+	keyint = 1;
+	if(nonblank(frcode))then begin
+		CUr.Code = frcode;
+		keystr = "Code";
+		keyint = 1;
+	end;
+	if(RepSpec.flags[4]>0)then begin
+		keyint = 1;
+		if(nonblank(frcode))then begin
+			CUr.Code = frcode;
+			keyint = 2;
+		end;
+		CUr.DateCreated = RepSpec.sStartDate;
+		keystr = "DateCreated";
+	end;
+
+	StartReportNoheaderJob("Информация о клиентах");
+	
+	
+/* old structure	
+	startformat(15);
+		OutString(0,0,"Код",false);
+		OutString(130,0,"Наименование",false);
+		OutString(300,0,"Телефон",false);
+		OutString(300,0,"Доп. телефон",false);
+		OutString(300,0,"Моб. телефон",false);
+		OutString(300,0,"eMail",false);
+		OutString(300,0,"Скидка",false);
+		OutString(300,0,"Дата создания",false);
+		OutString(300,0,"Создан в магазине(склад)",false);
+		OutString(300,0,"Название",false);
+		OutString(300,0,"Комментарий к созданию",false);
+		OutString(300,0,"Комментарий",false);
+		OutString(300,0,"Отключен от рассылки",false);
+		OutString(300,0,"Статус",false);
+		OutString(300,0,"Адрес",false);
+	endformat;
+*/	
+	
+	
+	
+	startformat(15);
+		OutString(0,0,"Код",false);
+		OutString(130,0,"Пол",false);
+		OutString(300,0,"Компания",false);
+		OutString(300,0,"Имя",false);
+		OutString(300,0,"Род занятий",false);
+		OutString(300,0,"Дата рождения",false);
+		OutString(300,0,"Семейное положение",false);
+		OutString(300,0,"Дата рождения супруга(ги)",false);
+		OutString(300,0,"Дата свадьбы",false);
+		OutString(300,0,"Улица",false);
+		OutString(300,0,"№ дома",false);
+		OutString(300,0,"№ квартиры",false);
+		OutString(300,0,"Почтовый индекс",false);
+		OutString(300,0,"Телефон",false);
+		OutString(300,0,"Доп. телефон",false);
+		OutString(300,0,"Мобильный телефон",false);
+		OutString(300,0,"E-mail",false);
+		OutString(300,0,"Скидка",false);
+		OutString(300,0,"Источник информации",false);
+		OutString(300,0,"Место",false);
+		OutString(300,0,"Название",false);
+		OutString(300,0,"Дата",false);
+		OutString(300,0,"Способ связи с контактом",false);
+		OutString(300,0,"Комментарий к созданию",false);
+		OutString(300,0,"Комментарий",false);
+		OutString(300,0,"Отключен от рассылки",false);
+		OutString(300,0,"Закрыт/открыт",false);
+		OutString(300,0,"Должность",false);
+	endformat;	
+		
+		
+	
+	
+	TrHs = true;
+	while(loopkey(keystr,CUr,keyint,TrHs))begin
+		testf = true;
+		active = false;
+		if(nonblank(frcode) and CUr.Code>tocode)then begin TrHs = false; testf = false; end;
+		if(RepSpec.flags[4]>0 and CUr.DateCreated>RepSpec.sEndDate)then begin testf = false; TrHs = false; end;
+		
+		if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,CUr.Classification))then begin testf = false; end;
+		
+		RecordClear(Letr);
+		if(nonblank(RepSpec.f1))then begin
+			AddToText(CUr.Name,Letr);
+			AddToText(" ",Letr);
+		end;
+		if(nonblank(RepSpec.LastAcc))then begin
+			AddToText(CUr.Phone,Letr);
+			AddToText(" ",Letr);
+			AddToText(CUr.AltPhone,Letr);
+			AddToText(" ",Letr);
+			AddToText(CUr.Mobile,Letr);
+			AddToText(" ",Letr);
+		end;
+		if(nonblank(RepSpec.Stext))then begin
+			AddToText(CUr.eMail,Letr);
+			AddToText(" ",Letr);
+			AddToText(CUr.BirthDate & " ",Letr);
+			AddToText(CUr.SuprDate & " ",Letr);
+		end;
+		if(nonblank(CUr.Title))then begin
+			AddToText(CUr.Title & " ",Letr);
+		end;
+		if(nonblank(CUr.Classification))then begin
+			AddToText(CUr.Classification & " ",Letr);
+		end;
+		
+		if(nonblank(RepSpec.f1)) then begin
+			if (!StringInText(RepSpec.f1,Letr)) then begin testf = false; end;
+		end;
+		if(nonblank(RepSpec.LastAcc)) then begin
+			if (!StringInText(RepSpec.LastAcc,Letr)) then begin testf = false; end;
+		end;
+		if(nonblank(RepSpec.FirstAcc) and RepSpec.FirstAcc!=CUr.RebCode) then begin	testf = false; end;
+		if(RepSpec.flags[3]>0 and blank(CUr.Phone) and blank(CUr.AltPhone) and blank(CUr.Mobile))then begin	testf=false;	end;
+		//if(RepSpec.flags[1]>0 and CUr.blockedFlag==0)then begin testf = false; end;
+		switch(RepSpec.flags[1])begin
+			case 0:if(CUr.blockedFlag==1)then begin testf = false; end;
+			case 1:if(CUr.blockedFlag==0)then begin testf = false; end;
+		end;
+		/*If(RepSpec.flags[1]==1)then begin
+			if(CUr.blockedFlag==0)then begin testf = false; end;
+		end;*/
+		if(CUr.CUType==0)then begin testf = false; end;
+		if(RepSpec.flags[2]>0 and CUr.NoLetterPosting>0)then begin testf = false; end;
+		
+		if(RepSpec.flags[0]>0 and testf)then begin
+			For(i=0;i<mtrw;i=i+1) begin
+	  		if (SetCompany(i+1,false)) then begin
+	  			IVr.InvDate = CurrentDate;
+	  			IVr.CustCode = CUr.Code;
+	  			if(readlastkey("CustDate",IVr,2,false))then begin
+	  				if(IVr.CustCode==CUr.Code)then begin
+							if(datediff(currentdate,IVr.InvDate)<365)then begin
+								active = true;
+							end;
+	  				end;
+	  			end;
+	  			resetloop(IVr);
+	  		end;
+	  		resetcompany(curcomp);
+			end;
+			if(RepSpec.flags[0]==1)then begin
+				if(active==false)then begin testf = false; end;
+			end; 
+			if(RepSpec.flags[0]==2)then begin
+				if(active==true)then begin testf = false; end;
+			end; 
+		end;
+		
+		if(testf)then begin		
+		
+		
+			startformat(15);
+				OutString(0,0,CUr.Code,false);
+				OutString(300,0, GetGender(CUr.Gender),false);
+				OutString(300,0,CUr.Comment,false);
+				OutString(300,0,prepareStr(CUr.Name),false);
+				OutString(300,0,CUr.Profesion,false);
+				OutString(300,0,CUr.BirthDate,false);
+				OutString(300,0,GetMaritalStatus(CUr.MarStatus),false);
+				OutString(300,0,CUr.SuprDate,false);
+				OutString(300,0,CUr.WedDate,false);
+				
+				OutString(300,0,prepareStr(CUr.InvAddr0),false);	//Street
+				OutString(300,0,prepareStr(CUr.InvAddr1),false);	//House
+				OutString(300,0,prepareStr(CUr.InvAddr2),false);	//Apartment №
+				OutString(300,0,prepareStr(CUr.InvAddr2),false);	//Post index
+				
+				OutString(300,0,CUr.Phone,false);
+				OutString(300,0,CUr.AltPhone ,false);
+				OutString(300,0,CUr.Mobile,false);
+				OutString(300,0,CUr.eMail,false);
+				OutString(300,0,prepareStr(CUr.RebCode),false);
+				
+				OutString(300,0,GetInformationSource(CUr),false);
+				
+				OutString(300,0,CUr.CreateLocation,false);
+				GLocr.Code = CUr.CreateLocation;
+				if(readfirstmain(GLocr,1,true))then begin
+					OutString(300,0,GLocr.Name,false);
+				end else begin
+					OutString(300,0,"",false);
+				end;				
+				OutString(300,0,CUr.DateCreated,false);
+				OutString(300,0,GetCommunicationMethods(CUr),false);
+				
+				OutString(300,0,prepareStr(CUr.CreateComment),false);
+				OutString(300,0,prepareStr(CUr.Comment0),false);
+				if(CUr.NoLetterPosting>0)then begin
+					OutString(300,0,"Отключен",false);
+				end else begin
+					OutString(300,0,"",false);
+				end;
+				
+				if(CUr.blockedFlag==1)then begin
+					OutString(300,0,"Закрыт",false);
+				end else begin
+					OutString(300,0,"Открыт",false);
+				end;			
+				OutString(300,0,CUr.Title,false);
+
+				
+			EndFormat;	
+
+					
+		end;
+	end;
+
+	endjob;
+return;
+end;
+
+
+global procedure CustBayPeriodRn(record RcVc RepSpec)
+begin
+	record CUVc CUr;
+	string 50 keystr,frcode,tocode;
+	integer keyint,act,compact,i,mtrw;
+	integer curcompany;
+	boolean TrHs,testf,TrHs1,testf1;
+	record LetVc Letr;
+	record IVVc IVr;
+	val sum,compsum;
+	string 100 curcompstr,lastbaycompany;
+	date lastbaydate,curcomplastbaydate;
+	array string 40 compnames;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBrw;
+	
+	blockload(CBb);
+	
+	compnames[0] = "";
+	mtrw = matrowcnt(CBb);
+	For(i=0;i<mtrw;i=i+1) begin
+	  matrowget(CBb,i,CBrw);
+	  compnames[i+1] = CBrw.CompName;
+	end; 
+	
+	matrowget(CBb,currentcompany-1,CBrw);
+	curcompstr = CBrw.CompName;
+	frcode = firstinrange(RepSpec.f1,20);
+	tocode = lastinrange(RepSpec.f1,20);
+	
+	
+	startreportnoheaderjob("Отчет по клиентам совершившим покупки за период");
+	startformat(15);
+		outstring(0,0,"Код",false);
+		outstring(100,0,"Имя",false);
+		outstring(200,0,"Компания",false);
+		outstring(260,0,"Дата последней покупки",false);
+		outstring(300,0,"Компания последней покупки",false);
+		outstring(400,0,"Чеков",true);
+		outstring(450,0,"Клиент создан в комп.",true);
+		outstring(500,0,"Клиента создал пользователь/лок.машина",true);
+		outstring(1,0,"Сумма",true);
+	endformat;
+	
+	TrHs = true;
+	CUr.Code = "";
+	if(nonblank(frcode))then begin
+		CUr.Code = frcode;
+	end;
+	while(loopmain(CUr,1,TrHs))begin
+		act = 0;
+		sum = 0;
+		lastbaydate = stringtodate("1/1/2009");
+		lastbaycompany = "";
+		if(nonblank(frcode) and CUr.Code>tocode)then begin TrHs = false;	end;
+		
+		if(TrHs)then begin
+			if(RepSpec.flags[0]==0)then begin
+				IVr.InvDate = RepSpec.sStartDate;
+				IVr.CustCode = CUr.Code;
+				TrHs1 = true;
+				while(loopkey("CustDate",IVr,2,TrHs1))begin
+					testf1 = true;
+					if(IVr.CustCode!=CUr.Code or IVr.TransDate>RepSpec.sEndDate)then begin TrHs1 = false; testf1 = false; end;
+					if(IVr.OKFlag==0)then begin testf1 = false; end;
+					if(IVr.Invalid>0)then begin testf1 = false; end;
+					
+					if(testf1)then begin
+						if(lastbaydate<IVr.InvDate)then begin
+							lastbaydate = IVr.InvDate;
+						end;
+						sum = sum + IVr.Sum4;
+						act = act + 1;
+					end;
+				end;
+				resetloop(IVr);
+				
+			end else begin
+				curcompany = currentcompany;
+				mtrw = matrowcnt(CBb);
+				For(i=0;i<mtrw;i=i+1) begin
+					matrowget(CBb,i,CBrw);
+					if (SetCompany(i+1,false)) then begin
+						IVr.InvDate = RepSpec.sStartDate;
+						IVr.CustCode = CUr.Code;
+						TrHs1 = true;
+						compact = 0;
+						compsum = 0;
+						curcomplastbaydate = stringtodate("1/1/2009");
+						while(loopkey("CustDate",IVr,2,TrHs1))begin
+							testf1 = true;
+							if(IVr.CustCode!=CUr.Code or IVr.TransDate>RepSpec.sEndDate)then begin TrHs1 = false; testf1 = false; end;
+							if(IVr.OKFlag==0)then begin testf1 = false; end;
+							if(IVr.Invalid>0)then begin testf1 = false; end;
+					
+							if(testf1)then begin
+								if(lastbaydate<IVr.InvDate)then begin
+									lastbaydate = IVr.InvDate;
+									lastbaycompany = i;
+								end;
+								if(curcomplastbaydate<IVr.InvDate)then begin
+									curcomplastbaydate = IVr.InvDate;
+								end;
+								sum = sum + IVr.Sum4;
+								act = act + 1;
+								compsum = compsum + IVr.Sum4;
+								compact = compact + 1;
+							end;
+						end;
+						resetloop(IVr);
+						if(compact>0 and RepSpec.flags[1]>0)then begin
+							startformat(15);
+								outstring(0,"DblCUVc",CUr.Code,false);
+								outstring(100,0,CUr.Name,false);
+								outstring(200,0,CBrw.CompName,false);
+								outstring(260,0,curcomplastbaydate,false);
+								outstring(400,0,"",false);
+								outstring(400,0,compact,false);
+								outstring(450,0,compnames[CUr.CreateCompany],false);
+								outstring(500,0,CUr.CreateLocation,false);
+								outstring(1,0,compsum,true);
+							endformat;
+						end;
+					end;
+				end; 
+				resetcompany(curcompany);
+			end;
+			if(act>0)then begin
+				startformat(15);
+					outstring(0,"DblCUVc",CUr.Code,false);
+					outstring(100,0,CUr.Name,false);
+					if(RepSpec.flags[0]==0)then begin
+						outstring(200,0,curcompstr,false);
+					end else begin
+						outstring(200,0,"По всем компаниям",false);
+					end;
+					outstring(260,0,lastbaydate,false);
+					if(RepSpec.flags[0]!=0)then begin
+						if(nonblank(stringtoint(lastbaycompany)>-1))then begin
+							matrowget(CBb,stringtoint(lastbaycompany),CBrw);
+							lastbaycompany = CBrw.CompName;
+						end;
+					end else begin
+						lastbaycompany = "";
+					end;
+					outstring(300,0,lastbaycompany,false);
+					outstring(400,0,act,false);
+					outstring(450,0,compnames[CUr.CreateCompany],false);
+					outstring(500,0,CUr.CreateLocation,false);
+					outstring(1,0,sum,true);
+				endformat;
+			end;
+			
+			
+		end;
+	end;
+	endjob;
+return;
+end;

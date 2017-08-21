@@ -1,0 +1,922 @@
+external procedure HTClasses(string,string,var string);
+external procedure HTBranchIDs(string,string,var string);
+external function val GetCUTurnover(record CUVc,string,string,string,Date,Date,string,string);
+external function val GetINTurnover(record INVc,string,string,string,string,Date,Date);
+external function val IVGetTurnover(string,string,string,string,string,string,Date,Date);
+external procedure HT2Per(Date, Date , var string);
+external function Boolean SetInSet2(string,string);
+external function Boolean FindItemVAR(string,var string,var string,var string,var string);
+external procedure ExtractObj(string,var Integer,var string);
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);// Edit ************************** Wednesday, 19 June 2013 13:43:37
+external procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);// Edit ************************** Wednesday, 19 June 2013 14:02:13
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode); // Edit ***** 18 June 2013 16:02:00 Larisa
+
+//SetLangMode(LangRussian,"RUS",0);
+
+
+procedure AddToSMSort(var record SMVc SMr,var record SMVc SM2r,record INVc INr,string Variety,val q,val s,val sort)
+begin
+  row SMVc SMrw;
+  row SMVc SM2rw;
+  Integer i,j,rwcnt;
+  Boolean addedf;
+  string 100 class,brand;// Edit ************************** Monday, 18 November 2013 11:22:47
+  integer pos;// Edit ************************** Monday, 18 November 2013 11:22:47
+  record DIVc DIr;// Edit ************************** Monday, 18 November 2013 11:22:46
+
+  addedf = false;
+  rwcnt = MatRowCnt(SMr);
+  j = 0;
+  pos = 0;
+	class = "";
+	ExtractObj(INr.DispGroups,pos,class);
+	while(nonblank(class))begin
+		DIr.Code = class;
+		readfirstmain(DIr,1,true);
+		if(DIr.CType=="BRAND")then begin
+			brand = DIr.Name;
+		end;
+		ExtractObj(INr.DispGroups,pos,class);
+	end;
+  
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(SMr,i,SMrw);
+    if ((SMrw.DebVal2<sort) and (addedf==false)) then begin
+      SM2rw.Objects = INr.Code & Variety;
+      SM2rw.Comment = INr.Name;
+      SM2rw.DebVal = q;
+      SM2rw.CredVal = s;
+      SM2rw.DebVal2 = sort;
+      SM2rw.CredVal2 = q*s;
+      SM2rw.ExtraComment = brand;
+      MatRowPut(SM2r,j,SM2rw);
+      j = j + 1;
+      addedf = true;
+    end;
+    MatRowPut(SM2r,j,SMrw);
+    j = j + 1;
+  end;
+  if (addedf==false) then begin
+    SM2rw.Objects = INr.Code & Variety;
+    SM2rw.Comment = INr.Name;
+    SM2rw.DebVal = q;
+    SM2rw.CredVal = s;
+    SM2rw.DebVal2 = sort;
+    SM2rw.CredVal2 = q*s;
+    SM2rw.ExtraComment = brand;
+    MatRowPut(SM2r,j,SM2rw);
+  end;
+  RecordNew(SMr);
+  rwcnt = MatRowCnt(SM2r);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(SM2r,i,SMrw);
+    MatRowPut(SMr,i,SMrw);
+  end;
+  return;
+end;
+
+
+procedure Sorting(var record SMVc SM2r,val sort,boolean profCheck)  //Edit ************************** Friday, 14 June 2013 {
+begin
+row SMVc SM2rw;
+row SMVc SM2rw1;
+row SMVc SM2rw2;
+String 255 cCode1, cCode2,tempCode,cName1,cName2,tempName;
+val prof1, prof2, tempProf,sum1,sum2,tempSum;
+Integer i,j,rwcnt;
+
+rwcnt = MatRowCnt(SM2r);
+
+if (profCheck==false and sort>0) then begin
+
+	 for (i=0;i<rwcnt;i=i+1) begin
+		 for (j=0;j<rwcnt-1;j=j+1) begin
+			MatRowGet(SM2r,j,SM2rw1);
+			MatRowGet(SM2r,j+1,SM2rw2);
+				if (SM2rw2.CredVal>SM2rw1.CredVal) then begin
+					MatRowPut(SM2r,j,SM2rw2);
+					MatRowPut(SM2r,j+1,SM2rw1);
+				end;
+		end;
+	end;
+
+end;
+
+if (profCheck==false and sort<0) then begin
+	 for (i=0;i<rwcnt;i=i+1) begin
+		 for (j=0;j<rwcnt-1;j=j+1) begin
+			MatRowGet(SM2r,j,SM2rw1);
+			MatRowGet(SM2r,j+1,SM2rw2);
+				if (SM2rw2.CredVal<SM2rw1.CredVal) then begin
+					MatRowPut(SM2r,j,SM2rw2);
+					MatRowPut(SM2r,j+1,SM2rw1);
+				end;
+		end;
+	end;
+
+end;
+
+if (profCheck) then begin
+
+	 for (i=0;i<rwcnt;i=i+1) begin
+		 for (j=0;j<rwcnt-1;j=j+1) begin
+			MatRowGet(SM2r,j,SM2rw1);
+			MatRowGet(SM2r,j+1,SM2rw2);
+				if (SM2rw2.DebVal>SM2rw1.DebVal) then begin
+					MatRowPut(SM2r,j,SM2rw2);
+					MatRowPut(SM2r,j+1,SM2rw1);
+				end;
+		end;
+	end;
+
+end;
+
+  return;
+end;  //Edit ************************** Friday, 14 June 2013 }
+
+function val CountCost(string ACode, string FName, LongInt TrNr, integer ARow) //Edit ************************** Wednesday, 12 June 2013 {
+BEGIN
+val total;
+record ItemHistvc IHr;
+boolean TrHs, testf;
+	total = 0;
+	IHr.FileName = FName;
+	IHr.TransNr = TrNr;
+	IHr.Row = ARow;
+    TrHs = true;
+		while (LoopKey("FNTransNr",IHr,3,TrHs)) begin
+			testf = true;
+			if (IHr.ArtCode!=ACode or  IHr.FileName!=FName or IHr.TransNr!=TrNr or IHr.Row!=ARow) then begin TrHs = false; testf = false; end;
+
+			if (testf) then begin
+				if (IHr.Qty>0) then begin
+					total = total - IHr.TotCostPrice;
+				end else begin
+					total = total + IHr.TotCostPrice;
+				end;
+			end;
+		
+		end;
+
+CountCost = total;
+  RETURN;
+END; //Edit ************************** Wednesday, 12 June 2013 }
+
+global
+procedure CustSalesRn(record RcVc RepSpec)
+begin
+  record CUVc CUr;
+  record INVc INr;
+  record SMVc SMr;
+  record SMVc SM2r;
+  record IVvc IVr; //Edit ************************** Wednesday, 12 June 2013
+  record DIvc DIr; //Edit ************************** Wednesday, 12 June 2013
+  row IVvc IVrw; //Edit ************************** Wednesday, 12 June 2013
+  row SMVc SM2rw; //Edit ************************** Wednesday, 12 June 2013
+  record ItemHistvc IHr; //Edit ************************** Wednesday, 12 June 2013
+  string 50 frcc,tocc;
+  Boolean found,testf; 
+  val gp,s,sort;
+  row SMVc SMrw; 
+  val tot; 
+  Integer i,rwcnt;
+  string 255 tstr;
+  Integer rw;
+  Boolean TrHs,testf1,testf2,TS,TS1,print,profCheck; //Edit ************************** Wednesday, 12 June 2013
+  val finalProfit,finalSum,tempProfit,tempSum,oldRow,profit; //Edit ************************** Wednesday, 12 June 2013
+  string 255 customer,oldFileName,oldArtCode,key; //Edit ************************** Wednesday, 12 June 2013
+  LongInt oldTransNr; //Edit ************************** Wednesday, 12 June 2013
+  Integer rowNumb,keyCount; //Edit ************************** Wednesday, 12 June 2013
+  val fr,to1,to2,br1,br2,ivfr,ivto;
+  string 20 curncy;
+	Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
+  Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52
+  Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51
+  
+	CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);// Edit ************************** Wednesday, 19 June 2013 13:59:15
+	curncy = acrncy[0];// Edit ************************** Wednesday, 19 June 2013 13:59:14
+	
+	
+	startreportnoheaderjob(USetStr(31132));
+	  customer = RepSpec.f1;
+	  profCheck = false;
+	  s = 1;
+      if (RepSpec.ArtMode==0) then begin sort = s; end;
+      if (RepSpec.ArtMode==1) then begin sort = -s; end;
+      if (RepSpec.ArtMode==2) then begin sort = gp; profCheck = true; end;
+		
+	Startformat(15);
+		outstring(60,0,USetStr(31102),true);
+		outstring(130,0,RepSpec.sStartDate & chr(58) & RepSpec.sEndDate,true);	
+	endformat;
+
+	if (NonBlank(RepSpec.f1)) then begin
+		Startformat(15);
+			outstring(60,0,USetStr(31114),true);
+			outstring(130,0,RepSpec.f1,true);	
+		endformat;
+	end else begin;
+		Startformat(15);
+			outstring(60,0,USetStr(31114),true);
+			outstring(130,0,USetStr(31115),true);	
+		endformat;
+	end;
+
+	if (NonBlank(RepSpec.AccStr)) then begin
+		Startformat(15);
+			outstring(60,0,USetStr(31103),true);
+			outstring(130,0,RepSpec.AccStr,true);	
+		endformat;
+	end else begin;
+		Startformat(15);
+			outstring(60,0,USetStr(31103),true);
+			outstring(130,0,USetStr(31104),true);	
+		endformat;
+	end;
+
+	Startformat(15);
+		outstring(40,0,USetStr(31114),true);
+		outstring(130,0,USetStr(31070),true);
+		outstring(200,0,USetStr(31135),true);
+		outstring(260,0,USetStr(31122),true);
+		outstring(290,0,USetStr(31123),true);
+		outstring(320,0,USetStr(31124),true);
+		outstring(350,0,USetStr(31125),true);
+		outstring(400,0,USetStr(31126),true);
+	endformat;
+
+	Black_Divider(0,1); 
+
+	finalProfit = 0;
+	finalSum = 0;
+ 	CUr.Code = customer;
+	TrHs = true;
+    rowNumb = 0;
+
+	RecordNew(SM2r);
+ 	while (LoopMain(CUr,1,TrHs)) begin
+		tempProfit = 0;
+		tempSum = 0;
+		testf = true;
+		print = false;
+		if (nonblank(customer) and CUr.Code!=customer) then begin TrHs = false; testf = false; end;	 
+		
+
+		TS = true;
+
+		if (testf) then begin
+
+
+				IVr.CustCode = CUr.Code;
+				key = "CustDate";
+				IVr.InvDate = RepSpec.sStartDate;
+				keyCount = 2;
+
+			if (blank(customer) and nonblank(RepSpec.AccStr)) then begin
+				IVr.Location = RepSpec.AccStr;
+				IVr.InvDate = RepSpec.sStartDate;
+				key = "Location";
+				keyCount = 2;
+				IVr.CustCode = CUr.Code;
+				IVr.InvDate = RepSpec.sStartDate;
+			if (ReadFirstKey("CustDate",IVr,2,false)) then begin
+				if ((IVr.CustCode==CUr.Code and IVr.InvDate>=RepSpec.sStartDate and IVr.InvDate<=RepSpec.sEndDate)==false) then begin TS = false; end;
+			end else begin
+				TS = false;
+			end;
+
+			end;
+
+			
+			print = false;
+			while (LoopKey(key,IVr,keyCount,TS)) begin
+			testf1 = true;
+			profit = 0;
+				if(key=="CustDate") then begin 
+					if (IVr.CustCode!=CUr.Code) then begin TS = false; testf1 = false; end;
+					if (nonblank(RepSpec.AccStr) and IVr.Location!=RepSpec.AccStr) then begin testf1 = false; end;
+				end;
+				if(key=="Location") then begin
+					if (IVr.CustCode!=CUr.Code) then begin testf1 = false; end;
+					if  (IVr.Location!=RepSpec.AccStr) then begin TS = false; testf1 = false; end;
+				end;
+				if (IVr.OKFlag==0) then begin testf1 = false; end;
+				if (IVr.Invalid==1) then begin testf1 = false; end;
+				If(RepSpec.sStartDate>IVr.TransDate or IVr.TransDate>RepSpec.sEndDate) then begin testf1 = false; end;
+				
+
+					if (testf1) then begin 
+						
+						ivfr = 1; ivto = 1;
+						fr = 1; to1 = 1;
+						if(IVr.CurncyCode!=curncy)then begin
+							ivfr = IVr.FrRate;
+							ivto = IVr.ToRateB1;
+							if(ivfr==0 or ivto==0)then begin
+								ivfr = 1;	ivto = 1;
+							end;
+							GetFullCurncyRate(curncy,IVr.TransDate,fr,to1,to2,br1,br2);
+							if(fr==0 or to1==0)then begin
+								fr = 1;	to1 = 1;
+							end;
+						end;
+						
+						rwcnt = MatRowCnt(IVr);
+						for (i=0;i<rwcnt;i=i+1) begin
+							MatRowGet(IVr,i,IVrw);
+								if (IVrw.stp==kInvoiceRowTypeNormal) then begin
+									//if(IVrw.Quant>0) then begin
+									profit = profit + CountCost(IVrw.ArtCode,"IVVc",IVr.SerNr,i)/ivfr*ivto;
+									//end;
+								end;
+						end;
+
+								tempProfit = tempProfit + (IVr.Sum4/ivfr*ivto*fr/to1 - profit);
+								tempSum = tempSum + IVr.Sum4;
+								finalProfit = finalProfit + (IVr.Sum4/ivfr*ivto*fr/to1 - profit);
+								finalSum = finalSum + IVr.Sum4;
+								print = true;
+					end;
+					
+			end; RESETLOOP(IVr);
+
+				if (print) then begin
+				    SM2rw.Objects = CUr.Code;
+					SM2rw.Comment = CUr.Name;
+					SM2rw.DebVal = tempProfit;
+					SM2rw.CredVal = tempSum;
+					MatRowPut(SM2r,rowNumb,SM2rw);
+					rowNumb = rowNumb +1;
+				end;
+
+		end;
+
+	end;
+		Sorting(SM2r,sort, profCheck);
+		rwcnt = MatRowCnt(SM2r);
+
+		for (i=0;i<rwcnt;i=i+1) begin
+		MatRowGet(SM2r,i,SM2rw);
+			Startformat(15);
+				outstring(40,0,SM2rw.Objects,true);
+				outstring(120,0,SM2rw.Comment,true);
+				outstring(200,0,SM2rw.DebVal,true);
+				outstring(260,0,SM2rw.CredVal,true);
+				CUr.Code = SM2rw.Objects;
+				readfirstmain(CUr,1,true);
+				outstring(290,0,CUr.Phone & " " & CUr.Mobile,true);
+				outstring(320,0,CUr.InvAddr0,true);
+				outstring(350,0,CUr.eMail,true);
+				tstr = "";
+				if(CUr.AllowSendSMS>0)then begin
+					tstr = tstr & USetStr(31128);
+				end;
+				if(CUr.AllowSendeMail>0)then begin
+					tstr = tstr & USetStr(31125);
+				end;
+				if(CUr.AllowSendCall>0)then begin
+					tstr = tstr & USetStr(31129);
+				end;
+				if(CUr.AllowSendkMail>0)then begin
+					tstr = tstr & USetStr(31130);
+				end;
+				
+				outstring(400,0,tstr,true);
+				
+			endformat;
+		end;
+
+		Gray_Divider(0,1);
+			Startformat(15);
+				outstring(40,0,"",true);
+				outstring(120,0,USetStr(31131),true);
+				outstring(200,0,finalProfit,true);
+				outstring(260,0,finalSum,true);
+			endformat;
+		Black_Divider(0,1);
+
+
+	endjob; //Edit ************************** Wednesday, 12 June 2013 }
+
+  return;
+end;
+
+global
+function string 255 GetVARItemName(string ItemCode)
+begin
+  string 255 res;
+  record VARVc VARr;
+  string 255 code,tstr;
+  Integer i,pos;
+  record INVc INr;
+  
+  code = ItemCode;
+  pos = 0;
+  ExtractObj(code,pos,tstr);
+  INr.Code = tstr;
+  if (ReadFirstMain(INr,1,true)) then begin
+    res = INr.Name;
+  end else begin
+    res = tstr;
+  end;
+  while (nonblank(tstr)) begin
+    ExtractObj(code,pos,tstr);
+    if (nonblank(tstr)) then begin
+      VARr.Code = tstr;
+      if (ReadFirstMain(VARr,1,true)) begin
+        res = res & ", " & VARr.Comment;
+      end else begin
+        res = res & ", " & tstr;
+      end;
+    end;
+  end;
+  
+  GetVARItemName = res;
+  return;
+end;
+
+
+
+function val TurnoverFromStartDate(record INVc INr,Date sEndDate,string location) //add-----------------------Dima  03.12.2014
+BEGIN
+	record ItemHistVc IHr;
+	Boolean TrHs,testf,locfind;
+	Val quant;	
+	integer pos;
+	string 100 loc;
+ 	
+	quant = 0;
+	IHr.ArtCode = INr.Code;
+	TrHs = true;
+	while(LoopKey("ArtCode",IHr,1,TrHs))begin
+		testf = true;
+
+		if(nonblank(location))then begin
+			pos = 0;
+			loc = "";
+			locfind = false;
+			ExtractObj(location,pos,loc);
+			while(nonblank(loc))begin
+				if(loc==IHr.Location)then begin
+					locfind = true;
+				end;
+				ExtractObj(location,pos,loc);
+			end;
+			testf = locfind;
+		end;
+
+		if(IHr.ArtCode!=INr.Code)then begin
+			TrHs = false;
+			testf = false;		
+		end;
+
+		if(IHr.TransDate>sEndDate)then begin
+			TrHs = false;
+			testf = false;		
+		end;
+		if(IHr.StockAffectf==0)then begin
+			testf = false;		
+		end;	
+	
+		
+		if(testf)then begin
+			quant=quant+IHr.Qty;	
+		end; 
+	end; 
+
+TurnoverFromStartDate=quant;
+	RETURN;
+END; // Edit   ------------------Dima   03.12.2014
+
+
+
+procedure GetINTurnover2(record INVc INr,Date sStartDate,Date sEndDate,string location,var val quant,var val sales, string curncy) // Edit ***** 19 June 2013 09:19:00 Larisa
+BEGIN
+	record ItemHistVc IHr;
+	record IVVc IVr;
+	row IVVc IVrw;
+	Boolean TrHs,testf,testf2,testf3;
+	Val q1,s1;
+	String 255 oldfilename,oldartcode,oldsernr;
+	LongInt oldtransnr;
+	Integer oldrow;
+	val fr,to1,to2,br1,br2,ivfr,ivto;
+	boolean locfind; 
+	integer pos;
+	string 100 loc;
+  	
+	quant = 0;
+	sales = 0;
+	IHr.ArtCode = INr.Code;
+	IHr.TransDate = sStartDate;
+	TrHs = true;
+	while(LoopKey("ArtCode",IHr,2,TrHs))begin
+		testf = true;
+		testf3 = true;
+		
+		if(IHr.ArtCode!=INr.Code)then begin
+			TrHs = false;
+			testf = false;
+			testf3 = false;
+		end;
+		if(IHr.TransDate<sStartDate)then begin
+			TrHs = false;
+			testf = false;
+			testf3 = false;
+		end;
+		if(IHr.TransDate>sEndDate)then begin
+			TrHs = false;
+			testf = false;
+			testf3 = false;
+		end;
+		if(IHr.FileName!="IVVc")then begin
+			testf = false;
+			testf3 = false;
+		end;
+		if(nonblank(location))then begin
+			pos = 0;
+			loc = "";
+			locfind = false;
+			ExtractObj(location,pos,loc);
+			while(nonblank(loc))begin
+				if(loc==IHr.Location)then begin
+					locfind = true;
+				end;
+				ExtractObj(location,pos,loc);
+			end;
+			testf = locfind;
+			testf3 = locfind;
+		end;
+		
+		if(IHr.FileName==oldfilename and IHr.TransNr==oldtransnr and IHr.Row==oldrow and IHr.ArtCode==oldartcode)then begin
+			testf3 = false;
+		end;
+		oldfilename = IHr.FileName;
+		oldtransnr = IHr.TransNr;
+		oldrow = IHr.Row;
+		oldartcode = IHr.ArtCode;
+		
+		if(testf)then begin
+			IVr.SerNr = IHr.TransNr;
+			if(ReadFirstMain(IVr,1,true))then begin
+				if (IVr.OKFlag!=0) then begin
+					if (IVr.Invalid==0) then begin
+						if(testf3)then begin
+							ivfr = 1; ivto = 1;
+							fr = 1; to1 = 1;
+							if(IVr.CurncyCode!=curncy)then begin
+								ivfr = IVr.FrRate;
+								ivto = IVr.ToRateB1;
+								if(ivfr==0 or ivto==0)then begin
+									ivfr = 1;	ivto = 1;
+								end;
+								GetFullCurncyRate(curncy,IVr.TransDate,fr,to1,to2,br1,br2);
+								if(fr==0 or to1==0)then begin
+									fr = 1;	to1 = 1;
+								end;
+							end;			
+							MatRowGet(IVr,IHr.Row,IVrw);
+							if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+								if (IVrw.ArtCode==INr.Code) then begin
+									q1 = IVrw.Quant;
+									s1 = IVrw.Sum;///ivfr*ivto*fr/to1;
+									//s1 = MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+									quant = quant + q1;
+									sales = sales + s1;
+								end; //if IVrw.ArtCode
+							end; //if IVrw.stp
+						end; //if testf3
+					end; //if Invalid
+				end; //if OKFlag
+			end; //if RFM IVr
+		end; //testf
+	end; //while IHr
+	ResetLoop(IHr);
+	RETURN;
+END; // Edit ***** 19 June 2013 13:39:00 Larisa
+
+
+
+
+
+procedure AddToUnsoldItems(var record SMVc SMr,record INVc INr,string Variety,val q,val s)	//Added -------------------------Dima----------02.12.2014
+begin
+  row SMVc SMrw;
+  Integer i,rwcnt;
+  string 100 class,brand;
+  integer pos;
+  record DIVc DIr;
+
+  rwcnt = MatRowCnt(SMr);
+  pos = 0;
+	class = "";
+	ExtractObj(INr.DispGroups,pos,class);
+	while(nonblank(class))begin
+		DIr.Code = class;
+		readfirstmain(DIr,1,true);
+		if(DIr.CType=="BRAND")then begin
+			brand = DIr.Name;
+		end;
+		ExtractObj(INr.DispGroups,pos,class);
+	end;
+  
+
+   SMrw.Objects = INr.Code & Variety;
+   SMrw.Comment = INr.Name;
+   SMrw.DebVal = q;
+   SMrw.CredVal = s;
+   SMrw.CredVal2 = q*s;
+   SMrw.ExtraComment = brand;
+   MatRowPut(SMr,rwcnt,SMrw); 
+
+  return;
+end;
+
+
+global
+procedure ItemSalesRn(record RcVc RepSpec)
+begin
+  record INVc INr;
+  record SMVc SMr;
+  record SMVc SM2r;
+  string 50 frcc,tocc;
+  Boolean found,testf;
+  val q,s,sort,qBefore;
+  row SMVc SMrw; 
+  val tot;
+  Integer i,rwcnt;
+  string 255 tstr;
+  Integer rw;
+  string 60 sz,msk,mskrep;  
+  string 200 varsubset;  
+  Boolean ItemVARFound,LoopIS;
+  record ItemStatusVc ISr;
+	val sumqty; // Edit ***** 19 June 2013 13:41:00 Larisa
+	string 20 curncy;
+	Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
+  Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52
+  Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51
+  integer pos;// Edit ************************** Monday, 18 November 2013 11:21:46
+  string 100 class,brand,loc,category;// Edit ************************** Monday, 18 November 2013 11:21:45
+  record DIVc DIr;// Edit ************************** Monday, 18 November 2013 11:21:45
+  val itemqty;
+  date toDate; //Edit----------Dima 03.12.2014
+  
+	CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);// Edit ************************** Wednesday, 19 June 2013 13:59:15
+	curncy = acrncy[0];// Edit ************************** Wednesday, 19 June 2013 13:59:14	
+	StartReportJob(USetStr(2469));
+	rw = 1;
+	HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+	Header(rw,tstr,1);
+	rw = rw + 1;   
+	HTBranchIDs(RepSpec.f6,RepSpec.f6,tstr);
+	Header(rw,tstr,0);
+	rw = rw + 1;
+	HTClasses(RepSpec.LastAcc,RepSpec.LastAcc,tstr);
+	Header(rw,tstr,0);
+	rw = rw + 1; // Edit ***** 18 June 2013 16:23:00 Larisa
+	if(nonblank(RepSpec.AccStr))then begin
+		tstr = USetStr(31202) & RepSpec.AccStr;
+	end else begin
+		tstr = USetStr(31225);
+	end;
+	Header(rw,tstr,0); // Edit ***** 18 June 2013 16:29:00 Larisa
+	EndHeader;
+	if(RepSpec.wholemonthf==0)then begin
+		StartFormat(15);
+			OutString(0,0,USetStr(1163),false);
+		EndFormat;
+		goto LItemSalesRn;
+	end;
+	// Edit ************************** Monday, 18 November 2013 10:59:06
+	startformat(15);
+		if(nonblank(RepSpec.AccStr))then begin
+			tstr = USetStr(31202) & RepSpec.AccStr;		//Location
+		end else begin
+			tstr = USetStr(31225);					//All locatoins
+		end;
+		OutString(0,0,tstr,false);
+	endformat;
+	startformat(15);
+		if(nonblank(RepSpec.f5))then begin
+			tstr = USetStr(31226) & RepSpec.f5;		//Brand
+		end else begin
+			tstr = USetStr(31227);
+		end;
+		OutString(0,0,tstr,false);
+	endformat;
+	startformat(15);
+		if(nonblank(RepSpec.f4))then begin
+			tstr = USetStr(31228) & RepSpec.f4;		//Classification
+		end else begin
+			tstr = USetStr(31229);
+		end;
+		OutString(0,0,tstr,false);
+	endformat;
+	// Edit ************************** Monday, 18 November 2013 10:59:03
+	StartFormat(15);
+		OutString(0,0,USetStr(2462),false);
+		OutString(70,0,USetStr(2448),false);
+		if(currentcompany==9)then begin
+			OutString(130,0,USetStr(9131),false);	//Edit----------------------Dima  20.03.2015
+		end;
+		OutString(180,0,USetStr(31226),false);// Edit ************************** Monday, 18 November 2013 11:02:23
+		if(nonblank(RepSpec.AccStr))then begin // Edit ***** 19 June 2013 09:32:00 Larisa
+			OutString(250,0,USetStr(5010),false);
+		end; // Edit ***** 19 June 2013 09:32:00 Larisa
+		OutStringAdjustBiDi(340,0,USetStr(2464),true,M4Val,380);
+		OutString(400,0,USetStr(31230),true);// Edit ************************** Thursday, 31 October 2013 16:01:29
+		//OutString(410,0,USetStr(2465),true);
+		OutStringAdjustBiDi(1,0,USetStr(2466),true,M4Val,510);
+	EndFormat;
+	Gray_Divider(0,1);
+	sumqty = 0;
+	frcc = FirstInRange(RepSpec.f1,20);
+	tocc = LastInRange(RepSpec.f1,20);
+	INr.Code = frcc;
+	found = true;
+	if (RepSpec.flags[1]!=0) then begin //Edit------------Dima-----02.12.2014
+		RecordNew(SMr);
+	end;
+
+	while (LoopMain(INr,1,found)) begin
+		testf = true;i=i+1;
+		if (nonblank(RepSpec.f1)) then begin
+			if (tocc<INr.Code) then begin found = false; end;
+		end;
+		if (nonblank(RepSpec.f2)) then begin
+			if (RepSpec.f2<>INr.Group) then begin testf = false; end;
+		end;
+		if (nonblank(RepSpec.f4)) then begin
+			if (SetInSet2(RepSpec.f4,INr.DispGroups)==false) then begin
+				testf = false;
+			end;
+		end; 
+		if (found==false) then begin testf = false; end;
+		// Edit Start ---------------------------------------------- Edit Start
+	//Monday, 18 November 2013 11:20:20
+	
+		if(testf and nonblank(RepSpec.f5))then begin
+			pos = 0;
+			class = "";
+			brand = "";
+			ExtractObj(INr.DispGroups,pos,class);
+			while(nonblank(class))begin
+				DIr.Code = class;
+				readfirstmain(DIr,1,true);
+				if(DIr.CType=="BRAND")then begin
+					brand = DIr.Code;
+				end;			
+				ExtractObj(INr.DispGroups,pos,class);
+			end;
+			if(RepSpec.f5!=brand)then begin testf = false; end;
+		end;
+		
+	// Edit End ---------------------------------------------- Edit End
+	
+		
+		if (testf) then begin
+			/*if (RepSpec.flags[2]!=0) then begin //
+				ItemVARFound = FindItemVAR(INr.Code,sz,msk,mskrep,varsubset);
+			end else begin //if flags2!=0
+				ItemVARFound = false;
+			end; //if flags2==0
+			if (ItemVARFound) then begin
+				ResetLoop(ISr);
+				ISr.Location = ";;;";
+				ISr.Code = INr.Code;
+				LoopIS = true;
+				while (LoopKey("Location",ISr,2,LoopIS)) begin
+					if (ISr.Location!=";;;") then begin LoopIS = false; end;
+					if (ISr.Code!=INr.Code) then begin LoopIS = false; end;
+					if (LoopIS) then begin
+						q = IVGetTurnover("",ISr.Code & ISr.Variety,RepSpec.f6,RepSpec.LastAcc,"","quant",RepSpec.sStartDate,RepSpec.sEndDate);
+						s = IVGetTurnover("",ISr.Code & ISr.Variety,RepSpec.f6,RepSpec.LastAcc,"","salesexclvat",RepSpec.sStartDate,RepSpec.sEndDate);
+						if (RepSpec.ArtMode==0) then begin sort = q; end;
+						if (RepSpec.ArtMode==1) then begin sort = -q; end;
+						if (RepSpec.ArtMode==2) then begin sort = s; end;
+						if (sort<>0) then begin
+							INr.Name = GetVARItemName(INr.Code & ISr.Variety);
+							RecordNew(SM2r);
+							AddToSMSort(SMr,SM2r,INr,ISr.Variety,q,s,sort);
+						end; //if sort<>0
+					end; //if LoopIS
+				end; //while Location ISr
+			end else begin *///if ItemVARFound
+
+			if (RepSpec.flags[1]==0) then begin		//Edit----------Dima 02.12.2014
+
+				q = 0;
+				GetINTurnover2(INr,RepSpec.sStartDate,RepSpec.sEndDate,RepSpec.AccStr,q,s,curncy); // Edit ***** 19 June 2013 09:32:00 Larisa
+				sumqty = sumqty + q; // Edit ***** 19 June 2013 13:42:00 Larisa
+				//q = GetINTurnover(INr,RepSpec.f6,RepSpec.LastAcc,"","quant",RepSpec.sStartDate,RepSpec.sEndDate); // Edit ***** 19 June 2013 16:32:00 Larisa
+				//s = GetINTurnover(INr,RepSpec.f6,RepSpec.LastAcc,"","salesexclvat",RepSpec.sStartDate,RepSpec.sEndDate); // Edit ***** 19 June 2013 16:32:00 Larisa
+				if (RepSpec.ArtMode==0) then begin sort = s; end;
+				if (RepSpec.ArtMode==1) then begin sort = q; end;
+				if (RepSpec.ArtMode==2) then begin sort = -q; end;
+				if (sort<>0) then begin // Edit ***** 19 June 2013 15:19:00 Larisa
+					RecordNew(SM2r);
+					AddToSMSort(SMr,SM2r,INr,"",q,s,sort);
+				end; //if sort<>0 Edit ***** 19 June 2013 15:19:00 Larisa
+			//end; //if not ItemVARFound
+
+				//Edit-----------Dima  02.12.2014------------------Start Edit
+				end else begin
+					toDate=AddDay(RepSpec.sStartDate,-1);
+					qBefore=TurnoverFromStartDate(INr,toDate,RepSpec.AccStr);
+
+					if(qBefore>0) then begin
+						GetINTurnover2(INr,RepSpec.sStartDate,RepSpec.sEndDate,RepSpec.AccStr,q,s,curncy);
+						//q - quantity
+						//s - turnover
+						if ((q==0) and (s==0)) then begin
+							AddToUnsoldItems(SMr,INr,"",q,s);
+						end;
+					end;
+				
+				end;//----------------------------------------------Edit  End 
+		end; //if testf
+	end; //while INr
+	tot = 0;
+	rwcnt = MatRowCnt(SMr);
+	/*if (RepSpec.long1>-1) then begin // Edit ***** 19 June 2013 15:33:00 Larisa
+		if (rwcnt>RepSpec.long1) then begin rwcnt = RepSpec.long1; end;
+	end;*/ // Edit ***** 19 June 2013 15:33:00 Larisa
+	sumqty = 0;
+
+	for (i=0;i<rwcnt;i=i+1) begin
+		MatRowGet(SMr,i,SMrw);
+			if(currentcompany==9)then begin
+					pos = 0;
+					class = "";
+					category = "";
+					INr.Code = SMrw.Objects;
+					ReadFirstMain(INr,1,true);
+					ExtractObj(INr.DispGroups,pos,class);
+					while(nonblank(class))begin
+						DIr.Code = class;
+						readfirstmain(DIr,1,true);
+						if (DIr.CType=="BRAND") then begin				//Edit----------------------Dima  20.03.2015
+							category = DIr.CCat;	
+						end;				
+						ExtractObj(INr.DispGroups,pos,class);
+					end;
+			end;
+		StartFormat(15);
+			OutString(0,"DblINVc",SMrw.Objects,false);
+			OutString(70,0,SMrw.Comment,false);
+			if(currentcompany==9)then begin
+				OutString(130,0,category,false);//Edit----------------------Dima  20.03.2015
+			end;
+			OutString(180,0,SMrw.ExtraComment,false);// Edit ************************** Monday, 18 November 2013 11:03:48
+			if(nonblank(RepSpec.AccStr))then begin // Edit ***** 19 June 2013 09:32:00 Larisa
+				OutString(250,0,RepSpec.AccStr,false); // Edit ***** 18 June 2013 17:19:00 Larisa
+			end; // Edit ***** 19 June 2013 09:32:00 Larisa
+			OutValBiDi(340,0,SMrw.DebVal,M4Val,true,380);
+			sumqty = sumqty + SMrw.DebVal; // Edit ***** 19 June 2013 13:42:00 Larisa
+			
+			ISr.Code = SMrw.Objects;// Edit ************************** Thursday, 31 October 2013 16:03:08
+			ISr.Location = ";;;";
+			itemqty = 0;
+			if(nonblank(RepSpec.AccStr))then begin
+				pos = 0;
+				loc = "";
+				itemqty = 0;
+				ExtractObj(RepSpec.AccStr,pos,loc);
+				while(nonblank(loc))begin
+					if(nonblank(loc))then begin
+						ISr.Location = loc;
+						ISr.Code = SMrw.Objects;
+						if(readfirstmain(ISr,2,true))then begin// Edit ************************** Thursday, 31 October 2013 16:03:06
+							itemqty = itemqty + ISr.Instock;
+						end;
+					end;
+					ExtractObj(RepSpec.AccStr,pos,loc);
+				end;
+			end else begin
+				if(readfirstmain(ISr,2,true))then begin// Edit ************************** Thursday, 31 October 2013 16:03:06
+					itemqty = ISr.Instock;
+				end;
+			end;
+			OutValBiDi(400,0,itemqty,M4Val,true,400);// Edit ************************** Thursday, 31 October 2013 16:03:16
+			//OutVal(410,0,SMrw.CredVal2,M4Val,true);
+			OutValBiDi(1,0,SMrw.CredVal,M4Val,true,510);
+		EndFormat;
+		tot = tot + SMrw.CredVal;
+	end;
+	Gray_Divider(0,1);
+	StartFormat(15);
+		OutString(0,0,"",false); // Edit ***** 19 June 2013 15:35:00 Larisa
+		OutString(100,0,"",false); // Edit ***** 19 June 2013 15:35:00 Larisa
+		if(nonblank(RepSpec.AccStr))then begin // Edit ***** 19 June 2013 09:32:00 Larisa
+			OutString(250,0,USetStr(31211),false); // Edit ***** 18 June 2013 17:19:00 Larisa
+		end; // Edit ***** 19 June 2013 09:32:00 Larisa
+		OutString(340,0,"",false); // Edit ***** 19 June 2013 13:59:00 Larisa
+		OutString(340,0,sumqty,false); // Edit ***** 19 June 2013 13:59:00 Larisa
+		OutString(340,0,"",false); // Edit ***** 19 June 2013 13:59:00 Larisa
+		OutValBiDi(1,0,tot,M4Val,true,510);
+	EndFormat;
+LItemSalesRn:;  
+	EndJob;
+	return;
+end;

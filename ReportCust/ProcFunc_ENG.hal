@@ -1,0 +1,935 @@
+external function roundmode SetRoundModeD(Integer);
+external procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);
+external procedure OutCashRows(array val,array string,integer);
+remote procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external procedure ExtractObj(string,var Integer,var string);
+
+//SetLangMode(LangRussian,"RUS",0);
+
+function string 200 ParseClassification(string class)
+begin
+	string 200 res,cl;
+	record DIVc DIr;
+	integer pos;
+	
+	if(nonblank(class))then begin
+		pos = 0;
+		ExtractObj(class,pos,cl);
+		DIr.Code = cl;
+		if(readfirstmain(DIr,1,true))then begin
+			res = DIr.Name;
+			outstring(0,0,DIr.Name,false);
+		end else begin
+			outstring(0,0,"",false);
+		end;
+	
+		ExtractObj(class,pos,cl);
+		if(nonblank(cl))then begin
+			DIr.Code = cl;
+			if(readfirstmain(DIr,1,true))then begin
+				if(nonblank(DIr.Code))then begin
+					res = res & "," & DIr.Name;
+				end;
+				outstring(0,0,DIr.Name,false);
+			end else begin
+				outstring(0,0,"",false);
+			end;
+		end else begin
+			outstring(0,0,"",false);
+		end;
+	end else begin
+		outstring(0,0,"",false);
+		outstring(0,0,"",false);
+	end;
+	
+	ParseClassification = res;
+return;
+end;
+
+function val getIHCost(longint sernr, integer rownr,boolean updst)
+begin
+	val res;
+	record ItemHistVc IHr;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record ORVc ORr;
+	row ORVc ORrw;
+	boolean TrHs,testf;
+	record SHVc SHr;
+	row SHVc SHrw;
+	integer i,mtrw;
+	
+	res = 0;
+	if(updst)then begin
+		IHr.FileName = "IVVc";
+		IHr.TransNr = sernr;
+		IHr.Row = rownr;
+		TrHs = true;
+		while(loopkey("FNTransNr",IHr,3,TrHs))begin
+			if(IHr.FileName!="IVVc")then begin TrHs = false; end;
+			if(IHr.TransNr!=sernr)then begin TrHs = false; end;
+			if(IHr.Row!=rownr)then begin TrHs = false; end;
+			
+			if(TrHs)then begin
+				res = res + IHr.TotCostPrice;
+			end;
+		end;
+	end else begin
+		IVr.SerNr = sernr;
+		readfirstmain(IVr,1,true);
+		matrowget(IVr,rownr,IVrw);
+		
+		TrHs = true;
+		SHr.OrderNr=IVr.OrderNr;
+		while(loopkey("OrderKey",SHr,1,TrHs))begin
+			if(SHr.OrderNr!=IVr.OrderNr)then begin TrHs=false; end;
+			
+			if(TrHs)then begin
+			mtrw = matrowcnt(SHr);
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(SHr,i,SHrw);
+				if(SHrw.OrdRow==IVrw.OrdRow)then begin
+					IHr.FileName = "SHVc";
+					IHr.TransNr = SHr.SerNr;
+					IHr.Row = SHrw.OrdRow;
+					while(loopkey("FNTransNr",IHr,3,TrHs))begin
+						if(IHr.FileName!="SHVc")then begin TrHs = false; end;
+						if(IHr.TransNr!=SHr.SerNr)then begin TrHs = false; end;
+						if(IHr.Row!=SHrw.OrdRow)then begin TrHs = false; end;
+			
+						if(TrHs)then begin
+							res = res + IHr.TotCostPrice;
+						end;
+					end;
+				end;	  
+			end; 
+			end;
+		end;
+	end;
+	
+	getIHCost = res;
+return;
+end;
+
+
+procedure GetCurncyRateOnDate(string curncy, date d1,var val rate)
+begin
+record ERVc ERr;
+
+  ERr.Date = d1;
+  ERr.CurncyCode = curncy;
+  if (ReadLastKey("CDKey",ERr,2,false)) then begin
+    rate = round(ERr.FrRate/ERr.ToRate1,SetRoundModeD(4));
+  end;
+  RETURN;
+END;
+
+
+procedure ClearValArray(integer maxcnt, var array val mcleararray)
+begin
+integer i;
+
+  for (i=0;i<maxcnt;i=i+1) begin
+    mcleararray[i] = blankval;
+  end;
+
+RETURN;
+END;
+
+
+procedure ClearStringArr(integer maxcnt, var array string mcleararray)
+begin
+integer i;
+
+  for (i=0;i<maxcnt;i=i+1) begin
+    mcleararray[i] = "";
+  end;
+
+return;
+end;
+
+
+procedure PecuniaryRClassReportDefaults(Integer wn)
+BEGIN
+  record RcVc RepSpec;
+  record LocalMachineBlock LMb;
+
+  BlockLoad(LMb);
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  ReportDefaults(RepSpec,"PecuniaryRClass");  
+  RepSpec.d1 = CurrentDate;
+  RepSpec.f2 = LMb.DefLocation;
+  RepSpec.f1 = LMb.LocalMachineCode;
+  PutWindowRecord(wn,RepSpec);
+  SelectWindow(wn);
+  
+  RETURN;
+END;
+
+procedure PMArrayMaker(var integer cnt,var integer maxcnt, var array string pm, string paymode)
+begin
+integer i;
+Boolean TrHs;
+
+  i = 0;
+  TrHs = true;
+  while(TrHs) begin
+    if TrHs then begin
+      if nonblank(pm[i]) then begin
+        if pm[i]==paymode then begin
+        cnt = i;
+        TrHs = false;
+        end;
+      end else begin
+        pm[i] = paymode;
+        cnt = i;
+        TrHs = false;
+      end;
+      i = i+1;
+      if i>maxcnt then begin
+        maxcnt = i;
+      end;
+    end;
+  end;
+
+RETURN;
+END;
+
+procedure SMArrayMaker(var integer cnt,var integer maxcnt, var array string sm, string salesman)
+begin
+integer i;
+Boolean TrHs;
+  i = 0;
+  TrHs = true;
+  while(TrHs) begin
+    if TrHs then begin
+      if nonblank(sm[i]) then begin
+        if sm[i]==salesman then begin
+        cnt = i;
+        TrHs = false;
+        end;
+      end else begin
+        sm[i] = salesman;
+        cnt = i;
+        TrHs = false;
+      end;
+      i = i+1;
+      if i>maxcnt then begin
+        maxcnt = i;
+      end;
+    end;
+  end;
+
+RETURN;
+END;
+
+
+function val GetDebtFromARVc(longint SerNr)
+begin
+	record ARVc ARr;
+	val res;
+
+	ARr.InvoiceNr = SerNr;
+
+	if (ReadFirstKey("InvoiceNr",ARr,1,true)) then begin
+		res = ARr.BookRVal;
+	end;
+	
+GetDebtFromARVc = res;
+ return; 
+end;
+
+
+
+global
+procedure PecuniaryRn_ENG(record RcVc RepSpec)
+begin
+  record LocalMachineVc LMr;
+  record IVVc IVr;
+  row IVVc IVrw;
+  Boolean TrHs,testf,lmtestf,TrHs1;
+  integer i,j,rwcnt,mark,rwnr,cnt,maxcnt,cnt1,maxcnt1;
+  Date d1;
+  string 60 curmachine;
+  string 255 tstr;
+  val totqty,totsum,totqtyprice,totqtypricesum,totfifo,total,rate,totgift;
+  array val totcc;
+  val loybals;
+  array string 10 ccpaydeal;
+  integer totcccnt;
+  array string 60 paymod;
+  array string 60 salesman;
+  array val totpay;
+  record PMBlock PMRec;
+  row PMBlock PMrw;
+  record PDVc PDr;
+  Array val cashsum,totcash;
+  val termsum;
+  Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
+  Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52
+  Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51
+  boolean payrows;
+  record IPVc IPr;
+  row IPVc IPrw;
+  val totsumpay,fr,to1,to2,br1,br2,coef;
+  val orfr,orto1,orto2,orbr1,orbr2;
+  record INVc INr;// Edit ************************** Monday, 15 April 2013 15:12:04
+  integer ivcount,mtrw;
+  record IPrsVc IPrsr; 
+  record IPVc SMr,SMgift,SMpay;
+  row IPVc SMrw,SMrw2;
+  record ARPayHistVc ARPayr;
+  val cost;
+  boolean updst;
+  val prepaymentval;
+  record ORVc ORr;
+  row ORVc ORrw;
+  integer ori,ormtrw;
+  record LocationVc Locr;
+  record GCVc GCr;
+  integer sign;
+	val debt;
+	integer cred;
+	
+  recordnew(SMr);
+  recordnew(SMgift);  //Edit -----------------Dima           11.12.2014
+  recordnew(SMpay);  //Edit -----------------Dima           15.12.2014
+    
+  sign = 1;
+  CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);
+  
+  BlockLoad(PMRec);
+    StartReportNoHeaderJob(USetStr(31023));
+    if nonblank(RepSpec.d1) then begin
+      d1 = RepSpec.d1;
+    end else begin
+      d1 = CurrentDate;
+    end;
+       
+    StartFormat(15);
+			if nonblank(RepSpec.f2) then begin
+				Locr.Code = RepSpec.f2;
+				if ReadFirstMain(Locr,1,true) then begin
+				OutString(0,0,USetStr(31024),false);
+				OutString(100,0,Locr.Name,false);
+				end;
+			end else begin
+				OutString(0,0,"",false);
+				OutString(0,0,"",false);
+			end;
+			if nonblank(RepSpec.f1) then begin
+				LMr.Code = RepSpec.f1;
+				if ReadFirstMain(LMr,1,true) then begin
+				OutString(0,0,USetStr(31025),false);
+				OutString(100,0,LMr.Comment,false);
+				end;
+			end else begin
+				OutString(0,0,USetStr(31026),false);
+				OutString(0,0,"",false);
+			end;
+			OutString(150,0,USetStr(31016),false);
+			OutString(285,0,d1,false);
+			OutString(360,0,USetStr(16681),false);
+			GetCurncyRateOnDate("AZN",d1,rate);
+			//rate = 1;
+			OutString(410,0,rate,false);
+			
+    EndFormat;
+    
+    IVr.InvDate = d1;
+    IVr.MachineName = RepSpec.f1;
+    IVr.Location = RepSpec.f2;
+    TrHs = true;
+    curmachine = "";
+    mark = 0;
+    rwnr = 0;
+    totqty = 0;
+    totsum = 0;
+    totqtyprice = 0;
+    totqtypricesum = 0;
+    totfifo = 0;
+    total = 0;
+    cnt = 0;
+    maxcnt = 0;
+    cnt1 = 0;
+    maxcnt1 = 0;
+    loybals = 0;
+    totsumpay = 0;
+    ivcount = 0;
+    totgift = 0;
+		debt = 0;
+    while (LoopKey("Location",IVr,2,TrHs)) begin
+   // while (LoopKey("TransDMachineN",IVr,2,TrHs)) begin
+    		for(i=0;i<acrncnt;i=i+1)begin
+    			cashsum[i] = 0;
+    		end;
+    		termsum = 0;
+      testf = true;
+      if IVr.InvDate!=d1 then begin
+        TrHs = false;
+        testf = false;
+      end;
+      if IVr.MachineName!=RepSpec.f1 and nonblank(RepSpec.f1) then begin
+        //TrHs = false;
+        testf = false;
+      end;
+      if IVr.Location!=RepSpec.f2 and nonblank(RepSpec.f2) then begin
+        TrHs = false;
+        testf = false;
+      end;
+      if IVr.OKFlag!=1 then begin
+        testf = false;
+      end;
+      if IVr.Invalid==1 then begin
+        testf = false;
+      end;
+      
+      if testf then begin
+      	cred = 1;
+      	if(IVr.InvType==kInvoiceTypeCredit)then begin cred=-1; end;
+      	IPrsr.IVNr = IVr.SerNr;
+      	IPrsr.TransType = 1;
+      	TrHs1 = true;
+      	while(loopkey("IVKey",IPrsr,2,TrHs1))begin
+      		if(IPrsr.IVNr!=IVr.SerNr or IPrsr.TransType!=1)then begin TrHs1=false; end;
+
+      		if(TrHs1)then begin
+      			mtrw = matrowcnt(SMr);
+      			IPr.SerNr = IPrsr.TransNr;
+      			readfirstmain(IPr,1,true);
+      			mtrw = matrowcnt(IPr);
+      			For(i=0;i<mtrw;i=i+1) begin
+	  					matrowget(IPr,i,IPrw);
+	  					if(IPrw.InvoiceNr==IVr.SerNr)then begin
+	  						SMrw.stp = 0;
+								SMrw.InvoiceNr = IPrsr.IVNr;
+								SMrw.ChequeNr = IPrsr.TransNr;
+								SMrw.PayDate = IPrsr.TransDate;
+								SMrw.RecVal = IPrw.RecVal;
+								SMrw.RecCurncy = IPrw.RecCurncy;
+								SMrw.CustName = IVr.InvComment;
+								matrowput(SMr,matrowcnt(SMr),SMrw);
+							end;
+	  				end; 
+      		end;
+      	end;
+      	resetloop(IPrsr);
+      	
+      	ivcount = ivcount + 1;
+        if mark==0 then begin 
+          if blank(RepSpec.f1) then begin
+            LMr.Code = IVr.MachineName;
+            if ReadFirstMain(LMr,1,true) then begin
+              StartFormat(15);
+              OutString(0,0,LMr.Comment,false);
+              EndFormat;
+            end else begin
+              StartFormat(15);
+              OutString(0,0,USetStr(31027),false);
+              EndFormat;
+            end;
+          end;
+          StartFormat(15);
+          EndFormat;
+          StartFormat(15);
+          OutString(0,0,"№",false);
+          if(currentcompany>3)then begin
+          	OutString(0,0,USetStr(31028),true);// Edit ************************** Monday, 15 April 2013 15:12:07
+						OutString(0,0,USetStr(31029),true);// Edit ************************** Monday, 15 April 2013 15:12:07
+          end;
+          OutString(20,0,USetStr(12501),false);
+          OutString(50,0,USetStr(8105),false);
+          OutString(190,0,USetStr(31121),false);
+          OutString(220,0,USetStr(12754),false);
+          OutString(270,0,USetStr(31122),false);
+          OutString(320,0,USetStr(12007),false);
+          if (UserCanAction("ViewCostPrice",true)==true) then begin
+            OutString(360,0,USetStr(18240),false);
+            OutString(410,0,USetStr(8121),false);
+          end else begin
+            OutString(360,0,"",false);
+            OutString(410,0,USetStr(8121),false);
+          end;
+          
+          EndFormat;
+          mark = 1;
+          rwnr = 1;
+          curmachine = IVr.MachineName;
+          //EndFormat;
+        end; // mark
+        SMArrayMaker(cnt1,maxcnt1,salesman,IVr.SalesMan);
+        rwcnt = MatRowCnt(IVr);
+        payrows = true;
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(IVr,i,IVrw);
+          switch (IVrw.stp) begin
+
+            case kInvoiceRowTypePrepayment:
+            	mtrw = matrowcnt(SMr);
+							ARPayr.CUPNr = IVrw.CUPNr;
+							readfirstmain(ARPayr,1,true);
+							SMrw.stp = 1;
+							SMrw.InvoiceNr = IVr.SerNr;
+							SMrw.ChequeNr = IVrw.CUPNr;
+							SMrw.PayDate = ARPayr.TransDate;
+							SMrw.RecVal = IVrw.Sum;
+							SMrw.RecCurncy = IVr.CurncyCode;
+							SMrw.CustName = IVr.InvComment;
+							matrowput(SMr,mtrw,SMrw);
+							payrows = false;    
+            case kInvoiceRowTypeNormal:
+           		 if(nonblank(IVrw.ArtCode))then begin
+           		 	
+           		 	if(IVr.UpdStockFlag>0 and IVr.OrderNr<0)then begin
+           		 		updst = true;
+           		 	end else begin
+           		 		updst = false;
+           		 	end;
+            	    	
+							StartFormat(15);
+								OutString(0,0,rwnr,false);
+								rwnr = rwnr+1;
+								if(currentcompany>3)then begin
+									INr.Code = IVrw.ArtCode;
+									readfirstmain(INr,1,true);
+									//OutString(1,0,ParseClassification(INr.DispGroups),true);// Edit ************************** Monday, 15 April 2013 15:12:14
+									ParseClassification(INr.DispGroups);// Edit ************************** Monday, 15 April 2013 15:19:47
+								end;
+								OutString(20,0,IVrw.ArtCode,false);
+								OutString(50,0,IVrw.Spec,false);
+								OutVal(190,0,IVrw.Quant,M4Val,false);
+								OutVal(220,0,IVrw.Price*IVrw.Quant,M4Val,false);
+								OutVal(270,0,IVrw.Sum,M4Val,false);
+								//OutVal(320,0,IVrw.Price*IVrw.Quant-IVrw.Sum,M4Val,false);
+								OutVal(320,0,IVrw.vRebate,M4Val,false);
+								if (UserCanAction("ViewCostPrice",true)==true) then begin
+									if(IVrw.Quant>0)then begin
+										sign = 1;
+										OutVal(360,0,getIHCost(IVr.SerNr,i,updst)*rate,M4Val,false);
+									end else begin
+										sign = -1;
+										OutVal(360,0,getIHCost(IVr.SerNr,i,updst)*rate*sign,M4Val,false);
+									end;
+									OutString(410,0,IVr.InvComment,false);
+								end else begin
+									OutString(360,0,"",false);
+									OutString(410,0,IVr.InvComment,false);
+								end;
+							
+								totqty = totqty+IVrw.Quant;
+								totsum = totsum+IVrw.Sum;
+								totqtyprice = totqtyprice+IVrw.Price*IVrw.Quant;
+								totqtypricesum =IVrw.vRebate;//totqtypricesum+IVrw.Price*IVrw.Quant-IVrw.Sum;
+								totfifo = totfifo+getIHCost(IVr.SerNr,i,updst)*rate*sign;
+						
+							EndFormat;
+            end;
+            case kInvoiceRowTypeCashPayment:
+              //if(IVr.MachineName!="SW4")then begin
+             			if(left(IVrw.PayMode,1)=="C")then begin
+              			for(j=0;j<acrncnt;j=j+1)begin
+											if(acrncy[j]==IVrw.CurncyCode)then begin
+												cashsum[j] = cashsum[j] + IVrw.Sum;
+											end;
+										end;
+              		end else begin	
+										switch(IVrw.PayMode)begin
+										case "T1":  totcc[0] = totcc[0] + IVrw.Sum; ccpaydeal[0] = "T1"; termsum = termsum + IVrw.Sum;
+										case "T2":  totcc[1] = totcc[1] + IVrw.Sum; ccpaydeal[1] = "T2"; termsum = termsum + IVrw.Sum;
+										case "T3":  totcc[2] = totcc[2] + IVrw.Sum; ccpaydeal[2] = "T3"; termsum = termsum + IVrw.Sum;
+										case "T4":  totcc[3] = totcc[3] + IVrw.Sum; ccpaydeal[3] = "T4"; termsum = termsum + IVrw.Sum;
+										case "T5":  totcc[4] = totcc[4] + IVrw.Sum; ccpaydeal[4] = "T5"; termsum = termsum + IVrw.Sum;
+										case "LC":  totcc[5] = totcc[5] + IVrw.Sum; ccpaydeal[5] = "LC"; termsum = termsum + IVrw.Sum; loybals = loybals + IVrw.Points;
+										end;
+              		end;
+              //end;
+              totcccnt = 6;//count of payDeals!!!
+              payrows = false;         
+            case kInvoiceRowTypeCreditCardPayment:
+            		//if(IVr.MachineName!="SW4")then begin
+            			if(left(IVrw.PayMode,1)=="C")then begin
+              			for(j=0;j<acrncnt;j=j+1)begin
+											if(acrncy[j]==IVrw.CurncyCode)then begin
+												cashsum[j] = cashsum[j] + IVrw.Sum;
+											end;
+										end;
+              		end else begin
+										switch(IVrw.PayMode)begin
+										case "T1":  totcc[0] = totcc[0] + IVrw.Sum; ccpaydeal[0] = "T1"; termsum = termsum + IVrw.Sum;
+										case "T2":  totcc[1] = totcc[1] + IVrw.Sum; ccpaydeal[1] = "T2"; termsum = termsum + IVrw.Sum;
+										case "T3":  totcc[2] = totcc[2] + IVrw.Sum; ccpaydeal[2] = "T3"; termsum = termsum + IVrw.Sum;
+										case "T4":  totcc[3] = totcc[3] + IVrw.Sum; ccpaydeal[3] = "T4"; termsum = termsum + IVrw.Sum;
+										case "T5":  totcc[4] = totcc[4] + IVrw.Sum; ccpaydeal[4] = "T5"; termsum = termsum + IVrw.Sum;
+										case "LC":  totcc[5] = totcc[5] + IVrw.Sum; ccpaydeal[5] = "LC"; termsum = termsum + IVrw.Sum; loybals = loybals + IVrw.Points;
+										end;
+              		end;
+              		payrows = false;
+            case 29:
+            		//if(IVr.MachineName!="SW4")then begin
+            			if(left(IVrw.PayMode,1)=="C")then begin
+              			for(j=0;j<acrncnt;j=j+1)begin
+											if(acrncy[j]==IVrw.CurncyCode)then begin
+												cashsum[j] = cashsum[j] + IVrw.Sum;
+											end;
+										end;
+              		end else begin
+										switch(IVrw.PayMode)begin
+										case "T1":  totcc[0] = totcc[0] + IVrw.Sum; ccpaydeal[0] = "T1"; termsum = termsum + IVrw.Sum;
+										case "T2":  totcc[1] = totcc[1] + IVrw.Sum; ccpaydeal[1] = "T2"; termsum = termsum + IVrw.Sum;
+										case "T3":  totcc[2] = totcc[2] + IVrw.Sum; ccpaydeal[2] = "T3"; termsum = termsum + IVrw.Sum;
+										case "T4":  totcc[3] = totcc[3] + IVrw.Sum; ccpaydeal[3] = "T4"; termsum = termsum + IVrw.Sum;
+										case "T5":  totcc[4] = totcc[4] + IVrw.Sum; ccpaydeal[4] = "T5"; termsum = termsum + IVrw.Sum;
+										case "LC":  totcc[5] = totcc[5] + IVrw.Sum; ccpaydeal[5] = "LC"; termsum = termsum + IVrw.Sum; loybals = loybals + IVrw.Points;
+										end;
+             		 	end;
+             				 //end;
+             				 totcccnt = 6;//count of payDeals!!!
+             				 payrows = false;
+
+		case kInvoiceRowTypeGiftVoucherSold :	//Edit-------------------------------------------Dima----------11.12.2014
+							
+							mtrw = matrowcnt(SMgift);
+							SMrw2.stp = 1;
+							SMrw2.ChequeNr = IVrw.GCNr;
+							SMrw2.RecVal = IVrw.Sum*cred;
+							SMrw2.CustName = IVrw.Spec;
+							matrowput(SMgift,mtrw,SMrw2);
+
+		case kInvoiceRowTypeGiftVoucherPayment:
+
+							mtrw = matrowcnt(SMpay);
+							GCr.SerNr = IVrw.GCNr;
+							ReadFirstMain(GCr,1,true);
+							SMrw2.stp = 0;		
+							SMrw2.InvoiceNr = IVr.SerNr;					 
+							SMrw2.PayDate = GCr.TransDate;
+							SMrw2.ChequeNr = IVrw.GCNr;
+							SMrw2.RecVal = IVrw.Sum;
+							SMrw2.CustName = IVrw.Spec;
+							matrowput(SMpay,mtrw,SMrw2);																						
+							payrows = false;
+							
+          end;
+        end;
+        
+        if(payrows)then begin
+        	switch(IVr.PayDeal)begin
+        		case "O":  for(j=0;j<acrncnt;j=j+1)begin
+													if(acrncy[j]==IVr.CurncyCode)then begin
+														cashsum[j] = cashsum[j] + IVr.Sum4;
+													end;
+												end;
+						case "T1":  totcc[0] = totcc[0] + IVr.Sum4; ccpaydeal[0] = "T1"; termsum = termsum + IVr.Sum4;
+						case "T2":  totcc[1] = totcc[1] + IVr.Sum4; ccpaydeal[1] = "T2"; termsum = termsum + IVr.Sum4;
+						case "T3":  totcc[2] = totcc[2] + IVr.Sum4; ccpaydeal[2] = "T3"; termsum = termsum + IVr.Sum4;
+						case "T4":  totcc[3] = totcc[3] + IVr.Sum4; ccpaydeal[3] = "T4"; termsum = termsum + IVr.Sum4;
+						case "T5":  totcc[4] = totcc[4] + IVr.Sum4; ccpaydeal[4] = "T5"; termsum = termsum + IVr.Sum4;
+						case "L1":  totcc[5] = totcc[5] + IVr.Sum4; ccpaydeal[5] = "L1"; termsum = termsum + IVr.Sum4; loybals = loybals + IVr.Sum4;
+						case "LC":  totcc[5] = totcc[5] + IVr.Sum4; ccpaydeal[5] = "LC"; termsum = termsum + IVr.Sum4; loybals = loybals + IVr.Sum4;
+        	end;
+        	if(IVr.CurncyCode==acrncy[0])then begin
+        		totsumpay = totsumpay  + IVr.Sum4;
+        	end else begin
+						GetFullCurncyRate(acrncy[0],IVr.InvDate,fr,to1,to2,br1,br2);
+						if(fr==0 or to1==0)then begin
+							fr=1; to1=1;
+						end;
+						totsumpay = totsumpay  + IVr.BaseSum4*fr/to1;
+        	end;
+        	totcccnt = 6;
+        end else begin
+        	totsumpay = totsumpay  + IVr.Sum4;	
+        end;
+        for(j=0;j<acrncnt;j=j+1)begin
+					totcash[j] = totcash[j] + cashsum[j];
+        end;
+				
+				if(IVr.CurncyCode==acrncy[0])then begin
+					debt = debt + GetDebtFromARVc(IVr.SerNr);		//Edit --------------Dima 22.01.2015
+				end else begin
+					GetFullCurncyRate(acrncy[0],IVr.InvDate,fr,to1,to2,br1,br2);
+					if(fr==0 or to1==0)then begin
+						fr=1; to1=1;
+					end;
+					debt = debt + GetDebtFromARVc(IVr.SerNr)*fr/to1;
+				end;
+
+      end; // testf
+    end; //while 
+    
+    IPr.TransDate = d1;
+    IPr.MachineName = RepSpec.f1;
+    IPr.DrawerCode = "";
+    TrHs = true;
+    prepaymentval = 0;
+    ori = 0;
+    recordNew(ORr);
+    while(loopkey("Cashup",IPr,3,TrHs))begin
+    	testf = true;
+    	if(IPr.TransDate!=d1)then begin TrHs = false; testf = false; end;
+    	if(IPr.MachineName!=RepSpec.f1 and nonblank(IPr.MachineName))then begin TrHs = false; testf = false; end;
+    	if(testf)then begin
+    		rwcnt = matrowcnt(IPr);
+    		For(i=0;i<rwcnt;i=i+1) begin
+	  			matrowget(IPr,i,IPrw);
+	  			GetFullCurncyRate(IPrw.BankCurncy,IPr.TransDate,fr,to1,to2,br1,br2);
+					if(fr==0 or to1==0)then begin
+						fr=1; to1=1;
+					end;
+					coef = to1/fr;
+					GetFullCurncyRate(acrncy[0],IPr.TransDate,fr,to1,to2,br1,br2);
+					if(fr==0 or to1==0)then begin
+						fr=1; to1=1;
+					end;
+					coef = coef*fr/to1;
+					
+					totsumpay = totsumpay  + IPrw.BankVal*coef;
+					prepaymentval = prepaymentval + IPrw.BankVal*coef;
+					ORrw.Spec = IPrw.CustCode;
+					if(IPrw.InvoiceNr>-1)then begin
+						ORrw.SerialNr = USetStr(31030);
+						ORrw.Objects = IPrw.InvoiceNr;
+					end else begin
+						ORrw.SerialNr = USetStr(31031);
+						ORrw.Objects = IPrw.OrderNr;
+					end;
+					ORrw.Sum = IPrw.BankVal;
+					ORrw.ArtCode = IPrw.BankCurncy;
+					
+					Matrowput(ORr,ori,ORrw);
+					ori = ori + 1;
+					if(left(IPr.PayMode,1)=="C")then begin
+						for(j=0;j<acrncnt;j=j+1)begin
+							if(acrncy[j]==IPrw.BankCurncy)then begin
+								//cashsum[j] = cashsum[j] + IPrw.BankVal;
+								totcash[j] = totcash[j] + IPrw.BankVal;
+							end;
+						end;
+					end else begin
+						switch(IPr.PayMode)begin
+							case "T1":  totcc[0] = totcc[0] + IPrw.BankVal; ccpaydeal[0] = "T1"; termsum = termsum + IPrw.BankVal;
+							case "T2":  totcc[1] = totcc[1] + IPrw.BankVal; ccpaydeal[1] = "T2"; termsum = termsum + IPrw.BankVal;
+							case "T3":  totcc[2] = totcc[2] + IPrw.BankVal; ccpaydeal[2] = "T3"; termsum = termsum + IPrw.BankVal;
+							case "T4":  totcc[3] = totcc[3] + IPrw.BankVal; ccpaydeal[3] = "T4"; termsum = termsum + IPrw.BankVal;
+							case "T5":  totcc[4] = totcc[4] + IPrw.BankVal; ccpaydeal[4] = "T5"; termsum = termsum + IPrw.BankVal;
+							case "LC":  totcc[5] = totcc[5] + IPrw.BankVal; ccpaydeal[5] = "LC"; termsum = termsum + IPrw.BankVal; loybals = loybals + IPrw.BankVal;
+						end;
+        	end;
+        	totcccnt = 6;
+				end; 
+    	end;
+    end;
+    resetloop(IPr);
+    Gray_Divider(0,1);
+
+	//Edit Start --------  Dima ---------------08.12.20140-----Вывод totsumpay без ранних предоплат
+	totsumpay=0;
+	GetFullCurncyRate(acrncy[0],RepSpec.d1,orfr,orto1,orto2,orbr1,orbr2);
+	if(orfr==0 or orto1==0)then begin
+				orfr=1; orto1=1;
+			end;
+	for(i=0;i<acrncnt;i=i+1) begin
+		GetFullCurncyRate(acrncy[i],RepSpec.d1,fr,to1,to2,br1,br2);
+			if(fr==0 or to1==0)then begin
+				fr=1; to1=1;
+			end;
+		coef = to1/fr/orto1*orfr;
+		totsumpay=totsumpay+totcash[i]*coef;
+	end;
+	for(i=0;i<totcccnt;i=i+1)begin
+		totsumpay=totsumpay+totcc[i];
+	end;//Edit  End---------------------------------------------
+
+				
+
+
+
+    StartFormat(15);
+    OutString(0,0,USetStr(8330),false);
+    if(currentcompany>3)then begin
+			OutString(0,0,"",true);// Edit ************************** Monday, 15 April 2013 15:12:07
+			OutString(0,0,"",true);// Edit ************************** Monday, 15 April 2013 15:12:07
+		end;
+    OutString(100,0,"",false);
+    OutString(150,0,"",false);
+    OutVal(190,0,totqty,M4Val,false);
+    OutVal(220,0,totqtyprice,M4Val,false);
+    OutVal(270,0,totsum,M4Val,false);
+    //OutVal(320,0,totqtypricesum,M4Val,false);
+    OutString(320,0,"",false);
+    if (UserCanAction("ViewCostPrice",true)==true) then begin
+      OutVal(360,0,totfifo,M4Val,false);
+    end;
+    EndFormat;  
+    StartFormat(15);
+    endformat;
+    StartFormat(15);
+    OutString(0,0,"",false);
+    OutString(0,0,"",false);
+    OutString(0,0,USetStr(31032),false);
+    OutVal(220,0,totsumpay,M4Val,false);
+    EndFormat;
+    
+    OutCashRows(totcash,acrncy,acrncnt);
+  
+    for(i=0;i<totcccnt;i=i+1)begin
+      if(totcc[i]!=0)then begin
+        PDr.Code = ccpaydeal[i];       
+        if(readfirstmain(PDr,1,true))then begin
+          StartFormat(15);
+						OutString(0,0,"",false);
+						OutString(0,0,"",false);
+						tstr = USetStr(31033);
+						if(i==5)then begin tstr = ""; end;
+            OutString(0,0,tstr & PDr.pdComment & ":",false);
+            OutVal(220,0,totcc[i],M4Val,false);
+            if(i==5)then begin
+							OutString(270,0,USetStr(31034),false);
+							OutVal(360,0,loybals,M4Val,false);
+            end;
+          EndFormat;
+        end;
+      end;
+    end;
+    ormtrw = matrowcnt(ORr);
+    
+    if(ormtrw>0)then begin
+			StartFormat(15);
+				outstring(0,0,USetStr(31035),false);
+			endformat;
+			For(ori=0;ori<ormtrw;ori=ori+1) begin
+	  		matrowget(ORr,ori,ORrw);
+	  		StartFormat(15);
+					outstring(0,0,ORrw.SerialNr,false);
+					outstring(80,0,ORrw.Spec,false);
+					outstring(160,0,USetStr(31122),false);
+					outstring(200,0,ORrw.Sum,false);
+					outstring(250,0,USetStr(16018),false);
+					outstring(280,0,ORrw.ArtCode,false);
+					outstring(310,0,USetStr(31144),false);
+					outstring(390,0,ORrw.Objects,false);
+				endformat;
+			end; 
+		end;
+    StartFormat(15);
+		endformat;
+    
+
+
+//Edit--------------------------Dima---------11.12.2014
+    mtrw = matrowcnt(SMgift);
+    if(mtrw>0)then begin
+			StartFormat(15);
+				outstring(0,0,USetStr(31243),false);
+			EndFormat;			
+			For(i=0; i<mtrw; i=i+1) begin
+				matrowget(SMgift,i,SMrw2);
+				if(SMrw2.stp == 1) then begin  //sold gift card
+		  			StartFormat(15);
+					outstring(90,0,USetStr(31244),false);
+					outstring(110,0,SMrw2.ChequeNr,false);
+					outstring(160,0,USetStr(31245),false);
+					outstring(220,0,SMrw2.CustName,false);
+					outstring(310,0,USetStr(31239),false);
+					outstring(340,0,SMrw2.RecVal,false);
+					EndFormat;
+					totgift = totgift + SMrw2.RecVal;
+				end;			
+			end;	
+    				Gray_Divider(0,1);
+				outstring(310,0,USetStr(31211),false);
+				outstring(340,0,totgift,false);
+				EndFormat;
+				EndFormat;
+	end;	
+
+	mtrw = matrowcnt(SMpay);
+    if(mtrw>0)then begin
+			StartFormat(15);
+				outstring(0,0,USetStr(31250),false);
+			EndFormat;
+			totgift = 0;			
+			For(i=0; i<mtrw; i=i+1) begin
+				matrowget(SMpay,i,SMrw2);
+				if(SMrw2.stp == 0) then begin  //pay by gift card
+		  			StartFormat(15);
+					outstring(15,0,USetStr(31307),false);
+					outstring(45,0,SMrw2.InvoiceNr,false);
+					outstring(90,0,USetStr(31244),false);
+					outstring(110,0,SMrw2.ChequeNr,false);
+					outstring(160,0,USetStr(31245),false);
+					outstring(220,0,SMrw2.CustName,false);
+					outstring(310,0,USetStr(31239),false);
+					outstring(340,0,SMrw2.RecVal,false);
+					outstring(380,0,USetStr(31256),false);
+					outstring(420,0,SMrw2.PayDate,false);
+					EndFormat;
+					totgift = totgift + SMrw2.RecVal;
+				end;			
+			end;	
+    				Gray_Divider(0,1);
+				outstring(310,0,USetStr(31211),false);
+				outstring(340,0,totgift,false);
+				EndFormat;
+				EndFormat;
+	end;	
+//------------------------------End edit---------------
+
+
+    mtrw = matrowcnt(SMr);
+    if(mtrw>0)then begin
+			StartFormat(15);
+				outstring(0,0,USetStr(31036),false);
+			endformat;
+			For(i=0;i<mtrw;i=i+1) begin
+	  		matrowget(SMr,i,SMrw);
+	  		StartFormat(15);
+					outstring(0,0,USetStr(12788),false);
+					outstring(30,0,SMrw.InvoiceNr,false);
+					if(SMrw.stp==0)then begin
+						outstring(70,0,USetStr(4087),false);
+					end else begin
+						outstring(70,0,USetStr(31037),false);
+					end;
+					outstring(120,0,SMrw.ChequeNr,false);
+					outstring(160,0,USetStr(31122),false);
+					outstring(200,0,SMrw.RecVal,false);
+					outstring(250,0,USetStr(16018),false);
+					outstring(280,0,SMrw.RecCurncy,false);
+					outstring(310,0,USetStr(31220),false);
+					outstring(350,0,SMrw.PayDate,false);
+					outstring(380,0,SMrw.CustName,false);
+				endformat;
+			end; 
+		end;
+    StartFormat(15);
+		endformat;
+
+		if (debt>0) then begin		//Edit------------Dima 22.01.2015
+			outstring(0,0,USetStr(31308),false);
+    	outstring(220,0,debt,false);
+			endformat;
+			endformat;
+		end;
+
+    StartFormat(15);
+    	outstring(0,0,USetStr(31038),false);
+    	outstring(220,0,ivcount,false);
+		endformat;
+		StartFormat(15);
+		endformat;
+		StartFormat(15);
+		endformat;
+		StartFormat(15);
+		OutString(0,0,USetStr(31039),false);
+		OutString(270,0,"",false);
+		OutString(270,0,"",false);
+		OutString(270,0,"",false);
+		OutString(300,0,USetStr(31040),false);
+		EndFormat;
+   
+    Gray_Divider(0,1);  
+      EndJob;
+  return;
+end;

@@ -1,0 +1,254 @@
+external procedure ExtractObj(string,var Integer,var string);
+external function Boolean POVc_PasteArtCode(var record POVc,Integer,Boolean);// Edit ************************** Friday, 31 August 2012 16:50:21
+external procedure POVc_PasteQuant(var record POVc,Integer);// Edit ************************** Friday, 31 August 2012 16:50:20
+external function Boolean POVc_PasteVECode(var record POVc,Boolean);
+external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
+external function roundmode DefaultRoundMode();
+
+SetLangMode(LangRussian,"RUS",0);
+
+
+global function boolean CheckPOFromOR(record ORVc ORr)
+begin
+	boolean res;
+	record POVc POr;
+	
+	res = false;
+
+	POr.OrdNr = ORr.SerNr;
+	if(readfirstkey("OrdNr",POr,1,true))then begin
+		res = true;
+	end;
+	
+	CheckPOFromOR = res;
+return;
+end;
+
+//Edit***********************Vitalii 15:29 21.08.2014
+global procedure SOofPeriodRn(record RcVc RepSpec)
+begin
+  string 20 fromdate,todate;
+  record ORVc ORr;
+	row ORVc ORrw;
+	record INVc INr;
+	record DIVc DIr;
+	record SHVc SHr;
+	row SHVc SHrw;
+	record RetVc Retr;
+	row RetVc Retrw;
+	record ItemHistVc IHr;
+	record BaseCurBlock BCb;
+	record RLinkVc RLr;
+	record POVc POr;
+	row POVc POrw;
+	Boolean TrHs,TrHs2,TrHs3,printf;
+	Integer rwcnt,rwcnt1,i,j,pos;
+	string 10 classtr,brandstr,brandCurncy;
+	val price,sum,stoim,quant,razn,brandCost;
+	string 50 category;
+	Integer notenr;
+
+	fromdate = RepSpec.sStartDate;
+	todate = RepSpec.sEndDate;
+	BlockLoad(BCb);
+
+	startreportjob("Отчет по заказанным товарам");
+	Header(0,"Период отчета: " & fromdate & " - " & todate,1);
+	EndHeader;
+
+	startformat(15);
+	outstring(0,0,"Вид счета",false);
+	outstring(1,0,"№ Счета",false);
+	outstring(2,0,"Дата покупки",false);
+	outstring(3,0,"Ханза",false);
+	if(currentcompany==9)then begin
+		outstring(3,0,"Категория",false);		//Edit----------------------Dima  20.03.2015
+	end;
+	outstring(4,0,"Код поставщика",false);
+	outstring(5,0,"Склад",false);
+	outstring(6,0,"Бренд",false);
+	outstring(7,0,"Наименование",false);
+	outstring(8,0,"Кол-во продаж",false);
+	outstring(9,0,"Ед.измерения",false);
+	outstring(10,0,"Ритейл за ед-цу в валюте бренда ",false);
+	outstring(11,0,"Ритейл за ед-цу в валюте АЗН",false);
+	outstring(12,0,"Сумма продажи в валюте бренда",false);
+	outstring(13,0,"Сумма продажи в валюте АЗН",false);
+	outstring(14,0,"Себестоимость в валюте АЗН",false);
+	outstring(15,0,"Разница в валюте АЗН",false);
+	outstring(16,0,"Себестоимость в валюте бренда",false);
+	outstring(17,0,"Валюта бренда",false);
+	outstring(18,0,"Номер клиента",false);
+	outstring(19,0,"Имя клиента",false);
+	outstring(20,0,"Процент скидки",false);
+	outstring(21,0,"Продавец",false);
+	endformat;
+	gray_divider(0,480); 
+	
+	TrHs = true;
+  ORr.OKFlag = 1;
+  while (LoopKey("OKFlag",ORr,1,TrHs)) begin
+    if ((TrHs) and (ORr.OrdDate >= RepSpec.sStartDate) and (ORr.OrdDate <= RepSpec.sEndDate)) then begin
+			rwcnt = MatRowCnt(ORr);
+  		for (i=0;i<rwcnt;i=i+1) begin
+    		MatRowGet(ORr,i,ORrw);
+				startformat(15);
+				outstring(0,0,ORr.OrderClass,false);
+				outstring(1,0,ORr.SerNr,false);
+				outdate(2,0,ORr.OrdDate,false);
+				outstring(3,0,ORrw.ArtCode,false);
+				INr.Code = ORrw.ArtCode;
+				ReadFirstKey("Code",INr,1,true);
+				
+				pos = 0;
+				brandstr = "";
+				category = "";
+				ExtractObj(INr.DispGroups,pos,classtr);
+				while (nonblank(classtr)) begin
+					DIr.Code = classtr;
+					ReadFirstKey("Code",DIr,1,true);
+					if (DIr.CType=="BRAND") then begin
+						if Blank(brandstr) then begin 
+							brandstr = DIr.Name;
+						end else begin
+							brandstr = brandstr & ", " & DIr.Name;
+						end;
+						if(currentcompany==9)then begin
+								category = DIr.CCat;			//Edit----------------------Dima  20.03.2015
+						end;		
+					end;
+	  			ExtractObj(INr.DispGroups,pos,classtr);
+	  		end;
+	  		if(currentcompany==9)then begin
+						outstring(3,0,category,false);//Edit----------------------Dima  20.03.2015
+				end;
+				outstring(4,0,INr.AlternativeCode,false);
+				if NonBlank(ORrw.Location) then begin
+					outstring(5,0,ORrw.Location,false);
+				end else begin
+					outstring(5,0,ORr.Location,false);
+				end;
+
+				outstring(6,0,brandstr,false);
+				outstring(7,0,INr.Name,false);
+				outval(8,0,ORrw.Quant,M4Val,false);
+				outstring(9,0,ORrw.UnitCode,false);
+				outval(10,0,ORrw.Price,M4Val,false);
+				CurValToOtherCur(ORr.OrdDate,ORr.CurncyCode,ORrw.Price,BCb.StdBaseCur,price,DefaultCurRoundOff);
+				outval(11,0,price,M4Val,false);
+				outval(12,0,ORrw.Sum,M4Val,false);
+				CurValToOtherCur(ORr.OrdDate,ORr.CurncyCode,ORrw.Sum,BCb.StdBaseCur,sum,DefaultCurRoundOff);
+				outval(13,0,sum,M4Val,false);
+			//Edit***********************Vitalii 10:31 09.09.2014
+			  brandCost = 0;
+				stoim = 0;
+				quant = 0;
+				TrHs2 = true;
+				SHr.OrderNr = ORr.SerNr;
+				while (LoopKey("OrderKey",SHr,1,TrHs2)) begin
+					if (SHr.OrderNr != ORr.SerNr) then begin TrHs2 = false; end;
+					if (TrHs2) then begin
+						rwcnt1 = MatRowCnt(SHr);
+	  				for(j=0;j<rwcnt1;j=j+1) begin
+	    				MatRowGet(SHr,j,SHrw);
+							if (SHrw.OrdRow == i) then begin
+								TrHs3 = true;
+								IHr.FileName = "SHVc";
+								IHr.TransNr = SHr.SerNr;
+								IHr.Row = j;
+								while (LoopKey("FNTransNr",IHr,3,TrHs3)) begin
+									if ((IHr.FileName != "SHVc") or (IHr.TransNr != SHr.SerNr) or (IHr.Row != j)) then begin TrHs3 = false; end;
+									if (TrHs3) then begin
+										stoim = stoim + IHr.TotCostPrice;
+										brandCost = brandCost + IHr.TotCostPriceCurncy;
+										quant = quant - IHr.Qty;
+									end;
+								end;
+								resetloop(IHr);
+							end;
+						end;
+					end;
+				end;
+				resetloop(SHr);
+				TrHs2 = true;
+				Retr.OrdNr = ORr.SerNr;
+				while (LoopKey("OrdNr",Retr,1,TrHs2)) begin
+					if (Retr.OrdNr != ORr.SerNr) then begin TrHs2 = false; end;
+					if (TrHs2) then begin
+						rwcnt1 = MatRowCnt(Retr);
+	  				for(j=0;j<rwcnt1;j=j+1) begin
+	    				MatRowGet(Retr,j,Retrw);
+							if (Retrw.OrdRow == i) then begin
+								TrHs3 = true;
+								IHr.FileName = "RetVc";
+								IHr.TransNr = Retr.SerNr;
+								IHr.Row = j;
+								while (LoopKey("FNTransNr",IHr,3,TrHs3)) begin
+									if ((IHr.FileName != "RetVc") or (IHr.TransNr != Retr.SerNr) or (IHr.Row != j)) then begin TrHs3 = false; end;
+									if (TrHs3) then begin
+										stoim = stoim - IHr.TotCostPrice;
+										brandCost = brandCost - IHr.TotCostPriceCurncy;
+										quant = quant - IHr.Qty;
+									end;
+								end;
+								resetloop(IHr);
+							end;
+						end;
+					end;
+				end;
+				resetloop(Retr);
+				if (quant < ORrw.Quant) then begin
+					stoim = stoim + INr.InPrice*(ORrw.Quant - quant);
+					brandCost = brandCost + INr.LastPurchPrice2*(ORrw.Quant - quant);
+				end;
+				if (ORrw.Quant == 0) then begin
+					razn = 0;
+					stoim = 0;
+					brandCost = 0;
+				end else begin
+					razn = sum - stoim;
+					stoim = stoim/ORrw.Quant;
+					brandCost = brandCost/ORrw.Quant;
+				end;
+				brandCurncy = INr.LastPurchCurncyCode;
+				if (ORrw.Quant!=0) then begin
+  				if (brandCost==0 and INr.LastPurchPrice2<>0) then begin
+  				  brandCost = INr.LastPurchPrice2;
+  				  if (stoim==0) then begin
+  				    CurValToOtherCur(INr.LastPriceChange,ORr.CurncyCode,brandCost,BCb.StdBaseCur,stoim,DefaultRoundMode);
+  				  end;
+  				end;
+  				notenr = 1;
+  				if (brandCost==0 and ReadRecordLink(ORr,notenr,POr,RLr)) then begin
+  				  rwcnt1 = MatRowCnt(POr);
+  				  for (j=0;j<rwcnt1;j=j+1) begin
+  				    MatRowGet(POr,j,POrw);
+  				    if (POrw.ArtCode==ORrw.ArtCode and POrw.Price<>0) then begin
+  				      brandCost = POrw.Price;
+  				      if (brandCurncy!=POr.CurncyCode) then begin
+  				        brandCurncy = POr.CurncyCode;
+  				      end;
+  				      if (stoim==0) then begin
+      				    CurValToOtherCur(POr.TransDate,POr.CurncyCode,brandCost,BCb.StdBaseCur,stoim,DefaultRoundMode);
+      				  end;
+  				      j = rwcnt1;
+  				    end;
+  				  end;
+  				end;
+				end;
+				outval(14,0,stoim,M4Val,false);
+				outval(15,0,razn,M4Val,false);
+				outval(16,0,brandCost,M4Val,false);
+				outstring(17,0,brandCurncy,false);
+				outstring(18,0,ORr.CustCode,false);
+				outstring(19,0,ORr.Addr0,false);
+				outval(20,0,ORrw.vRebate,M4Val,false);
+				outstring(21,0,ORr.SalesMan,false);
+				endformat;
+			end;
+		end;
+	end;
+
+	endjob;
+	return;
+end;

@@ -1,0 +1,874 @@
+external procedure HT2Per(Date, Date , var string);
+external procedure HTCusts(string,string,var string);
+external procedure HTOKF(Integer,Integer, var string);
+external procedure OutLineText(string);
+external procedure OutLine (string,string,val,val,val);
+external function boolean FindItemSt(string,string,var val,var val,var val,date,date);
+external function boolean FindItemStSlow(record RcVc,string,string,var val,var val,var val); 
+external function Boolean SetInSet2(string,string);
+external procedure ExtractObj(string,var Integer,var string); // Edit ***** 11 June 2013 10:44:00 Larisa
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);// Edit ************************** Wednesday, 19 June 2013 13:43:37
+external procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);// Edit ************************** Wednesday, 19 June 2013 14:02:13
+
+//SetLangMode(LangRussian,"RUS",0); 	//Edit-------------Dima-----09.12.2014
+
+procedure HTSaleMan1(string a, string b, var string res)
+begin
+  if (blank(a) and blank(b)) then begin
+     res = USetStr(4918);
+  end else begin
+     res = USetStr(8314);
+     res = res & " " & a;
+     if (a <> b) then begin
+        res = res & " : " & b;
+     end;
+  end;
+  return;
+end;
+           
+global
+procedure IStatRn(record RcVc RepSpec) // Edit ***** 10 June 2013 10:47:00 Larisa
+BEGIN
+  val totval,totqty,totgp;
+  val totvalsum,totqtysum,totgpsum,totigvalsum,totigqtysum,totiggpsum;
+  LongInt friv,toiv;
+  string 20 fromus,tous,fromcust,tocust;
+  string 20 fromit,toit,frig,toig;
+  string 255 tstr;
+  integer rw;
+  record UserVc USr;
+  record INVc INr;
+  record ITVc ITr;
+  record ItemHistVc IHr;
+  record IVVc IVr;
+  row IVVc IVrw;
+  record DIVc DIr; // Edit ***** 11 June 2013 11:25:00 Larisa
+  Boolean found,found1,found2,testf1,TrHs,testf3,testf4;
+  integer em;
+  Boolean testf,testf2,testf5;
+  Boolean item1, itemgroup,rtype;
+  Boolean userprntdf;
+  date cntdate;
+  string 100 location;// Edit ************************** Thursday, 30 May 2013 16:54:20
+  Boolean TrHs1,TrHs2,TrHs6,testf6; // Edit ***** 10 June 2013 15:02:00 Larisa
+  Integer mtrw,i; // Edit ***** 10 June 2013 17:07:00 Larisa
+  Integer oldrow; // Edit ***** 10 June 2013 17:46:00 Larisa
+  String 255 oldfilename,oldartcode; // Edit ***** 10 June 2013 17:46:00 Larisa
+  LongInt oldtransnr; // Edit ***** 10 June 2013 17:46:00 Larisa
+  String 255 classcode, brend, model, oldinrcode; // Edit ***** 11 June 2013 10:41:00 Larisa
+  Integer pos; // Edit ***** 11 June 2013 10:41:00 Larisa
+  Boolean printf,testf7; // Edit ***** 11 June 2013 15:36:00 Larisa
+  Val totcost,totcostsum; // Edit ***** 11 June 2013 16:13:00 Larisa
+  Val totallqty,totallval,totallgp; // Edit ***** 12 June 2013 09:43:00 Larisa
+  integer ivcount,ivcounttotal;
+  boolean ivtestf,ivTrHs;
+  val fr,to1,to2,br1,br2,ivfr,ivto;
+  string 20 curncy;
+	Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
+  Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52
+  Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51
+  
+	CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);// Edit ************************** Wednesday, 19 June 2013 13:59:15
+	curncy = acrncy[0];// Edit ************************** Wednesday, 19 June 2013 13:59:14
+  
+  rtype = false;
+  
+  location = RepSpec.AccStr;// Edit ************************** Thursday, 30 May 2013 16:54:17
+  
+  fromus = FirstInRange(RepSpec.f1,5);
+  tous = LastInRange(RepSpec.f1,5);
+  
+  fromit = FirstInRange(RepSpec.f2,20);
+  toit = LastInRange(RepSpec.f2,20);
+  
+  friv = FirstInRange(RepSpec.f3,20);
+  toiv = LastInRange(RepSpec.f3,20);
+  
+  frig = FirstInRange(RepSpec.Stext,20);
+  toig = LastInRange(RepSpec.Stext,20);
+  
+  fromcust = FirstInRange(RepSpec.ObjStr,20);
+  tocust = LastInRange(RepSpec.ObjStr,20);
+  
+  ivcount = 0;// Edit ************************** Monday, 17 June 2013 17:21:30
+  ivcounttotal = 0;// Edit ************************** Monday, 17 June 2013 17:21:30
+  
+  if nonblank(RepSpec.ObjStr) then begin
+    rtype = true;
+  end;
+  
+    StartReportJob(USetStr(2460));
+    rw = 1;
+    HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+    if(false)then begin // Edit ***** 11 June 2013 17:08:00 Larisa
+    HTCusts(fromcust,tocust,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+    end; // Edit ***** 11 June 2013 17:08:00 Larisa
+    HTSaleMan1(fromus,tous,tstr);
+    if (nonblank(tstr)) then begin
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;
+    if(false)then begin // Edit ***** 10 June 2013 13:15:00 Larisa
+      if RepSpec.flags[3] == 0 then begin
+        tstr = USetStr(8554);
+      end else begin
+        tstr = USetStr(8555);
+      end; 
+      Header(rw,tstr,0);
+    end; // Edit ***** 10 June 2013 13:15:00 Larisa
+    if nonblank(RepSpec.f3) then begin
+       rtype = true; 
+     tstr = USetStr(1112);
+     tstr = tstr & friv;
+     if (friv<>toiv) then begin
+       tstr = tstr & " : " & toiv;
+     end;
+    end else begin
+     tstr = USetStr(1111);
+    end;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+    if nonblank(RepSpec.Stext) then begin
+       tstr = USetStr(1135);
+    tstr = tstr & RepSpec.Stext;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+    end;
+    if(false)then begin // Edit ***** 10 June 2013 13:15:00 Larisa
+      if nonblank(RepSpec.LastAcc) then begin
+        rtype = true;
+        tstr = USetStr(1114);
+      tstr = tstr & RepSpec.LastAcc;
+      Header(rw,tstr,1);
+      rw = rw + 1;
+      end;
+    end; // Edit ***** 10 June 2013 13:15:00 Larisa
+  EndHeader;
+ /*  if (RepSpec.wholemonthf==0) then begin
+    StartFormat(15);
+      OutString(0,0,USetStr(1163),false);
+    EndFormat;
+    goto LIStatRn;
+  end;
+ if(false)then begin // Edit ***** 10 June 2013 13:17:00 Larisa
+  SetRepCol(2,70);
+  SetRepCol(3,20);
+  SetRepCol(4,80);
+  SetRepCol(5,40);
+  SetRepCol(6,100);
+  SetRepCol(7,300);
+  SetRepCol(8,400);
+  SetRepCol(9,480);
+  
+  if RepSpec.flags[3] == 0 then begin  
+    if (tous <> fromus) or blank(RepSpec.f1) then begin  
+      OutLineText(USetStr(4908));
+    end else begin  
+      OutLineText(USetStr(2325));
+    end;
+    if nonblank(RepSpec.Stext) then begin
+      // PER GROUP
+      TrHs = true;
+      ITr.Code = frig;
+      itemgroup = false;
+      ResetLoop(ITr);
+      while (LoopMain(ITr,1,TrHs)) begin
+        testf3 = true;
+        if toig < ITr.Code then begin testf3 = false; end;
+        if testf3 then begin
+          found = true;
+          INr.Code = fromit;
+          INr.Group = ITr.Code;
+          ResetLoop(INr);
+          itemgroup = true;
+          item1 = false;
+          while (LoopMain(INr,2,found)) begin
+            testf4 = true;
+            if INr.Group <> ITr.Code then begin testf4 = false; end;
+            if (nonblank(RepSpec.f2)) then begin
+              if (INr.Code>toit) then begin testf4 = false; end;
+            end;
+            if (nonblank(RepSpec.f4)) then begin
+              if (SetInSet2(RepSpec.f4,INr.DispGroups)==false) then begin
+                testf4 = false;
+              end;
+            end;
+            if testf4 then begin
+            totval = 0;
+            totqty = 0;
+              totgp = 0;
+              item1 = true;
+              found2 = true;
+              ResetLoop(USr);
+              USr.Code = fromus;
+              while (LoopMain(USr,1,found2)) begin
+               testf1 = true;
+               if blank(USr.Code) then begin testf1 = false; end;
+                if (nonblank(RepSpec.f1)) then begin
+                 if (USr.Code>tous) then begin
+                    testf1 = false;
+                  end;
+                end; 
+                if testf1 then begin
+                  found1 = false;
+                  if  rtype then begin
+                    found1 = FindItemStSlow(RepSpec,USr.Code,INr.Code,totval,totqty,totgp); 
+                  end else begin
+                    found1 = FindItemSt(USr.Code,INr.Code,totval,totqty,totgp,RepSpec.sStartDate,RepSpec.sEndDate);
+                  end;  
+                  if found1 then begin
+                    // GROUP OUPUT
+                  if itemgroup then begin
+                  StartFormat(15);
+                  OutString(0,0,ITr.Code,false);
+                  OutString(2,0,ITr.Comment,false);
+                  EndFormat;
+                  Black_Divider(0,1);
+                  StartFormat(1);
+                  EndFormat;
+                  Black_Divider(0,1);
+                  itemgroup = false;
+                end;
+                    if item1 then begin
+                      if (tous <> fromus) or blank(RepSpec.f1) then begin
+                        Black_divider(0,1);
+                      StartFormat(15);
+                      OutString(3,0,INr.Code,false);
+                      OutString(4,0,INr.Name,false);
+                     EndFormat;
+                   end;  
+                     item1 = false;
+                    end;  
+                    // SALESMAN OUTPUT WITH VALUES
+                    if (tous <> fromus) or blank(RepSpec.f1) then begin
+                      OutLine(USr.Code,USr.Name,totqty,totval,totgp);
+                    end else begin
+                      OutLine(INr.Code,INr.Name,totqty,totval,totgp);
+                    end;   
+                    totvalsum = totvalsum + totval;
+                    totqtysum = totqtysum + totqty;
+                    totgpsum = totgpsum + totgp;
+                    totigvalsum = totigvalsum + totval;
+                    totigqtysum = totigqtysum + totqty;
+                    totiggpsum = totiggpsum + totgp; 
+          end;                    
+                 end;                   
+                end;  
+              end;
+              if (tous <> fromus) or blank(RepSpec.f1) then begin
+                if (totigvalsum<>0) and (totigqtysum<>0) and (totiggpsum <> 0) then begin
+                  Black_Divider(0,1);
+                  OutLine(USetStr(2357),INr.Name,totigqtysum,totigvalsum,totiggpsum);
+                  totigvalsum = 0;
+                  totigqtysum = 0;
+                  totiggpsum = 0;
+                  StartFormat(15);
+                  EndFormat;
+                end;   
+              end;  
+            end;  
+          end; 
+          if (totvalsum<>0) and (totqtysum<>0) and (totgpsum<>0) then begin
+            Black_divider(0,1);
+            StartFormat(1);
+            EndFormat;
+            Black_Divider(0,1);
+            OutLine(USetStr(8553),ITr.Comment,totqtysum,totvalsum,totgpsum);
+            totvalsum = 0;
+            totqtysum = 0;
+            totgpsum = 0;
+            StartFormat(15);
+            EndFormat;
+          end; 
+        end;     
+     
+  end;
+  // PER ITEM
+  if blank(RepSpec.Stext) then begin
+      found = true;
+      INr.Code = fromit;
+      ResetLoop(INr);
+      item1 = false;
+      while (LoopMain(INr,1,found)) begin
+        testf4 = true;          
+        if (nonblank(RepSpec.f2)) then begin
+           if (INr.Code>toit) then begin testf4 = false; end;
+        end; 
+        if (nonblank(RepSpec.f4)) then begin
+          if (SetInSet2(RepSpec.f4,INr.DispGroups)==false) then begin
+            testf4 = false;
+          end;
+        end;     
+        if (testf4) then begin
+          item1 = true;
+          found2 = true;
+          ResetLoop(USr);
+          USr.Code = fromus;
+          while (LoopMain(USr,1,found2)) begin  
+            testf1 = true;
+            if (nonblank(RepSpec.f1)) then begin
+              if (USr.Code>tous) then begin
+                testf1 = false;
+                found2 = false;
+              end;
+            end;
+            if blank(USr.Code) then begin testf1 = false; end;
+            if testf1 then begin
+             found1 = false; 
+             if rtype then begin  
+               found1 = FindItemStSlow(RepSpec,USr.Code,INr.Code,totval,totqty,totgp); 
+             end else begin
+               found1 = FindItemSt(USr.Code,INr.Code,totval,totqty,totgp,RepSpec.sStartDate,RepSpec.sEndDate);
+             end;
+             if found1 then begin 
+                if item1 then begin
+                  // ITEM INPUT
+                if (tous <> fromus) or blank(RepSpec.f1) then begin
+                 StartFormat(15);
+                  OutString(0,0,INr.Code,false);
+                  OutString(2,0,INr.Name,false);
+                  EndFormat;
+                end;  
+                item1 = false;
+                end;  
+                if (tous <> fromus) or blank(RepSpec.f1) then begin   
+                  OutLine(USr.Code,USr.Name,totqty,totval,totgp);
+                end else begin
+                    OutLine(INr.Code,INr.Name,totqty,totval,totgp);  
+                end;  
+                totvalsum = totvalsum + totval;
+                totqtysum = totqtysum + totqty;
+                totgpsum = totgpsum + totgp;
+             end; 
+            end;  
+          end;
+          if (tous <> fromus) or blank(RepSpec.f1) then begin  
+            if (totqtysum<>0) and (totvalsum<>0) and (totgpsum<>0) then begin
+              Black_Divider(0,1);
+              OutLine( USetStr(2357),INr.Name,totqtysum,totvalsum,totgpsum);
+              StartFormat(15);
+              EndFormat;
+              totqtysum = 0;
+              totvalsum = 0;
+              totgpsum = 0;
+            end;
+          end;  
+        end;
+      end; 
+        if (totvalsum<>0) and (totqtysum<>0) and (totgpsum<>0) then begin
+              Black_divider(0,1);
+              StartFormat(1);
+              EndFormat;
+              Black_Divider(0,1);
+              OutLine(USetStr(8553),ITr.Comment,totqtysum,totvalsum,totgpsum);
+              totvalsum = 0;
+              totqtysum = 0;
+              totgpsum = 0;
+              StartFormat(15);
+              EndFormat;
+        end;  
+  end;    
+end;
+
+//SALESMAN \ ITEM
+if (RepSpec.flags[3] == 1) then begin 
+  if (tous <> fromus) or blank(RepSpec.f1) then begin  
+    OutLineText(USetStr(4908));
+  end else begin  
+    OutLineText(USetStr(2325));
+  end;
+  ResetLoop(USr);
+  found = true;
+  USr.Code = fromus;
+  while (LoopMain(USr,1,found)) begin
+      testf = true;
+      if nonblank(tous) then begin
+        if tous < USr.Code then begin
+          testf = false;
+          found = false;
+        end;
+      end;
+      if blank(USr.Code) then begin testf = false; end;
+      if testf then begin
+        userprntdf = false;
+        itemgroup = false;
+        if nonblank(RepSpec.Stext) then begin
+          ITr.Code = frig;
+          ResetLoop(ITr);
+          TrHs = true;
+          item1 = false;
+          while (LoopMain(ITr,1,TrHs)) begin
+            testf5 = true;
+            itemgroup = true;
+            if ITr.Code > toig then begin
+              testf5 = false;
+              TrHs = false;
+            end;            
+            if testf5 then begin
+              found2 = true;
+              ResetLoop(INr);
+              INr.Code = fromit;
+              while (LoopMain(INr,1,found2)) begin
+                testf2 = true;
+                if nonblank(toit) then begin
+                  if toit < INr.Code then begin
+                    testf2 = false;
+                  end;
+                end;
+                if INr.Group <> ITr.Code then begin
+                  testf2 = false;
+                end;
+                if (nonblank(RepSpec.f4)) then begin
+                  if (SetInSet2(RepSpec.f4,INr.DispGroups)==false) then begin
+                    testf2 = false;
+                  end;
+                end;
+                if testf2 then begin
+                  found1 = false;
+                  if  rtype then begin
+                    found1 = FindItemStSlow(RepSpec,USr.Code,INr.Code,totval,totqty,totgp); 
+                  end else begin
+                    found1 = FindItemSt(USr.Code,INr.Code,totval,totqty,totgp,RepSpec.sStartDate,RepSpec.sEndDate);
+                  end; 
+                  if found1 then begin
+                    if (userprntdf==false)  then begin
+                      StartFormat(15);
+                      OutString(0,0,USr.Code,false);
+                      OutString(2,0,USr.Name,false);
+                      EndFormat;
+                      Black_Divider(0,1);
+                      userprntdf = true;
+                    end;
+                    // GROUP OUPUT
+                    if itemgroup then begin
+                      StartFormat(15);
+                      OutString(0,0,ITr.Code,false);
+                      OutString(2,0,ITr.Comment,false);
+                      EndFormat;
+                      itemgroup = false;
+                    end;
+                    if item1 then begin
+                      if (tous <> fromus) or blank(RepSpec.f1) then begin
+                        Black_divider(0,1);
+                        StartFormat(15);
+                        OutString(3,0,USr.Code,false);
+                        OutString(4,0,USr.Name,false);
+                        EndFormat;
+                      end;  
+                      item1 = false;
+                    end;  
+                    OutLine(INr.Code,INr.Name,totqty,totval,totgp);
+                    totvalsum = totvalsum + totval;
+                    totqtysum = totqtysum + totqty;
+                    totgpsum = totgpsum + totgp;
+                    totigvalsum = totigvalsum + totval;
+                    totigqtysum = totigqtysum + totqty;
+                    totiggpsum = totiggpsum + totgp; 
+                  end;   //found1                 
+                end; //testf2                   
+              end;  //while INr
+            end;//testf5
+            
+            if (tous <> fromus) or blank(RepSpec.f1) then begin
+              if (totigvalsum<>0) and (totigqtysum<>0) and (totiggpsum <> 0) then begin
+                Black_Divider(0,1);
+                OutLine(USetStr(2357),ITr.Comment,totigqtysum,totigvalsum,totiggpsum);
+                totigvalsum = 0;
+                totigqtysum = 0;
+                totiggpsum = 0;
+                StartFormat(15);
+                EndFormat;
+              end;   
+            end;  
+          end; // while ITr
+          if (totvalsum<>0) and (totqtysum<>0) and (totgpsum<>0) then begin
+            Black_divider(0,1);
+            StartFormat(1);
+            EndFormat;
+            Black_Divider(0,1);
+            OutLine(USetStr(8553),USr.Name,totqtysum,totvalsum,totgpsum);
+            totvalsum = 0;
+            totqtysum = 0;
+            totgpsum = 0;
+            StartFormat(15);
+            EndFormat;
+          end; 
+        end;   //Stext
+     if blank(RepSpec.Stext) then begin
+       found = true;
+        ResetLoop(INr);
+        item1 = true;
+        found2 = true;
+        INr.Code = fromit;
+        while (LoopMain(INr,1,found2)) begin  
+            testf1 = true;
+            if (nonblank(RepSpec.f2)) then begin
+              if (INr.Code>toit) then begin
+                  testf1 = false;
+                  found2 = false;
+                 end;
+            end;
+            if (nonblank(RepSpec.f4)) then begin
+              if (SetInSet2(RepSpec.f4,INr.DispGroups)==false) then begin
+                testf1 = false;
+              end;
+            end;
+            if testf1 then begin
+                found1 = false; 
+                if rtype then begin
+                  found1 = FindItemStSlow(RepSpec,USr.Code,INr.Code,totval,totqty,totgp); 
+                end else begin
+                   found1 = FindItemSt(USr.Code,INr.Code,totval,totqty,totgp,RepSpec.sStartDate,RepSpec.sEndDate);
+                end;
+                if found1 then begin 
+                    totvalsum = totvalsum + totval;
+                    totqtysum = totqtysum + totqty;
+                    totgpsum = totgpsum + totgp;
+                    if (userprntdf==false)  then begin
+                      StartFormat(15);
+                      OutString(0,0,USr.Code,false);
+                      OutString(2,0,USr.Name,false);
+                      EndFormat;
+                      Black_Divider(0,1);
+                      userprntdf = true;
+                    end;
+                    if (tous <> fromus) or blank(RepSpec.f1) then begin   
+                      OutLine(INr.Code,INr.Name,totqty,totval,totgp);
+                    end else begin
+                      OutLine(INr.Code,INr.Name,totqty,totval,totgp);  
+                    end;  
+                  end;  
+               end; 
+           end;  
+           if (totvalsum<>0) and (totqtysum<>0) and (totgpsum<>0) then begin
+              Black_divider(0,1);
+              StartFormat(1);
+              EndFormat;
+              Black_Divider(0,1);
+              OutLine(USetStr(8553),USr.Name,totqtysum,totvalsum,totgpsum);
+              totvalsum = 0;
+              totqtysum = 0;
+              totgpsum = 0;
+              StartFormat(15);
+              EndFormat;
+          end;  
+       end;   
+   end;
+ end;
+end; 
+end; // Edit ***** 10 June 2013 13:17:00 Larisa
+*/
+  if(true)then begin // Edit ***** 10 June 2013 13:19:00 Larisa
+		if(RepSpec.Media==mtFile or RepSpec.Media==mtExcel)then begin
+			StartFormat(15)
+			OutString(0,0,USetStr(31201),false);
+			OutString(30,0,RepSpec.sStartDate & ":" & RepSpec.sEndDate,false);
+			EndFormat;
+			if(nonblank(RepSpec.f1))then begin
+				tstr = RepSpec.f1;
+			end else begin
+				tstr = USetStr(31232);
+			end;
+			StartFormat(15)
+			OutString(0,0,USetStr(31219),false);
+			OutString(30,0,tstr,false);
+			EndFormat;
+			if(nonblank(RepSpec.AccStr))then begin
+				tstr = RepSpec.AccStr;
+			end else begin
+				tstr = USetStr(31225);
+			end;
+			StartFormat(15)
+			OutString(0,0,USetStr(31202),false);
+			OutString(30,0,tstr,false);
+			EndFormat;
+			if(nonblank(RepSpec.f2))then begin
+				tstr = RepSpec.f2;
+			end else begin
+				tstr = USetStr(31233);
+			end;
+			StartFormat(15)
+			OutString(0,0,USetStr(31234),false);
+			OutString(30,0,tstr,false);
+			EndFormat;
+			if(nonblank(RepSpec.f4))then begin
+				tstr = RepSpec.f4;
+			end else begin
+				tstr = USetStr(31229);
+			end;
+			StartFormat(15)
+			OutString(0,0,USetStr(31228),false);
+			OutString(30,0,tstr,false);
+			EndFormat;
+    end;
+    StartFormat(15);
+      OutString(0,0,USetStr(31235),false);
+      OutString(30,0,USetStr(31236),false);
+      OutString(80,0,USetStr(31231),false);
+      OutString(120,0,USetStr(31203),false);
+      OutString(200,0,USetStr(31205),false);
+      OutString(250,0,USetStr(31206),false);
+      OutString(300,0,USetStr(31238),false);
+      OutString(350,0,USetStr(31239),false);
+      OutString(400,0,USetStr(31237),false);
+    EndFormat;
+    Black_divider(0,1);
+	
+	totallqty = 0;
+	totallval = 0;
+	totallgp = 0;
+	
+    USr.Code = RepSpec.f1;
+    TrHs1 = true;
+    while(LoopMain(USr,1,TrHs1))begin
+      testf1 = true;
+      if(nonblank(RepSpec.f1) and USr.Code!=RepSpec.f1)then begin
+      	TrHs1 = false;
+      	testf1 = false;
+      end;
+      IVr.SalesMan = USr.Code;
+      IVr.InvDate = RepSpec.sStartDate;
+      if(ReadFirstKey("SalesMan",IVr,2,false))then begin
+        if(IVr.SalesMan!=USr.Code or IVr.InvDate<RepSpec.sStartDate or IVr.InvDate>RepSpec.sEndDate)then begin
+        testf1 = false;
+        end;
+      end else begin
+       testf1 = false;
+      end;
+      
+      if(testf1)then begin
+      totqtysum = 0;
+    	totvalsum = 0;
+    	totgpsum = 0;
+    	INr.DispGroups = RepSpec.f4;
+    	INr.Code = RepSpec.f2;
+        TrHs2 = true;
+        while(LoopKey("MyDispGroups",INr,2,TrHs2))begin
+          testf2 = true;
+          printf = false;
+          if (nonblank(RepSpec.f4) and SetInSet2(RepSpec.f4,INr.DispGroups)==false) then begin
+            TrHs2 = false;
+            testf2 = false;
+          end;
+          if(nonblank(RepSpec.f2) and INr.Code!=RepSpec.f2)then begin
+            testf2 = false;
+          end;
+                    
+          if(testf2)then begin
+            totqty = 0;
+          	totval = 0;
+          	totgp = 0;
+          	totcost = 0;
+            IHr.FileName = "IVVc";
+            IHr.ArtCode = INr.Code;
+        	IHr.TransDate = RepSpec.sStartDate;
+            TrHs6 = true;
+            
+            
+            
+								while(LoopKey("FNArtCode",IHr,3,TrHs6))begin
+									testf6 = true;
+									testf7 = true;
+									if(IHr.FileName!="IVVc")then begin
+										TrHs6 = false;
+										testf6 = false;
+										testf7 = false;
+									end;
+									if(IHr.ArtCode!=INr.Code)then begin
+										testf6 = false;
+										testf7 = false;
+									end;
+									if(IHr.TransDate<RepSpec.sStartDate)then begin
+										TrHs6 = false;
+										testf6 = false;
+										testf7 = false;
+									end;
+									if(IHr.TransDate>RepSpec.sEndDate)then begin
+										TrHs6 = false;
+										testf6 = false;
+										testf7 = false;
+									end;
+									if(nonblank(location) and IHr.Location!=location)then begin
+										testf6 = false;
+										testf7 = false;
+									end;
+									if(IHr.FileName==oldfilename and IHr.TransNr==oldtransnr and IHr.Row==oldrow and IHr.ArtCode==oldartcode)then begin
+										testf6 = false;
+									end;
+									oldfilename = IHr.FileName;
+									oldtransnr = IHr.TransNr;
+									oldrow = IHr.Row;
+									oldartcode = IHr.ArtCode;
+
+									if(testf7)then begin
+										IVr.SerNr = IHr.TransNr;      	
+										if(ReadFirstMain(IVr,1,true))then begin
+											if(IVr.SalesMan==USr.Code and IVr.Invalid==0)then begin
+												ivfr = 1; ivto = 1;
+												fr = 1; to1 = 1;
+												if(IVr.CurncyCode!=curncy)then begin
+													ivfr = IVr.FrRate;
+													ivto = IVr.ToRateB1;
+													if(ivfr==0 or ivto==0)then begin
+														ivfr = 1;	ivto = 1;
+													end;
+													GetFullCurncyRate(curncy,IVr.TransDate,fr,to1,to2,br1,br2);
+													if(fr==0 or to1==0)then begin
+														fr = 1;	to1 = 1;
+													end;
+												end;
+												
+												if(testf6)then begin
+													
+													MatRowGet(IVr,IHr.Row,IVrw);
+													if(IVrw.ArtCode==INr.Code)then begin
+														pos = 0;
+														classcode = INr.DispGroups;
+														brend = "";
+														model = "";
+														ExtractObj(classcode,pos,brend);
+														ExtractObj(classcode,pos,model);
+														DIr.Code = brend;
+														if(ReadFirstMain(DIr,1,true))then begin
+															brend = DIr.Name;
+														end;
+														DIr.Code = model;
+														if(ReadFirstMain(DIr,1,true))then begin
+															model = DIr.Name;
+														end;   
+														totqty = totqty + IVrw.Quant;
+														totval = totval + IVrw.Sum/ivfr*ivto*fr/to1;
+														printf = true;
+													end; //if IVrw.ArtCode
+												end; //testf6
+											end else begin
+												ivfr = IVr.FrRate;
+												ivto = IVr.ToRateB1;
+												if(ivfr==0 or ivto==0)then begin
+													ivfr = 1;	ivto = 1;
+												end;
+												if(IHr.Qty>=0)then begin
+													totcost = totcost - IHr.TotCostPrice*ivfr/ivto;
+												end else begin
+													totcost = totcost + IHr.TotCostPrice*ivfr/ivto;
+												end;
+											end; //if IVrw.SalesMan
+											ivfr = IVr.FrRate;
+											ivto = IVr.ToRateB1;
+											if(ivfr==0 or ivto==0)then begin
+												ivfr = 1;	ivto = 1;
+											end;
+											if(IHr.Qty>=0)then begin
+												totcost = totcost + IHr.TotCostPrice*ivfr/ivto;
+											end else begin
+												totcost = totcost - IHr.TotCostPrice*ivfr/ivto;
+											end;
+										end; //if RFM IVr
+										
+									end; //testf7
+								end; //while IHr
+
+
+
+								ResetLoop(IHr);
+								if(printf)then begin
+								totgp = totval + totcost;
+								totqtysum = totqtysum + totqty;
+								totvalsum = totvalsum + totval;
+								totgpsum = totgpsum + totgp;
+								StartFormat(15);
+								OutString(0,0,USr.Code,false);
+									OutString(30,0,USr.Name,false);
+									OutString(80,"DblINVc",INr.Code,false);
+									OutString(120,0,INr.Name,false);
+									OutString(200,0,brend,false);
+									OutString(250,0,model,false);
+									OutString(300,0,totqty,false);
+									OutString(350,0,totval,false);
+									OutString(400,0,totgp,false);
+								EndFormat;
+								end; //if printf
+							end; //testf2
+						end; //while INr   
+						ResetLoop(INr);
+      gray_divider(0,1);
+      if(totqtysum!=0 or totvalsum!=0 or totgpsum!=0)then begin
+				StartFormat(15);
+					OutString(0,0,USr.Code,false);
+					OutString(30,0,USr.Name,false);
+					OutString(80,0,"",false);
+					OutString(120,0,"",false);
+					OutString(200,0,"",false);
+					OutString(250,0,USetStr(31211),false);
+					OutString(300,0,totqtysum,false);
+					OutString(350,0,totvalsum,false);
+					OutString(400,0,totgpsum,false);
+				EndFormat;
+      end;
+      ivcount = 0;
+      IVr.SalesMan = USr.Code;
+      IVr.InvDate = RepSpec.sStartDate;
+      ivTrHs = true;
+      while(loopkey("SalesMan",IVr,2,ivTrHs))begin
+      	ivtestf = true;
+      	if(IVr.SalesMan!=USr.Code)then begin ivTrHs=false; ivtestf=false;  end;
+      	if(IVr.InvDate<RepSpec.sStartDate)then begin ivtestf=false; end;
+      	if(IVr.InvDate>RepSpec.sEndDate)then begin ivTrHs=false; ivtestf=false; end;
+      	if(IVr.Invalid>0)then begin ivtestf=false; end;
+      	if(IVr.OKFlag==0)then begin ivtestf=false; end;
+      	if(nonblank(location) and IVr.Location!=location)then begin ivtestf=false; end;// Edit ************************** Monday, 17 June 2013 17:30:12
+      	
+      	if(ivtestf)then begin
+					ivcount = ivcount + 1;
+					ivcounttotal = ivcounttotal + 1;
+      	end;	
+      end;
+      resetloop(IVr);
+      if(ivcount!=0)then begin
+				StartFormat(15);
+					OutString(0,0,USr.Code,false);
+					OutString(30,0,USr.Name,false);
+					OutString(80,0,"",false);
+					OutString(120,0,"",false);
+					OutString(200,0,"",false);
+					OutString(250,0,USetStr(31240),false);
+					OutString(300,0,ivcount,false);
+				EndFormat;
+      end;
+      black_divider(0,1);
+      totallqty = totallqty + totqtysum;
+	  totallval = totallval + totvalsum;
+      totallgp = totallgp + totgpsum;
+    end; //testf1
+  end; //while USr
+  ResetLoop(USr);
+  StartFormat(15);
+    OutString(0,0,"",false);
+    OutString(30,0,"",false);
+    OutString(80,0,"",false);
+    OutString(120,0,"",false);
+    OutString(200,0,"",false);
+    OutString(250,0,USetStr(31242),false);
+    OutString(300,0,totallqty,false);
+    OutString(350,0,totallval,false);
+    OutString(400,0,totallgp,false);
+  EndFormat;
+  StartFormat(15);
+		OutString(0,0,"",false);
+		OutString(30,0,"",false);
+		OutString(80,0,"",false);
+		OutString(120,0,"",false);
+		OutString(200,0,"",false);
+		OutString(250,0,USetStr(31241),false);
+		OutString(300,0,ivcounttotal,false);
+	EndFormat;
+end; // Edit ***** 10 June 2013 13:19:00 Larisa
+  
+LIStatRn:;
+EndJob;
+return;
+END;  
