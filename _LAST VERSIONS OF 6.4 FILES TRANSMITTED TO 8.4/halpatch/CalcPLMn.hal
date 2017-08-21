@@ -1,0 +1,760 @@
+external function roundmode SetRoundModeD(Integer);
+external procedure CheckFlush(var Integer,Integer);
+external function val DivWithRateToBase1(string,Date,val,roundmode);
+external function val MulWithRateToBase1(var string,Date,val,roundmode);
+external function Boolean GetPurchaseItem(string,string,var record PIVc);
+remote function boolean CompanyIsJWLikeCompany(Integer);
+
+procedure GetPurchItemPrice(string ItemCode,var val newprp)
+begin
+  record PIVc PIr;
+  
+  if (GetPurchaseItem(ItemCode,"",PIr)) then begin
+    newprp = PIr.PurPrice;
+    if (nonblank(PIr.CurncyCode)) then begin
+      newprp = MulWithRateToBase1(PIr.CurncyCode,CurrentDate,newprp,DefaultCurRoundOff);
+    end;
+  end;
+  return;
+end;
+
+updating function Boolean CalcItemPrice(record RcVc RepSpec,string plcode,var val exvatprice,record INVc INp,string formula,Integer roundof,var boolean AddPricef)
+begin
+  record PFormVc PFr;
+  record PLDefVc PLDr,PLDBaser;
+  record PLVc PLr;
+  Boolean res;
+  Boolean pldfound;
+  Boolean pricefoundf;
+  val newpr,t;
+  val t100;
+  val frrate,to1,to2,br1,br2;
+  Integer theroundof;
+  string 20 plcurcode;
+  roundmode rnd
+  
+  
+  rnd = DefaultCurRoundoff;
+  rnd.decimals = 0;
+  rnd.step = kRoundingStep5;
+  rnd.mode = kRoundingModeHalfDown;
+  
+  AddPricef = true;
+  theroundof = roundof;
+  res = false;
+  pldfound = false;
+  PLDr.Code = plcode;
+  pldfound = ReadFirstMain(PLDr,1,true);
+  newpr = BlankVal;
+  t100 = 100;
+  PFr.Code = formula;
+  if (ReadFirstMain(PFr,1,true)) then begin
+    switch (PFr.SelBase) begin
+      case 0: 
+        newpr = INp.InPrice;
+      case 1: 
+        newpr = INp.UPrice1;
+      case 2: 
+        newpr = INp.LastPurchPrice2;
+      case 3: 
+        newpr = INp.WeighedAvPrice;
+      case 4: 
+        GetPurchItemPrice(INp.Code,newpr);
+      case 5:
+        PLDBaser.Code = PFr.BasePriceList;
+        pricefoundf = ReadFirstMain(PLDBaser,1,true);
+        if (pricefoundf) then begin
+          PLr.PLCode = PFr.BasePriceList;
+          PLr.ArtCode = INp.Code;
+          pricefoundf = ReadFirstMain(PLr,2,true);
+          if pricefoundf then begin
+            newpr = PLr.ExVatPrice;
+          end;
+        end;
+    end;
+    if (RepSpec.flags[1]<>0) then begin
+      t = newpr * INp.Markup;
+      t = t / t100;
+      newpr = newpr + t;
+    end;
+    if (pldfound) then begin
+    // Edit Start ---------------------------------------------- Edit Start
+	//Tuesday, 14 October 2014 18:39:54
+	
+    	if(nonblank(PLDr.CurncyCode))then begin
+    		plcurcode = PLDr.CurncyCode;
+    	end else begin
+    		if(PFr.SelBase==2)then begin
+					plcurcode = INp.LastPurchCurncyCode;
+    		end;
+    	end;
+    	
+	// Edit End ---------------------------------------------- Edit End
+	
+    /*if(INp.Code=="5658_1001")then begin
+    	messagebox(0,newpr);
+    	messagebox(0,plcurcode);
+    end;*/
+      switch (PFr.SelBase) begin
+        case 2:
+          if (plcurcode<>INp.LastPurchCurncyCode) then begin
+            if (nonblank(INp.LastPurchCurncyCode)) then begin
+              newpr = MulWithRateToBase1(INp.LastPurchCurncyCode,CurrentDate,newpr,DefaultCurRoundOff);
+            end;
+            if (nonblank(plcurcode)) then begin
+              newpr = DivWithRateToBase1(plcurcode,CurrentDate,newpr,DefaultCurRoundOff);
+            end;
+          end;
+        case 5:
+          if (plcurcode<>PLDBaser.CurncyCode) then begin
+            if (nonblank(PLDBaser.CurncyCode)) then begin
+              newpr = MulWithRateToBase1(PLDBaser.CurncyCode,CurrentDate,newpr,DefaultCurRoundOff);
+            end;
+            if (nonblank(plcurcode)) then begin
+              newpr = DivWithRateToBase1(plcurcode,CurrentDate,newpr,DefaultCurRoundOff);
+            end;
+          end;
+        otherwise
+          if (nonblank(plcurcode)) then begin
+            newpr = DivWithRateToBase1(plcurcode,CurrentDate,newpr,DefaultCurRoundOff);
+          end;
+      end;
+      if ((PFr.SelBase<>0) and (theroundof<>3)) then begin
+        theroundof = 3;
+      end;
+    end;
+    /*if(INp.Code=="5658_1001")then begin
+    	messagebox(0,newpr);
+    	messagebox(0,plcurcode);
+    end;*/
+    if (PFr.SelBase==5) and (pricefoundf==false) then begin
+      switch (PFr.BasePriceListOption) begin
+        case 0: //Don't add price
+          AddPricef = false;
+        case 1: //Add with zero price
+          res = true;
+          exvatprice = 0.00;
+        case 2: //Use alternative price formula
+          res = CalcItemPrice(RepSpec,plcode,exvatprice,INp,PFr.BasePriceListAltFormula,roundof,AddPricef);
+      end;
+      goto LCalcItemPrice;
+    end;
+    newpr = newpr * PFr.Perc;
+    newpr = newpr / 100;
+    if (PFr.RndTo==-3) then begin
+      PFr.RndTo = -4; //Edit***************************Sasha2,15:12 03.06.2015
+    end;
+    newpr = Round(newpr + PFr.Add1Val,SetRoundModeD(PFr.RndTo));
+    
+    
+    if(CompanyIsJWLikeCompany(currentcompany))then begin
+    	if((newpr + PFr.Add2Val)>5)then begin
+    		newpr = Round(newpr + PFr.Add2Val,rnd);// Edit ************************** Friday, 24 May 2013 14:08:31
+    	end else begin
+    		/*rnd = DefaultCurRoundoff;
+				rnd.decimals = 0;
+				rnd.step = kRoundingStepNone;
+				rnd.mode = kRoundingModeHalfUp;*/
+				newpr = 5;// Edit ************************** Thursday, 2 June 2016 15:21:35
+    	end;
+    end else begin
+			newpr = Round(newpr + PFr.Add2Val,SetRoundModeD(roundof));
+    end;
+    
+    if (newpr<>exvatprice) then begin
+      res = true;
+      exvatprice = newpr;
+    end;
+  end;
+LCalcItemPrice:;
+  CalcItemPrice = res;
+  return;
+end;
+
+updating procedure CalcItemPrices(record RcVc RepSpec,string pricelist,string itemcodes,string formula,Integer deppr,var Integer flushcnt)
+begin
+  record INVc INr;
+  record PLVc oldPLr;
+  record PLVc PLr;
+  record PLQVc PLQr;
+  row PLQVc PLQrw;
+  record PIVc PIr;
+  LongInt LLoop1;
+  string 200 infr,into;
+  string 200 infr2,into2;
+  val exvatpr;
+  Boolean found;
+  Boolean plfound,changed;
+  Boolean testf;
+  Integer ires;
+  Boolean bres;
+  Boolean AddPricef;
+	record PLDefVc PLDr;// Edit ************************** Wednesday, 22 May 2013 11:43:06
+  string 20 plcurcode;// Edit ************************** Wednesday, 22 May 2013 11:43:07
+  record PFormVc PFr;// Edit ************************** Tuesday, 14 October 2014 18:11:52
+	record PricePointListVc PPLr;// Edit ************************** Wednesday, 20 April 2016 10:23:11
+  row PricePointListVc PPLrw;// Edit ************************** Wednesday, 20 April 2016 10:23:14
+	integer pmtrw;
+	val ppprice;
+  
+  PFr.Code = formula;// Edit ************************** Tuesday, 14 October 2014 18:12:06
+  ReadFirstMain(PFr,1,true);// Edit ************************** Tuesday, 14 October 2014 18:12:05
+  
+  PLDr.Code = pricelist;// Edit ************************** Wednesday, 22 May 2013 11:43:43
+	readfirstmain(PLDr,1,true);// Edit ************************** Wednesday, 22 May 2013 11:43:44
+	plcurcode = PLDr.CurncyCode;// Edit ************************** Wednesday, 22 May 2013 11:43:44
+  
+  
+  infr2 = FirstInRange(itemcodes,20);
+  into2 = LastInRange(itemcodes,20);
+  INr.Code = infr2;
+  found = true;
+  while (LoopMain(INr,1,found)) begin
+    if (found) then begin
+      if (nonblank(itemcodes)) then begin
+        if (into2<INr.Code) then begin
+          found = false;
+        end;
+      end;
+    end;
+    if (found) then begin
+      testf = true;
+      if (nonblank(RepSpec.f2)) then begin
+        infr = FirstInRange(RepSpec.f2,20);
+        into = LastInRange(RepSpec.f2,20);
+        if ((INr.Code>into) or (INr.Code<infr)) then begin
+          testf = false;
+        end;
+      end;
+      if (INr.Terminated<>0) then begin
+        testf = false;
+      end;
+      if (testf) then begin
+        if (nonblank(RepSpec.AccStr)) then begin
+          PIr.VECode = RepSpec.AccStr;
+          PIr.ItemCode = INr.Code;
+          PIr.DefaultChoice = 1;
+          if (ReadFirstKey("DefaultChoice",PIr,3,true)==false) then begin
+            testf = false;
+          end;
+        end;
+      end;
+      if (INr.Terminated<>0) then begin
+        testf = false;
+      end;
+      if (testf) then begin
+      	
+      		ppprice = 0;
+      	  if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0 and pricelist=="RRP")then begin// Edit ************************** Wednesday, 20 April 2016 10:33:53
+						PPLr.TransDate = CurrentDate;
+						resetloop(PPLr);
+						loopbackkey("TransDate",PPLr,1,true);
+						pmtrw = matrowcnt(PPLr);
+						if(stringtoint(INr.CPSCode)<=pmtrw)then begin
+							matrowget(PPLr,stringtoint(INr.CPSCode)-1,PPLrw);
+							ppprice = PPLrw.Price;
+						end;
+					end;// Edit ************************** Wednesday, 20 April 2016 10:33:54
+      	
+        switch (deppr) begin
+          case 0:
+            PLr.PLCode = pricelist;
+            PLr.ArtCode = INr.Code;
+            plfound = ReadFirstMain(PLr,2,true);
+            if (plfound) then begin
+              if (PLr.DonotRecalculate==0) then begin
+                RecordCopy(oldPLr,PLr);
+                exvatpr = PLr.ExVatPrice;
+                changed = CalcItemPrice(RepSpec,PLr.PLCode,exvatpr,INr,formula,3,AddPricef);
+                PLr.ExVatPrice = exvatpr;
+                if(blank(PLDr.CurncyCode))then begin// Edit ************************** Wednesday, 22 May 2013 11:43:17
+                	if(PFr.SelBase==2)then begin// Edit ************************** Tuesday, 14 October 2014 18:14:14
+										plcurcode = INr.LastPurchCurncyCode;
+										PLr.CurncyCode = plcurcode;
+									end else begin
+										plcurcode = "";
+										PLr.CurncyCode = plcurcode;// Edit ************************** Tuesday, 14 October 2014 18:13:54
+									end;
+								end;// Edit ************************** Wednesday, 22 May 2013 11:43:21
+								
+								if(ppprice>0 and left(PLr.PLCode,3)=="RRP")then begin
+                	PLr.ExVatPrice = ppprice;
+                	PLr.CurncyCode = "";
+                	changed = true;
+                end;
+								
+                if (changed) then begin
+                  if (plfound) then begin
+                    ires = RecordUpdate(oldPLr,PLr,true); // Amazing logic !!!! We HAVE to rewrite the RecordUpdate
+                  end else begin
+                    bres = RecordStore(PLr,true);
+                  end;
+                  CheckFlush(flushcnt,10);
+                end;
+              end;
+            end else begin
+              PLr.PLCode = pricelist;
+              PLr.ArtCode = INr.Code;
+              PLr.Comment = INr.Name;
+              PLr.SalesAcc = "";
+              if(blank(PLDr.CurncyCode))then begin// Edit ************************** Wednesday, 22 May 2013 11:43:17
+              	if(PFr.SelBase==2)then begin// Edit ************************** Tuesday, 14 October 2014 18:14:14
+									plcurcode = INr.LastPurchCurncyCode;
+									PLr.CurncyCode = plcurcode;
+								end else begin
+									plcurcode = "";
+									PLr.CurncyCode = plcurcode;// Edit ************************** Tuesday, 14 October 2014 18:13:54
+								end;
+              end;// Edit ************************** Wednesday, 22 May 2013 11:43:21
+              exvatpr = PLr.ExVatPrice;
+              
+              
+              
+              changed = CalcItemPrice(RepSpec,PLr.PLCode,exvatpr,INr,formula,3,AddPricef);
+              
+              if(ppprice>0 and left(PLr.PLCode,3)=="RRP")then begin
+								PLr.ExVatPrice = ppprice;
+								PLr.CurncyCode = "";
+								changed = true;
+								AddPricef = true;
+							end;
+              
+              if (AddPricef==true) then begin
+                PLr.ExVatPrice = exvatpr;
+                
+                if(ppprice>0 and left(PLr.PLCode,3)=="RRP")then begin
+                	PLr.ExVatPrice = ppprice;
+                	PLr.CurncyCode = "";
+                	changed = true;
+                end;
+                bres = RecordStore(PLr,true);
+                CheckFlush(flushcnt,10);
+              end;
+              
+              
+              
+            end;
+          case 1:
+            PLQr.PLCode = pricelist;
+            PLQr.ArtCode = INr.Code;
+            plfound = ReadFirstMain(PLQr,2,true);
+            if (plfound) then begin
+
+            end else begin
+              PLQr.PLCode = pricelist;
+              PLQr.ArtCode = INr.Code;
+              PLQr.Comment = INr.Name;
+              PLQr.SalesAcc = "";
+              if(blank(PLDr.CurncyCode))then begin// Edit ************************** Wednesday, 22 May 2013 11:43:17
+              	if(PFr.SelBase==2)then begin// Edit ************************** Tuesday, 14 October 2014 18:14:14
+									plcurcode = INr.LastPurchCurncyCode;
+									PLr.CurncyCode = plcurcode;
+								end else begin
+									plcurcode = "";
+									PLr.CurncyCode = plcurcode;// Edit ************************** Tuesday, 14 October 2014 18:13:54
+								end;
+              end;// Edit ************************** Wednesday, 22 May 2013 11:43:21
+              PLQrw.QtyLimit = 1;
+              exvatpr = BlankVal;
+              changed = CalcItemPrice(RepSpec,PLQr.PLCode,exvatpr,INr,formula,3,AddPricef);
+              if (AddPricef==true) then begin
+                PLQrw.ExVatPrice = exvatpr;
+                MatRowPut(PLQr,0,PLQrw);
+                bres = RecordStore(PLr,true);
+                CheckFlush(flushcnt,10);
+              end;
+            end;
+          case 2:
+            PLr.PLCode = pricelist;
+            PLr.ArtCode = INr.Code;
+            plfound = ReadFirstMain(PLr,2,true);
+            if (plfound) then begin
+              if (PLr.DonotRecalculate==0) then begin
+                if (blank(PLr.CostPrice)) then begin
+                  RecordCopy(oldPLr,PLr);
+                  PLr.CostPrice = INr.InPrice;
+                  RecordUpdate(oldPLr,PLr,true);
+                end;
+              end;
+            end else begin
+              if (blank(PLr.CostPrice)) then begin
+                PLr.PLCode = pricelist;
+                PLr.ArtCode = INr.Code;
+                PLr.Comment = INr.Name;
+                PLr.SalesAcc = "";
+                PLr.CostPrice = INr.InPrice;
+                PLr.BBGenTrans = 1;
+                bres = RecordStore(PLr,true);
+              end;
+            end;
+        end;
+      end;
+    end;
+  end;
+  
+  
+  return;
+end;
+
+updating procedure CalcGroupPrices(record RcVc RepSpec,string pricelist,string agroup1,string formula,Integer deppr,var Integer flushcnt)// Edit ************************** Thursday, 20 August 2015 14:00:16
+begin
+  record INVc INr;
+  record PLVc oldPLr;
+  record PLVc PLr;
+  record PLQVc PLQr;
+  row PLQVc PLQrw;
+  record PIVc PIr;
+  LongInt LLoop1;
+  Boolean found;
+  Boolean plfound,changed;
+  string 200 infr,into;
+  Boolean testf;
+  val exvatpr;
+  Integer ires;
+  Boolean bres;
+  Boolean AddPricef;
+  record PLDefVc PLDr;// Edit ************************** Wednesday, 22 May 2013 11:43:06
+  string 20 plcurcode;// Edit ************************** Wednesday, 22 May 2013 11:43:07
+  integer keys;
+  string 50 keystring;
+	record PFormVc PFr;// Edit ************************** Tuesday, 14 October 2014 18:11:52
+	string 100 agroup,aclass;
+	record PricePointListVc PPLr;// Edit ************************** Wednesday, 20 April 2016 10:23:11
+  row PricePointListVc PPLrw;// Edit ************************** Wednesday, 20 April 2016 10:23:14
+	integer pmtrw;
+	val ppprice;
+	
+	
+	
+	
+	agroup = firstinrange(agroup1,10);// Edit ************************** Thursday, 20 August 2015 14:01:14
+	aclass = lastinrange(agroup1,10);// Edit ************************** Thursday, 20 August 2015 14:01:14
+	
+	
+	if(agroup==aclass)then begin
+		aclass = "";// Edit ************************** Thursday, 20 August 2015 14:01:54
+	end;
+  
+  PFr.Code = formula;// Edit ************************** Tuesday, 14 October 2014 18:12:06
+  ReadFirstMain(PFr,1,true);// Edit ************************** Tuesday, 14 October 2014 18:12:05
+	
+	PLDr.Code = pricelist;// Edit ************************** Wednesday, 22 May 2013 11:43:43
+	readfirstmain(PLDr,1,true);// Edit ************************** Wednesday, 22 May 2013 11:43:44
+	plcurcode = PLDr.CurncyCode;// Edit ************************** Wednesday, 22 May 2013 11:43:44
+  INr.Group = agroup;
+  // Edit Start ---------------------------------------------- Edit Start
+
+  
+  // Edit Start ---------------------------------------------- Edit Start
+	//Thursday, 15 August 2013 15:41:47
+	keys = 1;
+  keystring = "Group";
+  infr = FirstInRange(RepSpec.f2,20);
+	into = LastInRange(RepSpec.f2,20);
+  if(nonblank(infr))then begin
+  	INr.Code = infr;
+  	keys = 2;
+  	if(blank(agroup))then begin
+  		keys = 1;
+  		keystring = "Code";
+  	end;
+  end;
+	// Edit End ---------------------------------------------- Edit End
+  found = true;
+  
+  while (LoopKey(keystring,INr,keys,found)) begin// Edit ************************** Thursday, 15 August 2013 15:42:23
+    if (found) then begin
+      if (nonblank(agroup)) then begin
+        if (agroup<>INr.Group) then begin
+          found = false;
+        end;        
+      end;
+    end;
+    if (found) then begin
+      testf = true;
+      
+      if(nonblank(aclass))then begin
+				if(!setinset(aclass,INr.DispGroups))then begin
+					testf = false;// Edit ************************** Thursday, 20 August 2015 14:03:13
+				end;
+			end;
+      
+      if (nonblank(RepSpec.f2)) then begin
+        if ((INr.Code>into) or (INr.Code<infr)) then begin
+          testf = false;
+        end;
+        if ((INr.Code>into)) then begin
+          found = false;
+        end;
+      end;
+      if (INr.Terminated<>0) then begin
+        testf = false;
+      end;
+      if (testf) then begin
+        if (nonblank(RepSpec.AccStr)) then begin
+          PIr.VECode = RepSpec.AccStr;
+          PIr.ItemCode = INr.Code;
+          PIr.DefaultChoice = 1;
+          if (ReadFirstKey("DefaultChoice",PIr,3,true)==false) then begin
+            testf = false;
+          end;
+        end;
+      end;
+      if (testf) then begin
+      
+      		//Wednesday, 20 April 2016 10:27:30
+      		ppprice = 0;
+					if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0 and pricelist=="RRP")then begin
+						PPLr.TransDate = CurrentDate;
+						resetloop(PPLr);
+						loopbackkey("TransDate",PPLr,1,true);
+						pmtrw = matrowcnt(PPLr);
+						if(stringtoint(INr.CPSCode)<=pmtrw)then begin
+							matrowget(PPLr,stringtoint(INr.CPSCode)-1,PPLrw);
+							ppprice = PPLrw.Price;
+						end;
+					end;
+	
+					// Edit End ---------------------------------------------- Edit End
+	
+      	
+        switch (deppr) begin
+          case 0:
+            PLr.PLCode = pricelist;
+            PLr.ArtCode = INr.Code;
+            plfound = ReadFirstMain(PLr,2,true);
+            if (plfound) then begin
+              if (PLr.DonotRecalculate==0) then begin
+                RecordCopy(oldPLr,PLr);
+                exvatpr = PLr.ExVatPrice;
+                if(blank(PLDr.CurncyCode))then begin// Edit ************************** Wednesday, 22 May 2013 11:43:17
+									if(PFr.SelBase==2)then begin// Edit ************************** Tuesday, 14 October 2014 18:14:14
+										plcurcode = INr.LastPurchCurncyCode;
+										PLr.CurncyCode = plcurcode;
+									end else begin
+										plcurcode = "";
+										PLr.CurncyCode = plcurcode;// Edit ************************** Tuesday, 14 October 2014 18:13:54
+									end;
+								end;// Edit ************************** Wednesday, 22 May 2013 11:43:21
+                changed = CalcItemPrice(RepSpec,PLr.PLCode,exvatpr,INr,formula,3,AddPricef);
+                PLr.ExVatPrice = exvatpr;
+                // Edit Start ---------------------------------------------- Edit Start
+	//Wednesday, 20 April 2016 10:31:34
+	
+                if(ppprice>0 and left(PLr.PLCode,3)=="RRP")then begin
+                	PLr.ExVatPrice = ppprice;
+                	PLr.CurncyCode = "";
+                	changed = true;
+                end;
+                
+	// Edit End ---------------------------------------------- Edit End
+	
+                if (changed) then begin
+                  if (plfound) then begin
+                    ires = RecordUpdate(oldPLr,PLr,true); // Amazing logic !!!! We HAVE to rewrite the RecordUpdate
+                  end else begin
+                    bres = RecordStore(PLr,true);
+                  end;
+                  CheckFlush(flushcnt,10);              
+                end;
+              end;
+            end else begin
+              PLr.PLCode = pricelist;
+              PLr.ArtCode = INr.Code;
+              PLr.Comment = INr.Name;
+              PLr.SalesAcc = "";
+              if(blank(PLDr.CurncyCode))then begin// Edit ************************** Wednesday, 22 May 2013 11:43:17
+              	if(PFr.SelBase==2)then begin// Edit ************************** Tuesday, 14 October 2014 18:14:14
+									plcurcode = INr.LastPurchCurncyCode;
+									PLr.CurncyCode = plcurcode;
+								end else begin
+									plcurcode = "";
+									PLr.CurncyCode = plcurcode;// Edit ************************** Tuesday, 14 October 2014 18:13:54
+								end;
+              end;// Edit ************************** Wednesday, 22 May 2013 11:43:21
+              exvatpr = PLr.ExVatPrice;
+              changed = CalcItemPrice(RepSpec,PLr.PLCode,exvatpr,INr,formula,3,AddPricef);
+              if (AddPricef==true) then begin
+                PLr.ExVatPrice = exvatpr;
+                
+                if(ppprice>0 and left(PLr.PLCode,3)=="RRP")then begin
+                	PLr.ExVatPrice = ppprice;
+                	PLr.CurncyCode = "";
+                	changed = true;
+                end;
+                
+                bres = RecordStore(PLr,true);
+                CheckFlush(flushcnt,10);
+              end;
+            end;
+          case 2:
+            CalcItemPrices(RepSpec,pricelist,RepSpec.f2,formula,deppr,flushcnt);
+          otherwise
+            PLQr.PLCode = pricelist;
+            PLQr.ArtCode = INr.Code;
+            plfound = ReadFirstMain(PLQr,2,true);
+            if (plfound) then begin
+            end else begin
+              PLQr.PLCode = pricelist;
+              PLQr.ArtCode = INr.Code;
+              PLQr.Comment = INr.Name;
+              PLQr.SalesAcc = "";
+              if(blank(PLDr.CurncyCode))then begin// Edit ************************** Wednesday, 22 May 2013 11:43:26
+              	if(PFr.SelBase==2)then begin// Edit ************************** Tuesday, 14 October 2014 18:14:14
+									plcurcode = INr.LastPurchCurncyCode;
+									PLr.CurncyCode = plcurcode;
+								end else begin
+									plcurcode = "";
+									PLr.CurncyCode = plcurcode;// Edit ************************** Tuesday, 14 October 2014 18:13:54
+								end;
+              end;// Edit ************************** Wednesday, 22 May 2013 11:43:26
+              PLQrw.QtyLimit = 1;
+              exvatpr = BlankVal;
+              changed = CalcItemPrice(RepSpec,PLQr.PLCode,exvatpr,INr,formula,3,AddPricef);
+              if (AddPricef) then begin
+                PLQrw.ExVatPrice = exvatpr;
+                MatRowPut(PLQr,0,PLQrw);
+                bres = RecordStore(PLQr,true);
+                CheckFlush(flushcnt,10);
+              end;
+            end;
+        end;
+      end;
+    end;
+  end;
+  return;
+end;
+
+updating procedure CalcPrices(record RcVc RepSpec,record PLDefVc PLr,var Integer flushcnt)
+begin
+  row PLDefVc PLDefrw;
+  Integer rwcnt,i;
+  string 200 infr,into;
+  string 200 infr2,into2;
+  record INVc INr;
+  
+  rwcnt = MatRowCnt(PLr);
+  if (rwcnt==0) then begin
+    if (PLr.DepPrice==2) then begin
+      if (nonblank(RepSpec.f3)) then begin
+        CalcGroupPrices(RepSpec,PLr.Code,RepSpec.f3,"",PLr.DepPrice,flushcnt);
+      end else begin
+        CalcItemPrices(RepSpec,PLr.Code,RepSpec.f2,PLDefrw.Formula,PLr.DepPrice,flushcnt);
+      end;
+    end;
+  end;
+  
+  if(PLr.Code=="RRP")then begin
+  	if(nonblank(RepSpec.f2))then begin
+  		INr.Code = RepSpec.f2;
+			if(readfirstmain(INr,1,true) and INr.Group==PLDefrw.ItemCode and stringtoint(INr.CPSCode)>0)begin
+				CalcItemPrices(RepSpec,PLr.Code,PLDefrw.ItemCode,PLDefrw.Formula,PLr.DepPrice,flushcnt);
+			end;
+  	end else begin
+  		INr.Code = "";
+  		while(loopmain(INr,1,true) and stringtoint(INr.CPSCode)>0)begin
+  			RepSpec.f2 = INr.Code;
+  			CalcItemPrices(RepSpec,PLr.Code,RepSpec.f2,PLDefrw.Formula,PLr.DepPrice,flushcnt);
+  		end;
+  	end;
+  end;// Edit ************************** Thursday, 12 May 2016 12:40:17
+  
+  
+  
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(PLr,i,PLDefrw);
+    	
+    if (ProgramType==4 or ProgramType==9) then begin
+      PLDefrw.CodeType = 1;
+    end;
+    switch (PLDefrw.CodeType) begin
+      case 0:
+        if (nonblank(RepSpec.f3)) then begin
+          if (PLDefrw.ItemCode==RepSpec.f3) then begin
+            CalcGroupPrices(RepSpec,PLr.Code,PLDefrw.ItemCode & ":" & PLDefrw.DispGroups,PLDefrw.Formula,PLr.DepPrice,flushcnt);// Edit ************************** Thursday, 20 August 2015 13:58:20
+          end;
+        end else begin
+					//if (PLDefrw.ItemCode==RepSpec.f3) then begin// Edit ************************** Friday, 5 July 2013 10:01:50
+					if(nonblank(PLDefrw.ItemCode))then begin
+						if(nonblank(RepSpec.f2))then begin
+							INr.Code = RepSpec.f2;
+							if(readfirstmain(INr,1,true) and INr.Group==PLDefrw.ItemCode)begin
+								CalcGroupPrices(RepSpec,PLr.Code,PLDefrw.ItemCode & ":" & PLDefrw.DispGroups,PLDefrw.Formula,PLr.DepPrice,flushcnt);
+							end;
+						end else begin
+							CalcGroupPrices(RepSpec,PLr.Code,PLDefrw.ItemCode & ":" & PLDefrw.DispGroups,PLDefrw.Formula,PLr.DepPrice,flushcnt);
+						end;
+					end else begin
+						CalcGroupPrices(RepSpec,PLr.Code,PLDefrw.ItemCode & ":" & PLDefrw.DispGroups,PLDefrw.Formula,PLr.DepPrice,flushcnt);
+					end;
+					//end;// Edit ************************** Friday, 5 July 2013 10:01:51
+        end;
+      case 1:
+        if (nonblank(RepSpec.f2)) then begin
+          infr = FirstInRange(RepSpec.f2,20);
+          into = LastInRange(RepSpec.f2,20);
+          infr2 = FirstInRange(PLDefrw.ItemCode,20);
+          into2 = LastInRange(PLDefrw.ItemCode,20);
+          if(blank(PLDefrw.ItemCode) and nonblank(RepSpec.f2))then begin
+          		PLDefrw.ItemCode = RepSpec.f2;// Edit ************************** Thursday, 21 February 2013 10:48:53
+          end;
+          if(nonblank(infr2) and nonblank(into2))then begin// Edit ************************** Thursday, 21 February 2013 10:14:59
+						if (into>=infr2) then begin
+							if (infr<=into2) then begin
+								CalcItemPrices(RepSpec,PLr.Code,PLDefrw.ItemCode,PLDefrw.Formula,PLr.DepPrice,flushcnt);
+							end;
+						end;
+          end else begin// Edit ************************** Thursday, 21 February 2013 10:15:00
+          		CalcItemPrices(RepSpec,PLr.Code,PLDefrw.ItemCode,PLDefrw.Formula,PLr.DepPrice,flushcnt);
+          end;// Edit ************************** Thursday, 21 February 2013 10:15:01
+        end else begin
+          CalcItemPrices(RepSpec,PLr.Code,PLDefrw.ItemCode,PLDefrw.Formula,PLr.DepPrice,flushcnt);
+        end;
+    end;
+    MaintTrace(PLDefrw.ItemCode);    
+  end;
+  return;
+end;
+
+/* f1 = pricelists
+   f3 = item group
+   f2 = items
+   AccStr = Supplier
+*/
+global
+updating procedure CalcPriceListsMn(record RcVc RepSpec)
+begin
+  string 200 prfr,prto;
+  record PLDefVc PLr;
+  Boolean found,testf;
+  Integer flushcnt;
+   
+   
+  prfr = FirstInRange(RepSpec.f1,20);
+  prto = LastInRange(RepSpec.f1,20);
+  found = true;
+  PLr.Code = prfr;
+  while (LoopMain(PLr,1,found)) begin
+    if (found) then begin
+      if (nonblank(prto)) then begin
+        if (PLr.Code>prto) then begin
+          found = false;
+        end;
+      end;
+    end;
+    if (found) then begin
+      testf = true;
+      if (nonblank(RepSpec.AccStr)) then begin
+        if (PLr.DepPrice==2) then begin
+          if (PLr.BBVECode!=RepSpec.AccStr) then begin testf = false; end;
+        end;
+      end;
+      if (testf) then begin
+        CalcPrices(RepSpec,PLr,flushcnt);
+      end;
+    end;
+    MaintTrace(PLr.Code);                          
+  end;
+  return;
+end;
+

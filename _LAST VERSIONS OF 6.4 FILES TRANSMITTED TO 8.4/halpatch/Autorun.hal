@@ -1,0 +1,331 @@
+external function longint DateDiff(date,date);
+external procedure CreatePLActivityMn(record RcVc);
+remote function boolean CompanyIsJWLikeCompany(Integer);
+external updating procedure GruppoCoinParseAndReplaceInputFiles(string);
+external updating procedure GruppoCoinParseAndReplaceOutputFiles();
+
+global updating procedure AutoUnGroupIV()
+begin
+record IVVc IVr;
+date todate;
+boolean TrHs,testf;
+
+  todate = addday(currentdate,-16);
+  IVr.InvDate = addday(currentdate,-1);
+  if(CompanyIsJWLikeCompany(currentcompany))then begin
+  	IVr.InvDate = currentdate;	
+  end;
+  TrHs = true;
+  while(loopbackkey("InvDate",IVr,1,TrHs))begin
+  	testf = true;
+    if(IVr.InvDate<todate)then begin TrHs = false; testf = false; end;
+    if(IVr.OKFlag==0)then begin testf = false;  end;
+    
+    if(testf)then begin
+      if(nonblank(IVr.SalesGroup))then begin
+        IVr.SalesGroup = "";
+        recordStore(IVr,true);
+      end;
+    end;
+    
+  end;
+
+return;
+end;
+
+
+global updating procedure CUUpdateLoyaltyRebCode()
+begin
+  record CUVc CUr;
+  record LCMLevelSetBlock LCMLevelSetBl;
+  row LCMLevelSetBlock LCMLevelSetrw;
+  Integer i,rwcnt;
+  record LoyaltyCardVc LoyaltyCardr;
+  boolean testf;
+  record RebVc Rebr,Reb2r;
+  string 20 rebcode;
+  string 20 clevel;
+  val reb,reb2,points;
+  
+  blockload(LCMLevelSetBl);
+  rwcnt = matrowcnt(LCMLevelSetBl);
+  
+  LoyaltyCardr.SerNr = "";
+  while(loopmain(LoyaltyCardr,1,true))begin
+    reb = 0;
+    reb2 = 0;
+    
+    testf = true;
+    if(LoyaltyCardr.Closed>0)then begin testf = false; end;
+    
+    if(testf)then begin
+      CUr.Code = LoyaltyCardr.CustCode;
+      if(readfirstmain(CUr,1,true))then begin
+				points = LoyaltyCardr.PointsBalance;
+				clevel = LoyaltyCardr.LCMLevel;
+				for (i=0;i<rwcnt;i=i+1) begin
+					MatRowGet(LCMLevelSetBl,i,LCMLevelSetrw);
+					if ((points>=LCMLevelSetrw.FromPoints) and ((points<=LCMLevelSetrw.ToPoints) or (LCMLevelSetrw.ToPoints==0)) and (clevel==LCMLevelSetrw.LCMLevel)) then begin
+						rebcode = LCMLevelSetrw.RebCode;
+						i = rwcnt;
+					end;
+				end;  
+				if(nonblank(rebcode))then begin
+					Rebr.Code = rebcode;
+					readfirstmain(Rebr,1,true);
+					reb = Rebr.vra0;
+					if(nonblank(CUr.RebCode))then begin
+						Reb2r.Code = CUr.RebCode;
+						readfirstmain(Reb2r,1,true);
+						reb2 = Reb2r.vra0;
+					end;
+				
+					if(reb>reb2)then begin
+						CUr.RebCode = Rebr.Code;
+						recordStore(CUr,true);
+					end;
+				end;
+      end;
+    end;
+  end;
+  
+return;
+end;
+
+
+global webpublic updating procedure WebCUUPdate()
+begin
+	
+	CUUpdateLoyaltyRebCode;
+
+return;
+end;
+
+global updating procedure AutoCetRebCodeCU()
+begin
+record CUVc CUr;
+record RebTableBlock RTb;
+row RebTableBlock RTrw;
+boolean testf,TrHs,done;
+integer mtrw,i;
+record RebVc Rebr,Reb2r;
+
+	blockload(RTb);
+	mtrw = matrowcnt(RTb);
+	
+	if(mtrw>0)then begin
+		Trhs = true;
+		CUr.Code = "";
+		CUr.EmployeeType = 1;
+		while(loopkey("EmployeeActCode",CUr,2,TrHs))begin
+			done = false;
+			testf = true;
+			
+			if(CUr.EmployeeType==0)then begin TrHs = false; testf = false; end;
+			if(blank(CUr.DateCreated))then begin testf = false; end;
+			
+			if(testf)then begin
+				for(i=0;i<mtrw;i=i+1)begin
+					matrowget(RTb,i,RTrw);
+					if(datediff(currentdate,CUr.DateCreated)>=RTrw.Days)then begin
+            if(nonblank(CUr.RebCode))then begin
+              Rebr.Code = CUr.RebCode;
+              if(readfirstmain(Rebr,1,true))then begin
+                Reb2r.Code = RTrw.RebCode;
+                if(readfirstmain(Reb2r,1,true))then begin
+                  if(Reb2r.vra0>Rebr.vra0)then begin
+                    CUr.RebCode = RTrw.RebCode;
+                    done = true;
+                  end;
+                end;
+              end else begin
+                if(CUr.RebCode!=RTrw.RebCode)then begin
+                  CUr.RebCode = RTrw.RebCode;
+                  done = true;
+                end;
+              end;
+            end else begin
+              if(CUr.RebCode!=RTrw.RebCode)then begin
+                CUr.RebCode = RTrw.RebCode;
+                done = true;
+              end;
+						end;
+					end;
+				end;
+			end;
+			if(done)then begin
+				recordstore(CUr,true);
+			end;
+			
+		end;
+	end;
+
+
+return;
+end;
+
+
+global updating procedure TimeAutoRunMinutes()
+begin
+	record CompaniesBlock CBb;
+	integer i,mtrw;
+	record RcVc RepSpec;
+	
+	blockload(CBb);
+	
+	if(getminute(currenttime)==6 and gethour(currenttime)==10)then begin
+		logtext(0,"TimeAutoRunMinutes in " & getminute(currenttime));
+		mtrw = matrowcnt(CBb);
+		For(i=0;i<mtrw;i=i+1) begin
+			if(CompanyIsJWLikeCompany(i) or i==1 or i==2 or i==4 or i==5 or i==6 or i==7 or i==8 or i==9 or i==25 or i==16)then begin
+				if (SetCompany(i,false)) then begin
+					logtext(0,"CreatePLActivityMn in " & i);
+					CreatePLActivityMn(RepSpec);
+				end;
+			end;
+		end; 
+		ResetCompany(1);  
+	end;
+	
+return;
+end;
+
+global updating procedure TimeAutoRun()
+begin
+	integer SWAROVSKI,LLADRO,Jewelry,Villeroy,Rosental,Baccarat,Ambience,IvDelorme,Creative,CassaCoin,Xtravaganza;
+	record RcVc RepSpec;
+	
+	SWAROVSKI = 1;
+	LLADRO = 2;
+	Jewelry = 3;
+	Villeroy = 4;
+	Rosental = 5;
+	Baccarat = 6;
+	Ambience = 7;
+	IvDelorme = 8;
+	Creative = 9;
+	CassaCoin = 25;
+	Xtravaganza = 16;
+		
+	if (SetCompany(SWAROVSKI,false)) then begin
+		AutoCetRebCodeCU;
+		AutoUnGroupIV;
+		CUUpdateLoyaltyRebCode;
+		ResetCompany(SWAROVSKI);  
+  end;
+  if (SetCompany(LLADRO,false)) then begin
+		AutoUnGroupIV;
+		ResetCompany(LLADRO);  
+  end;
+  if (SetCompany(Jewelry,false)) then begin
+		//AutoUnGroupIV;
+		CreatePLActivityMn(RepSpec);
+		ResetCompany(Jewelry);  
+  end;
+  
+  if (SetCompany(17,false)) then begin
+		//AutoUnGroupIV;
+		CreatePLActivityMn(RepSpec);
+		ResetCompany(17);  
+  end;
+  if (SetCompany(19,false)) then begin
+		//AutoUnGroupIV;
+		CreatePLActivityMn(RepSpec);
+		ResetCompany(19);  
+  end;
+  if (SetCompany(20,false)) then begin
+		//AutoUnGroupIV;
+		CreatePLActivityMn(RepSpec);
+		ResetCompany(20);  
+  end;
+  if (SetCompany(21,false)) then begin
+		//AutoUnGroupIV;
+		CreatePLActivityMn(RepSpec);
+		ResetCompany(21);  
+  end;
+  if (SetCompany(22,false)) then begin
+		//AutoUnGroupIV;
+		CreatePLActivityMn(RepSpec);
+		ResetCompany(22);  
+  end;
+  if (SetCompany(23,false)) then begin
+		//AutoUnGroupIV;
+		CreatePLActivityMn(RepSpec);
+		ResetCompany(23);  
+  end;
+  if (SetCompany(24,false)) then begin
+		//AutoUnGroupIV;
+		CreatePLActivityMn(RepSpec);
+		ResetCompany(24);  
+  end;
+  
+  
+  if (SetCompany(Villeroy,false)) then begin
+		AutoUnGroupIV;
+		CreatePLActivityMn(RepSpec);
+		ResetCompany(Villeroy);  
+  end;
+  if (SetCompany(Rosental,false)) then begin
+		AutoUnGroupIV;
+		ResetCompany(Rosental);  
+  end;
+  if (SetCompany(Baccarat,false)) then begin
+		AutoUnGroupIV;
+		ResetCompany(Baccarat);  
+  end;
+  if (SetCompany(Ambience,false)) then begin
+		AutoUnGroupIV;
+		ResetCompany(Ambience);  
+  end;
+  if (SetCompany(IvDelorme,false)) then begin
+		AutoUnGroupIV;
+		ResetCompany(IvDelorme);  
+  end;
+  if (SetCompany(Creative,false)) then begin
+		AutoUnGroupIV;
+		ResetCompany(Creative);  
+  end;
+  if (SetCompany(CassaCoin,false)) then begin
+		AutoUnGroupIV;
+		ResetCompany(CassaCoin);
+  end;
+  if (SetCompany(Xtravaganza,false)) then begin
+		AutoUnGroupIV;
+		ResetCompany(Xtravaganza);
+  end;
+  
+  
+	
+
+return;
+end;
+
+global updating procedure BackgroundOperations()
+begin
+  Time InTransmissionBegin,InTransmissionEnd,
+       OutTransmissionBegin,OutTransmissionEnd;
+  record CoinSettingsBlock CoinSb;
+  string 255 path;
+  
+  BlockLoad(CoinSb);
+  path = CoinSb.inDir;
+  InTransmissionBegin = stringtotime("11:25:00");
+  InTransmissionEnd = stringtotime("11:30:00");
+  OutTransmissionBegin = stringtotime("23:15:00");
+  OutTransmissionEnd = stringtotime("23:20:00");
+  TimeAutoRunMinutes;
+    
+  if (CurrentTime >= InTransmissionBegin) and (CurrentTime <= InTransmissionEnd) then begin
+    if (SetCompany(25,false)) then begin
+      GruppoCoinParseAndReplaceInputFiles(path);
+    end;
+    ResetCompany(25);  
+  end;
+  
+  if (CurrentTime >= OutTransmissionBegin) and (CurrentTime <= OutTransmissionEnd) then begin
+    if (SetCompany(25,false)) then begin
+      GruppoCoinParseAndReplaceOutputFiles;
+    end;
+    ResetCompany(25);  
+  end;
+end;
