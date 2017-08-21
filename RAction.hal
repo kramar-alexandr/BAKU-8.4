@@ -1,0 +1,294 @@
+external inner function roundmode SetRoundModeD(Integer);// Edit ************************** Tuesday, 1 April 2014 17:03:06
+
+global
+updating function LongInt IVVcRecordCheck(record IVVc IVp,record IVVc IV2p,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  Integer insertmode,updatemode;
+  record IVrsVc IVrsr,IV1rsr;
+  record INVc INr;
+  record LocalMachineVc LMr;
+  LongInt sernr;
+  integer i,rwcnt;
+  row IVVc IVpw;
+  
+  res = 0;
+  
+  //SetLangMode(LangRussian,"RUS",0);// Edit ************************** Wednesday, 5 November 2014 13:31:31
+ 
+  res=inner.IVVcRecordCheck(IVp,IV2p,stat,long4);
+  if res!=-1 then begin
+    insertmode = 1;//Rs_insert
+    updatemode = 2;//Rs_update
+    if IVp.OKFlag==1 and (stat==insertmode or IV2p.OKFlag==0) then begin
+      rwcnt = MatRowCnt(IVp);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(IVp,i,IVpw);
+        IV1rsr.SerNr = 999999999;
+        if ReadLastMain(IV1rsr,1,false) then begin
+          sernr = IV1rsr.SerNr + 1;
+        end else begin
+          sernr = 1;
+        end;
+        if nonblank(IVpw.ArtCode) then begin
+          RecordNew(IVrsr);
+          IVrsr.SerNr = sernr;
+          IVrsr.IVNr = IVp.SerNr;
+          IVrsr.TransDate = IVp.TransDate;
+          IVrsr.RowNr = i;
+          IVrsr.ArtCode = IVpw.ArtCode;
+          IVrsr.Spec = IVpw.Spec;
+          if IVp.InvType==3 then begin
+            IVrsr.Quant = -IVpw.Quant;
+            IVrsr.FIFO = -IVpw.FIFO;
+            IVrsr.Sum = -IVpw.Sum;
+          end else begin
+            IVrsr.Quant = IVpw.Quant;
+            IVrsr.FIFO = IVpw.FIFO;
+            IVrsr.Sum = IVpw.Sum;
+          end;
+          INr.Code = IVpw.ArtCode;
+          if ReadFirstMain(INr,1,true) then begin
+            IVrsr.Group = INr.Group;
+            IVrsr.DispGroups = INr.DispGroups;
+          end;
+          IVrsr.MachineName = IVp.MachineName;
+          if RecordInsert(IVrsr,true) then begin 
+          end;
+        end;
+      end;
+    end;
+  end;
+
+  LIVVcRecordCheck:;
+  IVVcRecordCheck = res;
+  RETURN;
+END;  
+
+
+global
+updating function LongInt IVVcRecordImportAfter(var record IVVc IVp,record IVVc IV2p,LongInt long3,LongInt long4)
+BEGIN
+  LongInt res;
+  record IVrsVc IVrsr,IV1rsr;
+  record INVc INr;
+  record LocalMachineVc LMr;
+  LongInt sernr;
+  integer i,rwcnt;
+  row IVVc IVpw;
+  
+  res = inner.IVVcRecordImportAfter(IVp,IV2p,long3,long4);
+  if res==-1 then begin
+    if (IVp.OKFlag==1 and IVp.Invalid==0) then begin
+      rwcnt = MatRowCnt(IVp);
+      IV1rsr.SerNr = 999999999;
+			if (ReadLastMain(IV1rsr,1,false)) then begin
+				sernr = IV1rsr.SerNr + 1;
+			end else begin
+				sernr = 1;
+			end;
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(IVp,i,IVpw);
+        if (nonblank(IVpw.ArtCode)) then begin
+          RecordNew(IVrsr);
+          IVrsr.SerNr = sernr;
+          IVrsr.IVNr = IVp.SerNr;
+          IVrsr.TransDate = IVp.TransDate;
+          IVrsr.RowNr = i;
+          IVrsr.ArtCode = IVpw.ArtCode;
+          IVrsr.Spec = IVpw.Spec;
+          if IVp.InvType==3 then begin
+            IVrsr.Quant = -IVpw.Quant;
+            IVrsr.FIFO = -IVpw.FIFO;
+            IVrsr.Sum = -IVpw.Sum;
+          end else begin
+            IVrsr.Quant = IVpw.Quant;
+            IVrsr.FIFO = IVpw.FIFO;
+            IVrsr.Sum = IVpw.Sum;
+          end;
+          INr.Code = IVpw.ArtCode;
+          if ReadFirstMain(INr,1,true) then begin
+            IVrsr.Group = INr.Group;
+            IVrsr.DispGroups = INr.DispGroups;
+          end;
+          IVrsr.MachineName = IVp.MachineName;
+          RecordInsert(IVrsr,true);
+          sernr = sernr + 1;
+        end;
+      end;
+    end;
+  end;
+  
+  IVVcRecordImportAfter = res; 
+  RETURN;
+END;
+
+global
+updating function LongInt ExternalStoreVcRecordCheck(record ExternalStoreVc ESp,record ExternalStoreVc ES2p,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  
+  
+  res = 0;
+  if (blank(ESp.Code)) then begin
+    RecordCheckError(1058,ESp.Code,-1,"Code");      
+    res = -1; 
+    goto LExternalStoreVcRecordCheck;
+  end;
+  
+
+  LExternalStoreVcRecordCheck:;
+  ExternalStoreVcRecordCheck = res;
+  RETURN;
+END; 
+
+updating procedure ExtSalesUpdateLoyaltyCard(string custcode,val sum,record ExternalSalesVc ESp)
+begin
+ record LoyaltyCardVc LCr;
+ record PointsHistVc PHr;
+ 
+ LCr.CustCode = custcode;
+ if(readfirstkey("ActCustCode",LCr,1,true))then begin
+ 	LCr.StartBalance = LCr.StartBalance + sum;
+ 	recordstore(LCr,true);
+ 	
+ 	recordnew(PHr);
+ 	PHr.SerNr = NextSerNr("PointsHistVc",PHr.TransDate,-1,false,"");
+ 	PHr.FileName = "ExternalSalesVc";
+ 	PHr.TransNr = ESp.SerNr;
+ 	PHr.LMCardNr = LCr.SerNr;
+	PHr.FWBalance = LCr.PointsBalance;
+	PHr.Points = sum;
+	PHr.CustCode = ESp.CustCode;
+	PHr.Location = ESp.Location;
+ 	RecordStore(PHr,false); 
+ end;
+
+return;
+end;
+
+
+global
+updating function LongInt ExternalSalesVcRecordRemoveTest(record ExternalSalesVc ESp,record ExternalSalesVc ES2p,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  
+  res = 1;
+  
+  if(ESp.OKFlag==1)then begin
+  	if (stat>0) then begin
+			MessageBox(1560,"");
+			res = 0;
+		end;
+  	
+  end;
+  ExternalSalesVcRecordRemoveTest = res;
+  RETURN;
+END;
+
+
+global
+updating function LongInt ExternalSalesVcRecordDefaults(record ExternalSalesVc ESp,record ExternalSalesVc ES2p,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+ 
+  ESp.TransDate = currentdate;
+	
+  ExternalSalesVcRecordDefaults = res;
+  RETURN;
+END; 
+
+global
+updating function LongInt ExternalSalesVcRecordCheck(record ExternalSalesVc ESp,record ExternalSalesVc ES2p,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  Integer insertmode,updatemode;
+  record LoyaltyCardVc LCr;
+
+  res = 0;
+  
+  if (ESp.SerNr<0) then begin
+  	ESp.SerNr = NextSerNr("ExternalSalesVc",CurrentDate,-1,false,"");
+  end;
+  if (blank(ESp.CustCode)) then begin
+    RecordCheckError(1058,ESp.CustCode,-1,"CustCode");      
+    res = -1; 
+    goto LExternalSalesVcRecordCheck;
+  end;
+  if (blank(ESp.TransDate)) then begin
+    RecordCheckError(1058,ESp.TransDate,-1,"TransDate");      
+    res = -1; 
+    goto LExternalSalesVcRecordCheck;
+  end;
+  if (blank(ESp.Location)) then begin
+    RecordCheckError(1058,ESp.Location,-1,"Location");      
+    res = -1; 
+    goto LExternalSalesVcRecordCheck;
+  end;
+  if (ESp.Sum==0) then begin
+    RecordCheckError(1058,ESp.Sum,-1,"Sum");      
+    res = -1; 
+    goto LExternalSalesVcRecordCheck;
+  end;
+  if(ESp.OKFlag==1)then begin
+  	LCr.CustCode = ESp.CustCode;
+  	if(readfirstkey("ActCustCode",LCr,1,true)==false)then begin
+  		RecordCheckError(31003,ESp.CustCode,-1,"CustCode");      
+			res = -1; 
+			goto LExternalSalesVcRecordCheck;
+  	end;
+  end;
+  
+  
+	insertmode = 1;
+  updatemode = 2;
+  
+  if(stat==insertmode)then begin
+  	if(ESp.OKFlag==1)then begin
+			ExtSalesUpdateLoyaltyCard(ESp.CustCode,ESp.Sum,ESp);
+		end;
+	end;
+	if(stat==updatemode)then begin
+  	if(ESp.OKFlag==1 and ES2p.OKFlag==0)then begin
+			ExtSalesUpdateLoyaltyCard(ESp.CustCode,ESp.Sum,ESp);
+		end;
+		if(ESp.OKFlag==0 and ES2p.OKFlag==1)then begin
+			ExtSalesUpdateLoyaltyCard(ESp.CustCode,-ESp.Sum,ESp);
+		end;
+	end;
+	
+  LExternalSalesVcRecordCheck:;
+  ExternalSalesVcRecordCheck = res;
+  RETURN;
+END; 
+
+
+
+
+global
+function LongInt GCVcRecordDefaults(var record GCVc GCr,record GCVc GC2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+	res = inner.GCVcRecordDefaults(GCr,GC2r,stat,long4);	
+	GCr.Comment = CurMachineName; 
+ 	GCVcRecordDefaults = res; 
+  RETURN;
+END;	
+
+
+global
+function LongInt GCSVcRecordCheck(var record GCSVc GCSr,record GCSVc GCS2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+	res = inner.GCSVcRecordCheck(GCSr,GCS2r,stat,long4);	
+	if (GCSr.ExpiryDate<=GCSr.TransDate) then begin				//Edit--------Dima-------30.12.2014
+    		RecordCheckError(1142," " & GCSr.ExpiryDate,-1,"ExpiryDate");
+    		res = -1;
+  	end;
+
+ 	GCSVcRecordCheck = res; 
+  RETURN;
+END;	
