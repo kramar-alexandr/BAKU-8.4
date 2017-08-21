@@ -1,0 +1,355 @@
+external procedure ExtractObj(string,var Integer,var string);
+
+
+SetLangMode(LangRussian,"RUS",0);
+
+
+global procedure PackReportRn(record RcVc RepSpec)
+begin
+	Record StockMovVc SMr;
+	record PackListVc PackLr;
+	row PackListVc PackLrw;
+	integer i,mtrw;
+	
+	SMr.SerNr = RepSpec.long1;
+	PackLr.SMSerNr = RepSpec.long1;
+	startreportnoheaderjob("Распределение мест в траке");
+	if(readfirstmain(SMr,1,true))then begin
+	startformat(15);
+		outstring(0,0,"Track №",false);
+		outstring(70,0,SMr.TruckInfo,false);
+		outstring(140,0,"Дата выхода",false);
+		if(SMr.SentOKFlag==1)then begin
+			outstring(200,0,SMr.SentTransDate,false);
+		end else begin
+			outstring(200,0,"Не отправлен",false);
+		end;
+		outstring(250,0,"Дата прибытия",false);
+		if(SMr.OKFlag==1)then begin
+			outstring(300,0,SMr.TransDate,false);
+		end else begin
+			if(SMr.OKFlag==1)then begin
+				outstring(300,0,"В пути",false);
+			end else begin
+				outstring(300,0,"Не отправлен",false);
+			end;
+		end;
+	endformat;
+	startformat(15);
+		outstring(0,0,"Заказ",false);
+		outstring(70,0,"Поставщик",false);
+		outstring(140,0,"Pack",false);
+		outstring(200,0,"Вес",false);
+		outstring(250,0,"Объем",false);
+		outstring(300,0,"Примечание",false);
+	endformat;
+	
+		if(readfirstkey("SMSerNr",PackLr,1,true))then begin
+			mtrw = matrowcnt(PackLr);
+			For(i=0;i<mtrw;i=i+1) begin
+	  		matrowget(PackLr,i,PackLrw);
+	  		startformat(15);
+					outstring(0,0,PackLrw.OrderNr,false);
+					outstring(70,0,PackLrw.VEName,false);
+					outstring(140,0,PackLrw.Pack,false);
+					outstring(200,0,PackLrw.Weight,false);
+					outstring(250,0,PackLrw.Volume,false);
+					outstring(300,0,PackLrw.Comment,false);
+				endformat;
+			end; 
+			gray_divider(0,300);
+			startformat(15);
+				outstring(0,0,"Всего:",false);
+				outstring(70,0,"",false);
+				outstring(140,0,PackLr.SumPack,false);
+				outstring(200,0,PackLr.SumWeight,false);
+				outstring(250,0,PackLr.SumVolume,false);
+			endformat;
+		
+		end;
+	end;
+	
+	endjob;
+
+return;
+end;
+
+
+global procedure FillArrayListPackListPU(longint sernr,var integer cnt,var array string vendor,var array string vendorname,var array string order)
+begin
+	record PUVc PUr;
+	row PUVc PUrw;
+	record INVc INr;
+	record CUVc CUr;
+	integer mtrw,i,ocnt,j;
+	string 100 tstr;
+	boolean foundf;
+	record DIVc DIr;
+	
+	PUr.SerNr = sernr;
+	if(readfirstmain(PUr,1,true))then begin
+		mtrw = matrowcnt(PUr);
+		For(i=0;i<mtrw;i=i+1) begin
+			matrowget(PUr,i,PUrw);
+			INr.Code = PUrw.ArtCode;
+			if(readfirstmain(INr,1,true))then begin
+				ocnt=0;
+				ExtractObj(INr.DispGroups,ocnt,tstr);
+				tstr = "";
+				ExtractObj(INr.DispGroups,ocnt,tstr);
+				foundf = false;
+				For(j=0;j<cnt;j=j+1) begin
+	  			if(vendor[j]==tstr and order[j]==PUrw.SerialNr)then begin
+	  				foundf = true;
+	  			end;
+				end; 
+				if(!foundf)then begin
+					vendor[cnt] = tstr;
+					order[cnt] = PUrw.SerialNr;
+					cnt = cnt + 1;
+				end;
+			end;  
+		end; 
+	end;
+	For(j=0;j<cnt;j=j+1) begin
+		DIr.Code = vendor[j];
+		if(readfirstmain(DIr,1,true))then begin
+			CUr.Name = DIr.Name;
+			if(readfirstkey("Name",CUr,1,true))then begin
+				vendor[j] = CUr.Code;
+				vendorname[j] = CUr.Name;
+			end;
+		end;		
+	end;
+
+return;
+end;
+
+global procedure FillArrayListPackListSM(longint sernr,var integer cnt,var array string vendor,var array string vendorname,var array string order)
+begin
+	record StockMovVc SMr;
+	row StockMovVc SMrw;
+	record INVc INr;
+	record CUVc CUr;
+	integer mtrw,i,ocnt,j;
+	string 100 tstr;
+	boolean foundf;
+	record DIVc DIr;
+	
+	SMr.SerNr = sernr;
+	if(readfirstmain(SMr,1,true))then begin
+		mtrw = matrowcnt(SMr);
+		For(i=0;i<mtrw;i=i+1) begin
+			matrowget(SMr,i,SMrw);
+			INr.Code = SMrw.ArtCode;
+			if(readfirstmain(INr,1,true))then begin
+				ocnt=0;
+				ExtractObj(INr.DispGroups,ocnt,tstr);
+				tstr = "";
+				ExtractObj(INr.DispGroups,ocnt,tstr);
+				foundf = false;
+				For(j=0;j<cnt;j=j+1) begin
+	  			if(vendor[j]==tstr and order[j]==SMrw.SerialNr)then begin
+	  				foundf = true;
+	  			end;
+				end; 
+				if(!foundf)then begin
+					vendor[cnt] = tstr;
+					order[cnt] = SMrw.SerialNr;
+					cnt = cnt + 1;
+				end;
+			end;  
+		end; 
+	end;
+	For(j=0;j<cnt;j=j+1) begin
+		DIr.Code = vendor[j];
+		if(readfirstmain(DIr,1,true))then begin
+			CUr.Name = DIr.Name;
+			if(readfirstkey("Name",CUr,1,true))then begin
+				vendor[j] = CUr.Code;
+				vendorname[j] = CUr.Name;
+			end;
+		end;		
+	end;
+
+return;
+end;
+
+global procedure FillArrayListPackListSH(longint sernr,var integer cnt,var array string vendor,var array string vendorname,var array string order)
+begin
+	record SHVc SHr;
+	row SHVc SHrw;
+	record INVc INr;
+	record CUVc CUr;
+	integer mtrw,i,ocnt,j;
+	string 100 tstr;
+	boolean foundf;
+	record DIVc DIr;
+	
+	SHr.SerNr = sernr;
+	if(readfirstmain(SHr,1,true))then begin
+		mtrw = matrowcnt(SHr);
+		For(i=0;i<mtrw;i=i+1) begin
+			matrowget(SHr,i,SHrw);
+			INr.Code = SHrw.ArtCode;
+			if(readfirstmain(INr,1,true))then begin
+				ocnt=0;
+				ExtractObj(INr.DispGroups,ocnt,tstr);
+				tstr = "";
+				ExtractObj(INr.DispGroups,ocnt,tstr);
+				foundf = false;
+				For(j=0;j<cnt;j=j+1) begin
+	  			if(vendor[j]==tstr and order[j]==SHrw.SerialNr)then begin
+	  				foundf = true;
+	  			end;
+				end; 
+				if(!foundf)then begin
+					vendor[cnt] = tstr;
+					order[cnt] = SHrw.SerialNr;
+					cnt = cnt + 1;
+				end;
+			end;  
+		end; 
+	end;
+	For(j=0;j<cnt;j=j+1) begin
+		DIr.Code = vendor[j];
+		if(readfirstmain(DIr,1,true))then begin
+			CUr.Name = DIr.Name;
+			if(readfirstkey("Name",CUr,1,true))then begin
+				vendor[j] = CUr.Code;
+				vendorname[j] = CUr.Name;
+			end;
+		end;		
+	end;
+
+return;
+end;
+
+
+global procedure ORPackReportRn(record RcVc RepSpec)
+begin
+	record StockMovVc SMr;
+	record SHVc SHr;
+	record PackListVc PListr;
+	row PackListVc PListrw;
+	record ItemHistVc IHr;
+	record ORVc ORr;
+	row ORVc ORrw;
+	integer i,mtrw;
+	array string 200 vendor,track,ordernr,comment,indate,odate;
+	array val pack,weight,volume;
+	integer arcnt,ari;
+	integer pi,pmtrw;
+	boolean foundf;
+	
+	arcnt = 0;
+	
+	ORr.SerNr = RepSpec.long1;
+	if(readfirstmain(ORr,1,true))then begin
+		startreportnoheaderjob("Отчет по заказу");
+			if(nonblank(ORr.OrderClass))then begin
+				mtrw = matrowcnt(ORr);
+				For(i=0;i<mtrw;i=i+1) begin
+	  			matrowget(ORr,i,ORrw);
+	  			IHr.ArtCode = ORrw.ArtCode;
+	  			IHr.SerialNr = ORr.OrderClass & ORr.SerNr;
+	  			IHr.FileName = "StockMovVc";
+	  			if(readlastkey("ArtCodeSerialNr",IHr,3,true))begin
+	  				PListr.SMSerNr = IHr.TransNr;
+	  				if(readfirstkey("SMSerNr",PListr,1,true))then begin
+	  					SMr.SerNr = IHr.TransNr;
+	  					readfirstmain(SMr,1,true);
+	  					pmtrw = matrowcnt(PListr);
+	  					For(pi=0;pi<pmtrw;pi=pi+1) begin
+								matrowget(PListr,pi,PListrw);
+								if(PListrw.OrderNr==IHr.SerialNr)then begin
+									foundf = false;
+									For(ari=0;ari<arcnt;ari=ari+1) begin
+	  								if(ordernr[ari]==PListrw.OrderNr and track[ari]==SMr.TruckInfo and vendor[ari]==PListrw.VEName)then begin
+	  									foundf = true;
+	  								end;
+									end; 
+									if(!foundf)then begin
+										ordernr[arcnt] = PListrw.OrderNr;
+										vendor[arcnt] = PListrw.VEName;
+										track[arcnt] = SMr.TruckInfo;
+										pack[arcnt] = PListrw.Pack;
+										weight[arcnt] = PListrw.Weight;
+										volume[arcnt] = PListrw.Volume;
+										comment[arcnt] = PListrw.Comment;
+										indate[arcnt] = SMr.TransDate;
+										odate[arcnt] = "";
+										arcnt = arcnt + 1;
+									end;
+								end;
+							end; 
+	  				end;
+	  			end;
+	  			resetloop(IHr);
+	  			
+	  			IHr.ArtCode = ORrw.ArtCode;
+	  			IHr.SerialNr = ORr.OrderClass & ORr.SerNr;
+	  			IHr.FileName = "SHVc";
+	  			if(readlastkey("ArtCodeSerialNr",IHr,3,true))begin
+	  				PListr.SHSerNr = IHr.TransNr;
+	  				if(readfirstkey("SHSerNr",PListr,1,true))then begin
+	  					SHr.SerNr = IHr.TransNr;
+	  					readfirstmain(SHr,1,true);
+	  					pmtrw = matrowcnt(PListr);
+	  					For(pi=0;pi<pmtrw;pi=pi+1) begin
+								matrowget(PListr,pi,PListrw);
+								if(PListrw.OrderNr==IHr.SerialNr)then begin
+									foundf = false;
+									For(ari=0;ari<arcnt;ari=ari+1) begin
+	  								if(ordernr[ari]==PListrw.OrderNr and vendor[ari]==PListrw.VEName)then begin
+	  									foundf = true;
+	  									odate[ari] = SHr.ShipDate;
+	  									if(nonblank(PListrw.Comment))then begin
+	  										comment[ari] = PListrw.Comment;
+	  									end;
+	  								end;
+									end; 
+								end;
+							end; 
+	  				end;
+	  			end;
+				end; 
+				
+				startformat(15);
+					outstring(0,0,"Заказ:",false);
+					outstring(30,0,ORr.OrderClass & ORr.SerNr,false);
+				endformat;
+				startformat(15);
+					outstring(0,0,"Поставщик",false);
+					outstring(70,0,"№ Трака",false);
+					outstring(120,0,"Дата прихода на склад",false);
+					outstring(200,0,"Мест",false);
+					outstring(250,0,"Вес",false);
+					outstring(300,0,"Объем",false);
+					outstring(350,0,"Дата отгрузки со склада",false);
+					outstring(1,0,"Примечание",true);
+				endformat;
+				
+				For(i=0;i<arcnt;i=i+1) begin
+					startformat(15);
+						outstring(0,0,vendor[i],false);
+						outstring(70,0,track[i],false);
+						outstring(120,0,indate[i],false);
+						outstring(200,0,pack[i],false);
+						outstring(250,0,weight[i],false);
+						outstring(300,0,volume[i],false);
+						outstring(350,0,odate[i],false);
+						outstring(1,0,comment[i],true);
+					endformat;
+				end; 
+				
+			end else begin
+				startformat(15);
+					outstring(0,0,"Не указан тип счета клиента",false);
+				endformat;
+			end;
+		endjob;
+	end;
+	
+return;
+end;
