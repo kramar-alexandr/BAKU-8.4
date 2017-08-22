@@ -1,0 +1,200 @@
+remote function Boolean PasteCustInInv(var record IVVc);
+external procedure IVCashDClass_RefreshStringList(Integer,record IVCashVc);
+remote function Boolean PasteCustInCashInv(var record IVCashVc,string,string,var string);
+external function Boolean HasModSL();
+remote function Boolean CustomerWithPhoneExists(record CUVc, var string, var string); //added by BPI
+
+global
+function LongInt CUVcRecordDefaultsClient(LongInt wn,var record CUVc CUr,record CUVc CU2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Boolean treatedf;
+  string 255 tstr; //added by BPI
+  record UserVc Userr; //added by BPI
+  record CustomerSettingBlock CSb; //added by BPI
+  record LocalMachineBlock LMb;// Edit ************************** Tuesday, 30 September 2014 12:49:09
+  
+  BlockLoad(LMb);// Edit ************************** Tuesday, 28 January 2014 17:02:56
+  CUr.DateCreated = CurrentDate;
+  CUr.CreateLocation = LMb.DefLocation;// Edit ************************** Tuesday, 30 September 2014 12:49:14
+  CUr.CreateCompany = currentcompany;
+
+  if (TestModule("modPL") or TestModule("modPO") or TestModule("modAT2") or TestModule("modIN")) then begin
+    CUr.CUType = 0;
+    CUr.VEType = 1;
+    treatedf = true;
+  end;
+  if (TestModule("modHRM")) then begin
+    CUr.EmployeeType = 1;
+    CUr.CUType = 0;
+    treatedf = true;
+  end;
+  if (treatedf==false) then begin
+    CUr.CUType = 1;
+    CUr.VEType = 0;
+  end;
+  if (TestModule("modHotel")) then begin
+    CUr.GuestType = 1;
+  end;
+  if (TestModule("modHTS")) or  (TestModule("modSY")) then begin
+    CUr.CUType = 0;
+    CUr.VEType = 0;
+    CUr.DealerType = 0;
+    CUr.GuestType = 0;
+    CUr.EmployeeType = 0;
+    CUr.CustCat = "";
+  end;
+  if (IsStandardProduct or IsSberbankProduct) and (HasModSL==false) then begin
+    CUr.CUType = 1;
+  end;
+  if (BuildProductCode=="StandardHotel") then begin
+    CUr.CustCat = "";
+    CUr.GuestType = 1;
+    CUr.CUType = 1;
+  end;  
+  if (GetWindowClass(wn)=="CULeadDClass") then begin
+    CUr.CUType = 0;
+    CUr.LeadType = 1;
+  end;
+  CUVcRecordDefaultsClient = res; 
+  return;
+end;
+
+global
+updating function LongInt CUVcRecordSaveClient(LongInt wn,var record CUVc CUr,record CUVc CU2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  string 255 OperationMenuAction;
+  Integer mwn,rwcnt;
+  string 255 var1,var2; //added by BPI
+  record RcVc RepSpec; //added by BPI
+  record LocalMachineBlock LMb; //added by BPI
+  record CClassVc CCr; //added by BPI
+  record CTypeVc CTr; //added by BPI
+
+  BlockLoad(LMb);  //added by BPI
+  if (nonblank(LMb.DefLocation)) then begin //added by BPI {
+    CCr.Code = LMb.DefLocation;
+    if (!readfirstmain(CCr,1,true)) then begin
+      CTr.Code = "STORE";
+      if (!readfirstmain(CTr,1,true)) then begin
+        CTr.Code = "STORE";
+        RecordStore(CTr,true);
+      end;
+      CCr.Code = LMb.DefLocation;
+      CCr.CType = CTr.Code;
+      RecordStore(CCr,true);
+    end;
+    if (blank(CUr.Classification)) then begin
+      CUr.Classification = LMb.DefLocation;
+    end else begin
+      if (!setinset(LMb.DefLocation,CUr.Classification)) then begin
+        CUr.Classification = CUr.Classification & "," & LMb.DefLocation;
+      end;
+    end;
+  end;
+  res = 0; 
+  if (CustomerWithPhoneExists(CUr,var1,var2)) then begin
+    RepSpec.Media = mtScreen;
+    RepSpec.f1 = CUr.Phone;
+    RepSpec.f2 = CUr.AltPhone;
+    RepSpec.f3 = CUr.Mobile;
+    RepSpec.f4 = CUr.Code;
+    RepSpec.repname = "CUVcPhoneErrorRn";
+    RunReport(RepSpec,0);
+  end; //added by BPI }
+  OperationMenuAction = GetWindowString(wn,"OperationMenuAction");
+  switch (OperationMenuAction) begin
+    case "AddContact":
+      mwn = MotherWindow(wn);
+      if (mwn>0) then begin
+        switch (GetWindowFileName(mwn)) begin
+          case "IVVc": begin
+            record IVVc IVr;
+            
+            DeselectWindow(mwn,true);
+            GetWindowRecord(mwn,IVr);
+            WindowFieldGoto(mwn,IVr,-1,"CustCode",true);
+          end;
+          case "ORVc": begin
+            record ORVc ORr;
+            
+            DeselectWindow(mwn,true);
+            GetWindowRecord(mwn,ORr);
+            rwcnt = MatRowCnt(ORr);
+            WindowFieldGoto(mwn,ORr,-1,"CustCode",true);
+          end;
+          case "QTVc": begin
+            record QTVc QTr;
+            
+            DeselectWindow(mwn,true);
+            GetWindowRecord(mwn,QTr);
+            WindowFieldGoto(mwn,QTr,-1,"CustCode",true);
+          end;
+          case "OYVc": begin
+            record OYVc OYr;
+            
+            DeselectWindow(mwn,true);
+            GetWindowRecord(mwn,OYr);
+            WindowFieldGoto(mwn,OYr,-1,"CustCode",true);
+          end;
+        end;
+        PasteString(mwn,CUr.Code);
+        KeypadEnter(mwn);
+      end;
+  end;  
+  CUVcRecordSaveClient = res;
+  return;
+end;
+
+global
+function LongInt CUVcRecordUpdateClient(LongInt wn,var record CUVc CUp,record CUVc CU2p,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Integer mwn;
+  record IVVc IVr;
+  record IVCashVc IVCashr;
+  string 255 warning;
+
+  UpdateBrowses("ContactRelVc");
+  mwn = MotherWindow(wn);
+  switch (GetWindowClass(mwn)) begin
+    case "IVDClass":
+      if (TouchScreenInterface) then begin
+        GetWindowRecord(mwn,IVr);
+        if (PasteCustInInv(IVr)) then begin
+          PutWindowRecord(mwn,IVr);
+  //        IVDClass_RefreshStringList(mwn,IVr);
+          ReRunWindowDef(mwn);
+        end;    
+      end;    
+    case "NPTSIVCashDClass":
+      GetWindowRecord(mwn,IVCashr);
+      if (PasteCustInCashInv(IVCashr,"","",warning)) then begin
+        PutWindowRecord(mwn,IVCashr);
+//        IVCashDClass_RefreshStringList(mwn,IVCashr);
+        ReRunWindowDef(mwn);
+      end;      
+  end;
+  CUVcRecordUpdateClient = res;
+  return;
+end;
+
+global
+function LongInt CUVcRecordDuplicateClient(var record CUVc CUr,record CUVc CU2r,LongInt stat,LongInt long4)
+BEGIN
+
+  LongInt res;
+  string 255 tstr;
+  record CustomerSettingBlock CSb;
+	record LocalMachineBlock LMb;// Edit ************************** Tuesday, 30 September 2014 12:48:53
+  
+  BlockLoad(LMb);// Edit ************************** Tuesday, 30 September 2014 12:48:56
+  
+	CUr.CreateLocation = LMb.DefLocation;// Edit ************************** Tuesday, 30 September 2014 12:48:59
+	CUr.CreateCompany = currentcompany;// Edit ************************** Tuesday, 30 September 2014 12:49:02
+	
+
+
+  RETURN;
+END;
