@@ -1,0 +1,248 @@
+external function roundmode SetRoundModeD(Integer);
+
+
+global
+function LongInt PricePointListVcRecordDefaults(var record PricePointListVc PPLr,record PricePointListVc PPL2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  
+  PPLr.TransDate = CurrentDate;
+  if (PPLr.SerNr<=0) then begin
+    PPLr.SerNr = NextSerNr("PricePointListVc",PPLr.TransDate,-1,false,"");
+  end; 
+  PricePointListVcRecordDefaults = res; 
+  RETURN;
+END;
+
+global
+function LongInt PricePointListVcRecordDuplicate(var record PricePointListVc PPLr,record PricePointListVc PPL2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+  PricePointListVcRecordDuplicate = res; 
+  RETURN;
+END;
+
+global
+function LongInt PricePointListVcRecordCheck(var record PricePointListVc PPLr,record PricePointListVc PPL2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  
+  if (PPLr.SerNr<=0) then begin
+    PPLr.SerNr = NextSerNr("PricePointListVc",PPLr.TransDate,-1,false,"");
+  end; 
+  
+  res = 0;
+  
+  PricePointListVcRecordCheck = res;
+  RETURN;
+END;
+
+
+global
+function LongInt PricePointListVcRecordSave(var record PricePointListVc PPLr,record PricePointListVc PPL2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+  
+  PricePointListVcRecordSave = res;
+  RETURN;
+END;
+
+global
+updating function LongInt PricePointListVcRecordSaveAfter(var record PricePointListVc PPLr,record PricePointListVc PPL2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  row PricePointListVc PPLrw;
+  integer i,mtrw;
+  record PLVc PLr;
+  record INVc INr;
+  record PricePointListVc oldPPLr;
+  boolean testf,foundfVEitem;
+  record PIVc PIr;
+  
+  if(PPLr.OKFlag==1 and PPLr.Closed==0)then begin
+    testf = true;
+    oldPPLr.SerNr = 999999;
+    readlastmain(oldPPLr,1,true);
+    if(oldPPLr.TransDate>PPLr.TransDate)then begin
+      testf = false;
+    end;
+    
+    if(oldPPLr.TransDate==PPLr.TransDate and oldPPLr.SerNr>PPLr.SerNr)then begin
+      testf = false;
+    end;
+    
+    if(testf)then begin
+      mtrw = matrowcnt(PPLr);
+      INr.Code = "";
+      while(loopmain(INr,1,true))begin
+        foundfVEitem = false;
+        PIr.ItemCode = INr.Code;
+        if(readfirstmain(PIr,1,true))then begin
+          if(INr.Code==PIr.ItemCode)then begin
+            foundfVEitem = true;
+          end;
+        end;        
+        if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
+          i = StringToInt(INr.CPSCode);
+          if(i<=mtrw)then begin
+						matrowget(PPLr,i-1,PPLrw);
+          	if(PPLrw.Cost>0)then begin
+							if(foundfVEitem)then begin
+								PIr.PurPrice = PPLrw.Cost;
+								INr.InPrice = PPLrw.Cost/PIr.PIFactor;
+								RecordStore(PIr,true);
+							end else begin
+								INr.InPrice = PPLrw.Cost;
+							end;
+            end;
+            RecordStore(INr,true);
+            PLr.PLCode  = "RRP";
+            PLr.ArtCode = INr.Code;
+            if(readfirstmain(PLr,2,true))then begin     
+              if(PLr.DonotRecalculate==0)then begin         
+                if(foundfVEitem)then begin
+                  PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+                end else begin
+                  PLr.ExVatPrice = PPLrw.Price;
+                end;
+                recordStore(PLr,true);
+              end;
+            end else begin
+              recordNew(PLr);
+              PLr.PLCode  = "RRP";
+              PLr.ArtCode = INr.Code;
+              PLr.Comment = INr.Name;
+              if(foundfVEitem)then begin
+                PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+              end else begin
+                PLr.ExVatPrice = PPLrw.Price;
+              end;
+              recordStore(PLr,true);
+            end;
+            
+          end;
+        end;
+      end;
+    end;
+  end;
+  PricePointListVcRecordSaveAfter = res;
+  RETURN;
+END;
+
+global
+function LongInt PricePointListVcRecordUpdate(var record PricePointListVc PPLr,record PricePointListVc PPL2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+  PricePointListVcRecordUpdate = res;
+  RETURN;
+END;
+
+global
+updating function LongInt PricePointListVcRecordUpdateAfter(var record PricePointListVc PPLr,record PricePointListVc PPL2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  
+  row PricePointListVc PPLrw;
+  integer i,mtrw;
+  record PLVc PLr;
+  record INVc INr;
+  record PricePointListVc oldPPLr;
+  boolean testf,foundfVEitem;
+  record PIVc PIr;
+  
+  if(PPLr.OKFlag==1 and PPL2r.OKFlag==0 and PPLr.Closed==0)then begin
+    testf = true;
+    oldPPLr.SerNr = 999999;
+    readlastmain(oldPPLr,1,true);
+    if(oldPPLr.TransDate>PPLr.TransDate)then begin
+      testf = false;
+    end;
+    
+    if(oldPPLr.TransDate==PPLr.TransDate and oldPPLr.SerNr>PPLr.SerNr)then begin
+      testf = false;
+    end;
+    
+    if(testf)then begin
+      mtrw = matrowcnt(PPLr);
+      INr.Code = "";
+      while(loopmain(INr,1,true))begin
+        foundfVEitem = false;
+        PIr.ItemCode = INr.Code;
+        if(readfirstmain(PIr,1,true))then begin
+          if(INr.Code==PIr.ItemCode)then begin
+            foundfVEitem = true;
+          end;
+        end;        
+        if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
+          i = StringToInt(INr.CPSCode);
+          if(i<=mtrw)then begin
+            matrowget(PPLr,i-1,PPLrw);
+            if(PPLrw.Cost>0)then begin
+							if(foundfVEitem)then begin
+								PIr.PurPrice = PPLrw.Cost;
+								INr.InPrice = PPLrw.Cost/PIr.PIFactor;
+								RecordStore(PIr,true);
+							end else begin
+								INr.InPrice = PPLrw.Cost;
+							end;
+            end;
+            RecordStore(INr,true);
+            PLr.PLCode  = "RRP";
+            PLr.ArtCode = INr.Code;
+            if(readfirstmain(PLr,2,true))then begin 
+              if(PLr.DonotRecalculate==0)then begin             
+                if(foundfVEitem)then begin
+                  PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+                end else begin
+                  PLr.ExVatPrice = PPLrw.Price;
+                end;
+                PLr.CurncyCode = "";
+                recordStore(PLr,true);
+              end;
+            end else begin
+              recordNew(PLr);
+              PLr.PLCode  = "RRP";
+              PLr.ArtCode = INr.Code;
+              PLr.Comment = INr.Name;
+              if(foundfVEitem)then begin
+                PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+              end else begin
+                PLr.ExVatPrice = PPLrw.Price;
+              end;
+              recordStore(PLr,true);
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  PricePointListVcRecordUpdateAfter = res;
+  RETURN;
+END;
+
+global
+updating function LongInt PricePointListVcRecordRemoveAfter(var record PricePointListVc PPLr,record PricePointListVc PPL2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+
+  PricePointListVcRecordRemoveAfter = res;
+  RETURN;
+END;
+
+global
+function LongInt PricePointListVcRecordRemoveTest(var record PricePointListVc PPLr,record PricePointListVc PPL2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  
+  res = 1;
+  if(PPLr.OKFlag>0)then begin
+    res = 0;
+  end;
+  
+  PricePointListVcRecordRemoveTest = res;  
+  return;
+end;
+
