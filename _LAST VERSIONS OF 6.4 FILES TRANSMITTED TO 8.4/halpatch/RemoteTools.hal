@@ -1,11 +1,3 @@
-external procedure GetVATRowFromBlock(string,record VATCodeBlock,var row VATCodeBlock);
-external function Boolean GetFirstItem(var string,var record INVc);
-remote procedure OpenItemStatusWindow(Integer);
-external function roundmode SetRoundModeD(Integer);
-external procedure MulVATIV(string,val,var val,var val,Integer,Integer);
-external function Boolean HasModIN();
-external function Boolean HasModSO();
-external procedure GetCustomsDeclarationNumber(string,LongInt,LongInt,string,string,Integer,var string);
 external function string 255 FillupTaxMatrix(Integer,string,string,string,string,string,var record TaxMatrixVc);
 external procedure GetItemTaxTemplateCode(string,Integer,var string,Boolean);
 external function Boolean UseTaxTemplatesforTaxCalc();
@@ -18,7 +10,7 @@ external procedure AddWithholdingTaxesRows_IVVc(var record IVVc);
 external procedure AddPerceptionTaxesRows_IVVc(var record IVVc);
 external procedure PasteARPayInIV(record IVVc,row IVVc,Integer);
 external procedure GetBaseCurncy(Integer,var string);
-external function val GetINCostPrice2(string,string,string,Boolean);
+external function val GetINCostPrice(string,string,Boolean);
 external updating procedure UpdateCredMan(record IVVc,LongInt,var Integer);
 external procedure GetARAcc(string,var string);
 external function Boolean IVDchrsum(var record IVVc,Integer);
@@ -51,14 +43,8 @@ external procedure IVSumup(var record IVVc,Boolean);
 external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
 external procedure StockMovSumUp(var record StockMovVc);
 external function LongInt GetCurUserLastNr(string);
-external procedure IVVc_PasteSalesMan(var record IVVc,string);
-external updating function integer SendCheckUserEmailAddress(record UserVc);
-external procedure DoSendValidateUserEmailAddress(record GlobalUserVc,record UserVc,Boolean,Boolean,string);
-external function Boolean FindTheUser(var record UserVc);
 external procedure IVVc_PasteLoyaltyCardNr(var record IVVc);// Edit ************************** Thursday, 20 March 2014 13:07:07
 external procedure VIVc_PastePrepayNr(var record VIVc,Integer);//Edit----------------------Dima  06.03.2015
-
-
 
 global
 procedure GetItemSalesAccFromOR(record ORVc ORr,var string salesacc)
@@ -212,32 +198,16 @@ BEGIN
   string 10 curcode;
   val fr,to1,to2,br1,br2;
   record LocationVc Locr;
-  record MainStockBlock MSb;
+  record MainStockBlock MainStockRec;
   Array string 20 apos;
   Integer acnt;
 
-  BlockLoad(MSb);
-  StockMovp.FrLocation = MSb.MainStock;
+  BlockLoad(MainStockRec);
+  StockMovp.FrLocation = MainStockRec.MainStock;
   if (nonblank(RepSpec.Stext)) then begin
     StockMovp.FrLocation = RepSpec.Stext;
   end;
-  Locr.Code = StockMovp.FrLocation;
-  ReadFirstMain(Locr,1,true);
-  StockMovp.FrAddr0 = Locr.Addr0;
-  StockMovp.FrAddr1 = Locr.Addr1;
-  StockMovp.FrAddr2 = Locr.Addr2;
-  StockMovp.FrAddr3 = Locr.Addr3;
-  StockMovp.FrAddr4 = Locr.Addr4;
-  StockMovp.OrderNr = ORp.SerNr;
   StockMovp.ToLocation = ORp.Location;
-  Locr.Code = StockMovp.ToLocation;
-  ReadFirstMain(Locr,1,true);
-  StockMovp.ToAddr0 = Locr.Addr0;
-  StockMovp.ToAddr1 = Locr.Addr1;
-  StockMovp.ToAddr2 = Locr.Addr2;
-  StockMovp.ToAddr3 = Locr.Addr3;
-  StockMovp.ToAddr4 = Locr.Addr4;
-
   StockMovp.CurncyCode = ORp.CurncyCode;  
   curcode = StockMovp.CurncyCode;
   GetFullCurncyRate(curcode,StockMovp.TransDate,fr,to1,to2,br1,br2);
@@ -247,7 +217,6 @@ BEGIN
   StockMovp.ToRateB2 = to2;
   StockMovp.BaseRate1 = br1;
   StockMovp.BaseRate2 = br2;
-  StockMovp.Objects = ORp.Objects;
   stcnt = 0;
   rwcnt = MatRowCnt(ORp);
   for (i=0;i<rwcnt;i=i+1) begin
@@ -265,8 +234,6 @@ BEGIN
         StockMovrw.BasePrice = INr.UPrice1;
         StockMovrw.BasePrice = blankval;
         StockMovrw.Coefficient = INr.UnitCoefficient;
-        StockMovrw.Objects = ORrw.Objects;
-        StockMovrw.OrderRowNr = i+1;
         MatRowPut(StockMovp,stcnt,StockMovrw);
         stcnt = stcnt + 1;
         ORrw.Shipd1 = ORrw.Quant;
@@ -284,7 +251,7 @@ BEGIN
     rwcnt = MatRowCnt(StockMovp);
     for (i=0;i<rwcnt;i=i+1) begin
       MatRowGet(StockMovp,i,StockMovrw);
-      FillupStockMovementsRowsWithPositions(StockMovp,i,MSb.MainStock,apos,acnt);
+      FillupStockMovementsRowsWithPositions(StockMovp,i,MainStockRec.MainStock,apos,acnt);
     end;
   end;
   
@@ -293,7 +260,7 @@ END;
 
 procedure PasteOrdInStockMov(var record StockMovVc StockMovp,LongInt ordnr)
 BEGIN
-  record MainStockBlock MSb;
+  record MainStockBlock MainStockRec;
   record ORVc ORr;
   record RcVc RepSpec;
   string 255 tstr,t2;
@@ -302,8 +269,8 @@ BEGIN
   if (ReadFirstMain(ORr,1,true)==false) then begin
     goto LPasteOrdInStockMov;
   end;
-  BlockLoad(MSb);
-  if (blank(ORr.Location)) then begin ORr.Location = MSb.MainStock;  end;
+  BlockLoad(MainStockRec);
+  if (blank(ORr.Location)) then begin ORr.Location = MainStockRec.MainStock;  end;
   if (blank(ORr.Location)) then begin goto LPasteOrdInStockMov;  end;
   AddORToStockMov(ORr,StockMovp,RepSpec);
   tstr = StockMovp.Comment;
@@ -342,12 +309,6 @@ BEGIN
     StockMovp.SerNr = NextSerNr("StockMovVc",td,-1,false,"");
     if (StockMovp.SerNr==-1) then begin
       res = 1747;
-      goto LRecordAction_raPasteOrdInStockMov;
-    end;
-  end;
-  if (ORr.OKFlag==0) then begin
-    if (OfficialSerNrDefined("ORVc")) then begin
-      res = 2069;
       goto LRecordAction_raPasteOrdInStockMov;
     end;
   end;
@@ -481,10 +442,9 @@ LReturnedQty:;
   return;
 end;
 
-function Integer PasteSHRowsToIV(record RcVc RepSpec,record ORVc ORp,record IVVc IVp,Integer NoRetFromOR,Integer SHIncludesAllORRows,Integer AllowInvBeforeShip,Integer UpdateInv,Integer UseDiscount,var val orsum,
+procedure PasteSHRowsToIV(record RcVc RepSpec,record ORVc ORp,record IVVc IVp,Integer NoRetFromOR,Integer AllowInvBeforeShip,Integer UpdateInv,Integer UseDiscount,var val orsum,
                           Boolean maintf,array record XSrsVc aXSrsr,var Integer axsrscnt)
 BEGIN
-  Integer res;
   record INVc INr;
   record SHVc SHr;
   row SHVc SHrw;
@@ -511,21 +471,12 @@ BEGIN
   
   sd = StringToDate(FirstInRange(RepSpec.f4,10));
   ed = StringToDate(LastInRange(RepSpec.f4,10));
-  IVp.Region = "";
+
   orcnt = MatRowCnt(ORp);
   ivcnt = MatRowCnt(IVp);    
   found = true;
   SHr.OrderNr = ORp.SerNr;
   SHr.SerNr = 9999999999;
-  res = 1;
-  shcnt = MatRowCnt(ORp);
-  for (shi=0;shi<shcnt;shi=shi+1) begin
-    MatRowGet(ORp,shi,ORrw);
-    if (ORrw.OrderType==kOrderTypeDropShip) then begin
-      res = 2;
-      shi = shcnt;
-    end;
-  end;
   while (LoopBackKey("OrderKey",SHr,2,found)) begin 
     if (SHr.OrderNr!=ORp.SerNr) then begin found = false; end;
     testf = true;
@@ -535,15 +486,7 @@ BEGIN
         testf = false;
       end;
     end;
-    if (SHr.InvoiceNr>0) then begin testf = false; end;
     if (found and testf) then begin
-      if (SHr.Region!=IVp.Region) then begin
-        if (nonblank(SHr.Region) and nonblank(IVp.Region)) then begin
-          IVp.Region = "";
-        end else begin
-          IVp.Region = SHr.Region;
-        end;
-      end;
       if (SHr.ShipDate>IVp.ServiceDelDate) then begin
         IVp.ServiceDelDate = SHr.ShipDate;
       end;
@@ -565,7 +508,6 @@ BEGIN
 //          remnv = ORrw.Shipd2 - ORrw.Invd;  
           remnv = SHrw.Ship - SHrw.Invd;
           testf = false;
-          if (SHIncludesAllORRows!=0) then begin testf = true; end;
           if ((remnv>0) and (remnv!=0)) then begin testf = true; end;
           if ((remnv<0) and (remnv!=0)) then begin testf = true; end;//and (CompM4ZeroVal(&ORrw.Shipd2)<0)
           if ((ORrw.Sum==0) and (ORrw.Shipd2==blankval)) then begin testf = true; end;
@@ -575,9 +517,7 @@ BEGIN
               testf = true; 
             end;
           end;
-          if (SHIncludesAllORRows==0) then begin
-            if (invq>=totremnv) then begin testf = false; end;
-          end;
+          if (invq>=totremnv) then begin testf = false; end;
           if (testf) then begin                    
             if (lastshnr!=SHr.SerNr) then begin
               if (lastshnr>0) then begin
@@ -598,7 +538,7 @@ BEGIN
               MatRowPut(IVp,ivcnt,IVrw);
               ivcnt = ivcnt + 1;
             end;
-            ClearRow(IVp,IVrw,SHrw.stp);
+            ClearRow(IVp,IVrw,1);
             IVrw.OrdRow = SHrw.OrdRow;
             if (blank(SHrw.ArtCode)) then begin
               IVrw.Spec = SHrw.Spec;
@@ -609,7 +549,7 @@ BEGIN
             end;
             
             IVrw.ArtCode = SHrw.ArtCode;
-            IVrw.CustArtCode = SHrw.CustArtCode;
+            IVrw.CustArtCode = SHrw.CustArtCode;            
             if ((ORrw.Quant==blankval) and (remnv==0)) then begin
               remnv = blankval;
             end;
@@ -624,28 +564,19 @@ BEGIN
 //this is not needed ORrw.Shipd1 - ORrw.Invd should already give returned qty
 //            IVrw.Quant = SHrw.Ship - v;
             IVrw.Quant = ORrw.Shipd1 - ORrw.Invd - vinvd[SHrw.OrdRow]- v;
-//LogText(0,"IVrw.ArtCode " & IVrw.ArtCode & " ORrw.Shipd1 " & ORrw.Shipd1 & " ORrw.Invd " & ORrw.Invd & " v " & v & " vinvd[SHrw.OrdRow] " & vinvd[SHrw.OrdRow]);
             if (IVrw.Quant>SHrw.Ship) then begin
               IVrw.Quant = SHrw.Ship;
             end;
-            if (IVrw.Quant<0) then begin goto LSKIPIVROW; end;
-            if (IVrw.Quant==0) and (SHIncludesAllORRows==0) then begin goto LSKIPIVROW; end;
-            if (SHIncludesAllORRows!=0) then begin
-              if (IVrw.Quant==0) then begin //for blankqty
-                IVrw.Quant = 0;
-              end;
-            end;
+            if (IVrw.Quant<=0) then begin goto LSKIPIVROW; end;
             vinvd[SHrw.OrdRow] = vinvd[SHrw.OrdRow] + IVrw.Quant;
             invq = invq + IVrw.Quant;
             IVrw.Price = ORrw.Price;
             IVrw.vRebate = ORrw.vRebate;
-            IVrw.ServiceDelDate = ORrw.ServiceDelDate;
             IVrw.SalesAcc = SHrw.SalesAcc;
             if (blank(IVrw.SalesAcc)) then begin
               IVrw.SalesAcc = ORrw.SalesAcc;
             end;
             IVrw.VATCode = ORrw.VATCode;
-            IVrw.RvrsVATCode = ORrw.RvrsVATCode;
             IVrw.Objects = ORrw.Objects;
             IVrw.PriceFactor = ORrw.PriceFactor;
             IVrw.Recepy = ORrw.Recepy;
@@ -680,33 +611,23 @@ BEGIN
             end;
             infound = ReadFirstItem(IVrw.ArtCode,INr,true,false);
             IVrw.Perceptions = INr.Perceptions;
-
-            tv = blankval;
-            switch (UpdateInv) begin
-              case 2:
-                tv = SHrw.BasePrice;
-              case 1:
-                if (infound) then begin
-                  tv = GetINCostPrice2(ORp.PriceList,ORrw.ArtCode,ORp.CustCode,true);
-//                  tv = INr.InPrice + INr.ExtraCost;
-                end else begin
-                  if (SHrw.BBCostPrice!=0) then begin 
-                    tv = SHrw.BBCostPrice;
-                  end;  
-                end;  
-                if ((blank(tv)) and (INr.ItemType==kItemTypeStructured) and (nonblank(INr.Recepy))) then begin
-                  if (INr.ExplodeRec==0) then begin
-                    GetStructureCostPrice(INr.Recepy,tv);
-                  end;
-                end;      
-              otherwise
-                if (SHrw.BBCostPrice!=0) then begin 
-                  tv = SHrw.BBCostPrice;
-                end;  
+            if (UpdateInv!=0) then begin
+              if (infound) then begin
+                tv = INr.InPrice + INr.ExtraCost;
+                IVrw.BasePrice = tv;
+              end else begin
+                IVrw.BasePrice = ORrw.BasePrice;
+              end;  
+              if ((INr.InPrice==blankval) and (INr.ItemType==2) and (nonblank(INr.Recepy))) then begin
+                if (INr.ExplodeRec==0) then begin
+//                GetStructureCostPrice(ORrw.Recepy,tv);
+                  GetStructureCostPrice(INr.Recepy,tv);
+                  IVrw.BasePrice = tv;
+                end;
+              end;          
+            end else begin
+              IVrw.BasePrice = ORrw.BasePrice;
             end;
-            if (blank(tv)) then begin tv = ORrw.BasePrice; end;
-            IVrw.BasePrice = tv;
-
             if (nonblank(IVrw.ArtCode)) then begin
               tv = IVrw.Quant*IVrw.BasePrice;   // cost  
               if (IVrw.PriceFactor!=0) then begin
@@ -732,6 +653,8 @@ BEGIN
             orsum = orsum + IVrw.Sum;
             IVrw.SHNr = SHr.SerNr;
             IVrw.SHRow = shi;
+            
+            
 
             IVrw.TaxTemplateCode = ORrw.TaxTemplateCode;
             UnpackRowFieldMatrix(ORrw,"TaxMatrix",TMr);
@@ -780,39 +703,31 @@ LSKIPIVROW:;
     MatRowPut(IVp,ivcnt,IVrw);
     ivcnt = ivcnt + 1;
     totshv = blankval;
-  end else begin
-    if (AllowInvBeforeShip==1) then begin
-      res = 0;
-    end;
   end;
   if (repaf) then begin
     if (AddRepaLine(IVp,false,0,orsum)) then begin end;
   end;  
-  
-  PasteSHRowsToIV = res;
   RETURN;
 END;
 
-procedure DownpaymentPerVATCode(record IVVc theIVp,record DownPayBlock DPb,val downp,Integer hiddenrow,var Integer srw)
+procedure DownpaymentPerVATCode(record IVVc oIVp,record DownPayBlock DPb,val downp,Integer hiddenrow,var Integer srw)
 BEGIN
   record IVVc IVr;
   record ORVc ORr; 
   row IVVc IVrw;
-  row IVVc theIVrw;
   row IVVc newIVrw;
   Boolean TrHs,testf,subvatf;
   Integer di,drwcnt;
   Integer i,rwcnt;
-  val t,qty,sum;  
+  val t;  
   val totd,v;
   string 255 tstr;
   LongInt ordrow;
   record RoundBlock Roundb;
   record TaxMatrixVc TMr;
-  val vatv,t1;
     
   BlockLoad(Roundb);
-  if (theIVp.InclVAT==0) then begin
+  if (oIVp.InclVAT==0) then begin
     subvatf = true;
   end else begin
     subvatf = false;
@@ -825,16 +740,16 @@ BEGIN
   end;
 /*  
   if (DPb.CalcMode==1) then begin
-    if (t>theIVp.Sum1) then begin
-      t = theIVp.Sum1;
+    if (t>oIVp.Sum1) then begin
+      t = oIVp.Sum1;
       subvatf = false;
     end;
   end else begin
-    if (t<theIVp.Sum4) then begin
+    if (t<oIVp.Sum4) then begin
       subvatf = false;
     end;
-    if (t>theIVp.Sum4) then begin
-      t = theIVp.Sum4;
+    if (t>oIVp.Sum4) then begin
+      t = oIVp.Sum4;
     end;
   end;
 */  
@@ -842,132 +757,93 @@ BEGIN
     goto LDownpaymentPerVATCode;
   end;
 
-  rwcnt = MatRowCnt(theIVp);
+  rwcnt = MatRowCnt(oIVp);
   for (i=0;i<rwcnt;i=i+1) begin
-    MatRowGet(theIVp,i,theIVrw);
+    MatRowGet(oIVp,i,IVrw);
     TrHs = true;
-    qty = theIVrw.Quant;
-    sum = theIVrw.Sum;
-    if (theIVrw.stp!=kInvoiceRowTypeNormal) then begin
+    if (ordrow==IVrw.OrdRow) then begin
       TrHs = false;
     end;
-    if (ordrow==theIVrw.OrdRow) then begin
-      TrHs = false;
-    end;
-    if (TrHs) then begin
-      for (di=i+1;di<rwcnt;di=di+1) begin
-        MatRowGet(theIVp,di,IVrw);
-        if (IVrw.OrdRow==theIVrw.OrdRow) then begin
-          qty = qty + IVrw.Quant;
-          sum = sum + IVrw.Sum;
-        end;
-      end;
-    end;
-    ordrow = theIVrw.OrdRow;
+    ordrow = IVrw.OrdRow;
     ResetLoop(IVr);
-    IVr.OrderNr = theIVp.OrderNr;
+    IVr.OrderNr = oIVp.OrderNr;
     while (LoopKey("OrderNr",IVr,1,TrHs)) begin
-      if (IVr.OrderNr!=theIVp.OrderNr) then begin TrHs = false; end;
+      if (IVr.OrderNr!=oIVp.OrderNr) then begin TrHs = false; end;
       if (TrHs) then begin
         testf = true;
         if (IVr.InvType!=kInvoiceTypeDownpayment) then begin testf = false; end;
         if (IVr.OKFlag==0) then begin testf = false; end;
-        if (IVr.Invalid!=0) then begin testf = false; end;
         if (testf) then begin
           drwcnt = MatRowCnt(IVr);
           for (di=0;di<drwcnt;di=di+1) begin
             MatRowGet(IVr,di,IVrw);
-            if (IVrw.Sum<0) then begin
-              goto LSkiDpRow;
-            end;
-            switch (IVrw.stp) begin
-              case kInvoiceRowTypeDownpayment:
-                if (IVrw.OrdRow==ordrow) then begin 
-                  v = IVrw.Sum;
-                  if (theIVp.InclVAT==0) then begin
-                    if (DPb.CalcMode==0) then begin
-                      switch (Roundb.VATCalcWay) begin
-                        case 1:
-                          if (v>sum) then begin
-                            v = sum;
-                          end;
-                        otherwise
-                          if (ORr.InclVAT!=0) then begin
-                            if (UseTaxTemplatesforTaxCalc==false) then begin
-                              MulVATIV(theIVrw.VATCode,sum,vatv,t1,theIVp.InclVAT,theIVp.NoTAXonVAT);
-                              if (v>(sum-vatv)) then begin
-                                v = sum - vatv;
-                              end;
-                            end;
-                          end else begin
-                            if (v>sum) then begin
-                              v = sum;
-                            end;
-                          end;
-                      end;
-                    end else begin
-                      if (UseTaxTemplatesforTaxCalc==false) then begin
-                        if (ORr.InclVAT!=0) then begin
-                          MulVATIV(theIVrw.VATCode,sum,vatv,t1,theIVp.InclVAT,theIVp.NoTAXonVAT);
-                          if (v>(sum-vatv)) then begin
-                            if (v>(sum-vatv)) then begin
-                              v = sum - vatv;
-                            end;
+            if (IVrw.stp==kInvoiceRowTypeDownpayment) then begin          
+              if (IVrw.OrdRow==ordrow) then begin  
+                v = IVrw.Sum;
+                if (oIVp.InclVAT==0) then begin
+                  if (DPb.CalcMode==0) then begin
+                    switch (Roundb.VATCalcWay) begin                    
+                      case 1:
+                        if (v>oIVp.Sum4) then begin
+                          v = oIVp.Sum4;
+                        end;
+                      otherwise
+                        if (ORr.InclVAT!=0) then begin                        
+                          if (v>oIVp.Sum1) then begin
+                            v = oIVp.Sum1;
                           end;
                         end else begin
-                          if (v>sum) then begin
-                            v = sum;
+                          if (v>oIVp.Sum4) then begin
+                            v = oIVp.Sum4;
                           end;
                         end;
-                      end;
                     end;
                   end else begin
-                    if (v>sum) then begin
-                      v = sum;
+                    if (v>oIVp.Sum1) then begin
+                      v = oIVp.Sum1;
                     end;
                   end;
-                  if (v>t) then begin
-                    v = t;
-                    if (subvatf) then begin
-                      UnpackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
-                      FindSalesExVat(TMr,IVrw.VATCode,v,1,0,v);
-                    end;
-                  end;        
-                  ClearRow(theIVp,newIVrw,kInvoiceRowTypeDownpayment);
-                  newIVrw.ArtCode = IVr.SerNr;
-                  newIVrw.Spec = DPb.TextA;
-                  newIVrw.Spec = newIVrw.Spec & " ";
-                  newIVrw.Spec = newIVrw.Spec & theIVp.OrderNr;
-                  newIVrw.Sum =  newIVrw.Sum - v;
-                  ORr.SerNr = IVr.OrderNr;
-                  if (ReadFirstMain(ORr,1,true)) then begin
-                    GetItemSalesAccFromOR(ORr,tstr);
+                end else begin
+                  if (v>oIVp.Sum4) then begin
+                    v = oIVp.Sum4;
                   end;
-                  if (blank(tstr)) then begin
-                    GetItemSalesAcc(DPb.ArtCode,theIVp.ExportFlag,tstr);
-                  end;
-                  newIVrw.SalesAcc = tstr;
-                  newIVrw.VATCode = IVrw.VATCode;
-                  newIVrw.RvrsVATCode = IVrw.RvrsVATCode;
-                  newIVrw.OrdRow = IVrw.OrdRow;
-                  newIVrw.TaxTemplateCode = IVrw.TaxTemplateCode;
-                  newIVrw.vRebate = theIVrw.vRebate;
-                  newIVrw.Quant = qty;
-                  newIVrw.Price = (newIVrw.Sum/(100-newIVrw.vRebate))*100;
-                  newIVrw.Price = Round(newIVrw.Price/newIVrw.Quant,SetRoundModeD(2));
-                  UnpackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
-                  PackRowFieldMatrix(newIVrw,"TaxMatrix",TMr);
-                  if (hiddenrow>0) then begin 
-                    RowCalculateTaxMatrix_IVVc(theIVp,hiddenrow,newIVrw);
-                    MatRowInsert(theIVp,hiddenrow,newIVrw);
-                  end else begin
-                    RowCalculateTaxMatrix_IVVc(theIVp,srw,newIVrw);
-                    MatRowPut(theIVp,srw,newIVrw);
-                  end;
-                  srw = srw + 1;
                 end;
+                if (v>t) then begin
+                  v = t;
+                  if (subvatf) then begin
+                    UnpackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
+                    FindSalesExVat(TMr,IVrw.VATCode,v,1,0,v);
+                  end;
+                end;                
+                ClearRow(oIVp,newIVrw,5);
+                newIVrw.ArtCode = IVr.SerNr;
+                newIVrw.Spec = DPb.TextA;
+                newIVrw.Spec = newIVrw.Spec & " ";
+                newIVrw.Spec = newIVrw.Spec & oIVp.OrderNr;
+                newIVrw.Sum =  newIVrw.Sum - v;
+                ORr.SerNr = IVr.OrderNr;
+                if (ReadFirstMain(ORr,1,true)) then begin
+                  GetItemSalesAccFromOR(ORr,tstr);
+                end;
+                if (blank(tstr)) then begin
+                  GetItemSalesAcc(DPb.ArtCode,oIVp.ExportFlag,tstr);
+                end;
+                newIVrw.SalesAcc = tstr;
+                newIVrw.VATCode = IVrw.VATCode;
+                newIVrw.OrdRow = IVrw.OrdRow;
+                newIVrw.TaxTemplateCode = IVrw.TaxTemplateCode;
+                UnpackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
+                PackRowFieldMatrix(newIVrw,"TaxMatrix",TMr);
+                if (hiddenrow>0) then begin 
+                  RowCalculateTaxMatrix_IVVc(oIVp,hiddenrow,newIVrw);
+                  MatRowInsert(oIVp,hiddenrow,newIVrw);
+                end else begin
+                  RowCalculateTaxMatrix_IVVc(oIVp,srw,newIVrw);
+                  MatRowPut(oIVp,srw,newIVrw);
+                end;
+                srw = srw + 1;
               end;
-LSkiDpRow:;;
+            end;
           end;
         end;
       end;
@@ -1009,7 +885,7 @@ BEGIN
   RETURN;
 END;
 
-function val SHFindFIFOVals2(LongInt ORSerNr,array record SHVc aSHr,Integer acnt,LongInt OrdRow,Boolean bbtrf,Integer NoNLCostOnShip,var val costprice)
+function val SHFindFIFOVals(LongInt ORSerNr,array record SHVc aSHr,Integer acnt,LongInt OrdRow)
 BEGIN
   val res;
   record SHVc SHr;
@@ -1018,32 +894,16 @@ BEGIN
   record RetVc Retr;
   row RetVc Retrw;
   Boolean found;
-  val ship;
   
-  costprice = blankval;
   for (pos=0;pos<acnt;pos=pos+1) begin
     SHr = aSHr[pos];
     rwcnt = MatRowCnt(SHr);
     for (i=0;i<rwcnt;i=i+1) begin
       MatRowGet(SHr,i,SHrw);
       if (SHrw.OrdRow==OrdRow) then begin
-        if (bbtrf) then begin
-          if (SHrw.BBCostPrice!=0 and NoNLCostOnShip!=1) then begin
-            res = res + SHrw.BBCostPrice*SHrw.Ship;
-          end else begin
-            res = res + SHrw.FIFORowVal;
-          end;
-        end else begin
-          res = res + SHrw.FIFORowVal;
-        end;
-        costprice = costprice + SHrw.Ship*SHrw.BasePrice;
-        ship = ship + SHrw.Ship;
+        res = res + SHrw.FIFORowVal;
       end;
     end;
-  end;
-  
-  if (ship>0) then begin
-    costprice = costprice/ship;
   end;
 
   found = true;
@@ -1062,20 +922,11 @@ BEGIN
       end;
     end;
   end;
-  SHFindFIFOVals2 = res - FindAlreadyInvoicedFIFOVal(ORSerNr,OrdRow); // Also needs an array.... to avoid all these reads....
+  SHFindFIFOVals = res - FindAlreadyInvoicedFIFOVal(ORSerNr,OrdRow); // Also needs an array.... to avoid all these reads....
   RETURN;
 END;
 
-function val SHFindFIFOVals(LongInt ORSerNr,array record SHVc aSHr,Integer acnt,LongInt OrdRow,Boolean bbtrf)
-begin
-  record CostAccBlock CAb;
-  val costprice;
-  
-  BlockLoad(CAb);
-  SHFindFIFOVals = SHFindFIFOVals2(ORSerNr,aSHr,acnt,OrdRow,bbtrf,CAb.NoNLCostOnShip,costprice);
-end;
-
-function val DropSHFindFIFOVals(LongInt ORSerNr,array record DropSHVc aDropSHr,Integer acnt,LongInt OrdRow,var string serialnr)
+function val DropSHFindFIFOVals(LongInt ORSerNr,array record DropSHVc aDropSHr,Integer acnt,LongInt OrdRow)
 begin
   val res;
   record DropSHVc DropSHr;
@@ -1083,7 +934,6 @@ begin
   Integer i,rwcnt,pos;
   Boolean found;
   
-  serialnr = "";
   for (pos=0;pos<acnt;pos=pos+1) begin
     DropSHr = aDropSHr[pos];
     rwcnt = MatRowCnt(DropSHr);
@@ -1091,7 +941,6 @@ begin
       MatRowGet(DropSHr,i,DropSHrw);
       if (DropSHrw.OrdRow==OrdRow) then begin
         res = res + MulRateToBase1(DropSHr.CurncyCode,DropSHrw.Ship*DropSHrw.CostPrice,DropSHr.FrRate,DropSHr.ToRateB1,DropSHr.ToRateB2,DropSHr.BaseRate1,DropSHr.BaseRate2,DefaultCurRoundOff);// sales
-        serialnr = DropSHrw.SerialNr;
       end;
     end;
   end;
@@ -1203,13 +1052,12 @@ end;
 global
 function Boolean PasteOrdInInv(var record IVVc IVp,record ORVc ORp,Boolean addon,string lastcu,record RcVc RepSpec,var val orsum,Boolean addperceptionf,Boolean withholdingf,Boolean NLCostOnShipTestf,
                                var Integer err,Boolean maintf,array record XSrsVc aXSrsr,var Integer axsrscnt)
-begin
-  record MainStockBlock MSb;
-  record CostAccBlock CAb;
+BEGIN
+  record MainStockBlock MainStockRec;
+  record CostAccBlock CostAccRec;
   record DownPayBlock DPb;
   record OrdSettBlock OSb;
   record AccBlock ARAccRec;
-  record PLDefVc PLDefr;
   record CUVc CUr;
   record INVc INr;
   row ORVc ORrw;
@@ -1223,11 +1071,11 @@ begin
   val pr,coef;
   val s,rowsum;
   val from,to1,to2,base1,base2;
-  val FrBase,FrGP,FrPrice,costprice;
+  val FrBase,FrGP,FrPrice;
   string 255 tstr,curcode;
   string 255 compitem,VATCode,taxtemplatecode;
   record FreightBlock FreightRec;
-  record GeneralOptionBlock GOb;
+  record GeneralOptionBlock GenOptRec;
   Boolean fiscalf;
   Boolean treatedf,repaf;
   Integer lastrwcnt;
@@ -1235,7 +1083,7 @@ begin
   record SHVc lastSHr;
   Boolean found,subvatf;
   Integer hiddenrow;
-  Integer acnt,adscnt,oldstyle;
+  Integer acnt,oldstyle;
   array record SHVc aSHr;
   array record SHVc aDropSHr;
   record TaxMatrixVc TMr;
@@ -1243,40 +1091,29 @@ begin
   record IVTBlock IVTb;
   record XSrsVc XSrsr;
   record AccVc Accr;
-  array row IVVc arptIVrw;
-  Integer arptcnt;
-  Integer ordtype; 
-  record ARPayHistVc ARPHr;
-  Boolean bbtrf;
   record LoyaltyCardVc LoyaltyCardr;// Edit ************************** Thursday, 20 March 2014 12:55:40
-  boolean TrHsLoy;// Edit ************************** Tuesday, 22 August 2017 12:06:20
+  boolean TrHsLoy;
     	
-
-  
   lastrwcnt = MatRowCnt(IVp);
   orsum = blankval;
   res = false;  
   fiscalf = true;
-  BlockLoad(CAb);
+  BlockLoad(CostAccRec);
   BlockLoad(ARAccRec);
   BlockLoad(DPb);
-  BlockLoad(MSb);
+  BlockLoad(MainStockRec);
   BlockLoad(OSb);
-  BlockLoad(GOb);
+  BlockLoad(GenOptRec);
   BlockLoad(TRGb);
   if (nonblank(ORp.PRCode)) then begin goto LPasteOrdInInv; end;
   AllowInvBeforeShip = ORp.InvBeforeShip;
   if (AllowInvBeforeShip==0) then begin
-    if (IsStandardProduct) then begin
-      if (HasLocalization("RUS")) then begin AllowInvBeforeShip = 1; end;
-      if (HasModSO and HasModIN==false) then begin AllowInvBeforeShip = 1; end;
-    end;
+//    AllowInvBeforeShip = MainStockRec.AllowInvBeforeShip;
   end;  
   if (NLCostOnShipTestf) then begin
     if (AllowInvBeforeShip!=0) then begin
-      if (CAb.NoNLCostOnShip!=0) and (TRGb.SHGenTrans==0) then begin
+      if (CostAccRec.NoNLCostOnShip!=0) and (TRGb.SHGenTrans==0) then begin
         if (ORp.ShipFlag==0) then begin
-          err = 24155;
           goto LPasteOrdInInv;
         end;
       end;
@@ -1287,8 +1124,6 @@ begin
   IVp.OrderNr = ORp.SerNr;
   IVp.SVONr = -1;
   IVp.TREONr = ORp.TREONr;
-  IVp.RecipientGLN = ORp.RecipientGLN;
-  IVp.DelRecipientGLN = ORp.DelRecipientGLN;
   if (nonblank(ORp.InvoiceToCode)) then begin
     CUr.Code = ORp.InvoiceToCode;
     if (ReadFirstMain(CUr,1,true)) then begin
@@ -1333,12 +1168,10 @@ begin
 //      IVp.PayDeal = CUr.PayDeal;
       IVp.PayDeal = ORp.PayDeal;
       IVp.VATNr = CUr.VATNr;      
-      IVp.RegNr1 = CUr.RegNr1;
       IVp.ExportFlag = CUr.ExportFlag;
       IVp.FiscalFlag = CUr.FiscalFlag;
       IVp.CustVATCode = CUr.VATCode;      
       IVp.BankCode = CUr.AccOperator;
-      IVp.RecipientGLN = CUr.RecipientGLN;
       fiscalf = false;
       if (CUr.IntRate!=0) then begin IVp.IntCode = CUr.IntRate; end;
     end else begin
@@ -1346,6 +1179,7 @@ begin
     end;
   end else begin
 L20PasteOrdInInv:;
+		
     IVp.CustCode = ORp.CustCode;
     // Edit Start ---------------------------------------------- Edit Start
 	//Thursday, 20 March 2014 13:09:57
@@ -1398,14 +1232,10 @@ L20PasteOrdInInv:;
   IVp.ARAcc = tstr;
   IVp.ClientContact = ORp.CustContact;
   IVp.OurContact = ORp.OurContact;
-  IVp.BankCode = ORp.BankCode;
   if (maintf==false) then begin
     IVp.Objects = ORp.Objects;
   end;
-  IVp.QTNr = ORp.QuoteNr;
-  IVp.RefStr = ORp.RefStr;
   IVp.SalesMan = ORp.SalesMan;
-  IVVc_PasteSalesMan(IVp,"");
   IVp.CurncyCode = ORp.CurncyCode;
   IVp.LangCode = ORp.LangCode;
   IVp.PriceList = ORp.PriceList;
@@ -1417,26 +1247,17 @@ L20PasteOrdInInv:;
   IVp.NoTAXonVAT = ORp.NoTAXonVAT;
   IVp.TotalwoTAX = ORp.TotalwoTAX;
   BlockLoad(IVTb);
-  IVp.FrRate = ORp.FrRate;
-  IVp.ToRateB1 = ORp.ToRateB1;
-  IVp.ToRateB2 = ORp.ToRateB2;
-  IVp.BaseRate1 = ORp.BaseRate1;
-  IVp.BaseRate2 = ORp.BaseRate2;
   switch (IVTb.IVFromORRate) begin
     case kIVRateFromOrder:
-//        above;
+      IVp.FrRate = ORp.FrRate;
+      IVp.ToRateB1 = ORp.ToRateB1;
+      IVp.ToRateB2 = ORp.ToRateB2;
+      IVp.BaseRate1 = ORp.BaseRate1;
+      IVp.BaseRate2 = ORp.BaseRate2;
     case kIVRateOnInvoiceDate:
       GetFullCurncyRate(IVp.CurncyCode,IVp.InvDate,IVp.FrRate,IVp.ToRateB1,IVp.ToRateB2,IVp.BaseRate1,IVp.BaseRate2);
-    case kIVRateFromPrepaymentandInvoice:
-      GetFullCurncyRate(IVp.CurncyCode,IVp.InvDate,IVp.FrRate,IVp.ToRateB1,IVp.ToRateB2,IVp.BaseRate1,IVp.BaseRate2);
-/*
-? prepayment not paste yet ?      
     case kIVRateFromPrepayment:
-      ARPHr.OrderNr = ORp.SerNr;
-      if (ReadFirstKey("OrderNr",ARPHr,1,true)) then begin
-        GetFullCurncyRate(IVp.CurncyCode,ARPHr.TransDate,IVp.FrRate,IVp.ToRateB1,IVp.ToRateB2,IVp.BaseRate1,IVp.BaseRate2);
-      end;
-*/      
+      GetFullCurncyRate(IVp.CurncyCode,IVp.InvDate,IVp.FrRate,IVp.ToRateB1,IVp.ToRateB2,IVp.BaseRate1,IVp.BaseRate2);
   end;
   IVp.CustVATCode = ORp.CustVATCode;      
   IVp.FrPrice = ORp.FrPrice;
@@ -1485,45 +1306,30 @@ L20PasteOrdInInv:;
   if (blank(ORp.InvoiceToCode)) then begin
     if (CUr.IntRate!=0) then begin IVp.IntCode = CUr.IntRate; end;
   end;
-  if (blank(ORp.InvoiceToCode) and blank(IVp.BankCode)) then begin
+  if (blank(ORp.InvoiceToCode)) then begin
     IVp.BankCode = CUr.AccOperator;
   end;
 // This was done for EVERY line in the matrix....wierd...
 // Now with the record array this is unncesseray
-  ordtype = 0;
   acnt = 0;
-  adscnt = 0;
   switch (ORp.OrderType) begin
     case kOrderTypeDropShip:
-      FillDropSHArray(ORp.SerNr,aDropSHr,adscnt);
+      FillDropSHArray(ORp.SerNr,aDropSHr,acnt);
    otherwise
       FillSHArray(ORp.SerNr,aSHr,acnt);
       if (acnt>0) then begin
         RecordCopy(lastSHr,aSHr[acnt-1]);
       end;
-      FillDropSHArray(ORp.SerNr,aDropSHr,adscnt);
   end;
   switch (ORp.OrderType) begin
     case kOrderTypeDropShip:
     otherwise
       if (OSb.IVBasedOnSH!=0) then begin
         res = true;  
-        ordtype = PasteSHRowsToIV(RepSpec,ORp,IVp,OSb.NoRetFromOR,OSb.SHIncludesAllORRows,AllowInvBeforeShip,CAb.UpdateInv,GOb.UseDiscount,orsum,maintf,aXSrsr,axsrscnt);
-        if (ordtype==1) then begin
-          goto LSkipORRows;
-        end;
+        PasteSHRowsToIV(RepSpec,ORp,IVp,OSb.NoRetFromOR,AllowInvBeforeShip,CostAccRec.UpdateInv,GenOptRec.UseDiscount,orsum,maintf,aXSrsr,axsrscnt);
+        goto LSkipORRows;
       end;
   end;
-  if (nonblank(ORp.PriceList)) then begin
-    PLDefr.Code = ORp.PriceList;
-    if (ReadFirstMain(PLDefr,1,true)) then begin
-      switch (PLDefr.DepPrice) begin
-        case 2: 
-          bbtrf = true;
-      end;
-    end;
-  end;
-  
   compitem = CUr.CompItemCode;
   rwcnt = MatRowCnt(ORp);
   oldsrw = MatRowCnt(IVp);
@@ -1531,12 +1337,6 @@ L20PasteOrdInInv:;
   for (i=0;i<rwcnt;i=i+1) begin
     MatRowGet(ORp,i,ORrw);
     treatedf = false;
-    if (ORrw.stp==kInvoiceRowTypePerceptionTax) then begin
-      goto LSkipOneORRow;
-    end;  
-    if ((ordtype==2) and (ORrw.OrderType!=kOrderTypeDropShip)) then begin
-      goto LSkipOneORRow;
-    end;
     if (ORrw.stp==10) then begin
       ClearRow(IVp,IVrw,10);
       MatRowPut(IVp,srw,IVrw);
@@ -1571,7 +1371,7 @@ L20PasteOrdInInv:;
     testf = false;
 
 // Not sure about this....
-    if (remn!=0) then begin testf = true; end;
+    if (remn!=0) then begin testf = true;  end;
 //    if ((remn>0) and (remn!=0)) then begin testf = true; end;
 
  //ELar wants it like that
@@ -1585,7 +1385,7 @@ L20PasteOrdInInv:;
         testf = true; 
         if (remn==0) then begin         
           if (nonblank(ORrw.ArtCode)) then begin
-            testf = false; 
+            testf = false;
           end;
         end;
       end;
@@ -1604,7 +1404,6 @@ L20PasteOrdInInv:;
       if ((ORrw.Quant==blankval) and (remn==0)) then begin
         remn = blankval;
       end;
-      IVrw.ServiceDelDate = ORrw.ServiceDelDate;
       IVrw.UsedBirthRebate = ORrw.UsedBirthRebate;// Edit ************************** Monday, 19 June 2017 12:05:51
       IVrw.Quant = remn;
       IVrw.Location = ORrw.Location;
@@ -1617,7 +1416,6 @@ L20PasteOrdInInv:;
       ReadFirstMain(Accr,1,true);
       IVrw.PeriodCode = Accr.PeriodCode;
       IVrw.VATCode = ORrw.VATCode;
-      IVrw.RvrsVATCode = ORrw.RvrsVATCode;
       if (maintf==false) then begin
         IVrw.Objects = ORrw.Objects;
       end else begin
@@ -1648,19 +1446,50 @@ L20PasteOrdInInv:;
       if (IVrw.Quant==ORrw.Quant) then begin
         IVrw.Sum = ORrw.Sum;
       end else begin
-        CalcSum(IVrw.Quant,IVrw.Price,IVrw.PriceFactor,IVrw.vRebate,t,GOb.UseDiscount);
+        CalcSum(IVrw.Quant,IVrw.Price,IVrw.PriceFactor,IVrw.vRebate,t,GenOptRec.UseDiscount);
         IVrw.Sum = t;
 //        IVrw.Sum = (ORrw.Sum*IVrw.Quant)/ORrw.Quant;
       end;
-      if ((IVrw.Sum==0) and (blank(IVrw.Quant)) and (blank(IVrw.Price))) then begin
+      if ((IVrw.Sum==0) and (IVrw.Quant==blankval) and (IVrw.Price==blankval)) then begin
         IVrw.Sum = blankval;
       end;
       orsum = orsum + IVrw.Sum;
-      infound = false;
       if (nonblank(IVrw.ArtCode)) then begin
-        infound = ReadFirstItem(IVrw.ArtCode,INr,false,true);
+        INr.Code = IVrw.ArtCode;
+        infound = ReadFirstMain(INr,1,true);
+      end else begin
+        infound = false;
       end;
-            
+      if (CostAccRec.UpdateInv==1) then begin
+        if (infound) then begin
+          IVrw.BasePrice = GetINCostPrice(IVp.PriceList,IVrw.ArtCode,true); //IVrw.BasePrice = INr.InPrice + INr.ExtraCost;
+          if ((INr.InPrice==0) and (INr.ItemType==2) and (nonblank(INr.Recepy))) then begin
+            if (INr.ExplodeRec==0) then begin
+//            GetStructureCostPrice(ORrw.Recepy,t);
+              GetStructureCostPrice(INr.Recepy,t);
+              IVrw.BasePrice = t;
+            end;
+          end;
+        end else begin
+          IVrw.BasePrice = ORrw.BasePrice;
+        end;
+      end else begin
+        IVrw.BasePrice = ORrw.BasePrice;
+      end;
+      if (nonblank(IVrw.ArtCode)) then begin
+        t = IVrw.Quant*IVrw.BasePrice;   // cost  
+        if (IVrw.PriceFactor!=0) then begin
+          t = t/IVrw.PriceFactor;
+        end;
+        s = MulRateToBase1(IVp.CurncyCode,IVrw.Sum,IVp.FrRate,IVp.ToRateB1,IVp.ToRateB2,IVp.BaseRate1,IVp.BaseRate2,DefaultCurRoundOff);// sales
+        UnpackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
+        FindSalesExVat(TMr,IVrw.VATCode,s,IVp.InclVAT,IVp.NoTAXonVAT,rowsum);
+        IVrw.rowGP = rowsum - t;        // GP    
+      end else begin
+        IVrw.rowGP = 0;
+        IVrw.BasePrice = 0;
+      end;
+
       if (lastSHr.OrderNr==ORp.SerNr) then begin
         IVp.ServiceDelDate = lastSHr.ShipDate;
         IVrw.ExciseNr = lastSHr.ShipDate;
@@ -1675,61 +1504,15 @@ L20PasteOrdInInv:;
       end;
       IVrw.NotUpdStockFlag = 1;
       IVrw.Perceptions = INr.Perceptions;
-      costprice = blankval;
       switch (ORp.OrderType) begin
         case kOrderTypeDropShip:
-          IVrw.FIFORowVal = DropSHFindFIFOVals(ORp.SerNr,aDropSHr,adscnt,IVrw.OrdRow,IVrw.SerialNr);
-          costprice = IVrw.FIFORowVal;
+          IVrw.FIFORowVal = DropSHFindFIFOVals(ORp.SerNr,aDropSHr,acnt,IVrw.OrdRow);
         otherwise
-          if (ORrw.OrderType==kOrderTypeDropShip) then begin
-            IVrw.FIFORowVal = DropSHFindFIFOVals(ORp.SerNr,aDropSHr,adscnt,IVrw.OrdRow,IVrw.SerialNr);
-            costprice = IVrw.FIFORowVal;
-          end else begin
-            IVrw.FIFORowVal = SHFindFIFOVals2(ORp.SerNr,aSHr,acnt,IVrw.OrdRow,bbtrf,CAb.NoNLCostOnShip,costprice);
-          end;
-//      IVrw.FIFORowVal = SHFindFIFOVals(ORp.SerNr,IVrw.OrdRow,bbtrf);//KH how to fix?
+          IVrw.FIFORowVal = SHFindFIFOVals(ORp.SerNr,aSHr,acnt,IVrw.OrdRow);
+//      IVrw.FIFORowVal = SHFindFIFOVals(ORp.SerNr,IVrw.OrdRow);//KH how to fix?
       end;
       IVrw.FIFO = IVrw.FIFORowVal/IVrw.Quant;
-
-      switch (CAb.UpdateInv) begin
-        case 2:
-//          Found above in SHFindFIFOVals2;
-          costprice = IVrw.FIFORowVal;
-        case 1:
-          costprice = ORrw.BasePrice;
-          if (infound) then begin
-            costprice = GetINCostPrice2(IVp.PriceList,IVrw.ArtCode,IVp.CustCode,true); //IVrw.BasePrice = INr.InPrice + INr.ExtraCost;
-            if ((blank(costprice)) and (INr.ItemType==2) and (nonblank(INr.Recepy))) then begin
-              if (INr.ExplodeRec==0) then begin
-                GetStructureCostPrice(INr.Recepy,t);
-                costprice = t;
-              end;
-            end;        
-          end;
-        otherwise
-          costprice = ORrw.BasePrice;
-      end;
-      IVrw.BasePrice = costprice;
-
-      if (nonblank(IVrw.ArtCode)) then begin
-        t = IVrw.Quant*IVrw.BasePrice;   // cost
-        if (IVrw.PriceFactor!=0) then begin
-          t = t/IVrw.PriceFactor;
-        end;
-        s = MulRateToBase1(IVp.CurncyCode,IVrw.Sum,IVp.FrRate,IVp.ToRateB1,IVp.ToRateB2,IVp.BaseRate1,IVp.BaseRate2,DefaultCurRoundOff);// sales
-        UnpackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
-        FindSalesExVat(TMr,IVrw.VATCode,s,IVp.InclVAT,IVp.NoTAXonVAT,rowsum);
-        IVrw.rowGP = rowsum - t;        // GP
-      end else begin
-        IVrw.rowGP = 0;
-        IVrw.BasePrice = 0;
-      end;     
-
       IVrw.TaxTemplateCode = ORrw.TaxTemplateCode;
-      if (INr.SerNrf!=0) then begin
-        GetCustomsDeclarationNumber("IVVc",-1,-1,IVrw.ArtCode,IVrw.SerialNr,0,IVrw.CustomsNr);
-        GetCustomsDeclarationNumber("IVVc",-1,-1,IVrw.ArtCode,IVrw.SerialNr,2,IVrw.CountryOfOrg);
-      end;
       UnpackRowFieldMatrix(ORrw,"TaxMatrix",TMr);
       PackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
       RowCalculateTaxMatrix_IVVc(IVp,srw,IVrw);
@@ -1759,8 +1542,9 @@ L20PasteOrdInInv:;
         srw = MatRowCnt(IVp);
       end;
     end;
-LSkipOneORRow:;  
   end;
+  
+  
   if (repaf) then begin
     if (AddRepaLine(IVp,false,lastrwcnt,orsum)) then begin end;
   end;  
@@ -1818,7 +1602,7 @@ LSkipORRows:;
       end;
       if (t>0) then begin
         t = -t;
-        ClearRow(IVp,IVrw,kInvoiceRowTypeDownpayment);
+        ClearRow(IVp,IVrw,5);
         IVrw.Spec = DPb.TextA;
         IVrw.Spec = IVrw.Spec & " ";
         IVrw.Spec = IVrw.Spec & ORp.SerNr;
@@ -1838,7 +1622,6 @@ LSkipORRows:;
       end;
     end else begin
       srw = MatRowCnt(IVp);
-//      DownpaymentPerVATCode(IVp,DPb,t,hiddenrow,srw,arptIVrw,arptcnt);
       DownpaymentPerVATCode(IVp,DPb,t,hiddenrow,srw);
     end;
   end;
@@ -1849,11 +1632,8 @@ LSkipORRows:;
     if (nonblank(IVp.FrItem)) then begin 
       INr.Code = IVp.FrItem;
       if (ReadFirstMain(INr,1,true)) then begin
-        IVp.FrVATCode = CUr.VATCode;
-        if (blank(IVp.FrVATCode)) then begin
-          GetItemVATCode(IVp.FrItem,IVp.ExportFlag,tstr,true);
-          IVp.FrVATCode = tstr;
-        end;
+        GetItemVATCode(IVp.FrItem,IVp.ExportFlag,tstr,true);
+        IVp.FrVATCode = tstr;
         GetItemSalesAcc(IVp.FrItem,IVp.ExportFlag,tstr);
         IVp.FrSalesAcc = tstr;
         IVp.FrBase = INr.UPrice1;
@@ -1876,7 +1656,7 @@ LSkipORRows:;
         IVp.FrPrice = DivRateToBase1(IVp.CurncyCode,IVp.FrBase,IVp.FrRate,IVp.ToRateB1,IVp.ToRateB2,IVp.BaseRate1,IVp.BaseRate2,DefaultCurRoundOff);
         pr = 100;
         pr = pr - IVp.FrGPPercent;
-        CalcSum(1,IVp.FrBase,0,pr,t,GOb.UseDiscount);
+        CalcSum(1,IVp.FrBase,0,pr,t,GenOptRec.UseDiscount);
         IVp.FrGP = t;
       end;
     end else begin
@@ -1902,10 +1682,10 @@ LSkipORRows:;
   if (addperceptionf) then begin
     AddPerceptionTaxesRows_IVVc(IVp);
   end;
-  if (withholdingf) then begin
+  if (addperceptionf) then begin
     AddWithholdingTaxesRows_IVVc(IVp);
   end;
-//  IVSumup(IVp,true);
+  IVSumup(IVp,true);
   if (nonblank(compitem)) then begin    
     cmpf = true;
     if (nonblank(lastcu)) then begin
@@ -1972,7 +1752,6 @@ LPasteOrdInInv:;
       end;
     end;
   end;
-  IVSumup(IVp,true);
   PasteOrdInInv = res;
   return;
 end;
@@ -1985,13 +1764,14 @@ begin
   record SRBlock SRRec;
   Integer res;
   LongInt newnr;
-  Boolean testf,pof;
+  Boolean testf;
   val t;
   string 20 custcode;
   record CUVc CUr;
   record POVc POr;
   array record XSrsVc aXSrsr;
   Integer axsrscnt;
+  
   
   res = -1;
   RecordNew(IVp);
@@ -2002,11 +1782,9 @@ begin
   ORr.SerNr = ordnr;
   if (ReadFirstMain(ORr,1,true)) then begin
   end;
-  
   if (ORr.OrderType==kOrderTypeDropShip) then begin
     POr.OrdNr = ORr.SerNr;
-    pof = ReadFirstKey("OrdNr",POr,1,true);
-    if (pof) then begin//per row ? 
+    if (ReadFirstKey("OrdNr",POr,1,true)) then begin//per row ? 
 /* Invoice before Purchase Invoice is allowed
       if (POr.PIFlag==0) then begin
         res = 22074;
@@ -2014,10 +1792,8 @@ begin
       end;
 */      
     end else begin
-/*
       res = 22074;
       goto LRecordAction_raPasteOrdInInv;
-*/
     end;
   end;
   if (nonblank(ORr.PRCode)) then begin
@@ -2041,7 +1817,6 @@ begin
       goto LRecordAction_raPasteOrdInInv;
     end;
   end;
-  
   testf = PasteOrdInInv(IVp,ORr,false,"-1",RepSpec,t,true,true,NLCostOnShipTestf,res,false,aXSrsr,axsrscnt);
   if (IVp.SerNr==-1) then begin
     BlockLoad(SRRec);
@@ -2055,14 +1830,8 @@ begin
       goto LRecordAction_raPasteOrdInInv;
     end;
   end;
-  if (HasLocalization("ARG")) then begin 
-    IVp.BranchID = CurBranchID;
-    if (blank(IVp.BranchID)) then begin
-      IVp.BranchID = ORr.BranchID;
-    end;
-  end;
   if ((MatRowCnt(IVp)>0) and (IVp.SerNr!=-1) and testf) then begin
-    IVSumup(IVp,true);// Edit ************************** Tuesday, 22 August 2017 12:34:25
+    IVSumup(IVp,true);
     if (RecordInsert(IVp,false)) then begin
       res = 0;
       CreateRecordLink(IVp,CurrentCompany,ORr,CurrentCompany);  
@@ -2075,779 +1844,6 @@ LRecordAction_raPasteOrdInInv:;
   RETURN;
 END;
 
-
-
-
-global
-updating function Integer PasteSHInInvoice(record SHVc SHr,var record IVVc IVr)
-begin
-  Integer err,errcode;
-  row SHVc SHrw;
-  record ORVc ORr;
-  row ORVc ORrw;
-  row IVVc IVrw;
-  record CUVc CUr;
-  record INVc INr;
-  string 255 custcode,curcode,taxtemplatecode,VATCode,tstr,compitem,lastcu;
-  LongInt newnr,lastshnr;
-  record SRBlock SRb;
-  Integer shi,shcnt,orcnt,ivcnt,i,hiddenrow,srw,rwcnt,oldstyle;
-  val remnv,invq,tv,s,rowsum,orsum,totshv,t,pr;
-  val from,to1,to2,base1,base2;
-  val FrBase,FrGP,FrPrice;
-  Boolean testf,infound,repaf,fiscalf,maintf,subvatf,addperceptionf,withholdingf,cmpf;
-  Array LongInt aordrow;
-  Array val aordrowretq;
-  Array LongInt ashiprow;
-  Array LongInt ashipnr;
-  Integer acnt;
-  record TaxMatrixVc TMr;
-  record XSrsVc XSrsr;
-  vector val vinvd;
-  record CostAccBlock CAb;
-  record OrdSettBlock OSb;
-  record GeneralOptionBlock GOb;
-  record AccBlock ARb;
-  record IVTBlock IVTb;
-  record DownPayBlock DPb;
-  record ARPayHistVc ARPHr;
-  record FreightBlock Freightb;
-  record RcVc RepSpec;
-
-  err = 0;
-  if (SHr.InvoiceNr>0) then begin
-    err = 40301;
-    goto LPasteSHInInvoice;
-  end;
-  maintf = false;
-  BlockLoad(SRb);
-  BlockLoad(CAb);
-  BlockLoad(OSb);
-  BlockLoad(GOb);
-  BlockLoad(ARb);
-  BlockLoad(IVTb);
-  BlockLoad(DPb);
-  BlockLoad(Freightb);
-  RecordNew(IVr);   
-  ORr.SerNr = SHr.OrderNr;
-  if (ReadFirstMain(ORr,1,true)==false) then begin
-    err = 40302;
-    goto LPasteSHInInvoice;
-  end;
-  orcnt = MatRowCnt(ORr);
-  if (ORr.OrderType==kOrderTypeDropShip) then begin
-    err = 40303;
-    goto LPasteSHInInvoice;
-  end;
-  if (nonblank(ORr.PRCode)) then begin
-    err = 1096;
-    goto LPasteSHInInvoice;
-  end;
-  if (ORr.OKFlag==0) then begin
-    if (OfficialSerNrDefined("ORVc")) then begin
-      err = 2069;
-      goto LPasteSHInInvoice;
-    end;
-  end;
-  if (nonblank(ORr.InvoiceToCode)) then begin
-    custcode = ORr.InvoiceToCode;
-  end else begin
-    custcode = ORr.CustCode;
-  end;
-  CUr.Code = custcode;
-  if (ReadFirstMain(CUr,1,true)) then begin
-    if (CUr.GroupInv!=0) then begin
-      err = 40304;
-      goto LPasteSHInInvoice;
-    end;
-  end;
-  IVr.SerNr = -1;
-  IVr.OrderNr = SHr.OrderNr;
-  IVr.UpdStockFlag = 0;
-  IVr.OrderType = ORr.OrderType;
-  
-
-  IVr.UpdStockFlag = ARb.InvUpdStock;
-  IVr.OrderNr = ORr.SerNr;
-  IVr.SVONr = -1;
-  IVr.TREONr = ORr.TREONr;
-  IVr.RecipientGLN = ORr.RecipientGLN;
-  IVr.DelRecipientGLN = ORr.DelRecipientGLN;
-  if (nonblank(ORr.InvoiceToCode)) then begin
-    CUr.Code = ORr.InvoiceToCode;
-    if (ReadFirstMain(CUr,1,true)) then begin
-      if (CUr.OnHoldFlag!=0) then begin 
-        err = 40306;
-        goto LPasteSHInInvoice; 
-      end;
-      IVr.CustCode = CUr.Code;
-      IVr.Addr0 = CUr.Name;
-      IVr.Addr1 = CUr.InvAddr0;
-      IVr.Addr2 = CUr.InvAddr1;
-      IVr.Addr3 = CUr.InvAddr2;
-      IVr.InvAddr3 = CUr.InvAddr3;
-      IVr.InvAddr4 = CUr.InvAddr4;
-      IVr.InvCountry = CUr.CountryCode;
-      IVr.CustCat = CUr.CustCat;
-      IVr.OrgCust = ORr.CustCode;
-      IVr.PayDeal = ORr.PayDeal;
-      IVr.VATNr = CUr.VATNr;      
-      IVr.RegNr1 = CUr.RegNr1;
-      IVr.ExportFlag = CUr.ExportFlag;
-      IVr.FiscalFlag = CUr.FiscalFlag;
-      IVr.CustVATCode = CUr.VATCode;      
-      IVr.BankCode = CUr.AccOperator;
-      IVr.RecipientGLN = CUr.RecipientGLN;
-      fiscalf = false;
-      if (CUr.IntRate!=0) then begin IVr.IntCode = CUr.IntRate; end;
-    end else begin
-      goto L20PasteSHInInv; // if customer is not found then use the original customer
-    end;
-  end else begin
-L20PasteSHInInv:;
-    IVr.CustCode = ORr.CustCode;
-    IVr.Addr0 = ORr.Addr0;
-    IVr.Addr1 = ORr.Addr1;
-    IVr.Addr2 = ORr.Addr2;
-    IVr.Addr3 = ORr.Addr3;
-    IVr.InvAddr3 = ORr.InvAddr3;
-    IVr.InvAddr4 = ORr.InvAddr4;
-    IVr.InvCountry = ORr.InvCountry;
-    IVr.CustCat = ORr.CustCat;
-    IVr.PayDeal = ORr.PayDeal;
-    IVr.VATNr = ORr.VATNr;    
-    IVr.OrgCust = "";
-    IVr.ExportFlag = ORr.ExportFlag;
-    CUr.Code = ORr.CustCode;
-    ReadFirstMain(CUr,1,true);
-  end;
-  if (CUr.OnHoldFlag!=0) then begin 
-    err = 40306;
-    goto LPasteSHInInvoice; 
-  end;
-  if (CUr.blockedFlag!=0) then begin 
-    err = 40307;
-    goto LPasteSHInInvoice; 
-  end;
-  GetARAcc(IVr.CustCode,IVr.ARAcc);
-  IVr.ClientContact = ORr.CustContact;
-  IVr.OurContact = ORr.OurContact;
-  IVr.BankCode = ORr.BankCode;
-  if (maintf==false) then begin
-    IVr.Objects = ORr.Objects;
-  end;
-  IVr.RefStr = ORr.RefStr;
-  IVr.SalesMan = ORr.SalesMan;
-  IVVc_PasteSalesMan(IVr,"");
-  IVr.CurncyCode = ORr.CurncyCode;
-  IVr.LangCode = ORr.LangCode;
-  IVr.PriceList = ORr.PriceList;
-  IVr.PRCode = ORr.PRCode;
-  IVr.InvComment = ORr.Comment;
-  IVr.CustOrdNr = ORr.CustOrdNr;
-  IVr.Sorting = ORr.Sorting;
-  IVr.InclVAT = ORr.InclVAT;
-  IVr.NoTAXonVAT = ORr.NoTAXonVAT;
-  IVr.TotalwoTAX = ORr.TotalwoTAX;
-  BlockLoad(IVTb);
-  IVr.FrRate = ORr.FrRate;
-  IVr.ToRateB1 = ORr.ToRateB1;
-  IVr.ToRateB2 = ORr.ToRateB2;
-  IVr.BaseRate1 = ORr.BaseRate1;
-  IVr.BaseRate2 = ORr.BaseRate2;
-  switch (IVTb.IVFromORRate) begin
-    case kIVRateFromOrder:
-//        above;
-    case kIVRateOnInvoiceDate:
-      GetFullCurncyRate(IVr.CurncyCode,IVr.InvDate,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2);
-    case kIVRateFromPrepaymentandInvoice:
-      GetFullCurncyRate(IVr.CurncyCode,IVr.InvDate,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2);
-    case kIVRateFromPrepayment:
-      ARPHr.OrderNr = ORr.SerNr;
-      if (ReadFirstKey("OrderNr",ARPHr,1,true)) then begin
-        GetFullCurncyRate(IVr.CurncyCode,ARPHr.TransDate,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2);
-      end;
-  end;
-  IVr.CustVATCode = ORr.CustVATCode;      
-  IVr.FrPrice = ORr.FrPrice;
-  if ((ARb.UpdBaseRate!=0) or (ARb.UpdForeginRate!=0)) then begin
-    curcode = IVr.CurncyCode;
-    GetFullCurncyRate(curcode,IVr.TransDate,from,to1,to2,base1,base2);
-    IVr.CurncyCode = curcode;
-    if (ARb.UpdBaseRate!=0) then begin
-      IVr.BaseRate1 = base1;
-      IVr.BaseRate2 = base2;
-    end;
-    if (ARb.UpdForeginRate!=0) then begin
-      IVr.FrRate = from;
-      IVr.ToRateB1 = to1;
-      IVr.ToRateB2 = to2;
-    end;
-  end;
-  if (blank(IVr.VATNr)) then begin
-    IVr.VATNr = ORr.VATNr;  
-  end;
-  IVr.RebCode = ORr.RebCode;
-  IVr.Phone = ORr.Phone;
-  IVr.Fax = ORr.Fax;
-  IVr.DelAddrCode = SHr.DelAddrCode;
-  if (blank(IVr.DelAddrCode)) then begin
-    IVr.DelAddrCode = ORr.DelAddrCode;
-  end;
-  IVr.Region = ORr.Region;
-  IVr.ShipAddr0 = SHr.Addr0;
-  if (blank(IVr.ShipAddr0)) then begin
-    IVr.ShipAddr0 = ORr.ShipAddr0;
-  end;
-  IVr.ShipAddr1 = SHr.Addr1;
-  if (blank(IVr.ShipAddr1)) then begin
-    IVr.ShipAddr1 = ORr.ShipAddr1;
-  end;
-  IVr.ShipAddr2 = SHr.Addr2;
-  if (blank(IVr.ShipAddr2)) then begin
-    IVr.ShipAddr2 = ORr.ShipAddr2;
-  end;
-  IVr.ShipAddr3 = SHr.Addr3;
-  if (blank(IVr.ShipAddr3)) then begin
-    IVr.ShipAddr3 = ORr.ShipAddr3;
-  end;
-  IVr.DelAddr3 = SHr.DelAddr3;
-  if (blank(IVr.DelAddr3)) then begin
-    IVr.DelAddr3 = ORr.ShipAddr3;
-  end;
-  IVr.DelAddr4 = SHr.DelAddr4;
-  if (blank(IVr.DelAddr4)) then begin
-    IVr.DelAddr4 = ORr.DelCountry;
-  end;
-  IVr.DelCountry = SHr.DelCountry;
-  if (blank(IVr.DelCountry)) then begin
-    IVr.DelCountry = ORr.DelCountry;
-  end;
-  IVr.ShipMode = SHr.ShipMode;
-  if (blank(IVr.ShipMode)) then begin
-    IVr.ShipMode = ORr.ShipMode;
-  end;
-  IVr.ShipDeal = ORr.ShipDeal;
-  IVr.CreditCard = ORr.CreditCard;
-  IVr.AuthorizationCode = ORr.AuthorizationCode;
-  
-  IVr.Location = SHr.Location;
-  IVr.FreightCode = SHr.FreightCode;
-  IVr.PlanSendDate = SHr.PlanSendDate;
-  IVr.PlanSendTime = SHr.PlanSendTime;
-
-  CUr.Code = ORr.CustCode;
-  if (ReadFirstMain(CUr,1,true)) then begin end;
-  if (fiscalf) then begin
-    IVr.FiscalFlag = CUr.FiscalFlag;
-  end;  
-  if (blank(IVr.VATNr)) then begin IVr.VATNr = CUr.VATNr; end;
-  if (blank(ORr.InvoiceToCode)) then begin
-    if (CUr.IntRate!=0) then begin IVr.IntCode = CUr.IntRate; end;
-  end;
-  if (blank(ORr.InvoiceToCode) and blank(IVr.BankCode)) then begin
-    IVr.BankCode = CUr.AccOperator;
-  end;
-  shcnt = MatRowCnt(SHr);
-  for (shi=0;shi<shcnt;shi=shi+1) begin
-    MatRowGet(SHr,shi,SHrw);
-    if ((SHrw.OrdRow<orcnt) and (SHrw.OrdRow>-1)) then begin
-      MatRowGet(ORr,SHrw.OrdRow,ORrw);
-      testf = true;
-      if (nonblank(SHrw.ArtCode)) then begin
-        remnv = SHrw.Ship - SHrw.Invd;
-        if (remnv<=0) then begin testf = false; end;
-        remnv = ORrw.Shipd1 - ORrw.Invd - vinvd[SHrw.OrdRow];
-        if (remnv<=0) then begin testf = false; end;
-      end;
-      if (testf) then begin
-        ClearRow(IVr,IVrw,SHrw.stp);
-        IVrw.OrdRow = SHrw.OrdRow;
-
-        IVrw.ArtCode = SHrw.ArtCode;
-        IVrw.CustArtCode = SHrw.CustArtCode;
-        IVrw.Location = SHrw.Location;
-        IVrw.PosCode = SHrw.PosCode;
-        IVrw.Spec = SHrw.Spec;
-        IVrw.SerialNr = SHrw.SerialNr;            
-        FindOrdRowQty(ORr.SerNr,SHrw.OrdRow,SHr.SerNr,shi,OSb.NoRetFromOR,aordrow,aordrowretq,ashiprow,ashipnr,acnt)
-        IVrw.Quant = ORrw.Shipd1 - ORrw.Invd - vinvd[SHrw.OrdRow];
-        if (IVrw.Quant>SHrw.Ship) then begin IVrw.Quant = SHrw.Ship; end;
-        if (IVrw.Quant<0) then begin goto LSKIPIVROW; end;
-        vinvd[SHrw.OrdRow] = vinvd[SHrw.OrdRow] + IVrw.Quant;
-
-        invq = invq + IVrw.Quant;
-        IVrw.Price = ORrw.Price;
-        IVrw.vRebate = ORrw.vRebate;
-        IVrw.SalesAcc = SHrw.SalesAcc;
-        if (blank(IVrw.SalesAcc)) then begin
-          IVrw.SalesAcc = ORrw.SalesAcc;
-        end;
-        IVrw.VATCode = ORrw.VATCode;
-        IVrw.RvrsVATCode = ORrw.RvrsVATCode;
-        IVrw.Objects = ORrw.Objects;
-        IVrw.PriceFactor = ORrw.PriceFactor;
-        IVrw.Recepy = ORrw.Recepy;
-        IVrw.MotherArtCode = ORrw.MotherArtCode;
-        IVrw.RecipeQuant = ORrw.RecipeQuant;
-        IVrw.VARList = ORrw.VARList;            
-        IVrw.UnitCode = ORrw.UnitCode;
-        IVrw.UnitFactQuant = ORrw.UnitFactQuant;
-        IVrw.UnitFactPrice = ORrw.UnitFactPrice;
-        IVrw.ExciseNr = SHr.ShipDate;
-        IVrw.UnitXval = SHrw.UnitXval;
-        IVrw.UnitYval = SHrw.UnitYval;
-        IVrw.UnitZval = SHrw.UnitZval;
-        IVrw.TAX2Code = ORrw.TAX2Code;
-        IVrw.TAX2Prc = ORrw.TAX2Prc;
-        IVrw.TAX2Reb = ORrw.TAX2Reb;
-        IVrw.TAX1Reb = ORrw.TAX1Reb;
-        IVrw.TAX2Acc = ORrw.TAX2Acc;
-        IVrw.Location = SHrw.Location;
-        if (blank(IVrw.Location)) then begin
-          IVrw.Location = SHr.Location;
-        end;
-        IVrw.NotUpdStockFlag = 1;
-        IVrw.OrdRow = SHrw.OrdRow;
-        IVrw.OrdNr = ORr.SerNr;
-        IVrw.SHRow = shi;
-        CalcSum(IVrw.Quant,IVrw.Price,IVrw.PriceFactor,IVrw.vRebate,tv,GOb.UseDiscount);
-        IVrw.Sum = tv;
-//why comented out, negative GP ?             
-        if ((IVrw.Sum==0) and (IVrw.Quant==blankval) and (IVrw.Price==blankval)) then begin
-          IVrw.Sum = blankval;
-        end;
-        infound = ReadFirstItem(IVrw.ArtCode,INr,true,false);
-        IVrw.Perceptions = INr.Perceptions;
-        switch (CAb.UpdateInv) begin
-          case 2:
-            IVrw.BasePrice = SHrw.BasePrice;
-          case 1:
-            IVrw.BasePrice = ORrw.BasePrice;
-            if (infound) then begin
-              IVrw.BasePrice = GetINCostPrice2(IVr.PriceList,IVrw.ArtCode,IVr.CustCode,true); //IVrw.BasePrice = INr.InPrice + INr.ExtraCost;
-              if ((blank(IVrw.BasePrice)) and (INr.ItemType==2) and (nonblank(INr.Recepy))) then begin
-                if (INr.ExplodeRec==0) then begin
-                  GetStructureCostPrice(INr.Recepy,t);
-                  IVrw.BasePrice = t;
-                end;
-              end;        
-            end;
-          otherwise
-            IVrw.BasePrice = ORrw.BasePrice;
-            if (SHrw.BBCostPrice!=0) then begin 
-              IVrw.BasePrice = SHrw.BBCostPrice;
-            end;  
-        end;
-        if (blank(IVrw.BasePrice)) then begin
-          IVrw.BasePrice = ORrw.BasePrice;
-        end;
-        
-        if (nonblank(IVrw.ArtCode)) then begin
-          tv = IVrw.Quant*IVrw.BasePrice;   // cost  
-          if (IVrw.PriceFactor!=0) then begin
-            tv = tv/IVrw.PriceFactor;
-          end;
-          s = MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);// sales
-          UnpackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
-          FindSalesExVat(TMr,IVrw.VATCode,s,IVr.InclVAT,IVr.NoTAXonVAT,rowsum);
-          IVrw.rowGP = rowsum - tv;          // GP    
-        end else begin
-          IVrw.rowGP = 0;
-          IVrw.BasePrice = 0;
-        end;
-        IVrw.Coefficient = INr.UnitCoefficient;
-        IVrw.RepaExVAT = CalcItemRepa(INr.RepaPricePerWeight,INr.Weight,IVrw.Quant,IVr.CurncyCode,
-                                      IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
-        if (IVrw.RepaExVAT!=0) then begin repaf = true; end;
-        IVrw.NotUpdStockFlag = 1;
-        IVrw.FIFO = SHrw.FIFO;
-        IVrw.FIFORowVal = SHrw.FIFORowVal;
-        orsum = orsum + IVrw.Sum;
-        IVrw.SHNr = SHr.SerNr;
-        IVrw.SHRow = shi;
-        IVrw.ServiceDelDate = SHr.ShipDate;
-        IVrw.TaxTemplateCode = ORrw.TaxTemplateCode;
-        UnpackRowFieldMatrix(ORrw,"TaxMatrix",TMr);
-        PackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
-        RowCalculateTaxMatrix_IVVc(IVr,ivcnt,IVrw);
-        MatRowPut(IVr,ivcnt,IVrw);
-        if (IVDchrsum(IVr,ivcnt)) then begin end;
-/*        
-            if (maintf) then begin
-              RecordClear(XSrsr);
-              XSrsr.TransType = 0;
-              XSrsr.ToFileName = "IVVc";
-              XSrsr.ToRow = ivcnt;
-              XSrsr.FromFileName = "ORVc";
-              XSrsr.FromSerNr = ORp.SerNr;
-              XSrsr.FromRow = SHrw.OrdRow;
-              XSrsr.FromQty = remnv;
-              aXSrsr[axsrscnt] = XSrsr;
-              axsrscnt = axsrscnt + 1;
-            end;
-*/            
-        ivcnt = ivcnt + 1;
-        if ((infound) and (nonblank(INr.InvRecepy))) then begin
-          Do_InvoiceRecepy(IVr,INr,ivcnt);
-          ivcnt = MatRowCnt(IVr);
-        end;
-        if (nonblank(IVrw.SerialNr)) then begin
-          AddBatchText(IVr);
-          ivcnt = MatRowCnt(IVr);
-        end;
-        lastshnr = SHr.SerNr;
-        totshv = totshv + IVrw.Sum;        
-LSKIPIVROW:;        
-      end;
-    end else begin
-      if (blank(SHrw.ArtCode) and blank(SHrw.Ship) and blank(SHrw.Ordered) and nonblank(SHrw.Spec)) then begin 
-        ClearRow(IVr,IVrw,kInvoiceRowTypeNormal);
-        IVrw.Spec = SHrw.Spec;
-        MatRowInsert(IVr,ivcnt,IVrw);
-        ivcnt = ivcnt + 1;
-      end; 
-    end;
-  end;
-
-  if (repaf) then begin
-    if (AddRepaLine(IVr,false,MatRowCnt(IVr),orsum)) then begin end;
-  end;  
-  IVr.DiscPerc = ORr.DiscPerc;
-  IVr.DiscSum = ORr.DiscSum;
-  IVSumup(IVr,true);
-  t = ORr.DownPaySent - ORr.DownPayRedcd;
-  if (t>0) then begin
-    if (DPb.DetailsOnIV==0) then begin
-      subvatf = true;
-      if (DPb.CalcMode==1) then begin
-        if (t>IVr.Sum4) then begin
-          t = IVr.Sum4;
-          subvatf = false;
-        end;
-      end else begin
-        if (t>IVr.Sum4) then begin
-          t = IVr.Sum4;
-          subvatf = false;
-        end;        
-      end;
-      if (UseTaxTemplatesforTaxCalc) then begin
-        taxtemplatecode = "";
-        GetItemTaxTemplateCode(DPb.ArtCode,IVr.ExportFlag,taxtemplatecode,false);
-        if (blank(taxtemplatecode)) then begin taxtemplatecode = IVr.CustTaxTemplateCode; end;
-        taxtemplatecode = FillupTaxMatrix(0,IVr.BranchID,IVr.CustCode,IVr.CustCat,"",taxtemplatecode,TMr);
-        if (nonblank(taxtemplatecode)) then begin
-          if (IVr.InclVAT==0) then begin
-            subvatf = true;
-          end else begin
-            subvatf = false;
-          end;      
-          if (subvatf) then begin
-            FindSalesExVat(TMr,"",t,1,0,t);//no vat like in InvDownPaySum
-          end;
-        end;
-      end else begin
-        VATCode = DPb.VATCode;
-        if (blank(VATCode)) then begin
-          GetItemVATCode(DPb.ArtCode,IVr.ExportFlag,VATCode,true);
-        end;
-        if (blank(VATCode)) then begin VATCode = IVr.CustVATCode; end;
-        if (nonblank(VATCode)) then begin
-          if (IVr.InclVAT==0) then begin
-            subvatf = true;
-          end else begin
-            subvatf = false;
-          end;      
-          if (subvatf) then begin
-            RecordClear(TMr);
-            FindSalesExVat(TMr,VATCode,t,1,0,t);//no vat like in InvDownPaySum
-          end;
-        end;
-      end;
-      if (t>0) then begin
-        t = -t;
-        ClearRow(IVr,IVrw,kInvoiceRowTypeDownpayment);
-        IVrw.Spec = DPb.TextA;
-        IVrw.Spec = IVrw.Spec & " ";
-        IVrw.Spec = IVrw.Spec & ORr.SerNr;
-        IVrw.Sum = t;
-        GetItemSalesAcc(DPb.ArtCode,IVr.ExportFlag,tstr);
-        IVrw.SalesAcc = tstr;
-        IVrw.VATCode = VATCode;        
-        IVrw.TaxTemplateCode = taxtemplatecode;        
-        PackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
-        if (hiddenrow>0) then begin 
-          RowCalculateTaxMatrix_IVVc(IVr,hiddenrow,IVrw);
-          MatRowInsert(IVr,hiddenrow,IVrw);
-        end else begin
-          RowCalculateTaxMatrix_IVVc(IVr,MatRowCnt(IVr),IVrw);
-          MatRowPut(IVr,MatRowCnt(IVr),IVrw);
-        end;
-      end;
-    end else begin
-      srw = MatRowCnt(IVr);
-//      DownpaymentPerVATCode(IVr,DPb,t,hiddenrow,srw,arptIVrw,arptcnt);
-      DownpaymentPerVATCode(IVr,DPb,t,hiddenrow,srw);
-    end;
-  end;
-  if (MatRowCnt(IVr)>0) then begin
-    BlockLoad(Freightb);
-    IVr.FrItem = Freightb.FrItem;
-    IVr.FrGPPercent = Freightb.FrGPPercent;
-    if (nonblank(IVr.FrItem)) then begin 
-      INr.Code = IVr.FrItem;
-      if (ReadFirstMain(INr,1,true)) then begin
-        GetItemVATCode(IVr.FrItem,IVr.ExportFlag,tstr,true);
-        IVr.FrVATCode = tstr;
-        GetItemSalesAcc(IVr.FrItem,IVr.ExportFlag,tstr);
-        IVr.FrSalesAcc = tstr;
-        IVr.FrBase = INr.UPrice1;
-// Pricelist  
-      end else begin
-        IVr.FrItem = "";
-        IVr.FrGPPercent = 0;
-        IVr.FrBase = blankval;
-        IVr.FrPrice = blankval;
-        IVr.FrObjects = "";
-        IVr.FrVATCode = "";
-        IVr.FrSalesAcc = "";
-      end;
-      if (Freightb.UseWeight!=0) then begin
-        InvoiceCalculateFreightWeight(IVr,FrBase,FrGP,FrPrice);
-        IVr.FrGPPercent = FrGP;
-        IVr.FrBase = FrBase;
-        IVr.FrGP = FrPrice;
-      end else begin
-        IVr.FrPrice = DivRateToBase1(IVr.CurncyCode,IVr.FrBase,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
-        pr = 100;
-        pr = pr - IVr.FrGPPercent;
-        CalcSum(1,IVr.FrBase,0,pr,t,GOb.UseDiscount);
-        IVr.FrGP = t;
-      end;
-    end else begin
-      IVr.FrGPPercent = blankval;
-      IVr.FrBase = blankval;
-      IVr.FrGP = blankval;
-      IVr.FrPrice = ORr.FrPrice;
-      IVr.FrObjects = "";
-      IVr.FrVATCode = "";
-      IVr.FrSalesAcc = "";
-    end;
-    if (ORr.FrBase>0) then begin IVr.FrBase = ORr.FrBase; end;
-    if (ORr.FrPrice>0) then begin IVr.FrPrice = ORr.FrPrice; end;
-  end;
-  IVr.TotVolume = ORr.TotVolume;
-  IVr.TotWeight = ORr.TotWeight;
-  IVr.TotQty = ORr.TotQty;  
-  IVr.Commision = ORr.Commision;
-  IVr.ServiceDelDate = SHr.ShipDate;
-  if (blankdate(IVr.ServiceDelDate)) then begin
-    IVr.ServiceDelDate = CurrentDate;
-  end;
-  PastePDInInv(IVr,"",false);
-  if (addperceptionf) then begin
-    AddPerceptionTaxesRows_IVVc(IVr);
-  end;
-  if (withholdingf) then begin
-    AddWithholdingTaxesRows_IVVc(IVr);
-  end;
-  if (nonblank(compitem)) then begin    
-    cmpf = true;
-    if (nonblank(lastcu)) then begin
-      if (RepSpec.flags[4]!=0) then begin
-        if (lastcu==IVr.CustCode) then begin
-          cmpf = false;
-        end;        
-      end;
-    end;
-    if (cmpf) then begin 
-      PasteCompulsoryINtoIV(compitem,IVr);
-    end;
-  end;  
-LPasteOrdInInv:;
-  if (OSb.SetTransDateToServDelDate!=0) then begin
-    IVr.TransDate = IVr.ServiceDelDate;
-    if ((ARb.UpdBaseRate!=0) or (ARb.UpdForeginRate!=0)) then begin
-      curcode = IVr.CurncyCode;
-      GetFullCurncyRate(curcode,IVr.TransDate,from,to1,to2,base1,base2);
-      IVr.CurncyCode = curcode;
-      if (ARb.UpdBaseRate!=0) then begin
-        IVr.BaseRate1 = base1;
-        IVr.BaseRate2 = base2;
-      end;
-      if (ARb.UpdForeginRate!=0) then begin
-        IVr.FrRate = from;
-        IVr.ToRateB1 = to1;
-        IVr.ToRateB2 = to2;
-      end;
-    end;
-  end;
-//  IVr.OfficialSerNr = FindNextLegalSerNr(IVr,CUr.Classification);  //POSN
-  if (OSb.ConToPrepWhenInv!=0) then begin
-    AddPrepaymentRows(IVr,ORr.SerNr);
-  end;
-  if (nonblank(ORr.InvoiceToCode)) then begin
-    CUr.Code = ORr.InvoiceToCode;
-    if (ReadFirstMain(CUr,1,true)) then begin end;
-    if (ORr.CurncyCode!=CUr.CurncyCode) then begin
-      i = TypeOfCurncy(CUr.CurncyCode,oldstyle);
-      if ((i==0) or (i==2)) then begin
-        curcode = IVr.CurncyCode;
-        IVr.CurncyCode = CUr.CurncyCode;
-        RecalcProjectInvoice(IVr,curcode);
-      end;
-    end;
-  end;
-  IVSumup(IVr,true);
-    
-  if (IVr.SerNr==-1) then begin
-    BlockLoad(SRb);
-    newnr = GetCurUserLastNr("IVVc");
-    if (newnr!=-1) then begin
-      newnr = SRb.LastInvNr;
-    end;
-    IVr.SerNr = NextSerNr("IVVc",IVr.TransDate,newnr,false,IVr.LangCode);
-    if (IVr.SerNr==-1) then begin
-      err = 1744;
-      goto LPasteSHInInvoice;
-    end;
-  end;
-  if (HasLocalization("ARG")) then begin 
-    IVr.BranchID = CurBranchID;
-    if (blank(IVr.BranchID)) then begin
-      IVr.BranchID = ORr.BranchID;
-    end;
-  end;
-  if ((MatRowCnt(IVr)>0) and (IVr.SerNr>0)) then begin
-    if (RecordInsert(IVr,false)) then begin
-      err = 0;
-      CreateRecordLink(IVr,CurrentCompany,SHr,CurrentCompany);  
-      CreateRecordLink(SHr,CurrentCompany,IVr,CurrentCompany);  
-
-      CreateRecordLink(IVr,CurrentCompany,ORr,CurrentCompany);  
-      CreateRecordLink(ORr,CurrentCompany,IVr,CurrentCompany);  
-    end;
-    UpdateCredMan(IVr,ORr.QuoteNr,errcode);
-  end;
-    
-LPasteSHInInvoice:;  
-  PasteSHInInvoice = err;
-  return;
-end;
-
-global
-updating procedure DoCheckUserEmailAddressRemote(string usercode,var Integer res)
-begin
-  transaction boolean interactivef,foundgusr;
-  record UserVc Userr;
-  record GlobalUserVc GlobalUserr;
-
-  if (nonblank(usercode)) then begin
-    Userr.Code = usercode;
-    if (FindTheUser(Userr)) then begin
-      if (nonblank(Userr.LoginEmailAddr)) then begin    
-        res = SendCheckUserEmailAddress(Userr);
-      end;
-    end;
-  end;
-  return;
-end;
-
-global
-procedure EmailValidationAtLoginOClassResendRemote(string code)
-begin
-  record UserVc Userr;
-  record GlobalUserVc GlobalUserr;
-  Boolean foundgusr;
-
-  Userr.Code = code;
-  if (FindTheUser(Userr)) then begin
-    DoSendValidateUserEmailAddress(GlobalUserr,Userr,false,true,"");
-  end;
-
-  return;
-end;
-
-global
-procedure EmailValidationFailedOClassValidateAgainRemote(string code)
-begin
-  record UserVc Userr;
-  record GlobalUserVc GlobalUserr;
-
-  Userr.Code = code;
-  if (FindTheUser(Userr)) then begin
-    DoSendValidateUserEmailAddress(GlobalUserr,Userr,false,true,"");
-  end;
-
-  return;
-end;
-
-
-global
-procedure DoValidateUserEmailAddressRemote(string usercode)
-begin
-  transaction boolean interactivef,foundgusr;
-  record UserVc Userr;
-  record GlobalUserVc GlobalUserr;
-
-  interactivef = false;
-
-  Userr.Code = usercode;
-  if (FindTheUser(Userr)) then begin
-    DoSendValidateUserEmailAddress(GlobalUserr,Userr,false,false,"");
-  end;
-
-  return;
-end;
-
-global
-function string 255 GetCompanyShortCode(string compnr)
-begin
-  string 255 res;
-  record CompaniesBlock Cb;
-  row CompaniesBlock Cbrw;
-  Integer i,rwcnt;
-
-  BlockLoad(Cb);
-  rwcnt = MatRowCnt(Cb);
-  for (i=0;i<rwcnt;i=i+1) begin
-    MatRowGet(Cb,i,Cbrw);
-    if (StringToInt(compnr)==i+1) then begin
-      res = Cbrw.ShortName;
-      goto lbreak;
-    end;
-  end;
-lbreak:;  
-  GetCompanyShortCode = res;
-  return;
-end;
-
-global
-procedure ShouldOpenItemStatusWindow(Integer mwn)
-begin
-  Boolean testf;
-  record ItemSettingBlock ISb;
-  record ItemStatUserVc ISUr;
-  
-  BlockLoad(ISb);
-  ISUr.Signature = CurrentUser;
-  if (ReadFirstMain(ISUr,1,true)) then begin
-    switch (ISUr.ShowItemStatus) begin
-      case 0: testf = ISb.ShowItemStatus;
-      case 1: testf = ISUr.ShowItemStatus;
-    end;
-  end else begin
-    testf = ISb.ShowItemStatus;
-  end;
-  if (testf) then begin
-    if (ServerMode) then begin
-      ClientRemoteAsync.OpenItemStatusWindow(mwn);
-    end else begin
-      OpenItemStatusWindow(mwn);
-    end;
-  end;
-  return;
-end;
 
 global
 procedure AddPrepaymentPORows(var record VIVc VIp,LongInt OrderNr)		//Edit----------------------Dima  05.03.2015
