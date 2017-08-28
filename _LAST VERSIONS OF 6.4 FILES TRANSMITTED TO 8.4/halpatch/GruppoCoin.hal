@@ -1,0 +1,2035 @@
+external procedure ExtractObj(string,var Integer,var string); 
+external function val AbsoluteVal(val);
+external function roundmode SetRoundModeD(Integer);
+external function Boolean SetInSet2(string,string);
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function string 255 StrReplace(string,string,string);
+external function Date DateFromString(string,string);
+
+global //Edit***************************Sasha2,11:08 21.07.2016 {
+procedure TransportBillSClassArrayOnOpen(var Array string astr,var Integer acnt)
+BEGIN
+  record CoinPackListHistVc CoinPackListHistr;
+  Integer i,rwcnt;
+  Boolean TrHs;
+  
+  CoinPackListHistr.SerNr = -1;
+  TrHs = true;
+  while (LoopMain(CoinPackListHistr,1,TrHs)) begin
+    if (NonBlank(CoinPackListHistr.TransportBill)) then begin
+      astr[acnt] = CoinPackListHistr.TransportBill & "            " & DateFromString(CoinPackListHistr.TransportBillDate,"YYYYMMDD") & "            " & CoinPackListHistr.ImpDate;
+      acnt = acnt + 1;
+    end;
+  end;
+  
+  RETURN;
+END; //Edit***************************Sasha2,11:08 21.07.2016 }
+
+global //Edit***************************Sasha2,12:58 22.03.2016 {
+function string 255 NewM4PadString(string instr,Integer padlen,string padchar,Boolean padleft)
+BEGIN
+  string 255 tstr,t2;
+  Integer i;
+  Integer toff;
+  
+  toff = 0;
+  for (i = 1; i<=padlen ;i=i+1) begin tstr = tstr & padchar; end;
+  if (padleft) then begin
+    tstr = tstr & instr;
+    tstr = Right(tstr,(len(tstr)-len(instr)));    
+  end else begin
+    t2 = tstr;
+    tstr = instr;
+    tstr = tstr & t2;
+    tstr = Left(tstr,padlen);
+  end;
+  
+  NewM4PadString = tstr;
+  RETURN;
+END; //Edit***************************Sasha2,12:58 22.03.2016 }
+
+global //Edit***************************Sasha2,12:57 22.03.2016 {
+procedure GruppoCoinStockCountMn(record RcVc RepSpec)
+begin
+  record CoinSettingsBlock CoinSb;
+  record ItemStatusVc ISr;
+  record LocationVc Locr;
+  record INVc INr;
+  record PLVc PLr;
+  record SysFormatBlock SysFormatRec;
+  string 255 filename,path,backUpPath;
+  area ames;
+  string 20 curloc,datestring,barcode,price,qty;
+  record CoinEANCodeVc CEANr;
+  integer pos,storenumber; //storenumber!!!!!!!!!Необходимое для выгрузки значение Store-number. Предполагается,
+                           //что этот Store-number(StoreID) будет занесен в карточку склада.
+  boolean TrHs,testf,initfile;
+  LongInt reccnt;
+  string 5 nextline;
+  val vquant;
+  string 100 myart,oldmyart;
+    
+    BlockLoad(SysFormatRec);
+    BlockLoad(CoinSb);
+    storenumber = CoinSb.ClientCode; //Locr. Нужно обязательно указать Store-number(StoreID)
+    if (storenumber<=0 or len(storenumber)!=4) then begin
+      TrHs = false;
+      LogText(0,"Check storeID in CoinSettingsBlock");
+      goto LStocKCountGC;
+    end;
+    path = CoinSb.outDir;
+    if (Blank(path)) then begin
+      LogText(0,"Check upload directory in CoinSettingsBlock");
+      goto LStocKCountGC;
+    end;
+    
+    datestring = DateToString(CurrentDate,"YYYYMMDD");
+    filename = "PST" & "10000" & CoinSb.ClientCode & "_" & datestring & ".TXT";
+  	CreateFile(path & filename);
+  	CloseFile;
+    
+    nextline = chr(13) & chr(10);
+    reccnt = 0;
+    pos = 0;
+    myart = "";
+    oldmyart = "";
+    AddTextToArea("**INIT**STOCOUNT" & datestring & storenumber & nextline, ames);
+    //ExtractObjWithSeparator(",",CoinSb.Locations,true,pos,curloc);
+    //while (NonBlank(curloc)) begin
+      testf = false;
+      Locr.Code = curloc;
+      //testf = ReadFirstMain(Locr,1,true);
+      //if (testf) then begin
+        TrHs = true;
+        ISr.Location = Locr.Code;
+        
+        while (LoopMain(ISr,1,TrHs)) begin
+        	testf = true;
+         // if (ISr.Location!=Locr.Code) then begin TrHs=false; end;
+         	if(!setinset(ISr.Location,CoinSb.Locations))then begin testf = false; end;
+
+          if (testf) then begin
+						myart = ISr.Code;
+						if(myart!=oldmyart)then begin
+							if(nonblank(oldmyart))then begin
+								INr.Code = oldmyart;
+								ReadFirstMain(INr,1,true);
+								CEANr.EANNumber = INr.BarCode;
+								if(readfirstkey("EANNumber",CEANr,1,true))then begin
+									if (len(INr.BarCode)==13) then begin
+										barcode = INr.BarCode;
+									end else begin
+										barcode = NewM4PadString(oldmyart,13,"0",false);
+									end;
+									qty = "+" & NewM4PadString(ValToString(vquant,M45Val,"",SysFormatRec.decimalPt,1),6,"0",true);
+									PLr.PLCode = "RRP";
+									PLr.ArtCode = oldmyart;
+									ReadFirstMain(PLr,2,true);
+									price = ValToString(Round(PLr.ExVatPrice,SetRoundModeD(2)),M423Val,"","",0);
+									price = "+" & NewM4PadString(price,10,"0",true);
+									AddTextToArea("STOCOUNT" & storenumber & "I" & datestring & barcode & qty & price & nextline, ames);
+									reccnt = reccnt + 1;  
+								end;
+							end;
+							vquant = 0;
+							oldmyart = myart;
+						end;
+						vquant = vquant + ISr.Instock;
+          end;
+        end;
+        oldmyart = myart;
+        if(nonblank(oldmyart))then begin
+					INr.Code = oldmyart;
+					ReadFirstMain(INr,1,true);
+					CEANr.EANNumber = INr.BarCode;
+					if(readfirstkey("EANNumber",CEANr,1,true))then begin
+						if (len(INr.BarCode)==13) then begin
+							barcode = INr.BarCode;
+						end else begin
+							barcode = NewM4PadString(oldmyart,13,"0",false);
+						end;
+						qty = "+" & NewM4PadString(ValToString(vquant,M45Val,"",SysFormatRec.decimalPt,1),6,"0",true);
+						PLr.PLCode = "RRP";
+						PLr.ArtCode = oldmyart;
+						ReadFirstMain(PLr,2,true);
+						price = ValToString(Round(PLr.ExVatPrice,SetRoundModeD(2)),M423Val,"","",0);
+						price = "+" & NewM4PadString(price,10,"0",true);
+						AddTextToArea("STOCOUNT" & storenumber & "I" & datestring & barcode & qty & price & nextline, ames);
+						reccnt = reccnt + 1;  
+					end;
+				end;
+      //end;
+    //  ExtractObjWithSeparator(",",CoinSb.Locations,true,pos,curloc)
+    //end;
+    
+    
+    
+    
+LStocKCountGC:;    
+  	 
+	  AddTextToArea("**FINE**STOCOUNT" & datestring & storenumber & NewM4PadString(reccnt,7,"0",true) & nextline, ames);
+	  WriteAreaToFile(ames,path & filename,0);
+	  millisleep(100);
+	   
+	  if (/*FILEEXISTS(path & filename)*/ true) then begin
+      backUpPath = CoinSb.outDirBackUp;
+      if (nonblank(backUpPath)) then begin
+        if (!DirExists(backUpPath)) then begin
+          CreateFolder(backUpPath);
+        end;
+        //MoveFile(filename,path,backUpPath);
+        WriteAreaToFile(ames,backUpPath & filename,0);
+      end;
+      backUpPath = CoinSb.outDirBackUp2;
+      if (nonblank(backUpPath)) then begin
+        if (!DirExists(backUpPath)) then begin
+          CreateFolder(backUpPath);
+        end;
+        //MoveFile(filename,path,backUpPath);
+        WriteAreaToFile(ames,backUpPath & filename,0);
+      end;
+    end;
+	 
+  return;
+end; //Edit***************************Sasha2,12:58 22.03.2016 }
+
+global procedure GruppoCoinSalesMn(record RcVc RepSpec)	//Edit----------------------Dima  21.03.2016
+begin
+  record CoinSettingsBlock CoinSb;
+  record INVc INr;
+  record IVVc IVr;
+  row IVVc IVrw;
+	string 20 storeID,vendtran,transdateStr,quant,pricevalue,discountCode,discountvalue;
+	string 10 operatorID,terminalID,transNr,countStr,typeOfRegistration;
+	string 255 rowdata,path,backUpPath;
+	date transdate;
+	boolean TrHs,testf;
+	integer count,sign,i,qty;
+	longint price,discount;
+	string 255 filename,itemcode;
+	area ames;
+	string 5 nextline;
+	record CoinEANCodeVc CEANr;
+	
+	BlockLoad(CoinSb);
+	if (CoinSb.ClientCode<=0 or len(CoinSb.ClientCode)!=4) then begin
+	  LogText(0,"Check storeID in CoinSettingsBlock");
+    goto LGruppoCoinSalesMn;
+  end;
+  path = CoinSb.outDir;
+  if (Blank(path)) then begin
+    LogText(0,"Check upload directory in CoinSettingsBlock");
+    goto LGruppoCoinSalesMn;
+  end;
+	
+	transdate = RepSpec.d1;
+	if (BlankDate(transdate)) then begin
+		transdate = CurrentDate;
+	end;
+	transdateStr = 	DateToString(transdate,"YYYYMMDD");
+	filename = "PSL" & "10000" & CoinSb.ClientCode & "_" & transdateStr & ".TXT";
+	CreateFile(path & filename);
+	CloseFile;
+	
+	nextline = chr(13) & chr(10);
+	vendtran = "VENDTRAN";
+	storeID = CoinSb.ClientCode;
+	operatorID = "0001"; //IVr.SalesMan field is longer then 4 chars. so we fill it with "0001" always.
+	terminalID = "01"; //POS-terminal number
+	typeOfRegistration = "LL"; //first char for ArtCode, second for price
+	//L means that value was looked up from the DB
+	//and D - that value was entered manually
+	
+	//Header
+	AddTextToArea("**INIT**" & vendtran & transdateStr & storeID & nextline, ames);
+	
+	//Sales/returns transaction
+	TrHs = true;
+	IVr.InvDate = transdate;
+	While(LoopKey("InvDate",IVr,1,TrHs)) begin
+		sign = 1;
+		testf = true;
+		if (IVr.InvDate>transdate) then begin TrHs = false; testf = false; end;
+		if ( SetInSet2(IVr.Location,CoinSb.Locations)==false) then begin testf = false; end;
+		if (testf) then begin
+			if(IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales)then begin sign=-1; end;
+			for(i=0;i<MatRowCnt(IVr);i=i+1) begin
+				MatRowGet(IVr,i,IVrw);
+				if (IVrw.stp==kInvoiceRowTypeNormal) then begin
+					rowdata = vendtran;
+					if (IVrw.Quant*sign>0) then begin
+						rowdata = rowdata & "7";  //sales
+					end else begin
+						rowdata = rowdata & "4";	//returns
+					end;
+					INr.Code = IVrw.ArtCode;
+					if (ReadFirstMain(INr,1,true) and NonBlank(INr.BarCode) and len(INr.BarCode)==13) then begin
+					  itemcode = INr.BarCode;
+					end else begin
+					  itemcode = "0000000000000";
+					end;
+					CEANr.EANNumber = INr.BarCode;
+					if(readfirstkey("EANNumber",CEANr,1,true))then begin
+						rowdata = rowdata & transdateStr & storeID & itemcode;
+						qty = AbsoluteVal(IVrw.Quant); //cut decimals;
+						quant = "+" & Right("000000" & qty,6);	
+						price = AbsoluteVal(IVrw.Price * IVrw.Quant * 100);
+						pricevalue = 	"+" & Right("0000000000" & price,10);
+						discount = price - AbsoluteVal(IVrw.Sum)*100;
+						discountvalue = "+" & Right("00000000" & discount,8);
+						discountCode = "  "; //two spaces
+						if (nonblank(IVrw.vRebate)) then begin discountCode = "93"; end;
+						transNr = IVr.SerNr;
+						while(len(transNr)<4)begin
+							transNr = "0" & transNr;
+						end;
+						rowdata = rowdata & quant & Left(IVr.CurncyCode,3) & pricevalue & discountCode & discountvalue;
+						rowdata = rowdata & operatorID & terminalID & Right(transNr,4) & typeOfRegistration;
+						AddTextToArea(rowdata & nextline, ames);
+						count = count + 1;
+					end;
+				end;	
+			end;  	
+		end;
+	end;
+	
+	//Trailer record
+	countStr = Right("0000000" & count,7);
+	AddTextToArea("**FINE**" & vendtran & transdateStr & storeID & countStr & nextline, ames);
+	WriteAreaToFile(ames,path & filename,0);
+	millisleep(100);
+	
+	if (/*FILEEXISTS(path & filename)*/ true) then begin
+    backUpPath = CoinSb.outDirBackUp;
+    if (nonblank(backUpPath)) then begin
+      if (!DirExists(backUpPath)) then begin
+        CreateFolder(backUpPath);
+      end;
+      //MoveFile(filename,path,backUpPath);
+      WriteAreaToFile(ames,backUpPath & filename,0); 
+    end;
+    backUpPath = CoinSb.outDirBackUp2;
+    if (nonblank(backUpPath)) then begin
+      if (!DirExists(backUpPath)) then begin
+        CreateFolder(backUpPath);
+      end;
+      //MoveFile(filename,path,backUpPath);
+      WriteAreaToFile(ames,backUpPath & filename,0);
+    end;
+  end;
+	
+LGruppoCoinSalesMn:;
+
+  return;
+end;
+
+global //Edit***************************Sasha2,12:57 22.03.2016 {
+updating procedure GruppoCoinConfArrivalMn(date indate)
+begin
+  record CoinPackListHistVc CoinPLHr;
+  record CoinSettingsBlock CoinSb;
+  string 255 filename,rowdata,path,backUpPath;
+  area ames;
+  string 20 curloc,datestring,barcode,price,qty,arriveDate;
+  integer pos,storenumber;
+  boolean testf,TrHs;
+  LongInt reccnt;
+  string 5 nextline;
+    
+    BlockLoad(CoinSb);
+    storenumber = CoinSb.ClientCode;
+    if (storenumber<=0 or len(storenumber)!=4) then begin
+      LogText(0,"Check storeID in CoinSettingsBlock");
+      goto LGruppoCoinConfArrival;
+    end;
+    path = CoinSb.outDir;
+    if (Blank(path)) then begin
+      LogText(0,"Check upload directory in CoinSettingsBlock");
+      goto LGruppoCoinConfArrival;
+    end;
+    
+    arriveDate = DateToString(indate,"YYYYMMDD");
+    datestring = DateToString(CurrentDate,"YYYYMMDD");
+    filename = "AR1" & "10000" & storenumber & "_" & datestring & ".TXT";
+  	CreateFile(path & filename);
+  	CloseFile;
+  	
+  	nextline = chr(13) & chr(10);
+    reccnt = 0;
+
+    AddTextToArea("**INIT**ARRICONF" & datestring & storenumber & nextline, ames);
+    CoinPLHr.ImpDate = indate;
+    TrHs = true;
+    while (LoopKey("ImpDate",CoinPLHr,1,TrHs)) begin
+      testf = true;
+      if (len(CoinPLHr.TransportBill)!=9 or len(CoinPLHr.TransportBillDate)!=8) then begin testf = false; end;
+      if (CoinPLHr.Handled!=0) then begin testf = false; end;
+      if (CoinPLHr.ImpDate!=indate) then begin TrHs = false; testf = false; end;
+      if (testf) then begin
+        rowdata = "ARRICONF" & storenumber & arriveDate & CoinPLHr.TransportBill & CoinPLHr.TransportBillDate & "0000000000" & "00000000";
+        AddTextToArea(rowdata & nextline, ames);
+        CoinPLHr.Handled = 1;
+        RECORDSTORE(CoinPLHr,true);
+        reccnt = reccnt + 1;
+      end;
+    end;
+    reccnt = reccnt + 2;
+	  AddTextToArea("**FINE**ARRICONF" & datestring & storenumber & NewM4PadString(reccnt,7,"0",true) & nextline, ames);
+	  WriteAreaToFile(ames,path & filename,0);  
+    millisleep(100);
+    
+    if (/*FILEEXISTS(path & filename)*/ true) then begin
+      backUpPath = CoinSb.outDirBackUp;
+      if (nonblank(backUpPath)) then begin
+        if (!DirExists(backUpPath)) then begin
+          CreateFolder(backUpPath);
+        end;
+        //MoveFile(filename,path,backUpPath); 
+        WriteAreaToFile(ames,backUpPath & filename,0); 
+      end;
+      backUpPath = CoinSb.outDirBackUp2;
+      if (nonblank(backUpPath)) then begin
+        if (!DirExists(backUpPath)) then begin
+          CreateFolder(backUpPath);
+        end;
+        //MoveFile(filename,path,backUpPath);
+        WriteAreaToFile(ames,backUpPath & filename,0);
+      end;
+    end;
+	  
+LGruppoCoinConfArrival:;
+	 
+  return;
+end; //Edit***************************Sasha2,12:58 22.03.2016 }
+
+global //Edit***************************Sasha2,12:57 22.03.2016 {
+updating procedure GruppoCoinManageGoodsMn(record RcVc RepSpec)
+begin
+  record RetPUVc RetPUr;
+  record StockMovVc StockMovr;
+  record CoinSettingsBlock CoinSb;
+  record CoinEANCodeVc CoinEANCoder;
+  record CoinPackListHistVc CoinPackListHistr;
+  row RetPUVc RetPUrw;
+  row StockMovVc StockMovrw;
+  string 255 filename,rowdata,path,backUpPath;
+  area ames;
+  string 20 curloc,datestring;
+  integer pos,storenumber,storeID,rwcnt,i,intValue;
+  boolean TrHs,testf,foundf;
+  LongInt count;
+  string 5 nextline;
+    
+    BlockLoad(CoinSb);
+    storeID = CoinSb.ClientCode;
+    if (storeID<=0 or len(storeID)!=4) then begin
+      LogText(0,"Check storeID in CoinSettingsBlock");
+      goto LGruppoCoinManageGoods;
+    end;
+    path = CoinSb.outDir;
+    if (Blank(path)) then begin
+      LogText(0,"Check upload directory in CoinSettingsBlock");
+      goto LGruppoCoinManageGoods;
+    end;
+    
+    datestring = DateToString(CurrentDate,"YYYYMMDD");
+    filename = "PAD" & "10000" & storeID & "_" & datestring & ".TXT";
+  	//CreateFile(path & filename);
+  	//CloseFile;
+    
+    nextline = chr(13) & chr(10);
+    count = 0;
+
+  	TrHs = true;
+  	RetPUr.SerNr = 999999999999;
+  	While(LoopBackKey("SerNr",RetPUr,1,TrHs)) begin
+  		testf = true;
+		  foundf = false;
+  		if (RetPUr.OKFlag==0) then begin testf = false; end;
+  		if (RetPUr.SentCoin==0 or NonBlank(RetPUr.FileNameCoin) or Blank(RetPUr.TransBillCoin)) then begin testf = false; end;
+  		if (testf) then begin
+  		  CoinPackListHistr.TransportBill = RetPUr.TransBillCoin;
+  		  testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
+  		end;
+  		if (testf) then begin
+  		  rwcnt = MatRowCnt(RetPUr);
+  			for(i=0;i<rwcnt;i=i+1) begin
+  				MatRowGet(RetPUr,i,RetPUrw);
+  				if (Blank(RetPUrw.ArtCode) or Blank(RetPUrw.BarCode)) then begin testf = false; end;
+  				if (testf) then begin
+  				  CoinEANCoder.EANNumber = RetPUrw.BarCode;
+  				  //testf = ReadFirstKey("EANNumber",CoinEANCoder,1,true);
+  				end;
+  				if (testf) then begin
+            if (foundf==false) then begin
+  				    foundf = true;
+  				    //Header
+  	          AddTextToArea("**INIT**MERCTRAN" & datestring & storeID & nextline, ames);
+  				  end;
+  				  rowdata = "MERCTRAN" & storeID & datestring & "0303";
+  				  intValue = RetPUrw.Quant;
+  				  rowdata = rowdata & RetPUrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
+  				  rowdata = rowdata & NewM4PadString(CoinPackListHistr.TransportBill,16,"0",true) & CoinPackListHistr.TransportBillDate;
+  				  rowdata = rowdata & "0000000000000" & "0000000000000" & "000000000" & "000000000" & " ";
+  				  intValue = Round(RetPUrw.FIFO,SetRoundModeD(2))*100;
+  				  rowdata = rowdata  &  Left(RetPUr.CurncyCode ,3) & NewM4PadString(intValue,15,"0",true) & "    " & NewM4PadString("",25," ",true);
+    				AddTextToArea(rowdata & nextline, ames);
+    				count = count + 1;
+  				end;
+  			end; 
+  			if (foundf) then begin
+  			  count = count + 2;
+  			  //Footer
+  	      AddTextToArea("**FINE**MERCTRAN" & datestring & storeID & Right("0000000" & count,7) & nextline, ames);
+  	      RetPUr.FileNameCoin = filename;
+  	      RetPUr.SentDateCoin = CurrentDate;
+  	      RECORDSTORE(RetPUr,true);
+  			end;
+  		end;
+  	end;	
+    //Edit-------------------Vitalii 14:33 27.07.2016 {
+
+    TrHs = true;
+  	StockMovr.SerNr = 999999999999;
+  	While(LoopBackKey("SerNr",StockMovr,1,TrHs)) begin
+      foundf = false;
+  		testf = true;
+  		if (StockMovr.OKFlag==0) then begin testf = false; end;
+  		if (StockMovr.SentCoin==0 or NonBlank(StockMovr.FileNameCoin) or Blank(StockMovr.TransBillCoin)) then begin testf = false; end;
+  		if (testf) then begin
+  		  CoinPackListHistr.TransportBill = StockMovr.TransBillCoin;
+  		  testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
+  		end;
+  		if (testf) then begin
+  		  rwcnt = MatRowCnt(StockMovr);
+  			for(i=0;i<rwcnt;i=i+1) begin
+  				MatRowGet(StockMovr,i,StockMovrw);
+  				if (Blank(StockMovrw.ArtCode) or Blank(StockMovrw.BarCode)) then begin testf = false; end;
+          if (testf) then begin
+  				  CoinEANCoder.EANNumber = StockMovrw.BarCode;
+  				  //testf = ReadFirstKey("EANNumber",CoinEANCoder,1,true);
+  				end;
+  				if (testf) then begin
+  				  if (foundf==false) then begin
+  				    foundf = true;
+  				    //Header
+  	          AddTextToArea("**INIT**MERCTRAN" & datestring & storeID & nextline, ames);
+  				  end;
+  				  rowdata = "MERCTRAN" & storeID & datestring;
+            switch (StockMovr.TypeCoin) begin
+              case 0:;
+              case 1:
+                rowdata = rowdata & "0151";
+              case 2:
+                rowdata = rowdata & "0105";
+            end;
+            
+  				  intValue = StockMovrw.Quant;
+  				  rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
+  				  rowdata = rowdata & NewM4PadString(CoinPackListHistr.TransportBill,16,"0",true) & CoinPackListHistr.TransportBillDate;
+  				  //?????
+            rowdata = rowdata & "0000000000000" & "0000000000000" & "000000000" & "000000000" & " ";
+  				  intValue = Round(StockMovrw.NewPrice,SetRoundModeD(2))*100;
+  				  rowdata = rowdata & Left(StockMovr.CurncyCode,3) & NewM4PadString(intValue,15,"0",true) & "0011" & NewM4PadString("Unsellable",25," ",true);
+    				AddTextToArea(rowdata & nextline, ames);
+    				count = count + 1;
+  				end;
+  			end; 
+        if (foundf) then begin
+          count = count + 2;
+          //Footer
+          AddTextToArea("**FINE**MERCTRAN" & datestring & storeID & Right("0000000" & count,7) & nextline, ames);
+          StockMovr.FileNameCoin = filename;
+          StockMovr.SentDateCoin = CurrentDate;
+          RECORDSTORE(StockMovr,true);
+        end; 	
+  		end;
+  	end;
+    //Edit-------------------Vitalii 14:33 27.07.2016 }
+    
+  	if (GetAreaLength(ames)==0) then begin
+  	  AddTextToArea("**INIT**MERCTRAN" & datestring & storeID & nextline, ames);
+  	  AddTextToArea("**FINE**MERCTRAN" & datestring & storeID & "0000002" & nextline, ames);
+  	end;
+  	
+  	if (GetAreaLength(ames)>0) then begin
+    	WriteAreaToFile(ames,path & filename,0);
+    	millisleep(100);
+  	end;
+  	
+  	if (/*FILEEXISTS(path & filename)*/ true) then begin
+      backUpPath = CoinSb.outDirBackUp;
+      if (nonblank(backUpPath)) then begin
+        if (!DirExists(backUpPath)) then begin
+          CreateFolder(backUpPath);
+        end;
+        //MoveFile(filename,path,backUpPath);
+        WriteAreaToFile(ames,backUpPath & filename,0);
+      end;
+      backUpPath = CoinSb.outDirBackUp2;
+      if (nonblank(backUpPath)) then begin
+        if (!DirExists(backUpPath)) then begin
+          CreateFolder(backUpPath);
+        end;
+        //MoveFile(filename,path,backUpPath);
+        WriteAreaToFile(ames,backUpPath & filename,0);
+      end;
+    end;
+	  
+LGruppoCoinManageGoods:;
+	 
+  return;
+end; //Edit***************************Sasha2,12:58 22.03.2016 }
+
+global //Edit***************************Sasha2,12:57 22.03.2016 {
+updating procedure GruppoCoinMissingEANSMn(record RcVc RepSpec)
+begin
+  record CoinSettingsBlock CoinSb;
+  record CoinMissingEANVc CoinMissingEANr;
+  row CoinMissingEANVc CoinMissingEANrw;
+  string 255 filename,rowdata,path,backUpPath;
+  area ames;
+  string 20 curloc,datestring;
+  array LongInt serNrs;
+  integer pos,storenumber,storeID,i,rwcnt,serNrsLen;
+  boolean TrHs,testf,foundRowsf,headerf;
+  LongInt count;
+  string 5 nextline;
+    
+    BlockLoad(CoinSb);
+    storeID = CoinSb.ClientCode;
+    if (storeID<=0 or len(storeID)!=4) then begin
+      LogText(0,"Check storeID in CoinSettingsBlock");
+      goto LGruppoCoinMissingEANSMn;
+    end;
+    path = CoinSb.outDir;
+    if (Blank(path)) then begin
+      LogText(0,"Check upload directory in CoinSettingsBlock");
+      goto LGruppoCoinMissingEANSMn;
+    end;
+    
+    datestring = DateToString(CurrentDate,"YYYYMMDD");
+    filename = "BMA" & "10000" & storeID & "_" & datestring & ".TXT";
+    
+    nextline = chr(13) & chr(10);
+    count = 0;
+  	
+  	TrHs = true;
+  	CoinMissingEANr.FileName = "";
+  	While(LoopKey("FileName",CoinMissingEANr,1,TrHs)) begin
+  		testf = true;
+  		if (NonBlank(CoinMissingEANr.FileName)) then begin TrHs = false; testf = false; end;
+  		if (testf) then begin
+  		  foundRowsf = false;
+  		  rwcnt = MatRowCnt(CoinMissingEANr);
+  			for(i=0;i<rwcnt;i=i+1) begin
+  				MatRowGet(CoinMissingEANr,i,CoinMissingEANrw);
+  				if (len(CoinMissingEANrw.EANNumber)==13) then begin
+  				  if (headerf==false) then begin
+  				    headerf = true;
+  				    //Header
+  	          AddTextToArea("**INIT**MISSEAN*" & datestring & storeID & nextline, ames);
+  				  end;
+    				AddTextToArea("MISSEAN*" & storeID & CoinMissingEANrw.EANNumber & nextline, ames);
+    				foundRowsf = true;
+    				count = count + 1;  
+  				end;
+  			end;
+  			if (foundRowsf) then begin
+  			  serNrs[serNrsLen] = CoinMissingEANr.SerNr;
+  			  serNrsLen = serNrsLen + 1;
+  			end;  	
+  		end;
+  	end;
+  	
+  	if (serNrsLen>0) then begin
+  	  //Trailer record
+  	  AddTextToArea("**FINE**MISSEAN*" & datestring & storeID & Right("0000000" & count,7) & nextline, ames);
+    	WriteAreaToFile(ames,path & filename,0);
+    	for (i=0;i<serNrsLen;i=i+1) begin
+    	  CoinMissingEANr.SerNr = serNrs[i];
+    	  if (ReadFirstMain(CoinMissingEANr,1,true)) then begin
+    	    CoinMissingEANr.FileName = filename;
+    	    CoinMissingEANr.StoreID = storeID;
+    	    CoinMissingEANr.ImpDate = CurrentDate;
+    	    CoinMissingEANr.ImpTime = CurrentTime;
+    	    RECORDSTORE(CoinMissingEANr,true);
+    	  end;
+    	end;
+    	//millisleep(100);
+    	
+    	if (/*FILEEXISTS(path & filename)*/ true) then begin
+        backUpPath = CoinSb.outDirBackUp;
+        if (nonblank(backUpPath)) then begin
+          if (!DirExists(backUpPath)) then begin
+            CreateFolder(backUpPath);
+          end;
+          //MoveFile(filename,path,backUpPath);
+          WriteAreaToFile(ames,backUpPath & filename,0);
+        end;
+        backUpPath = CoinSb.outDirBackUp2;
+        if (nonblank(backUpPath)) then begin
+          if (!DirExists(backUpPath)) then begin
+            CreateFolder(backUpPath);
+          end;
+          //MoveFile(filename,path,backUpPath);
+          WriteAreaToFile(ames,backUpPath & filename,0);
+        end;
+      end;  
+  	end;
+
+LGruppoCoinMissingEANSMn:;
+	 
+  return;
+end; //Edit***************************Sasha2,12:58 22.03.2016 }
+
+global //Edit***************************Sasha2,12:11 29.06.2016
+updating procedure GruppoCoinManualMn(record RcVc RepSpec) 
+begin
+date sd,ed;
+
+	sd = RepSpec.sStartDate;
+	ed = RepSpec.sEndDate;
+  if (RepSpec.flags[1]==1) then begin
+  	
+  	if(nonblank(RepSpec.d1))then begin
+			GruppoCoinSalesMn(RepSpec);
+    end else begin
+    	RepSpec.d1 = sd;
+    	while(RepSpec.d1<=ed) begin
+				if(nonblankdate(RepSpec.d1))then begin
+					GruppoCoinSalesMn(RepSpec);
+				end;
+				RepSpec.d1 = addday(RepSpec.d1,1);
+			end;
+    end;
+  end;
+  millisleep(200);
+  if (RepSpec.flags[2]==1) then begin
+    GruppoCoinStockCountMn(RepSpec);
+  end;
+  millisleep(200);
+  if (RepSpec.flags[3]==1) then begin
+    GruppoCoinManageGoodsMn(RepSpec);
+  end;
+  millisleep(200);
+  if (RepSpec.flags[4]==1) then begin
+    GruppoCoinMissingEANSMn(RepSpec);
+  end;
+
+  return;
+end;
+
+procedure SetHeaderCoinPackList(var record CoinPackListVc CoinPackListr,string storeID,string storeID2,string transpBill,
+                                string transpBillDate,string deliverer,string recipient,string importer,
+                                string oviVATNum,string goodsCollAddr)
+begin
+  
+    CoinPackListr.StoreID = storeID;
+    CoinPackListr.StoreID2 = storeID2;
+    CoinPackListr.TransportBill = transpBill;
+    CoinPackListr.TransportBillDate = transpBillDate;
+    CoinPackListr.Deliverer = deliverer;
+    CoinPackListr.Recipient = recipient;
+    CoinPackListr.Importer = importer;
+    CoinPackListr.OviesseVATnum = oviVATNum;
+    CoinPackListr.GoodsCollAddress = goodsCollAddr;
+    
+  return;
+end;
+
+global //Edit***************************Sasha2,16:31 01.07.2016 {
+updating procedure GruppoCoinParsePackList(string path,string filename, boolean replacef, var boolean isReplaced) 
+begin
+  record CoinPackListVc CoinPackListr;
+  record CoinSettingsBlock CoinSb;
+  record CoinPackListHistVc CoinPLHr;
+  area inData,acarriage,extractedData;
+  string 5 nextline;
+  string 15 storeID,storeID2,transpBill,transpBillDate;
+  string 100 deliverer,recipient,importer,oviVATNum,goodsCollAddr;
+  string 255 backUpPath;
+  LongInt j,i,inDataLen,extrDataLen,prevpos,pos,k; ///////////
+  boolean headerf;
+  date curdate;
+    
+    BlockLoad(CoinSb);
+    if (replacef and Blank(CoinSb.inDirBackUp)) then begin
+      LogText(0,"Check download back up directories in CoinSettingsBlock");
+      goto LGruppoCoinParsePackList;
+    end;
+    
+    nextline = chr(13) & chr(10);
+    curdate = CurrentDate;
+    isReplaced = false;
+    
+    AddFileToArea(path & filename,inData,false);
+    //LogText(0,path & filename);
+    //goto LGruppoCoinParsePackList;
+    inDataLen = GetAreaLength(inData);
+    if (inDataLen>0) then begin 
+      prevpos = 0;
+      for (j=0;j<inDataLen;j=j+1) begin
+        if (Asc(GetStringFromArea(inData,j,1))==10) then begin
+          SetAreaZeroSize(extractedData);
+          GetAreaFromArea(inData,prevpos,j+1-prevpos,extractedData);
+          prevpos = j + 1;
+          i = 0;         
+          extrDataLen = GetAreaLength(extractedData);
+          if (extrDataLen>0) then begin
+            switch (GetStringFromArea(extractedData,i,2)) begin
+              case "TS":
+                i = i + 2;
+                headerf = true;
+                storeID = GetStringFromArea(extractedData,i,4);
+                i = i + 4;
+                storeID2 = GetStringFromArea(extractedData,i,4);
+                i = i + 4;
+                transpBill = GetStringFromArea(extractedData,i,9);
+                i = i + 9;
+                transpBillDate = GetStringFromArea(extractedData,i,8);
+                i = i + 8;
+                //skip row number
+                i = i + 5;
+                deliverer = GetStringFromArea(extractedData,i,70);
+                i = i + 70;
+                recipient = GetStringFromArea(extractedData,i,70);
+                i = i + 70;
+                importer = GetStringFromArea(extractedData,i,70);
+                i = i + 70;
+                oviVATNum = GetStringFromArea(extractedData,i,11);
+                i = i + 11;
+                goodsCollAddr = GetStringFromArea(extractedData,i,95);
+                i = i + 95;
+              case "DT":
+                if (headerf) then begin
+                  RECORDNEW(CoinPackListr);
+                  CoinPackListr.RecordType = "DT";
+                  CoinPackListr.ImpDate = curdate;
+                  CoinPackListr.ImpTime = CurrentTime;
+                  CoinPackListr.SerNr = NextSerNr("CoinPackListVc",CoinPackListr.ImpDate,-1,false,"");
+                  CoinPackListr.FileName = filename;
+                  SetHeaderCoinPackList(CoinPackListr,storeID,storeID2,transpBill,transpBillDate,deliverer,recipient,importer,oviVATNum,goodsCollAddr);
+                  i = i + 2 + 4 + 4 + 9 + 8;
+                  if ((i + 5)<=extrDataLen) then begin
+                    CoinPackListr.RowNumber = GetStringFromArea(extractedData,i,5);
+                    i = i + 5;
+                  end;
+                  if ((i + 13)<=extrDataLen) then begin
+                    CoinPackListr.PalletCode = GetStringFromArea(extractedData,i,13);
+                    i = i + 13;  
+                  end;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinPackListr.DistribNum = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinPackListr.PackGroupNum = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinPackListr.NumOfPackages = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinPackListr.SKUNumber = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if ((i + 51)<=extrDataLen) then begin
+                    CoinPackListr.ItemDescription = GetStringFromArea(extractedData,i,51);
+                    i = i + 51;
+                  end;
+                  if ((i + 78)<=extrDataLen) then begin
+                    CoinPackListr.ItemComposition = GetStringFromArea(extractedData,i,78);
+                    i = i + 78;
+                  end;
+                  if ((i + 10)<=extrDataLen) then begin
+                    CoinPackListr.GenderDescription = GetStringFromArea(extractedData,i,10);
+                    i = i + 10;
+                  end;
+                  if ((i + 10)<=extrDataLen) then begin
+                    CoinPackListr.Fabric = GetStringFromArea(extractedData,i,10);
+                    i = i + 10;
+                  end;
+                  if ((i + 3)<=extrDataLen) then begin
+                    CoinPackListr.CountryOfOrigin = GetStringFromArea(extractedData,i,3);
+                    i = i + 3;
+                  end;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinPackListr.CustomsCode = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinPackListr.Quantity = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if ((i + 11)<=extrDataLen) then begin
+                    CoinPackListr.GlobGrossWeight = GetStringFromArea(extractedData,i,11);
+                    i = i + 11;
+                  end;
+                  if ((i + 11)<=extrDataLen) then begin
+                    CoinPackListr.GlobNetWeight = GetStringFromArea(extractedData,i,11);
+                    i = i + 11;
+                  end;
+                  if ((i + 11)<=extrDataLen) then begin
+                    CoinPackListr.UnitCostPrice = GetStringFromArea(extractedData,i,11);
+                    i = i + 11;
+                  end;
+                  if ((i + 1)<=extrDataLen) then begin
+                    CoinPackListr.ExtraUE = GetStringFromArea(extractedData,i,1);
+                    i = i + 1;
+                  end;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinPackListr.ItalCustCode = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if ((i + 11)<=extrDataLen) then begin
+                    CoinPackListr.UnitGrossWeight = GetStringFromArea(extractedData,i,11);
+                    i = i + 11;
+                  end;
+                  if ((i + 3)<=extrDataLen) then begin
+                    CoinPackListr.CostCurCode = GetStringFromArea(extractedData,i,3);
+                    i = i + 3;
+                  end;
+                  if ((i + 10)<=extrDataLen) then begin
+                    CoinPackListr.InvoiceNum = GetStringFromArea(extractedData,i,10);
+                    i = i + 10;
+                  end;
+                  if ((i + 8)<=extrDataLen) then begin
+                    CoinPackListr.InvoiceDate = GetStringFromArea(extractedData,i,8);
+                    i = i + 8;
+                  end;
+                  if ((i + 13)<=extrDataLen) then begin
+                    CoinPackListr.EAN = GetStringFromArea(extractedData,i,13);
+                    i = i + 13;
+                  end;
+                  if ((i + 13)<=extrDataLen) then begin //can repeat up to 12 times?
+                    CoinPackListr.OtherPalletCodes = GetStringFromArea(extractedData,i,13);
+                    i = i + 13;
+                  end;
+                  if (CoinPackListr.SerNr>0) then begin
+                    if (RECORDSTORE(CoinPackListr,false)==false) then begin
+                      LogText(0,"Packlist " & FileName & " was no saved"); 
+                    end;
+                  end else begin
+                    LogText(0,"Packlist " & FileName & " got no SerNr");  
+                  end;
+                end;
+              case "PK":
+                if (headerf) then begin
+                  RECORDNEW(CoinPackListr);
+                  CoinPackListr.RecordType = "PK";
+                  CoinPackListr.ImpDate = curdate;
+                  CoinPackListr.ImpTime = CurrentTime;
+                  CoinPackListr.SerNr = NextSerNr("CoinPackListVc",CoinPackListr.ImpDate,-1,false,"");
+                  CoinPackListr.FileName = filename;
+                  SetHeaderCoinPackList(CoinPackListr,storeID,storeID2,transpBill,transpBillDate,deliverer,recipient,importer,oviVATNum,goodsCollAddr);
+                  i = i + 2 + 4 + 4 + 9 + 8;
+                  if ((i + 5)<=extrDataLen) then begin 
+                    CoinPackListr.RowNumber = GetStringFromArea(extractedData,i,5);
+                    i = i + 5;
+                  end;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinPackListr.PackGroupNum = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if ((i + 13)<=extrDataLen) then begin
+                    CoinPackListr.EAN = GetStringFromArea(extractedData,i,13);
+                    i = i + 13;
+                  end;
+                  if (CoinPackListr.SerNr>0) then begin
+                    if (RECORDSTORE(CoinPackListr,false)==false) then begin
+                      LogText(0,"Packlist " & FileName & " was no saved"); 
+                    end;
+                  end else begin
+                    LogText(0,"Packlist " & FileName & " got no SerNr");  
+                  end;
+                end;
+            end;
+            ///////////
+            /*k = k + 1;
+            AddTextToArea("j:" & j & "...i:" & i & "...j+i:" & j+i, extractedData);
+            WriteAreaToFile(extractedData,"Parse" & k,0);
+            if (k==5) then begin
+              goto LGruppoCoinParsePackList;
+            end;
+            if (i>=2) then begin
+              i = i /2;
+            end;*/
+            ///////////
+          end;
+          //j = j + i; ///////////
+        end;
+      end;
+    end;
+    if (headerf) then begin
+      RECORDNEW(CoinPLHr);
+      CoinPLHr.ImpDate = curdate;
+      CoinPLHr.SerNr = NextSerNr("CoinPackListHistVc",CoinPLHr.ImpDate,-1,false,"");
+      CoinPLHr.FileName = filename;
+      CoinPLHr.TransportBill = transpBill;
+      CoinPLHr.TransportBillDate = transpBillDate;
+      CoinPLHr.ReceiverStoreID = storeID2;
+      if (CoinPLHr.SerNr>0) then begin
+        if (RECORDSTORE(CoinPLHr,false)==false) then begin
+          LogText(0,"Packlist history " & FileName & " was no saved"); 
+        end;
+      end else begin
+        LogText(0,"Packlist history " & FileName & " got no SerNr");  
+      end;
+    end;
+    
+    if replacef then begin
+      //backUpPath = StrReplace(path,"in","Old_in");
+      backUpPath = CoinSb.inDirBackUp;
+      if !DirExists(backUpPath) then begin
+        CreateFolder(backUpPath);
+      end;
+      if (MoveFile(filename,path,backUpPath)==0) then begin
+        isReplaced = true;
+      end;
+    end;
+    
+LGruppoCoinParsePackList:;
+    
+  return;
+end; //Edit***************************Sasha2,16:31 01.07.2016 }
+
+global//Edit-------------------Vitalii 14:39 04.07.2016
+updating procedure GruppoCoinParseEANCodes(string path,string filename, boolean replacef,var boolean isReplaced) 
+begin
+  record CoinEANCodeVc CoinEANCoder;
+  record CoinSettingsBlock CoinSb;
+  area adata,linearea,tmparea;
+  string 5 nextline;
+  LongInt i,j,arlen,startpos,linelen,chcnt;
+  string 15 ProcedureName,TransactionDate;
+  string 255 backUpPath;
+  Date ImpDate;
+  Time ImpTime;
+  boolean headerf,testf;
+    
+     BlockLoad(CoinSb);
+    if (replacef and Blank(CoinSb.inDirBackUp)) then begin
+      LogText(0,"Check download back up directories in CoinSettingsBlock");
+      goto LGruppoCoinParseEANCodes;
+    end;
+    
+    nextline = chr(13) & chr(10);
+    ImpDate = CurrentDate;
+    ImpTime = CurrentTime;
+    isReplaced = false;
+    
+    AddFileToArea(path & filename,adata,false);
+    arlen = GetAreaLength(adata);
+    if (arlen>0) then begin 
+      AddTextToArea(nextline,tmparea);
+      InsertAreaBeforeArea(tmparea,adata);
+      startpos = 0;
+      linelen = 0;
+      for (i=0;i<arlen;i=i+1) begin
+        testf = false;
+        chcnt = 0;
+        if (Asc(GetStringFromArea(adata,i,1))==13) then begin
+          i = i + 1;
+          testf = true;
+          chcnt = chcnt + 1;
+          if (Asc(GetStringFromArea(adata,i,1))==10) then begin
+            i = i + 1;
+            chcnt = chcnt + 1;
+          end;
+        end else begin
+          if (Asc(GetStringFromArea(adata,i,1))==10) then begin
+            i = i + 1;
+            testf = true;
+            chcnt = chcnt + 1;
+          end;
+        end;
+        if testf begin
+          linelen = i - (startpos + chcnt);
+          setareazerosize(linearea);
+          GetAreaFromArea(adata,startpos,linelen,linearea);
+          logtext(0,"startpos = " & startpos & " linelen = " & linelen);
+          logtext(0,GetStringFromArea(linearea,0,10) & "..." & GetStringFromArea(linearea,linelen-10,10));
+          startpos = i;
+          for (j=0;j<linelen;j=j+1) begin
+            switch (GetStringFromArea(linearea,j,8)) begin
+              case "**INIT**":
+                j = j + 8;
+                headerf = true;
+                ProcedureName = GetStringFromArea(linearea,j,8);
+                j = j + 8;
+                TransactionDate = GetStringFromArea(linearea,j,8);
+                j = j + 8;
+              case "EANLIST*":
+                if (headerf) then begin
+                  RECORDNEW(CoinEANCoder);
+                  CoinEANCoder.FileName = filename;
+                  CoinEANCoder.ImpDate = ImpDate;
+                  CoinEANCoder.ImpTime = ImpTime;
+                  CoinEANCoder.TransDate = TransactionDate;
+                  CoinEANCoder.SerNr = NextSerNr("CoinEANCodeVc",CoinEANCoder.ImpDate,-1,false,"");
+                  CoinEANCoder.ProcedureName = GetStringFromArea(linearea,j,8);
+                  j = j + 8;
+                  CoinEANCoder.Action = GetStringFromArea(linearea,j,1);
+                  j = j + 1;
+                  CoinEANCoder.ItemNumber = GetStringFromArea(linearea,j,9);
+                  j = j + 9;
+                  CoinEANCoder.Size = GetStringFromArea(linearea,j,3);
+                  j = j + 3;
+                  CoinEANCoder.SizeDescription = GetStringFromArea(linearea,j,5);
+                  j = j + 5;
+                  CoinEANCoder.SKUNumber = GetStringFromArea(linearea,j,7);
+                  j = j + 7;
+                  CoinEANCoder.EANNumber = GetStringFromArea(linearea,j,13);
+                  j = j + 13;
+                  if (CoinEANCoder.SerNr>0) then begin
+                    if (RECORDSTORE(CoinEANCoder,false)==false) then begin
+                      LogText(0,"CoinEANCode " & FileName & " was no saved");
+                    end;
+                  end else begin
+                    LogText(0,"CoinEANCode " & FileName & " got no SerNr");
+                  end;
+                end;
+            end;
+          end;
+          
+          
+        end;
+      end;
+    end;
+    if replacef then begin
+      //backUpPath = StrReplace(path,"in","Old_in");
+      backUpPath = CoinSb.inDirBackUp;
+      if !DirExists(backUpPath) then begin
+        CreateFolder(backUpPath);
+      end;
+      if (MoveFile(filename,path,backUpPath)==0) then begin
+        isReplaced = true;
+      end;
+    end;
+    
+LGruppoCoinParseEANCodes:;
+    
+  return;
+end;
+
+global//Edit-------------------Vitalii 15:49 04.07.2016
+updating procedure GruppoCoinParseCoinItemList(string path,string filename, boolean replacef,var boolean isReplaced) 
+begin
+  record CoinItemListVc CoinItemListr;
+  record CoinSettingsBlock CoinSb;
+  area adata,linearea,tmparea;
+  string 5 nextline;
+  LongInt i,j,arlen,startpos,linelen,chcnt;
+  string 15 ProcedureName,TransactionDate;
+  string 255 backUpPath;
+  Date ImpDate;
+  Time ImpTime;
+  boolean headerf,testf;
+    
+    BlockLoad(CoinSb);
+    if (replacef and Blank(CoinSb.inDirBackUp)) then begin
+      LogText(0,"Check download back up directories in CoinSettingsBlock");
+      goto LGruppoCoinParseCoinItemList;
+    end;
+    
+    nextline = chr(13) & chr(10);
+    ImpDate = CurrentDate;
+    ImpTime = CurrentTime;
+    isReplaced = false;
+    
+    AddFileToArea(path & filename,adata,false);
+    arlen = GetAreaLength(adata);
+    if (arlen>0) then begin 
+      AddTextToArea(nextline,tmparea);
+      InsertAreaBeforeArea(tmparea,adata);
+      startpos = 0;
+      linelen = 0;
+      for (i=0;i<arlen;i=i+1) begin
+        testf = false;
+        chcnt = 0;
+        if (Asc(GetStringFromArea(adata,i,1))==13) then begin
+          i = i + 1;
+          testf = true;
+          chcnt = chcnt + 1;
+          if (Asc(GetStringFromArea(adata,i,1))==10) then begin
+            i = i + 1;
+            chcnt = chcnt + 1;
+          end;
+        end else begin
+          if (Asc(GetStringFromArea(adata,i,1))==10) then begin
+            i = i + 1;
+            testf = true;
+            chcnt = chcnt + 1;
+          end;
+        end;
+        if testf begin
+          linelen = i - (startpos + chcnt);
+          setareazerosize(linearea);
+          GetAreaFromArea(adata,startpos,linelen,linearea);
+          logtext(0,"startpos = " & startpos & " linelen = " & linelen);
+          logtext(0,GetStringFromArea(linearea,0,10) & "..." & GetStringFromArea(linearea,linelen-10,10));
+          startpos = i;
+          for (j=0;j<linelen;j=j+1) begin
+            switch (GetStringFromArea(linearea,j,8)) begin
+              case "**INIT**":
+                j = j + 8;
+                headerf = true;
+                ProcedureName = GetStringFromArea(linearea,j,8);
+                j = j + 8;
+                TransactionDate = GetStringFromArea(linearea,j,8);
+                j = j + 8;
+              case "ITEMLIST":
+                if (headerf) then begin
+                  RECORDNEW(CoinItemListr);
+                  CoinItemListr.FileName = filename;
+                  CoinItemListr.ImpDate = ImpDate;
+                  CoinItemListr.ImpTime = ImpTime;
+                  CoinItemListr.TransDate = TransactionDate;
+                  CoinItemListr.SerNr = NextSerNr("CoinItemListVc",CoinItemListr.ImpDate,-1,false,"");
+                  CoinItemListr.ProcName = GetStringFromArea(linearea,j,8);
+                  j = j + 8;
+                  CoinItemListr.Action = GetStringFromArea(linearea,j,1);
+                  j = j + 1;
+                  CoinItemListr.ItemNumber = GetStringFromArea(linearea,j,9);
+                  j = j + 9;
+                  CoinItemListr.ItemDescription = GetStringFromArea(linearea,j,25);
+                  j = j + 25;
+                  CoinItemListr.GoodsType = GetStringFromArea(linearea,j,9);
+                  j = j + 9;
+                  CoinItemListr.Colour = GetStringFromArea(linearea,j,25);
+                  j = j + 25;
+                  CoinItemListr.Composition = GetStringFromArea(linearea,j,78);
+                  j = j + 78;
+                  CoinItemListr.VATCode = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.FunctionFamilyDescription = GetStringFromArea(linearea,j,25);
+                  j = j + 25;
+                  CoinItemListr.SubdepartmentCode = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.SubdepartmentDescription = GetStringFromArea(linearea,j,25);
+                  j = j + 25;
+                  CoinItemListr.DepartmentCode = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.DepartmentDescription = GetStringFromArea(linearea,j,25);
+                  j = j + 25;
+                  CoinItemListr.SeasonCodeGarmentWeight = GetStringFromArea(linearea,j,2);
+                  j = j + 2;
+                  CoinItemListr.SeasonDescription = GetStringFromArea(linearea,j,25);
+                  j = j + 25;
+                  CoinItemListr.Gender = GetStringFromArea(linearea,j,3);
+                  j = j + 3;
+                  CoinItemListr.GenderDescription = GetStringFromArea(linearea,j,15);
+                  j = j + 15;
+                  CoinItemListr.CountryOfOrigin = GetStringFromArea(linearea,j,3);
+                  j = j + 3;
+                  CoinItemListr.PriceValidityStartDate = GetStringFromArea(linearea,j,8);
+                  j = j + 8;
+                  CoinItemListr.CurrencyCode1 = GetStringFromArea(linearea,j,3);
+                  j = j + 3;
+                  CoinItemListr.RetailPrice1 = GetStringFromArea(linearea,j,11);
+                  j = j + 11;
+                  CoinItemListr.CurrencyCode2 = GetStringFromArea(linearea,j,3);
+                  j = j + 3;
+                  CoinItemListr.RetailPrice2 = GetStringFromArea(linearea,j,11);
+                  j = j + 11;
+                  CoinItemListr.VAT = GetStringFromArea(linearea,j,5);
+                  j = j + 5;
+                  CoinItemListr.CustomsDescriptionOfGoods = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.CompositionCodeOld = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.Year = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.CategoryCode = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.CategoryDescription = GetStringFromArea(linearea,j,25);
+                  j = j + 25;
+                  CoinItemListr.ColourstoryPromoCoordination1 = GetStringFromArea(linearea,j,2);
+                  j = j + 2;
+                  CoinItemListr.ColourstoryPromoCoordination2 = GetStringFromArea(linearea,j,20);
+                  j = j + 20;
+                  CoinItemListr.ColourstoryPromoCoordination3 = GetStringFromArea(linearea,j,25);
+                  j = j + 25;
+                  CoinItemListr.CommercialReference = GetStringFromArea(linearea,j,15);
+                  j = j + 15;
+                  CoinItemListr.FunctionFamilyCode = GetStringFromArea(linearea,j,5);
+                  j = j + 5;
+                  CoinItemListr.SizeGroupCode1 = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.SizeGroupCode2 = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.ItalianCustomsCode = GetStringFromArea(linearea,j,9);
+                  j = j + 9;
+                  CoinItemListr.NetWeight = GetStringFromArea(linearea,j,11);
+                  j = j + 11;
+                  CoinItemListr.GrossWeight = GetStringFromArea(linearea,j,11);
+                  j = j + 11;
+                  CoinItemListr.KnittedWoven = GetStringFromArea(linearea,j,1);
+                  j = j + 1;
+                  CoinItemListr.Kit = GetStringFromArea(linearea,j,9);
+                  j = j + 9;
+                  CoinItemListr.LocalMonth = GetStringFromArea(linearea,j,9);
+                  j = j + 9;
+                  CoinItemListr.CompositionCode = GetStringFromArea(linearea,j,9);
+                  j = j + 9;
+                  CoinItemListr.ItemMaster = GetStringFromArea(linearea,j,9);
+                  j = j + 9;
+                  CoinItemListr.DateReleaseForSale = GetStringFromArea(linearea,j,8);
+                  j = j + 8;
+                  CoinItemListr.Period = GetStringFromArea(linearea,j,1);
+                  j = j + 1;
+                  CoinItemListr.BrandCode = GetStringFromArea(linearea,j,4);
+                  j = j + 4;
+                  CoinItemListr.BrandDescription = GetStringFromArea(linearea,j,25);
+                  j = j + 25;
+                  CoinItemListr.UnitCostPrice = GetStringFromArea(linearea,j,15);
+                  j = j + 14;
+                  if (CoinItemListr.SerNr>0) then begin
+                    if (RECORDSTORE(CoinItemListr,false)==false) then begin
+                      LogText(0,"CoinItemListr " & FileName & " was no saved");
+                    end;
+                  end else begin
+                    LogText(0,"CoinItemListr " & FileName & " got no SerNr");
+                  end;
+                end;
+            end;
+          end;
+        end;
+      end;
+    end;
+    if replacef then begin
+      //backUpPath = StrReplace(path,"in","Old_in");
+      backUpPath = CoinSb.inDirBackUp;
+      if !DirExists(backUpPath) then begin
+        CreateFolder(backUpPath);
+      end;
+      if (MoveFile(filename,path,backUpPath)==0) then begin
+        isReplaced = true;
+      end;
+    end;
+    
+LGruppoCoinParseCoinItemList:;
+    
+  return;
+end;
+
+global //Edit***************************Sasha2,14:33 27.07.2016 {
+updating procedure GruppoCoinParseCustGoodsDescript(string path,string filename, boolean replacef,var Boolean isReplaced) 
+begin
+  record CoinItemGoodsDecriptVc CoinItemGoodsDecriptr;
+  record CoinSettingsBlock CoinSb;
+  area inData,acarriage,extractedData;
+  string 1 c;
+  string 5 nextline;
+  string 15 transDate;
+  string 255 backUpPath,tstr,tstr2;
+  LongInt j,i,k,inDataLen,extrDataLen,prevpos,pos;
+  integer lenStr;
+  boolean headerf;
+  date curdate;
+    
+    BlockLoad(CoinSb);
+    if (replacef and Blank(CoinSb.inDirBackUp)) then begin
+      LogText(0,"Check download back up directories in CoinSettingsBlock");
+      goto LGruppoCoinParseCustGoodsDescript;
+    end;
+    
+    nextline = chr(13) & chr(10);
+    curdate = CurrentDate;
+    isReplaced = false;
+    
+    AddFileToArea(path & filename,inData,false);
+    
+    inDataLen = GetAreaLength(inData);
+    if (inDataLen>0) then begin 
+      prevpos = 0;
+      for (j=0;j<inDataLen;j=j+1) begin
+        if (Asc(GetStringFromArea(inData,j,1))==10) then begin
+          SetAreaZeroSize(extractedData);
+          GetAreaFromArea(inData,prevpos,j+1-prevpos,extractedData);
+          prevpos = j + 1;
+          i = 0;         
+          extrDataLen = GetAreaLength(extractedData);
+          if (extrDataLen>0) then begin
+            switch (GetStringFromArea(extractedData,i,8)) begin
+              case "**INIT**":
+                i = i + 16;
+                headerf = true;
+                transDate = GetStringFromArea(extractedData,i,8);
+                i = i + 8;
+              case "CUSDESGD":
+                if (headerf) then begin
+                  RECORDNEW(CoinItemGoodsDecriptr);
+                  CoinItemGoodsDecriptr.ImpDate = curdate;
+                  CoinItemGoodsDecriptr.ImpTime = CurrentTime;
+                  CoinItemGoodsDecriptr.SerNr = NextSerNr("CoinItemGoodsDecriptVc",CoinItemGoodsDecriptr.ImpDate,-1,false,"");
+                  CoinItemGoodsDecriptr.FileName = filename;
+                  CoinItemGoodsDecriptr.TransDate = transDate;
+                  i = i + 8;
+                  if ((i + 4)<=extrDataLen) then begin
+                    CoinItemGoodsDecriptr.CustomsDescriptionOfGoods = GetStringFromArea(extractedData,i,4);
+                    i = i + 4;
+                  end;
+                  tstr = GetStringFromArea(extractedData,i,extrDataLen-i);
+                  tstr2 = "";
+                  lenStr = len(tstr);
+                  for (k=0;k<lenStr;k=k+1) begin
+                    c = Mid(tstr,k,1);
+                    if (Asc(c)>31) then begin
+                      tstr2 = tstr2 & c;
+                    end;
+                  end;
+                  if (NonBlank(tstr2)) then begin
+                    CoinItemGoodsDecriptr.Description = tstr2;
+                  end;
+                  if (CoinItemGoodsDecriptr.SerNr>0) then begin
+                    if (RECORDSTORE(CoinItemGoodsDecriptr,false)==false) then begin
+                      LogText(0,"Customs description of Goods " & FileName & " was no saved"); 
+                    end;
+                  end else begin
+                    LogText(0,"Customs description of Goods " & FileName & " got no SerNr");  
+                  end;
+                end;
+            end;
+          end;
+        end;
+      end;
+    end;
+    
+    if (replacef) then begin
+      backUpPath = CoinSb.inDirBackUp;
+      if (!DirExists(backUpPath)) then begin
+        CreateFolder(backUpPath);
+      end;
+      if (MoveFile(filename,path,backUpPath)==0) then begin
+        isReplaced = true;
+      end;
+    end;
+    
+LGruppoCoinParseCustGoodsDescript:;
+    
+  return;
+end; //Edit***************************Sasha2,14:32 27.07.2016 }
+
+global //Edit***************************Sasha2,14:33 27.07.2016 {
+updating procedure GruppoCoinParseCompositionDecript(string path,string filename, boolean replacef,var Boolean isReplaced) 
+begin
+  record CoinComposDecriptVc CoinComposDecriptr;
+  record CoinSettingsBlock CoinSb;
+  area inData,acarriage,extractedData;
+  string 1 c;
+  string 5 nextline;
+  string 15 transDate;
+  string 255 backUpPath;
+  LongInt j,i,inDataLen,extrDataLen,prevpos,pos;
+  boolean headerf;
+  date curdate;
+    
+    BlockLoad(CoinSb);
+    if (replacef and Blank(CoinSb.inDirBackUp)) then begin
+      LogText(0,"Check download back up directories in CoinSettingsBlock");
+      goto LGruppoCoinParseCompositionDecript;
+    end;
+    
+    nextline = chr(13) & chr(10);
+    curdate = CurrentDate;
+    isReplaced = false;
+    
+    AddFileToArea(path & filename,inData,false);
+    
+    inDataLen = GetAreaLength(inData);
+    if (inDataLen>0) then begin 
+      prevpos = 0;
+      for (j=0;j<inDataLen;j=j+1) begin
+        if (Asc(GetStringFromArea(inData,j,1))==10) then begin
+          SetAreaZeroSize(extractedData);
+          GetAreaFromArea(inData,prevpos,j+1-prevpos,extractedData);
+          prevpos = j + 1;
+          i = 0;         
+          extrDataLen = GetAreaLength(extractedData);
+          if (extrDataLen>0) then begin
+            switch (GetStringFromArea(extractedData,i,8)) begin
+              case "**INIT**":
+                i = i + 16;
+                headerf = true;
+                transDate = GetStringFromArea(extractedData,i,8);
+                i = i + 8;
+              case "COMPDESC":
+                if (headerf) then begin
+                  RECORDNEW(CoinComposDecriptr);
+                  CoinComposDecriptr.ImpDate = curdate;
+                  CoinComposDecriptr.ImpTime = CurrentTime;
+                  CoinComposDecriptr.SerNr = NextSerNr("CoinComposDecriptVc",CoinComposDecriptr.ImpDate,-1,false,"");
+                  CoinComposDecriptr.FileName = filename;
+                  CoinComposDecriptr.TransDate = transDate;
+                  i = i + 12;
+                  if ((i + 78)<=extrDataLen) then begin
+                    CoinComposDecriptr.Description = GetStringFromArea(extractedData,i,78);
+                    i = i + 78;
+                  end;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinComposDecriptr.CompositionCode = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if (CoinComposDecriptr.SerNr>0) then begin
+                    if (RECORDSTORE(CoinComposDecriptr,false)==false) then begin
+                      LogText(0,"Composition descriptions " & FileName & " was no saved"); 
+                    end;
+                  end else begin
+                    LogText(0,"Composition descriptions " & FileName & " got no SerNr");  
+                  end;
+                end;
+            end;
+          end;
+        end;
+      end;
+    end;
+    
+    if (replacef) then begin
+      backUpPath = CoinSb.inDirBackUp;
+      if (!DirExists(backUpPath)) then begin
+        CreateFolder(backUpPath);
+      end;
+      if (MoveFile(filename,path,backUpPath)==0) then begin
+        isReplaced = true;
+      end;
+    end;
+    
+LGruppoCoinParseCompositionDecript:;
+    
+  return;
+end; //Edit***************************Sasha2,14:32 27.07.2016 }
+
+global //Edit***************************Sasha2,14:33 27.07.2016 {
+updating procedure GruppoCoinParseGoodsTypes(string path,string filename, boolean replacef,var Boolean isReplaced) 
+begin
+  record CoinGoodsTypesVc CoinGoodsTypesr;
+  record CoinSettingsBlock CoinSb;
+  area inData,acarriage,extractedData;
+  string 1 c;
+  string 5 nextline;
+  string 15 transDate;
+  string 255 backUpPath,tstr,tstr2;
+  LongInt j,i,k,inDataLen,extrDataLen,prevpos,pos;
+  integer lenStr;
+  boolean headerf;
+  date curdate;
+    
+    BlockLoad(CoinSb);
+    if (replacef and Blank(CoinSb.inDirBackUp)) then begin
+      LogText(0,"Check download back up directories in CoinSettingsBlock");
+      goto LGruppoCoinParseGoodsTypes;
+    end;
+    
+    nextline = chr(13) & chr(10);
+    curdate = CurrentDate;
+    isReplaced = false;
+    
+    AddFileToArea(path & filename,inData,false);
+    
+    inDataLen = GetAreaLength(inData);
+    if (inDataLen>0) then begin 
+      prevpos = 0;
+      for (j=0;j<inDataLen;j=j+1) begin
+        if (Asc(GetStringFromArea(inData,j,1))==10) then begin
+          SetAreaZeroSize(extractedData);
+          GetAreaFromArea(inData,prevpos,j+1-prevpos,extractedData);
+          prevpos = j + 1;
+          i = 0;         
+          extrDataLen = GetAreaLength(extractedData);
+          if (extrDataLen>0) then begin
+            switch (GetStringFromArea(extractedData,i,8)) begin
+              case "**INIT**":
+                i = i + 16;
+                headerf = true;
+                transDate = GetStringFromArea(extractedData,i,8);
+                i = i + 8;
+              case "UNMER***":
+                if (headerf) then begin
+                  RECORDNEW(CoinGoodsTypesr);
+                  CoinGoodsTypesr.ImpDate = curdate;
+                  CoinGoodsTypesr.ImpTime = CurrentTime;
+                  CoinGoodsTypesr.SerNr = NextSerNr("CoinGoodsTypesVc",CoinGoodsTypesr.ImpDate,-1,false,"");
+                  CoinGoodsTypesr.FileName = filename;
+                  CoinGoodsTypesr.TransDate = transDate;
+                  i = i + 8;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinGoodsTypesr.GoodsType = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  tstr = GetStringFromArea(extractedData,i,extrDataLen-i);
+                  tstr2 = "";
+                  lenStr = len(tstr);
+                  for (k=0;k<lenStr;k=k+1) begin
+                    c = Mid(tstr,k,1);
+                    if (Asc(c)>31) then begin
+                      tstr2 = tstr2 & c;
+                    end;
+                  end;
+                  if (NonBlank(tstr2)) then begin
+                    CoinGoodsTypesr.Description = tstr2;
+                  end;
+                  if (CoinGoodsTypesr.SerNr>0) then begin
+                    if (RECORDSTORE(CoinGoodsTypesr,false)==false) then begin
+                      LogText(0,"Types of goods " & FileName & " was no saved"); 
+                    end;
+                  end else begin
+                    LogText(0,"Types of goods " & FileName & " got no SerNr");  
+                  end;
+                end;
+            end;
+          end;
+        end;
+      end;
+    end;
+    
+    if (replacef) then begin
+      backUpPath = CoinSb.inDirBackUp;
+      if (!DirExists(backUpPath)) then begin
+        CreateFolder(backUpPath);
+      end;
+      if (MoveFile(filename,path,backUpPath)==0) then begin
+        isReplaced = true;
+      end;
+    end;
+    
+LGruppoCoinParseGoodsTypes:;
+    
+  return;
+end; //Edit***************************Sasha2,14:32 27.07.2016 }
+
+global //Edit***************************Sasha2,14:33 27.07.2016 {
+updating procedure GruppoCoinParsePriceChanges(string path,string filename, boolean replacef,var Boolean isReplaced) 
+begin
+  record CoinPriceChangesVc CoinPriceChangesr;
+  record CoinSettingsBlock CoinSb;
+  area inData,acarriage,extractedData;
+  string 1 c;
+  string 5 nextline;
+  string 15 transDate;
+  string 255 backUpPath,tstr,tstr2;
+  LongInt j,i,k,inDataLen,extrDataLen,prevpos,pos;
+  integer lenStr;
+  boolean headerf;
+  date curdate;
+    
+    BlockLoad(CoinSb);
+    if (replacef and Blank(CoinSb.inDirBackUp)) then begin
+      LogText(0,"Check download back up directories in CoinSettingsBlock");
+      goto LGruppoCoinParsePriceChanges;
+    end;
+    
+    nextline = chr(13) & chr(10);
+    curdate = CurrentDate;
+    isReplaced = false;
+    
+    AddFileToArea(path & filename,inData,false);
+    
+    inDataLen = GetAreaLength(inData);
+    if (inDataLen>0) then begin 
+      prevpos = 0;
+      for (j=0;j<inDataLen;j=j+1) begin
+        if (Asc(GetStringFromArea(inData,j,1))==10) then begin
+          SetAreaZeroSize(extractedData);
+          GetAreaFromArea(inData,prevpos,j+1-prevpos,extractedData);
+          prevpos = j + 1;
+          i = 0;         
+          extrDataLen = GetAreaLength(extractedData);
+          if (extrDataLen>0) then begin
+            switch (GetStringFromArea(extractedData,i,8)) begin
+              case "**INIT**":
+                i = i + 16;
+                headerf = true;
+                transDate = GetStringFromArea(extractedData,i,8);
+                i = i + 8;
+              case "PRCCHNGS":
+                if (headerf) then begin
+                  RECORDNEW(CoinPriceChangesr);
+                  CoinPriceChangesr.ImpDate = curdate;
+                  CoinPriceChangesr.ImpTime = CurrentTime;
+                  CoinPriceChangesr.SerNr = NextSerNr("CoinPriceChangesVc",CoinPriceChangesr.ImpDate,-1,false,"");
+                  CoinPriceChangesr.FileName = filename;
+                  CoinPriceChangesr.TransDate = transDate;
+                  i = i + 8;
+                  if ((i + 9)<=extrDataLen) then begin
+                    CoinPriceChangesr.ItemNumber = GetStringFromArea(extractedData,i,9);
+                    i = i + 9;
+                  end;
+                  if ((i + 8)<=extrDataLen) then begin
+                    CoinPriceChangesr.PriceStartDate = GetStringFromArea(extractedData,i,8);
+                    i = i + 8;
+                  end;
+                  if ((i + 3)<=extrDataLen) then begin
+                    CoinPriceChangesr.CurCode1 = GetStringFromArea(extractedData,i,3);
+                    i = i + 3;
+                  end;
+                  if ((i + 11)<=extrDataLen) then begin
+                    tstr = GetStringFromArea(extractedData,i,11);
+                    tstr2 = "";
+                    lenStr = len(tstr);
+                    for (k=0;k<lenStr;k=k+1) begin
+                      c = Mid(tstr,k,1);
+                      if (Asc(c)>=48 and Asc(c)<=57) then begin
+                        tstr2 = tstr2 & c;
+                      end;
+                    end;
+                    if (NonBlank(tstr2)) then begin
+                      CoinPriceChangesr.NewRetailPrice1 = StringToVal(tstr2,M4Val)/100;
+                    end;
+                    i = i + 11;
+                  end;
+                  if ((i + 3)<=extrDataLen) then begin
+                    CoinPriceChangesr.CurCode2 = GetStringFromArea(extractedData,i,3);
+                    i = i + 3;
+                  end;
+                  if ((i + 11)<=extrDataLen) then begin
+                    tstr = GetStringFromArea(extractedData,i,11);
+                    tstr2 = "";
+                    lenStr = len(tstr);
+                    for (k=0;k<lenStr;k=k+1) begin
+                      c = Mid(tstr,k,1);
+                      if (Asc(c)>=48 and Asc(c)<=57) then begin
+                        tstr2 = tstr2 & c;
+                      end;
+                    end;
+                    if (NonBlank(tstr2)) then begin
+                      CoinPriceChangesr.NewRetailPrice2 = StringToVal(tstr2,M4Val)/100;
+                    end;
+                    i = i + 11;
+                  end;
+                  if ((i + 3)<=extrDataLen) then begin
+                    CoinPriceChangesr.CurCode3 = GetStringFromArea(extractedData,i,3);
+                    i = i + 3;
+                  end;
+                  if ((i + 11)<=extrDataLen) then begin
+                    tstr = GetStringFromArea(extractedData,i,11);
+                    tstr2 = "";
+                    lenStr = len(tstr);
+                    for (k=0;k<lenStr;k=k+1) begin
+                      c = Mid(tstr,k,1);
+                      if (Asc(c)>=48 and Asc(c)<=57) then begin
+                        tstr2 = tstr2 & c;
+                      end;
+                    end;
+                    if (NonBlank(tstr2)) then begin
+                      CoinPriceChangesr.OldRetailPrice = StringToVal(tstr2,M4Val)/100;
+                    end;
+                    i = i + 11;
+                  end;
+                  if ((i + 4)<=extrDataLen) then begin
+                    CoinPriceChangesr.Causal = GetStringFromArea(extractedData,i,4);
+                    i = i + 4;
+                  end;
+                  if ((i + 25)<=extrDataLen) then begin
+                    CoinPriceChangesr.CausalDescript = GetStringFromArea(extractedData,i,25);
+                    i = i + 25;
+                  end;
+                  if ((i + 12)<=extrDataLen) then begin
+                    CoinPriceChangesr.AddField = GetStringFromArea(extractedData,i,12);
+                    i = i + 12;
+                  end;
+                  
+                  if (CoinPriceChangesr.SerNr>0) then begin
+                    if (RECORDSTORE(CoinPriceChangesr,false)==false) then begin
+                      LogText(0,"Price Changes " & FileName & " was no saved"); 
+                    end;
+                  end else begin
+                    LogText(0,"Price Changes " & FileName & " got no SerNr");  
+                  end;
+                end;
+            end;
+          end;
+        end;
+      end;
+    end;
+    
+    if (replacef) then begin
+      backUpPath = CoinSb.inDirBackUp;
+      if (!DirExists(backUpPath)) then begin
+        CreateFolder(backUpPath);
+      end;
+      if (MoveFile(filename,path,backUpPath)==0) then begin
+        isReplaced = true;
+      end;
+    end;
+    
+LGruppoCoinParsePriceChanges:;
+    
+  return;
+end; //Edit***************************Sasha2,14:32 27.07.2016 }
+
+global //Edit-------------------Vitalii 17:25 05.07.2016
+updating procedure GruppoCoinParseAndReplaceInputFiles(string path) 
+begin
+  record CoinSettingsBlock CoinSb;
+  string 255 filename;
+  Integer i,numoffiles;
+  Boolean packListFoundf,isReplaced;
+    
+    numoffiles = CountFilesInDir(path);
+    for (i=0;i<numoffiles;i=i+1) begin
+      filename = GetFileNameInDir(path,i);
+      isReplaced = false;
+
+      if (left(filename,3)=="DDT") then begin 
+        GruppoCoinParsePackList(path,filename,true,isReplaced);
+        packListFoundf = true;
+      end;
+
+      if (left(filename,3)=="EAN") then begin
+        GruppoCoinParseEANCodes(path,filename,true,isReplaced);
+      end;
+
+      if (left(filename,4)=="ITEM") then begin
+        GruppoCoinParseCoinItemList(path,filename,true,isReplaced);
+      end;
+
+      if (left(filename,4)=="CDGD") then begin 
+        GruppoCoinParseCustGoodsDescript(path,filename,true,isReplaced);
+      end;
+      
+      if (left(filename,4)=="CMPS") then begin 
+        GruppoCoinParseCompositionDecript(path,filename,true,isReplaced);
+      end;
+      
+      if (left(filename,4)=="GDTY") then begin 
+        GruppoCoinParseGoodsTypes(path,filename,true,isReplaced);
+      end;
+      
+      if (left(filename,3)=="PRC") then begin
+        GruppoCoinParsePriceChanges(path,filename,true,isReplaced);
+      end;
+      
+      if (isReplaced) then begin
+        numoffiles = CountFilesInDir(path);
+        i = i - 1;
+      end;
+    end;
+    
+    if (packListFoundf) then begin
+      GruppoCoinConfArrivalMn(CurrentDate);
+    end;
+    
+LGruppoCoinParseAndReplaceInputFiles:;
+  
+  return;
+end;
+
+global //Edit-------------------Vitalii 17:25 05.07.2016
+updating procedure GruppoCoinParseAndReplaceOutputFiles() 
+begin
+  record RcVc RepSpec;
+  
+  RECORDNEW(RepSpec);
+  GruppoCoinManageGoodsMn(RepSpec);
+  GruppoCoinSalesMn(RepSpec);
+  GruppoCoinStockCountMn(RepSpec);
+  GruppoCoinMissingEANSMn(RepSpec);//Edit-------------------Vitalii 15:39 20.07.2016
+  
+LGruppoCoinParseAndReplaceOutputFiles:;
+  
+  return;
+end;
+
+global //Edit***************************Sasha2,16:31 01.07.2016 {
+updating procedure GruppoCoinSearchInputFilesMn(record RcVc RepSpec) 
+begin
+  string 255 path,filename;
+  Integer i,numoffiles;
+  record CoinSettingsBlock CoinSb;
+  Boolean replacef,packListFoundf,isReplaced;
+    
+    BlockLoad(CoinSb);
+    path = CoinSb.inDir;
+    if (Blank(path)) then begin
+      LogText(0,"Check download directory in CoinSettingsBlock");
+      goto LGruppoCoinSearchInputFiles;
+    end;
+    if (RepSpec.flags[2]==1) then begin
+      replacef = true;
+    end;
+    numoffiles = CountFilesInDir(path);
+    for (i=0;i<numoffiles;i=i+1) begin
+      filename = GetFileNameInDir(path,i);
+      isReplaced = false;
+      switch (RepSpec.flags[1]) begin
+        case 0:
+          if (left(filename,3)=="DDT") then begin 
+            GruppoCoinParsePackList(path,filename,replacef,isReplaced);
+            packListFoundf = true;
+          end;
+        case 1:
+          if (left(filename,3)=="EAN") then begin 
+            GruppoCoinParseEANCodes(path,filename,replacef,isReplaced);
+          end;
+        case 2:
+          if (left(filename,4)=="ITEM") then begin 
+            GruppoCoinParseCoinItemList(path,filename,replacef,isReplaced);
+          end;
+        case 3 :
+          if (left(filename,4)=="CDGD") then begin
+            GruppoCoinParseCustGoodsDescript(path,filename,replacef,isReplaced);
+          end;
+        case 4 :
+          if (left(filename,4)=="CMPS") then begin
+            GruppoCoinParseCompositionDecript(path,filename,replacef,isReplaced);
+          end;
+        case 5 :
+          if (left(filename,4)=="GDTY") then begin
+            GruppoCoinParseGoodsTypes(path,filename,replacef,isReplaced);
+          end;
+        case 6 :
+          if (left(filename,3)=="PRC") then begin
+            GruppoCoinParsePriceChanges(path,filename,replacef,isReplaced);
+          end;
+      end;
+      if (isReplaced) then begin
+        numoffiles = CountFilesInDir(path);
+        i = i - 1;
+      end;
+    end;
+    
+    if (packListFoundf) then begin
+      GruppoCoinConfArrivalMn(CurrentDate);
+    end;
+
+LGruppoCoinSearchInputFiles:;
+  
+  return;
+end; //Edit***************************Sasha2,16:31 01.07.2016 }
+
+
+global //Edit***************************Sasha2,14:21 04.07.2016
+updating procedure GruppoCoinDeleteRecordsMn(record RcVc RepSpec) 
+begin
+  record CoinPackListVc CoinPackListr;
+  record CoinEANCodeVc CoinEANCoder;
+  record CoinItemListVc CoinItemListr;
+  record CoinPackListHistVc CoinPackListHistr;
+  record CoinMissingEANVc CoinMissingEANr;
+  record CoinItemGoodsDecriptVc CoinItemGoodsDecriptr;
+  record CoinComposDecriptVc CoinComposDecriptr;
+  record CoinGoodsTypesVc CoinGoodsTypesr;
+  record CoinPriceChangesVc CoinPriceChangesr;
+  LongInt first,last;
+  boolean ratiof,testf,TrHs;
+  
+  switch (RepSpec.flags[1]) begin
+    case 0:
+      if (nonblank(RepSpec.f1)) then begin
+      	first = FirstInRange(RepSpec.f1,10);
+      	last = LastInRange(RepSpec.f1,10);
+      	if (first>-1) then begin
+      		CoinPackListr.SerNr = first;
+      		ratiof = true;
+      	end;
+      end else begin
+        CoinPackListr.SerNr = -1;
+      end;
+      TrHs = true;
+      while (LoopMain(CoinPackListr,1,TrHs)) begin
+        testf = true;
+        if (ratiof and last==first and CoinPackListr.SerNr>first) then begin TrHs = false;testf = false; end;
+  	    if (ratiof and last!=first and CoinPackListr.SerNr>last) then begin TrHs = false;testf = false; end;
+        if (testf) then begin
+          RecordDelete(CoinPackListr);
+          StepBack(CoinPackListr);
+        end;
+      end;
+      if (RepSpec.flags[2]>0) then begin
+        CoinPackListHistr.SerNr = -1;
+        while (LoopMain(CoinPackListHistr,1,true)) begin
+          RecordDelete(CoinPackListHistr);
+          StepBack(CoinPackListHistr);
+        end;
+      end;
+    case 1:
+      CoinEANCoder.SerNr = -1;
+      while (LoopMain(CoinEANCoder,1,true)) begin
+        RecordDelete(CoinEANCoder);
+        StepBack(CoinEANCoder);
+      end;
+    case 2:
+      CoinItemListr.SerNr = -1;
+      while (LoopMain(CoinItemListr,1,true)) begin
+        RecordDelete(CoinItemListr);
+        StepBack(CoinItemListr);
+      end;
+    case 3:
+      CoinMissingEANr.SerNr = -1;
+      while (LoopMain(CoinMissingEANr,1,true)) begin
+        RecordDelete(CoinMissingEANr);
+        StepBack(CoinMissingEANr);
+      end;
+    case 4:
+      CoinItemGoodsDecriptr.SerNr = -1;
+      while (LoopMain(CoinItemGoodsDecriptr,1,true)) begin
+        RecordDelete(CoinItemGoodsDecriptr);
+        StepBack(CoinItemGoodsDecriptr);
+      end;
+    case 5:
+      CoinComposDecriptr.SerNr = -1;
+      while (LoopMain(CoinComposDecriptr,1,true)) begin
+        RecordDelete(CoinComposDecriptr);
+        StepBack(CoinComposDecriptr);
+      end;
+    case 6:
+      CoinGoodsTypesr.SerNr = -1;
+      while (LoopMain(CoinGoodsTypesr,1,true)) begin
+        RecordDelete(CoinGoodsTypesr);
+        StepBack(CoinGoodsTypesr);
+      end;
+    case 7:
+      CoinPriceChangesr.SerNr = -1;
+      while (LoopMain(CoinPriceChangesr,1,true)) begin
+        RecordDelete(CoinPriceChangesr);
+        StepBack(CoinPriceChangesr);
+      end;
+  end;
+
+  return;
+end;
+
+Global Updating procedure UpdateItemToCoinEAN()
+begin
+	record INVc INr;
+	record CoinEANCodeVc CoinEANCoder;
+	record DIVc DIr;
+	integer pos;
+	string 50 tstr;
+	integer cnt;
+	
+	while(loopmain(INr,1,true))begin
+		CoinEANCoder.EANNumber = INr.BarCode;
+		if(readfirstkey("EANNumber",CoinEANCoder,1,true))then begin
+			if(blank(INr.Group))then begin
+				INr.Group = "COINC";
+				
+				if(!setinset("COINCASA",INr.DispGroups))then begin
+					pos = 0;
+					ExtractObj(INr.DispGroups,pos,tstr);
+					While(nonblank(tstr)) begin
+	  				DIr.Code = tstr;
+	  				if(readfirstmain(DIr,1,true))then begin
+	  					if(DIr.CType=="MODEL" and cnt==1)then begin
+	  						DIr.CType = "COLLECTION";
+	  						recordstore(DIr,true);
+	  					end;
+	  					if(DIr.CType=="BRAND")then begin
+	  						DIr.CType = "MODEL";
+	  						recordstore(DIr,true);
+	  					end;
+	  				end;
+	  				cnt = cnt+1;
+	  				ExtractObj(INr.DispGroups,pos,tstr);
+					end; 
+					INr.DispGroups = "COINCASA," & INr.DispGroups;
+					recordstore(INr,true);
+				end;
+			end;
+		end;
+	end;
+return;
+end;
