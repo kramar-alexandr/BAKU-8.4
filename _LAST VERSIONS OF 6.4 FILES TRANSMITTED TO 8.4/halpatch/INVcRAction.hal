@@ -1,0 +1,1979 @@
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
+external function Boolean VATAccIsClosed(string,var string,Integer);
+external function Boolean IsVATCodeDefined(string);
+external procedure SplitAlphaDigit(string,var string,var LongInt);
+external procedure NextM4Number(string,var string);
+external procedure ExtractObj(string,var Integer,var string);
+external function string 255 RegisterSharedInCompanies(string);
+external function Boolean CheckMultipleIndexField(string,Integer,Integer);
+external function Integer CheckObjs(string,string,var string);
+external function LongInt CheckVarietyGroups(string,var string);
+external procedure AddCharsToString(var string,string,Integer);
+external function Boolean CheckAllowedSize(record INVc,val,val,val);
+external procedure B1ToB2Val(val,val,val,var val);
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external function Integer CountObjects(string);
+external procedure ExtractElemFromSet(string,integer,var string);
+external updating procedure CalcPriceListsMn(record RcVc);// Edit ************************** Thursday, 21 February 2013 09:44:41
+remote function boolean SkipCheckDIType(string); //Edit***************************Sasha2,16:35 25.12.2015
+external function roundmode SetRoundModeD(Integer);
+
+
+global
+function Boolean GetNextItemNr(var string itemnr)
+begin
+  Boolean res;
+  record INVc INr;
+  record SRBlock SRb;
+
+  BlockLoad(SRb);
+  NextM4Number(SRb.LastArtCode,itemnr);
+  if (nonblank(itemnr)) then begin
+    INr.Code = itemnr;
+    if (ReadFirstMain(INr,1,true)==false) then begin
+      SRb.LastArtCode = itemnr;
+    end else begin
+      INr.Code = "ZZZZZZZZZZZZZZZZZZZ";
+      if (ReadLastMain(INr,1,false)) then begin
+        NextM4Number(INr.Code,itemnr);
+        if (nonblank(itemnr)) then begin
+          SRb.LastArtCode = itemnr; 
+        end else begin
+          itemnr = "1";
+        end;
+      end;
+    end;
+  end;
+  GetNextItemNr = res;
+  return;
+end;
+
+function boolean CheckDispGroupsInINVc(record INVc INr,var string wctype)
+begin
+  boolean res,found;
+  record ITVc ITr;
+  record DIVc DIr;
+  integer typeam,i,clam,j;
+  string 5 ctype,cclass;
+  
+  res = true;
+  wctype = "";
+  ITr.Code=INr.Group; 
+  if (ReadFirstMain(ITr,1,true)) then begin
+    if (nonblank(ITr.ClassType)) then begin
+      typeam=CountObjects(ITr.ClassType); 
+      clam=CountObjects(INr.DispGroups); 
+      for (i=1;i<=typeam;i=i+1) begin
+        ExtractElemFromSet(ITr.ClassType,i,ctype);
+        found=false;
+        for (j=1;j<=clam;j=j+1) begin
+          ExtractElemFromSet(INr.DispGroups,j,cclass);
+          ResetLoop(DIr);
+          DIr.Code=cclass;
+          if (ReadFirstMain(DIr,1,true)) then begin
+            if (DIr.CType==ctype) then begin
+              found=true;
+              j=clam+1;
+            end;
+          end;
+        end;
+        if (not (found)) then begin
+          res=false;
+          wctype=ctype;
+          i=typeam+1;
+        end;
+      end;
+    end;
+  end;
+  CheckDispGroupsInINVc = res;
+  return;
+end;
+
+global
+function LongInt INVcRecordInIndex(record INVc INr,string indexname)
+BEGIN
+  LongInt res;
+  
+  res = 1;
+  if (INr.Terminated!=0) or (INr.NotForSales!=0) then begin 
+    if (indexname=="ActCode") then begin res = 0; end;
+    if (indexname=="ActName") then begin res = 0; end;
+    if (indexname=="ActGroup") then begin res = 0; end;
+    if (indexname=="ActAlternativeCode") then begin res = 0; end;
+    if (indexname=="DICode") then begin res = 0; end;
+    if (indexname=="DIName") then begin res = 0; end;
+    if (indexname=="DIGroup") then begin res = 0; end;
+  end;
+  INVcRecordInIndex = res;
+  RETURN;
+END;
+
+function Boolean TestSTVcExists(string artcode)
+BEGIN
+  Boolean res;
+  record STVc STr;  
+  record ItemStatusVc ISr;
+  record ItemHistVc IHr;
+  record TBIVVc TBIVr;
+
+  STr.ArtCode = artcode;
+  res = ReadFirstMain(STr,1,true);
+  if (res==false) then begin
+    ISr.Code = artcode;
+    if (ReadFirstMain(ISr,1,true)) then begin
+      res = (ISr.Instock!=0) or (ISr.OrddOut!=0) or (ISr.POQty!=0) or (ISr.POUnOKQty!=0) or (ISr.InShipment!=0) or (ISr.RsrvQty!=0) or (ISr.StockRsrvQty!=0);
+    end;
+  end;
+  if (res==false) then begin
+    IHr.ArtCode = artcode;
+    res = ReadFirstKey("ArtCode",IHr,1,true);
+  end;
+  if (res==false) then begin
+    TBIVr.ArtCode = artcode;
+    res = ReadFirstKey("ArtCode",TBIVr,1,true);
+  end;
+  TestSTVcExists = res; 
+  return;
+end;
+
+function Boolean STVcExists(string artcode)
+BEGIN
+  Boolean res;
+  string 255 sharedincomp,comp;
+  Integer curcomp;
+  Integer pos;
+
+  if (RegisterIsShared("INVc")) then begin
+   sharedincomp = RegisterSharedInCompanies("INVc");
+   if (nonblank(sharedincomp)) then begin
+     curcomp = CurrentCompany;
+     pos = 0;
+     ExtractObj(sharedincomp,pos,comp);
+     while (nonblank(comp)) begin
+       if (SetCompany(StringToInt(comp),false)) then begin
+//       if (SetCompanyCode(comp,false)) then begin
+         res = TestSTVcExists(artcode);
+         if (res) then begin
+           goto LSTVcExists;
+         end;
+       end;
+       ExtractObj(sharedincomp,pos,comp);
+     end;
+     ResetCompany(curcomp);
+   end;
+  end else begin
+    res = TestSTVcExists(artcode);
+  end;
+LSTVcExists:;  
+  STVcExists = res; 
+  return;
+end;
+
+global
+function LongInt INVcRecordRemoveTest(var record INVc INr,record INVc IN2r,LongInt long3,LongInt long4)
+BEGIN
+  LongInt res;
+  Boolean testf;
+
+  res = 1;
+  testf = STVcExists(INr.Code);
+  if (testf) then begin
+    if (long3>0) then begin MessageBox(1122,""); end;
+    res = 0;
+  end;
+LINVcRecordRemoveTest:;
+  INVcRecordRemoveTest = res; 
+  RETURN;
+END;
+
+global
+function LongInt INVcRecordDefaults(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  record ItemSettingBlock ISb;
+  Boolean lightFlag;
+  
+  BlockLoad(ISb);
+  if (SingleUserMode) then begin
+    if (GetNextItemNr(INr.Code)) then begin end;
+  end else begin
+    INr.Code = "";
+  end;
+  INr.Group = ISb.DefIGroup;
+  INr.WarrantyLength = ISb.WarrantyLength;
+  INr.Unittext = ISb.Unittext;
+  INr.SerNrf = ISb.SerNrf;
+  INr.UPrice1 = blankval;
+  INr.MinLevel = blankval;
+  INr.Bonus = blankval;
+  INr.InPrice = blankval;
+  INr.ExtraCost = blankval;
+  INr.PriceFactor = blankval;
+  INr.UnitCoefficient = blankval;
+  INr.Width = blankval;
+  INr.Height = blankval;
+  INr.Depth = blankval;
+  INr.AlcPrc = blankval;
+  INr.LastPriceChange = CurrentDate;
+  INr.LastBasePriceChange = CurrentDate;
+  INr.Terminated = 0;
+  INr.ItemMaterial = 0;
+  INr.Perceptions = ISb.Perceptions;
+  if ((ProgramType==typFirstOffice) or 
+      (ProgramType==typFirstOfficeSmall) or 
+      (IsBooks and IsStandardProduct==false)) then begin
+    lightFlag = true;
+  end;    
+  if (lightFlag==false) then begin // Why do we limit this, I know the setting is not in FO, but why disconnect the code?
+    INr.ItemType = ISb.DefItemType;
+    INr.UpdateCost = ISb.UpdateCost;
+    INr.SRUpdateCost = ISb.SRUpdateCost;
+  end;  
+  INr.colnr = 20;
+  INVcRecordDefaults = res; 
+  RETURN;
+END;
+
+global
+function LongInt INVcRecordDuplicate(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+  if (SingleUserMode) then begin
+    if (GetNextItemNr(INr.Code)) then begin end;
+  end else begin
+    INr.Code = "";
+  end;  
+  INr.WeighedAvPrice = blankval;
+  INr.WeighedAvPriceB2 = blankval;
+  INr.LastPurchPrice = blankval;
+  INr.LastPurchPrice2 = blankval;
+  INr.LastPurchCurncyCode = "";
+  INr.LastPriceChange = CurrentDate;
+  INr.LastBasePriceChange = CurrentDate;
+  INr.Terminated = 0;
+  INr.SavedCount = 0; //Edit***************************Sasha2,10:27 01.12.2014
+  INVcRecordDuplicate = res; 
+  RETURN;
+END;
+
+global
+updating function LongInt INVcRecordSave(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record SRBlock SRb;
+  string 255 lastitemnr,curitemnr;
+  LongInt lastinnr,curinnr;
+  record INVc IN3r; //Edit***************************Sasha2,10:48 09.01.2015
+  LongInt foundflag; //Edit***************************Sasha2,10:48 09.01.2015
+
+  BlockLoad(SRb);
+  SplitAlphaDigit(SRb.LastArtCode,lastitemnr,lastinnr);
+  SplitAlphaDigit(INr.Code,curitemnr,curinnr);
+  if (curitemnr==lastitemnr) then begin
+    if (curinnr!=lastinnr) then begin
+      SRb.LastArtCode = INr.Code;
+      BlockStore(SRb);
+    end;
+  end else begin
+    SRb.LastArtCode = INr.Code;
+    BlockStore(SRb);
+  end;
+
+  INr.LastPriceChange = CurrentDate;
+  INr.LastBasePriceChange = CurrentDate;
+  if (INr.colnr==0) then begin 
+    INr.colnr = 20;
+  end;
+  IN3r.SyncFlag = 9999999999;  //Edit***************************Sasha2,17:38 02.12.2014 {
+  if (ReadLastKey("SyncFlag",IN3r,1,false)) then begin
+	  foundflag = IN3r.SyncFlag;
+  end;
+  INr.SyncFlag = foundflag + 1;
+  INr.SavedCount = 1; //Edit***************************Sasha2,10:24 01.12.2014 }
+  INVcRecordSave = res; 
+  return;
+end;
+
+global
+function LongInt INVcRecordUpdate(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  row INVc INrw,IN2rw; //Edit***************************Sasha2,17:54 02.12.2014
+  integer i,rwcnt,rwcnt2; //Edit***************************Sasha2,17:54 02.12.2014
+  record INVc IN3r; //Edit***************************Sasha2,10:48 09.01.2015
+  LongInt foundflag; //Edit***************************Sasha2,10:48 09.01.2015
+	
+  if (IN2r.InPrice!=INr.InPrice) then begin
+    INr.LastPriceChange = CurrentDate;
+  end;
+  if (IN2r.UPrice1!=INr.UPrice1) then begin
+    INr.LastBasePriceChange = CurrentDate;
+  end;
+  IN3r.SyncFlag = 9999999999;//Edit***************************Sasha2,17:47 02.12.2014 {
+  if (IN2r.Name!=INr.Name) then begin
+  	if (ReadLastKey("SyncFlag",IN3r,1,false)) then begin
+		foundflag = IN3r.SyncFlag;
+  	end;
+  	INr.SyncFlag = foundflag + 1;
+  	goto LINVcRecordUpdate;
+  end;
+  if (IN2r.DispGroups!=INr.DispGroups) then begin
+  	if (ReadLastKey("SyncFlag",IN3r,1,false)) then begin
+		foundflag = IN3r.SyncFlag;
+  	end;
+  	INr.SyncFlag = foundflag + 1;
+  	goto LINVcRecordUpdate;
+  end;
+  rwcnt = MatRowCnt(INr);
+  rwcnt2 = MatRowCnt(IN2r);
+  if (rwcnt!=rwcnt2) then begin
+  	if (ReadLastKey("SyncFlag",IN3r,1,false)) then begin
+		foundflag = IN3r.SyncFlag;
+  	end;
+  	INr.SyncFlag = foundflag + 1;
+  	goto LINVcRecordUpdate;
+  end;
+  for (i=0;i<rwcnt;i=i+1) begin
+  	MatRowGet(INr,i,INrw);
+  	MatRowGet(IN2r,i,IN2rw);
+  	if (INrw.Text!=IN2rw.Text or INrw.Description!=IN2rw.Description) then begin
+  		if (ReadLastKey("SyncFlag",IN3r,1,false)) then begin
+			  foundflag = IN3r.SyncFlag;
+	  	end;
+	  	INr.SyncFlag = foundflag + 1;
+  		i = rwcnt;
+  	end;
+  end;
+  
+LINVcRecordUpdate:; //Edit***************************Sasha2,17:47 02.12.2014 }
+
+  INr.SavedCount = IN2r.SavedCount + 1; //Edit***************************Sasha2,10:25 01.12.2014
+  INVcRecordUpdate = res; 
+  RETURN;
+END;
+
+global
+function LongInt INVcRecordImport(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  Boolean gBase1ToBase2;
+  record ConvMasterBlock cvm;
+  string 10 curcode;
+  val t,fr,to1,to2,br1,br2;
+      
+  BlockLoad(cvm);
+  if (cvm.Base1ToBase2Flag!=0) then begin gBase1ToBase2 = true; end;
+  if (gBase1ToBase2) then begin
+    GetFullCurncyRate(curcode,CurrentDate,fr,to1,to2,br1,br2);
+    B1ToB2Val(INr.UPrice1,br1,br2,t);
+    INr.UPrice1 = t;
+    B1ToB2Val(INr.InPrice,br1,br2,t);
+    INr.InPrice = t;
+    B1ToB2Val(INr.ExtraCost,br1,br2,t);
+    INr.ExtraCost = t;
+    B1ToB2Val(INr.WeighedAvPrice,br1,br2,t);
+    INr.WeighedAvPrice = t;
+    
+    B1ToB2Val(INr.LastPurchPrice,br1,br2,t);// Edit ************************** Thursday, 5 September 2013 16:51:53
+		INr.LastPurchPrice = t;
+    if(blank(INr.LastPurchCurncyCode))then begin
+			
+			B1ToB2Val(INr.LastPurchPrice2,br1,br2,t);
+			INr.LastPurchPrice2 = t;
+    end;
+    
+    B1ToB2Val(INr.InPriceB2,br2,br1,t);
+    INr.InPriceB2 = t;
+    B1ToB2Val(INr.WeighedAvPriceB2,br2,br1,t);
+    INr.WeighedAvPriceB2 = t;
+  end;
+  INVcRecordImport = res;
+  RETURN;
+END;
+
+function Integer IsRecepyCorrect(Integer ExplodeRec,Integer itemtype,record RecVc mainRecr,var string warning)
+begin
+  Integer res;
+  row RecVc mainRecrwIn;
+  row RecVc mainRecrwOut;
+  row RecVc Recrw;
+  record RecVc Recr;
+  Integer ii,io,rwcnt;
+  Integer i2,rwcnt2;
+  record INVc INr;
+  
+  rwcnt = MatRowCnt(mainRecr);
+  for (io=0;io<rwcnt;io=io+1) begin
+    MatRowGet(mainRecr,io,mainRecrwOut);
+    if (mainRecrwOut.OutQty!=0) then begin
+      for (ii=0;ii<rwcnt;ii=ii+1) begin
+        MatRowGet(mainRecr,ii,mainRecrwIn);
+        if (mainRecrwIn.InQty!=0) and (mainRecrwIn.Item!=mainRecrwOut.Item) then begin
+          INr.Code = mainRecrwIn.Item;
+          if (ReadFirstItem(mainRecrwIn.Item,INr,true,false)) then begin
+            if (nonblank(INr.Recepy)) then begin
+              Recr.Code = INr.Recepy;
+              if (ReadFirstMain(Recr,1,true)) then begin
+                rwcnt2 = MatRowCnt(Recr);
+                for (i2=0;i2<rwcnt2;i2=i2+1) begin
+                  MatRowGet(Recr,i2,Recrw);
+                  if (Recrw.Item==mainRecrwOut.Item) then begin
+                    if (Recrw.OutQty!=0) then begin
+                      res = 2089;
+                      warning = Recr.Code;
+                      goto LIsRecepyCorrect;
+                    end;
+                  end;
+                end;
+              end;
+            end;
+            /*
+            why we cannot use SerialNumber items ? 
+            if (INr.SerNrf>0) then begin
+              res = 2210;
+              warning = mainRecrwIn.Item;
+              goto LIsRecepyCorrect;
+            end;
+            */
+          end else begin
+            res = 1290;
+            warning = mainRecrwIn.Item;
+            goto LIsRecepyCorrect;
+          end;      
+        end;
+      end;
+    end;
+    if (mainRecrwOut.InQty!=0) then begin
+      INr.Code = mainRecrwOut.Item;
+      if (ReadFirstItem(mainRecrwOut.Item,INr,true,false)) then begin
+        switch (itemtype) begin        
+          case 2:
+            if (INr.SerNrf>0) and (ExplodeRec==0) then begin
+              res = 2210;
+              warning = mainRecrwIn.Item;
+              goto LIsRecepyCorrect;
+          end;
+        end;
+      end else begin
+        res = 1290;
+        warning = mainRecrwOut.Item;
+        goto LIsRecepyCorrect;
+      end;      
+    end;
+  end;
+LIsRecepyCorrect:;  
+  IsRecepyCorrect = res;  
+  RETURN;
+END;
+
+procedure SplitVarietyGrups(string oldVARSubsets,Array string avars,var Integer acnt)
+begin
+  string 255 varietygroup;
+  Integer pos;
+  
+  pos = 0;
+  ExtractObjWithSeparator(";",oldVARSubsets,true,pos,varietygroup);
+  while (nonblank(varietygroup)) begin    
+    avars[acnt] = varietygroup;
+    acnt = acnt + 1;
+    ExtractObjWithSeparator(";",oldVARSubsets,true,pos,varietygroup);
+  end;
+  return;
+end;
+
+function Boolean VarietyCanbeDeleted(string artcode,string VARSubsets,string oldVARSubsets,var string missingvariety)
+begin
+  Boolean res;
+  record ItemStatusVc ISr;
+  Boolean found,varfound;
+  string 255 varietyinstock,varietiessubset;
+  Integer posused,possubset;
+  
+  missingvariety = "";
+  res = true;
+  found = true;
+  ISr.Code = artcode;
+  ISr.Location = ";;;";
+  while (LoopMain(ISr,2,found)) begin
+    if (ISr.Code!=artcode) then begin found = false; end;
+    if (ISr.Location!=";;;") then begin found = false; end;
+    if (found) then begin
+      if (ISr.Instock!=0) then begin
+        posused = 0;
+        ExtractObjWithSeparator(".",ISr.Variety,true,posused,varietyinstock);
+        while (nonblank(varietyinstock)) begin        
+          varfound = false;
+          possubset = 0;
+          ExtractObjWithSeparator(";",VARSubsets,true,possubset,varietiessubset);
+          while (nonblank(varietiessubset)) begin        
+            varfound = SetInSet(varietyinstock,varietiessubset);
+            if (varfound) then begin
+              goto LVarietyfoundinoldVARSubsets;
+            end;
+            ExtractObjWithSeparator(";",VARSubsets,true,possubset,varietiessubset);
+          end;
+          if (varfound==false) then begin
+            res = false;
+            missingvariety = varietyinstock;
+            goto LVarietyCanbeDeleted;        
+          end;
+LVarietyfoundinoldVARSubsets:;   
+          ExtractObjWithSeparator(".",ISr.Variety,true,posused,varietyinstock);
+        end;
+      end;
+    end;
+  end;
+LVarietyCanbeDeleted:;  
+  VarietyCanbeDeleted = res;
+  return;
+end;
+
+function Integer VerifyClassification(string classifications,var string classification)
+begin
+  Integer res;
+  Integer pos;
+  record DIVc DIr;
+  
+  res = 0;
+  ExtractObj(classifications,pos,classification);
+  while (nonblank(classification)) begin
+    DIr.Code = classification;
+    if (ReadFirstMain(DIr,1,true)==false) then begin
+      res = 2214;
+      goto LVerifyClassification;
+    end;
+    ExtractObj(classifications,pos,classification);
+  end;
+LVerifyClassification:;  
+  VerifyClassification = res;  
+  return; 
+end;
+
+global //if change something do it in nINVcRecordCheck(...) also
+function LongInt INVcRecordCheck(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  record INVc lINr;
+  record ITVc ITr;
+  Boolean checkf,check;
+  record ItemSettingBlock ISb;
+  Integer insertmode,updatemode;
+  string 255 tstr;
+  record RecVc Recr;
+  record UnitVc Unitr;
+  Integer errcode;
+  Boolean lightFlag,found,testf;
+  record MainStockBlock MSb;
+  record AccVc Accr;
+  record ItemHistVc IHr;  
+  record STVc STr;    
+  record TaxTemplateVc TTr;
+  Boolean checkdif; //Edit***************************Sasha2,17:42 04.11.2015
+  record DiCheckBlock DiCb; //Edit***************************Sasha2,9:09 05.11.2015
+  row DiCheckBlock DiCbw; //Edit***************************Sasha2,9:09 05.11.2015
+  integer i,rwcnt,pos,pos1,itemscnt; //Edit***************************Sasha2,9:12 05.11.2015
+  string 10 curdisp,maindisp,curtype; //Edit***************************Sasha2,9:13 05.11.2015
+  record DIVc DIr; //Edit***************************Sasha2,9:19 05.11.2015
+  vector string 255 dispscodes; //Edit***************************Sasha2,9:57 06.11.2015
+  vector string 10 checktype; //Edit***************************Sasha2,9:57 06.11.2015
+  Array string 10 types; //Edit***************************Sasha2,9:57 06.11.2015
+  
+  res = 0;
+  insertmode = 1;
+  updatemode = 2;
+  if ((ProgramType==typFirstOffice) or 
+      (ProgramType==typFirstOfficeSmall) or 
+      (ProgramType==typFirstOfficePro) or 
+      (IsBooks)) then begin
+    lightFlag = true;
+  end;  
+  BlockLoad(ISb);
+  BlockLoad(MSb);
+  if (blank(INr.Code)) then begin
+    if (GetNextItemNr(INr.Code)) then begin end;
+    lINr.Code = INr.Code;
+    if (ReadFirstMain(lINr,1,true)) then begin
+      RecordCheckError(1547,INr.Code,-1,"Code");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (long4>0) then begin
+    check = true;
+  end else begin
+    check = false;
+  end;
+  if (len(INr.Code)<=0) then begin
+    RecordCheckError(1130,"",-1,"Code");      
+    res = -1; 
+    goto LINVcRecordCheck;
+  end;
+  if (ISb.BarCodeLength>0) then begin
+    if (nonblank(INr.BarCode)) then begin
+      if (len(INr.BarCode)<ISb.BarCodeLength ) then begin
+        tstr = INr.BarCode;
+        AddCharsToString(tstr,"0",ISb.BarCodeLength-len(INr.BarCode));
+        INr.BarCode = tstr;
+      end;
+    end;
+  end;
+  if (INr.ItemType==2) then begin
+    if (blank(INr.Recepy)) then begin
+      RecordCheckError(1058,"",-1,"Recepy");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (INr.ItemType!=1) then begin
+    if (INr.SerNrf!=0) then begin
+      RecordCheckError(20105,"",-1,"Department");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (INr.DonotRequireBatchNrOnIVCash!=0) then begin
+    if (INr.SerNrf!=2) then begin
+      RecordCheckError(20106,"",-1,"MinLevel");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (lightFlag==false) then begin
+    if (nonblank(INr.Unittext)) and (IsSyncing==false) then begin
+      Unitr.Code = INr.Unittext;
+      if (ReadFIrstMain(Unitr,1,true)==false) then begin
+        RecordCheckError(1120,"",-1,"Unittext");      
+        res = -1; 
+        goto LINVcRecordCheck;
+      end;
+    end;
+  end;
+  if (IsSyncing==false) then begin
+    if (nonblank(INr.VARMask)) then begin
+      if (blank(MSb.MainStock)) then begin
+        if (CountRecords("LocationVc")>0) then begin
+          RecordCheckError(1743,"",-1,"VARMask");      
+          res = -1;
+          goto LINVcRecordCheck;
+        end;
+      end;
+    end;
+  end;
+  
+  if (CheckAllowedSize(INr,INr.Width,INr.Height,INr.Depth)==false) then begin
+    RecordCheckError(1480,"",-1,"Width");      
+    res = -1; 
+    goto LINVcRecordCheck;
+  end;
+  if (ISb.DemandItemGroup!=0) then begin
+    if (blank(INr.Group)) then begin
+      RecordCheckError(1058,"",-1,"Group");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.Group)) then begin
+    ITr.Code = INr.Group;
+    if (ReadFirstMain(ITr,1,true)==false) then begin
+      RecordCheckError(1120,INr.Group,-1,"Group");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  //if (ISb.UniqueBarCode!=0) then begin// Edit ************************** Friday, 18 September 2015 11:22:39
+  if (true) then begin
+    if (nonblank(INr.BarCode)) then begin
+      if (stat==insertmode) then begin checkf = true; end;
+      if (stat==updatemode) then begin
+        if (blank(IN2r.BarCode)) then begin checkf = true; end;
+        if (INr.BarCode!=IN2r.BarCode) then begin checkf = true; end;
+      end;
+      if (checkf) then begin
+        lINr.BarCode = INr.BarCode;
+        if (ReadFirstKey("BarCode",lINr,1,true)) then begin
+          RecordCheckError(1547," BarCode in Item #" & lINr.Code,-1,"BarCode");      
+          res = -1; 
+          goto LINVcRecordCheck;
+        end;
+      end;
+    end;
+  end;
+  if (INr.DefPosHeight>0) then begin
+    if (INr.PalletHeight>0) then begin
+      if (INr.DefPosHeight<INr.PalletHeight) then begin
+        RecordCheckError(20400,"",-1,"DefPosHeight");      
+        res = -1; 
+        goto LINVcRecordCheck;
+      end;
+    end;
+  end;
+  if (INr.DefPosDepth>0) then begin
+    if (INr.PalletDepth>0) then begin
+      if (INr.DefPosDepth<INr.PalletDepth) then begin
+        RecordCheckError(20401,"",-1,"DefPosDepth");      
+        res = -1; 
+        goto LINVcRecordCheck;
+      end;
+    end;
+  end;
+  if (INr.DefPosWidth>0) then begin
+    if (INr.PalletWidth>0) then begin
+      if (INr.DefPosWidth<INr.PalletWidth) then begin
+        RecordCheckError(20402,"",-1,"DefPosWidth");      
+        res = -1; 
+        goto LINVcRecordCheck;
+      end;
+    end;
+  end;
+  if (nonblank(INr.Objects)) then begin
+    errcode = CheckObjs("",INr.Objects,tstr);
+    if (errcode!=0) then begin
+      RecordCheckError(errcode,tstr,-1,"Objects");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.VARMask)) then begin
+    res = CheckVarietyGroups(INr.VARMask,tstr);
+    if (res!=0) then begin
+      RecordCheckError(res," " & tstr,-1,"VARMask");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.VARRepOrder)) then begin
+    res = CheckVarietyGroups(INr.VARRepOrder,tstr);
+    if (res!=0) then begin
+      RecordCheckError(res," " & tstr,-1,"VARRepOrder");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.Recepy) and (IsSyncing==false)) then begin
+    Recr.Code = INr.Recepy;
+    if (ReadFirstMain(Recr,1,true)) then begin
+      if (Recr.Closed!=0) then begin
+        RecordCheckError(2088,"",-1,"Recepy");      
+        res = -1; 
+        goto LINVcRecordCheck;
+      end;
+      errcode = IsRecepyCorrect(INr.ExplodeRec,INr.ItemType,Recr,tstr);
+      if (errcode!=0) then begin
+        RecordCheckError(errcode,": " & tstr,-1,"Recepy");      
+        res = -1; 
+        goto LINVcRecordCheck;      
+      end;
+    end else begin
+      RecordCheckError(1290,"",-1,"Recepy");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.Group)) then begin
+    if (CheckDispGroupsInINVc(INr,tstr)==false) then begin
+      RecordCheckError(1707," " & tstr,-1,"DispGroups");//change type     
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.DispGroups)) then begin
+    errcode = VerifyClassification(INr.DispGroups,tstr);
+    if (errcode!=0) then begin
+      RecordCheckError(errcode," " & tstr & " " & INr.Code,-1,"DispGroups");//change type     
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (CheckMultipleIndexField(INr.DispGroups,10,10)==false) then begin
+    RecordCheckError(2246,"",-1,"DispGroups");      
+    res = -1; 
+    goto LINVcRecordCheck;
+  end;
+  if (nonblank(INr.SalesAcc)) then begin
+    Accr.AccNumber = INr.SalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"SalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.EUSalesAcc)) then begin
+    Accr.AccNumber = INr.EUSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"EUSalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.ExpSalesAcc)) then begin
+    Accr.AccNumber = INr.ExpSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"ExpSalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CostAcc)) then begin
+    Accr.AccNumber = INr.CostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"CostAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredSalesAcc)) then begin
+    Accr.AccNumber = INr.CredSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"CredSalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredEUSalesAcc)) then begin
+    Accr.AccNumber = INr.CredEUSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"CredEUSalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredExpSalesAcc)) then begin
+    Accr.AccNumber = INr.CredExpSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"CredExpSalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CompUsage)) then begin
+    Accr.AccNumber = INr.CompUsage;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"CompUsage");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.HotelWIPAcc)) then begin
+    Accr.AccNumber = INr.HotelWIPAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"HotelWIPAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.EUCostAcc)) then begin
+    Accr.AccNumber = INr.EUCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"EUCostAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.ExpCostAcc)) then begin
+    Accr.AccNumber = INr.ExpCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"ExpCostAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOInvbleSalesAcc)) then begin
+    Accr.AccNumber = INr.SVOInvbleSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"SVOInvbleSalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOWarrantySalesAcc)) then begin
+    Accr.AccNumber = INr.SVOWarrantySalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"SVOWarrantySalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOContractSalesAcc)) then begin
+    Accr.AccNumber = INr.SVOContractSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"SVOContractSalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOGoodwillSalesAcc)) then begin
+    Accr.AccNumber = INr.SVOGoodwillSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"SVOGoodwillSalesAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOInvbleCostAcc)) then begin
+    Accr.AccNumber = INr.SVOInvbleCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"SVOInvbleCostAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOWarrantyCostAcc)) then begin
+    Accr.AccNumber = INr.SVOWarrantyCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"SVOWarrantyCostAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOContractCostAcc)) then begin
+    Accr.AccNumber = INr.SVOContractCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"SVOContractCostAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOGoodwillCostAcc)) then begin
+    Accr.AccNumber = INr.SVOGoodwillCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",-1,"SVOGoodwillCostAcc");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+  end;
+
+  if (nonblank(INr.VATCode)) then begin
+    if (IsVATCodeDefined(INr.VATCode)==false) then begin
+      RecordCheckError(1951,"",-1,"VATCode");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.VATCode,tstr,1)) then begin
+      RecordCheckError(1258,tstr,-1,"VATCode");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.VATCodeEU)) then begin
+    if (IsVATCodeDefined(INr.VATCodeEU)==false) then begin
+      RecordCheckError(1951,"",-1,"VATCodeEU");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.VATCodeEU,tstr,1)) then begin
+      RecordCheckError(1258,tstr,-1,"VATCodeEU");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.VATCodeExp)) then begin
+    if (IsVATCodeDefined(INr.VATCodeExp)==false) then begin
+      RecordCheckError(1951,"",-1,"VATCodeExp");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.VATCodeExp,tstr,1)) then begin
+      RecordCheckError(1258,tstr,-1,"VATCodeExp");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredVATCodeEU)) then begin
+    if (IsVATCodeDefined(INr.CredVATCodeEU)==false) then begin
+      RecordCheckError(1951,"",-1,"CredVATCodeEU");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.CredVATCodeEU,tstr,1)) then begin
+      RecordCheckError(1258,tstr,-1,"CredVATCodeEU");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredVATCodeExp)) then begin
+    if (IsVATCodeDefined(INr.CredVATCodeExp)==false) then begin
+      RecordCheckError(1951,"",-1,"CredVATCodeExp");      
+      res = -1;
+      goto LINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.CredVATCodeExp,tstr,1)) then begin
+      RecordCheckError(1258,tstr,-1,"CredVATCodeExp");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  
+  if (stat==updatemode) then begin
+    if (check) then begin
+      if (INr.ItemType!=IN2r.ItemType) then begin 
+        switch (IN2r.ItemType) begin
+          case 0:
+            switch (INr.ItemType) begin
+              case 1:
+                STr.ArtCode = INr.Code;
+                if (ReadFirstMain(STr,1,true)) then begin
+                  RecordCheckError(27352,"",-1,"Code");      
+                  res = -1; 
+                  goto LINVcRecordCheck;
+                end;
+              case 2:
+                STr.ArtCode = INr.Code;
+                if (ReadFirstMain(STr,1,true)) then begin
+                  RecordCheckError(27352,"",-1,"Code");      
+                  res = -1; 
+                  goto LINVcRecordCheck;
+                end;
+            end;
+          case 1:
+            found = true;
+            IHr.ArtCode = INr.Code;
+            while (LoopKey("ArtCode",IHr,1,found)) begin
+              if (IHr.ArtCode!=INr.Code) then begin
+                found = false;
+              end;
+              if (found) then begin
+                testf = true;
+                if (IHr.StockAffectf==0) then begin testf = false; end;
+                if (testf) then begin
+                  RecordCheckError(27352,"",-1,"Code");      
+                  res = -1; 
+                  goto LINVcRecordCheck;
+                end;
+              end;
+            end;        
+          case 2:
+            STr.ArtCode = INr.Code;
+            if (ReadFirstMain(STr,1,true)) then begin
+              RecordCheckError(27352,"",-1,"Code");      
+              res = -1; 
+              goto LINVcRecordCheck;
+            end;
+          case 3:
+            switch (INr.ItemType) begin
+              case 1:
+                STr.ArtCode = INr.Code;
+                if (ReadFirstMain(STr,1,true)) then begin
+                  RecordCheckError(27352,"",-1,"Code");      
+                  res = -1; 
+                  goto LINVcRecordCheck;
+                end;
+              case 2:
+                STr.ArtCode = INr.Code;
+                if (ReadFirstMain(STr,1,true)) then begin
+                  RecordCheckError(27352,"",-1,"Code");      
+                  res = -1; 
+                  goto LINVcRecordCheck;
+                end;
+            end;
+        end;
+      end;
+      if (INr.SerNrf!=IN2r.SerNrf and currentuser!="SA") then begin 
+        found = true;
+        IHr.ArtCode = INr.Code;
+        while (LoopKey("ArtCode",IHr,1,found)) begin
+          if (IHr.ArtCode!=INr.Code) then begin
+            found = false;
+          end;
+          if (found) then begin
+            testf = true;
+            if (IHr.StockAffectf==0) then begin testf = false; end;
+            if (testf) then begin
+              RecordCheckError(1391," " & INr.Code,-1,"Code");      
+              res = -1; 
+              goto LINVcRecordCheck;
+            end;
+          end;
+        end;        
+      end;
+      if (nonblank(IN2r.VARSubsets)) then begin
+        if (IN2r.VARSubsets!=INr.VARSubsets) then begin
+          if (VarietyCanbeDeleted(INr.Code,INr.VARSubsets,IN2r.VARSubsets,tstr)==false) then begin
+            RecordCheckError(1391," " & tstr,-1,"VARSubsets");      
+            res = -1; 
+            goto LINVcRecordCheck;
+          end;
+        end;
+      end;      
+    end;
+  end;
+  if (nonblank(INr.TaxTemplateCode)) then begin
+    TTr.Code = INr.TaxTemplateCode;
+    if (ReadFirstMain(TTr,1,true)==false) then begin
+      RecordCheckError(1120,INr.TaxTemplateCode,-1,"TaxTemplateCode");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.TaxTemplateCodeEU)) then begin
+    TTr.Code = INr.TaxTemplateCodeEU;
+    if (ReadFirstMain(TTr,1,true)==false) then begin
+      RecordCheckError(1120,INr.TaxTemplateCodeEU,-1,"TaxTemplateCodeEU");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.TaxTemplateCodeExp)) then begin
+    TTr.Code = INr.TaxTemplateCodeExp;
+    if (ReadFirstMain(TTr,1,true)==false) then begin
+      RecordCheckError(1120,INr.TaxTemplateCodeExp,-1,"TaxTemplateCodeExp");      
+      res = -1; 
+      goto LINVcRecordCheck;
+    end;
+  end;
+  
+  checkdif = false; //Edit***************************Sasha2,17:48 04.11.2015 {
+  if (stat==updatemode) then begin
+    if ((INr.MainDisp!=IN2r.MainDisp or INr.DispGroups!=IN2r.DispGroups) and (NonBlank(INr.MainDisp) or NonBlank(INr.DispGroups))) then begin
+      checkdif = true;
+    end;
+  end;
+  if (stat==insertmode) then begin
+    if (NonBlank(INr.MainDisp) or NonBlank(INr.DispGroups)) then begin
+      checkdif = true;
+    end;
+  end;
+  if (checkdif) then begin
+    pos = 0;
+    ExtractObj(INr.MainDisp,pos,maindisp);
+    pos = 0;
+    ExtractObj(INr.DispGroups,pos,curdisp);
+    
+    checkdif = false;
+    BlockLoad(DiCb);
+    rwcnt = MatRowCnt(DiCb);  
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(DiCb,i,DiCbw);
+      if (DiCbw.DiCode==curdisp or DiCbw.DiCode==maindisp) then begin
+        checkdif = true;
+        i = rwcnt;
+        if (DiCbw.DiCode==maindisp and DiCbw.DiCode!=curdisp) then begin
+          RecordCheckError(2246,"",-1,"DispGroups");      
+          res = -1; 
+          goto LINVcRecordCheck;
+        end;
+      end;
+    end;
+    pos1 = 0;
+    itemscnt = 0;
+    if (checkdif) then begin
+      ExtractObj(DiCbw.DiType,pos1,curtype);
+      while (NonBlank(curtype)) begin
+        if (dispscodes[curtype] != ".") then begin
+          checktype[curtype] = "OK";
+          dispscodes[curtype] = ".";
+          types[itemscnt] = curtype;
+          itemscnt = itemscnt + 1;
+        end;
+        ExtractObj(DiCbw.DiType,pos1,curtype);
+      end;
+      if (itemscnt>0) then begin
+        ExtractObj(INr.DispGroups,pos,curdisp);
+        while (NonBlank(curdisp)) begin
+          Dir.Code = curdisp;
+          if (ReadFirstMain(Dir,1,true) and checktype[Dir.CType]=="OK") then begin
+            if (dispscodes[Dir.CType]==".") then begin
+              dispscodes[Dir.CType] = Dir.Code;
+            end else begin
+              dispscodes[Dir.CType] = dispscodes[Dir.CType] & "," & Dir.Code;
+            end;
+          end;
+          ExtractObj(INr.DispGroups,pos,curdisp);
+        end;
+        
+        for (i=0;i<itemscnt;i=i+1) begin
+          if (dispscodes[types[i]]=="." and SkipCheckDIType(types[i])==false) then begin
+            RecordCheckError(1707," " & types[i],-1,"DispGroups");      
+            res = -1; 
+            goto LINVcRecordCheck;
+          end;
+        end; 
+      end;
+      INr.MainDisp = DiCbw.DiCode;
+    end;
+  end; //Edit***************************Sasha2,17:48 04.11.2015 }
+	
+LINVcRecordCheck:;
+  INVcRecordCheck = res;
+  RETURN;
+END;
+// Edit Start ---------------------------------------------- Edit Start
+	//Thursday, 21 February 2013 09:51:57
+	
+global
+updating function LongInt INVcRecordSaveAfter(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  record RcVc RepSpec;// Edit ************************** Thursday, 21 February 2013 09:43:50
+  record PLDefVc PLDr;// Edit ************************** Thursday, 21 February 2013 09:45:29
+  record PricePointListVc PPLr;
+	row PricePointListVc PPLrw;
+  integer i,mtrw;
+  record PLVc PLr;
+  record PricePointListVc oldPPLr;
+  boolean testf,foundfVEitem;
+  record PIVc PIr;
+	
+ 	if(currentcompany!=1)then begin
+			PLDr.Code="";
+			While(loopmain(PLDr,1,true))begin
+				RepSpec.f1 = PLDr.Code;
+				RepSpec.f2 = INr.Code;
+				
+				
+				
+				CalcPriceListsMn(RepSpec);// Edit ************************** Thursday, 21 February 2013 09:43:32
+				
+				if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
+					foundfVEitem = false;
+					PIr.ItemCode = INr.Code;
+					if(readfirstmain(PIr,1,true))then begin
+						if(INr.Code==PIr.ItemCode)then begin
+							foundfVEitem = true;
+						end;
+					end;        
+					if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
+						i = StringToInt(INr.CPSCode);
+						PPLr.TransDate = CurrentDate;
+						loopbackkey("TransDate",PPLr,1,true);
+						mtrw = matrowcnt(PPLr);
+						if(i<=mtrw)then begin
+							matrowget(PPLr,i-1,PPLrw);
+							if(PPLrw.Cost>0)then begin
+								if(foundfVEitem)then begin
+									PIr.PurPrice = PPLrw.Cost;
+									INr.InPrice = PPLrw.Cost/PIr.PIFactor;
+									RecordStore(PIr,true);
+								end else begin
+									INr.InPrice = PPLrw.Cost;
+								end;
+							end;
+							RecordStore(INr,true);
+							PLr.PLCode  = "RRP";
+							PLr.ArtCode = INr.Code;
+							PLr.CurncyCode = "";
+							if(readfirstmain(PLr,2,true))then begin     
+								if(PLr.DonotRecalculate==0)then begin         
+									if(foundfVEitem)then begin
+										PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+									end else begin
+										PLr.ExVatPrice = PPLrw.Price;
+									end;
+									recordStore(PLr,true);
+								end;
+							end else begin
+								recordNew(PLr);
+								PLr.PLCode  = "RRP";
+								PLr.ArtCode = INr.Code;
+								PLr.Comment = INr.Name;
+								if(foundfVEitem)then begin
+									PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+								end else begin
+									PLr.ExVatPrice = PPLrw.Price;
+								end;
+								recordStore(PLr,true);
+							end;
+						
+						end;
+					end;
+				end;
+				
+			end;
+	end;
+  
+  INVcRecordSaveAfter = res;
+  RETURN;
+END;
+
+
+global
+updating function LongInt INVcRecordUpdateAfter(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  record RcVc RepSpec;// Edit ************************** Thursday, 21 February 2013 09:43:50
+  record PLDefVc PLDr;// Edit ************************** Thursday, 21 February 2013 09:45:29
+  record PricePointListVc PPLr;
+	row PricePointListVc PPLrw;
+  integer i,mtrw;
+  record PLVc PLr;
+  record PricePointListVc oldPPLr;
+  boolean testf,foundfVEitem;
+  record PIVc PIr;
+
+  if(currentcompany!=1)then begin
+		if(IN2r.LastPurchPrice2!=INr.LastPurchPrice2 or IN2r.InPrice!=INr.InPrice or IN2r.LastPurchCurncyCode!=INr.LastPurchCurncyCode or IN2r.Group!=INr.Group or IN2r.CPSCode!=INr.CPSCode)then begin
+			PLDr.Code="";
+			While(loopmain(PLDr,1,true))begin
+				RepSpec.f1 = PLDr.Code;
+				RepSpec.f2 = INr.Code;
+				CalcPriceListsMn(RepSpec);// Edit ************************** Thursday, 21 February 2013 09:43:32
+				if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
+					foundfVEitem = false;
+					PIr.ItemCode = INr.Code;
+					if(readfirstmain(PIr,1,true))then begin
+						if(INr.Code==PIr.ItemCode)then begin
+							foundfVEitem = true;
+						end;
+					end;        
+					if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
+						i = StringToInt(INr.CPSCode);
+						PPLr.TransDate = CurrentDate;
+						loopbackkey("TransDate",PPLr,1,true);
+						mtrw = matrowcnt(PPLr);
+						if(i<=mtrw)then begin
+							matrowget(PPLr,i-1,PPLrw);
+							if(PPLrw.Cost>0)then begin
+								if(foundfVEitem)then begin
+									PIr.PurPrice = PPLrw.Cost;
+									INr.InPrice = PPLrw.Cost/PIr.PIFactor;
+									RecordStore(PIr,true);
+								end else begin
+									INr.InPrice = PPLrw.Cost;
+								end;
+							end;
+							RecordStore(INr,true);
+							PLr.PLCode  = "RRP";
+							PLr.ArtCode = INr.Code;
+							PLr.CurncyCode = "";
+							if(readfirstmain(PLr,2,true))then begin     
+								if(PLr.DonotRecalculate==0)then begin         
+									if(foundfVEitem)then begin
+										PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+									end else begin
+										PLr.ExVatPrice = PPLrw.Price;
+									end;
+									recordStore(PLr,true);
+								end;
+							end else begin
+								recordNew(PLr);
+								PLr.PLCode  = "RRP";
+								PLr.ArtCode = INr.Code;
+								PLr.Comment = INr.Name;
+								if(foundfVEitem)then begin
+									PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+								end else begin
+									PLr.ExVatPrice = PPLrw.Price;
+								end;
+								recordStore(PLr,true);
+							end;
+						
+						end;
+					end;
+				end;
+				
+			end;
+		end;
+	end;
+  
+  INVcRecordUpdateAfter = res;
+  RETURN;
+END;
+
+
+	// Edit End ---------------------------------------------- Edit End
+	
+global
+function LongInt INVcRecordImportTest(var record INVc INr,record INVc IN2r,LongInt long3,LongInt long4)
+begin
+  LongInt res;
+  string 255 class;
+  Integer pos;
+  
+  res = 1;
+  if (CheckMultipleIndexField(INr.DispGroups,10,10)==false) then begin
+    INr.DispGroups = "";
+  end;
+  INVcRecordImportTest = res;
+  RETURN;
+END;
+
+global 
+function Boolean INVcRecordShouldBeSynchronised(record INVc INr,string tagstr)
+begin
+  Boolean res;
+  
+  res = true;
+  INVcrecordShouldBeSynchronised = res;
+  return;
+end;
+
+global 
+function Boolean INVcRecordSync(record INVc INr,string tagstr)
+begin
+  Boolean res;
+  
+  res = true;
+  INVcRecordSync = res;
+  return;
+end;
+
+
+global //if change something do it in INVcRecordCheck(...) also
+function LongInt nINVcRecordCheck(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4,integer rownr)
+BEGIN
+  LongInt res;
+  record INVc lINr;
+  record ITVc ITr;
+  Boolean checkf,check;
+  record ItemSettingBlock ISb;
+  Integer insertmode,updatemode;
+  string 255 tstr;
+  record RecVc Recr;
+  record UnitVc Unitr;
+  Integer errcode;
+  Boolean lightFlag,found,testf;
+  record MainStockBlock MSb;
+  record AccVc Accr;
+  record ItemHistVc IHr;  
+  record STVc STr;    
+  record TaxTemplateVc TTr;
+  
+  res = 0;
+  insertmode = 1;
+  updatemode = 2;
+  if ((ProgramType==typFirstOffice) or 
+      (ProgramType==typFirstOfficeSmall) or 
+      (ProgramType==typFirstOfficePro) or 
+      (IsBooks)) then begin
+    lightFlag = true;
+  end;  
+  BlockLoad(ISb);
+  BlockLoad(MSb);
+  if (blank(INr.Code)) then begin
+    if (GetNextItemNr(INr.Code)) then begin end;
+    lINr.Code = INr.Code;
+    if (ReadFirstMain(lINr,1,true)) then begin
+      RecordCheckError(1547,INr.Code,rownr,"Code");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (long4>0) then begin
+    check = true;
+  end else begin
+    check = false;
+  end;
+  if (len(INr.Code)<=0) then begin
+    RecordCheckError(1130,"",rownr,"Code");      
+    res = -1; 
+    goto LnINVcRecordCheck;
+  end;
+  if (ISb.BarCodeLength>0) then begin
+    if (nonblank(INr.BarCode)) then begin
+      if (len(INr.BarCode)<ISb.BarCodeLength ) then begin
+        tstr = INr.BarCode;
+        AddCharsToString(tstr,"0",ISb.BarCodeLength-len(INr.BarCode));
+        INr.BarCode = tstr;
+      end;
+    end;
+  end;
+  if (INr.ItemType==2) then begin
+    if (blank(INr.Recepy)) then begin
+      RecordCheckError(1058,"",rownr,"Recepy");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (INr.ItemType!=1) then begin
+    if (INr.SerNrf!=0) then begin
+      RecordCheckError(20105,"",rownr,"Department");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (INr.DonotRequireBatchNrOnIVCash!=0) then begin
+    if (INr.SerNrf!=2) then begin
+      RecordCheckError(20106,"",rownr,"MinLevel");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (lightFlag==false) then begin
+    if (nonblank(INr.Unittext)) and (IsSyncing==false) then begin
+      Unitr.Code = INr.Unittext;
+      if (ReadFIrstMain(Unitr,1,true)==false) then begin
+        RecordCheckError(1120,"",rownr,"Unittext");      
+        res = -1; 
+        goto LnINVcRecordCheck;
+      end;
+    end;
+  end;
+  if (IsSyncing==false) then begin
+    if (nonblank(INr.VARMask)) then begin
+      if (blank(MSb.MainStock)) then begin
+        if (CountRecords("LocationVc")>0) then begin
+          RecordCheckError(1743,"",rownr,"VARMask");      
+          res = -1;
+          goto LnINVcRecordCheck;
+        end;
+      end;
+    end;
+  end;
+  
+  if (CheckAllowedSize(INr,INr.Width,INr.Height,INr.Depth)==false) then begin
+    RecordCheckError(1480,"",rownr,"Width");      
+    res = -1; 
+    goto LnINVcRecordCheck;
+  end;
+  if (ISb.DemandItemGroup!=0) then begin
+    if (blank(INr.Group)) then begin
+      RecordCheckError(1058,"",rownr,"Group");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.Group)) then begin
+    ITr.Code = INr.Group;
+    if (ReadFirstMain(ITr,1,true)==false) then begin
+      RecordCheckError(1120,INr.Group,rownr,"Group");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  //if (ISb.UniqueBarCode!=0) then begin// Edit ************************** Friday, 18 September 2015 11:22:39
+  if (true) then begin
+    if (nonblank(INr.BarCode)) then begin
+      if (stat==insertmode) then begin checkf = true; end;
+      if (stat==updatemode) then begin
+        if (blank(IN2r.BarCode)) then begin checkf = true; end;
+        if (INr.BarCode!=IN2r.BarCode) then begin checkf = true; end;
+      end;
+      if (checkf) then begin
+        lINr.BarCode = INr.BarCode;
+        if (ReadFirstKey("BarCode",lINr,1,true)) then begin
+          RecordCheckError(1547," BarCode in Item #" & lINr.Code,rownr,"BarCode");      
+          res = -1; 
+          goto LnINVcRecordCheck;
+        end;
+      end;
+    end;
+  end;
+  if (INr.DefPosHeight>0) then begin
+    if (INr.PalletHeight>0) then begin
+      if (INr.DefPosHeight<INr.PalletHeight) then begin
+        RecordCheckError(20400,"",rownr,"DefPosHeight");      
+        res = -1; 
+        goto LnINVcRecordCheck;
+      end;
+    end;
+  end;
+  if (INr.DefPosDepth>0) then begin
+    if (INr.PalletDepth>0) then begin
+      if (INr.DefPosDepth<INr.PalletDepth) then begin
+        RecordCheckError(20401,"",rownr,"DefPosDepth");      
+        res = -1; 
+        goto LnINVcRecordCheck;
+      end;
+    end;
+  end;
+  if (INr.DefPosWidth>0) then begin
+    if (INr.PalletWidth>0) then begin
+      if (INr.DefPosWidth<INr.PalletWidth) then begin
+        RecordCheckError(20402,"",rownr,"DefPosWidth");      
+        res = -1; 
+        goto LnINVcRecordCheck;
+      end;
+    end;
+  end;
+  if (nonblank(INr.Objects)) then begin
+    errcode = CheckObjs("",INr.Objects,tstr);
+    if (errcode!=0) then begin
+      RecordCheckError(errcode,tstr,rownr,"Objects");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.VARMask)) then begin
+    res = CheckVarietyGroups(INr.VARMask,tstr);
+    if (res!=0) then begin
+      RecordCheckError(res," " & tstr,rownr,"VARMask");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.VARRepOrder)) then begin
+    res = CheckVarietyGroups(INr.VARRepOrder,tstr);
+    if (res!=0) then begin
+      RecordCheckError(res," " & tstr,rownr,"VARRepOrder");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.Recepy) and (IsSyncing==false)) then begin
+    Recr.Code = INr.Recepy;
+    if (ReadFirstMain(Recr,1,true)) then begin
+      if (Recr.Closed!=0) then begin
+        RecordCheckError(2088,"",rownr,"Recepy");      
+        res = -1; 
+        goto LnINVcRecordCheck;
+      end;
+      errcode = IsRecepyCorrect(INr.ExplodeRec,INr.ItemType,Recr,tstr);
+      if (errcode!=0) then begin
+        RecordCheckError(errcode,": " & tstr,rownr,"Recepy");      
+        res = -1; 
+        goto LnINVcRecordCheck;      
+      end;
+    end else begin
+      RecordCheckError(1290,"",rownr,"Recepy");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.Group)) then begin
+    if (CheckDispGroupsInINVc(INr,tstr)==false) then begin
+      RecordCheckError(1707," " & tstr,rownr,"DispGroups");//change type     
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.DispGroups)) then begin
+    errcode = VerifyClassification(INr.DispGroups,tstr);
+    if (errcode!=0) then begin
+      RecordCheckError(errcode," " & tstr & " " & INr.Code,rownr,"DispGroups");//change type     
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (CheckMultipleIndexField(INr.DispGroups,10,10)==false) then begin
+    RecordCheckError(2246,"",rownr,"DispGroups");      
+    res = -1; 
+    goto LnINVcRecordCheck;
+  end;
+  if (nonblank(INr.SalesAcc)) then begin
+    Accr.AccNumber = INr.SalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"SalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.EUSalesAcc)) then begin
+    Accr.AccNumber = INr.EUSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"EUSalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.ExpSalesAcc)) then begin
+    Accr.AccNumber = INr.ExpSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"ExpSalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CostAcc)) then begin
+    Accr.AccNumber = INr.CostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"CostAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredSalesAcc)) then begin
+    Accr.AccNumber = INr.CredSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"CredSalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredEUSalesAcc)) then begin
+    Accr.AccNumber = INr.CredEUSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"CredEUSalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredExpSalesAcc)) then begin
+    Accr.AccNumber = INr.CredExpSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"CredExpSalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CompUsage)) then begin
+    Accr.AccNumber = INr.CompUsage;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"CompUsage");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.HotelWIPAcc)) then begin
+    Accr.AccNumber = INr.HotelWIPAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"HotelWIPAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.EUCostAcc)) then begin
+    Accr.AccNumber = INr.EUCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"EUCostAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.ExpCostAcc)) then begin
+    Accr.AccNumber = INr.ExpCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"ExpCostAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOInvbleSalesAcc)) then begin
+    Accr.AccNumber = INr.SVOInvbleSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"SVOInvbleSalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOWarrantySalesAcc)) then begin
+    Accr.AccNumber = INr.SVOWarrantySalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"SVOWarrantySalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOContractSalesAcc)) then begin
+    Accr.AccNumber = INr.SVOContractSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"SVOContractSalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOGoodwillSalesAcc)) then begin
+    Accr.AccNumber = INr.SVOGoodwillSalesAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"SVOGoodwillSalesAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOInvbleCostAcc)) then begin
+    Accr.AccNumber = INr.SVOInvbleCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"SVOInvbleCostAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOWarrantyCostAcc)) then begin
+    Accr.AccNumber = INr.SVOWarrantyCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"SVOWarrantyCostAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOContractCostAcc)) then begin
+    Accr.AccNumber = INr.SVOContractCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"SVOContractCostAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.SVOGoodwillCostAcc)) then begin
+    Accr.AccNumber = INr.SVOGoodwillCostAcc;
+    if (ReadFirstMain(Accr,1,true)==false) then begin
+      RecordCheckError(1007,"",rownr,"SVOGoodwillCostAcc");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+  end;
+
+  if (nonblank(INr.VATCode)) then begin
+    if (IsVATCodeDefined(INr.VATCode)==false) then begin
+      RecordCheckError(1951,"",rownr,"VATCode");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.VATCode,tstr,1)) then begin
+      RecordCheckError(1258,tstr,rownr,"VATCode");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.VATCodeEU)) then begin
+    if (IsVATCodeDefined(INr.VATCodeEU)==false) then begin
+      RecordCheckError(1951,"",rownr,"VATCodeEU");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.VATCodeEU,tstr,1)) then begin
+      RecordCheckError(1258,tstr,rownr,"VATCodeEU");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.VATCodeExp)) then begin
+    if (IsVATCodeDefined(INr.VATCodeExp)==false) then begin
+      RecordCheckError(1951,"",rownr,"VATCodeExp");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.VATCodeExp,tstr,1)) then begin
+      RecordCheckError(1258,tstr,rownr,"VATCodeExp");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredVATCodeEU)) then begin
+    if (IsVATCodeDefined(INr.CredVATCodeEU)==false) then begin
+      RecordCheckError(1951,"",rownr,"CredVATCodeEU");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.CredVATCodeEU,tstr,1)) then begin
+      RecordCheckError(1258,tstr,rownr,"CredVATCodeEU");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.CredVATCodeExp)) then begin
+    if (IsVATCodeDefined(INr.CredVATCodeExp)==false) then begin
+      RecordCheckError(1951,"",rownr,"CredVATCodeExp");      
+      res = -1;
+      goto LnINVcRecordCheck;
+    end;
+    if (VATAccIsClosed(INr.CredVATCodeExp,tstr,1)) then begin
+      RecordCheckError(1258,tstr,rownr,"CredVATCodeExp");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  
+  if (stat==updatemode) then begin
+    if (check) then begin
+      if (INr.ItemType!=IN2r.ItemType) then begin 
+        switch (IN2r.ItemType) begin
+          case 0:
+            switch (INr.ItemType) begin
+              case 1:
+                STr.ArtCode = INr.Code;
+                if (ReadFirstMain(STr,1,true)) then begin
+                  RecordCheckError(27352,"",rownr,"Code");      
+                  res = -1; 
+                  goto LnINVcRecordCheck;
+                end;
+              case 2:
+                STr.ArtCode = INr.Code;
+                if (ReadFirstMain(STr,1,true)) then begin
+                  RecordCheckError(27352,"",rownr,"Code");      
+                  res = -1; 
+                  goto LnINVcRecordCheck;
+                end;
+            end;
+          case 1:
+            found = true;
+            IHr.ArtCode = INr.Code;
+            while (LoopKey("ArtCode",IHr,1,found)) begin
+              if (IHr.ArtCode!=INr.Code) then begin
+                found = false;
+              end;
+              if (found) then begin
+                testf = true;
+                if (IHr.StockAffectf==0) then begin testf = false; end;
+                if (testf) then begin
+                  RecordCheckError(27352,"",rownr,"Code");      
+                  res = -1; 
+                  goto LnINVcRecordCheck;
+                end;
+              end;
+            end;        
+          case 2:
+            STr.ArtCode = INr.Code;
+            if (ReadFirstMain(STr,1,true)) then begin
+              RecordCheckError(27352,"",rownr,"Code");      
+              res = -1; 
+              goto LnINVcRecordCheck;
+            end;
+          case 3:
+            switch (INr.ItemType) begin
+              case 1:
+                STr.ArtCode = INr.Code;
+                if (ReadFirstMain(STr,1,true)) then begin
+                  RecordCheckError(27352,"",rownr,"Code");      
+                  res = -1; 
+                  goto LnINVcRecordCheck;
+                end;
+              case 2:
+                STr.ArtCode = INr.Code;
+                if (ReadFirstMain(STr,1,true)) then begin
+                  RecordCheckError(27352,"",rownr,"Code");      
+                  res = -1; 
+                  goto LnINVcRecordCheck;
+                end;
+            end;
+        end;
+      end;
+      if (INr.SerNrf!=IN2r.SerNrf) then begin 
+        found = true;
+        IHr.ArtCode = INr.Code;
+        while (LoopKey("ArtCode",IHr,1,found)) begin
+          if (IHr.ArtCode!=INr.Code) then begin
+            found = false;
+          end;
+          if (found) then begin
+            testf = true;
+            if (IHr.StockAffectf==0) then begin testf = false; end;
+            if (testf) then begin
+              RecordCheckError(1391," " & INr.Code,rownr,"Code");      
+              res = -1; 
+              goto LnINVcRecordCheck;
+            end;
+          end;
+        end;        
+      end;
+      if (nonblank(IN2r.VARSubsets)) then begin
+        if (IN2r.VARSubsets!=INr.VARSubsets) then begin
+          if (VarietyCanbeDeleted(INr.Code,INr.VARSubsets,IN2r.VARSubsets,tstr)==false) then begin
+            RecordCheckError(1391," " & tstr,rownr,"VARSubsets");      
+            res = -1; 
+            goto LnINVcRecordCheck;
+          end;
+        end;
+      end;      
+    end;
+  end;
+  if (nonblank(INr.TaxTemplateCode)) then begin
+    TTr.Code = INr.TaxTemplateCode;
+    if (ReadFirstMain(TTr,1,true)==false) then begin
+      RecordCheckError(1120,INr.TaxTemplateCode,rownr,"TaxTemplateCode");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.TaxTemplateCodeEU)) then begin
+    TTr.Code = INr.TaxTemplateCodeEU;
+    if (ReadFirstMain(TTr,1,true)==false) then begin
+      RecordCheckError(1120,INr.TaxTemplateCodeEU,rownr,"TaxTemplateCodeEU");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  if (nonblank(INr.TaxTemplateCodeExp)) then begin
+    TTr.Code = INr.TaxTemplateCodeExp;
+    if (ReadFirstMain(TTr,1,true)==false) then begin
+      RecordCheckError(1120,INr.TaxTemplateCodeExp,rownr,"TaxTemplateCodeExp");      
+      res = -1; 
+      goto LnINVcRecordCheck;
+    end;
+  end;
+  
+	
+LnINVcRecordCheck:;
+  nINVcRecordCheck = res;
+  RETURN;
+END;

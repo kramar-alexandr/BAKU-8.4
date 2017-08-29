@@ -1,0 +1,422 @@
+external procedure TouchScreenXReading;
+external procedure RestAccCurUserTabs();
+remote procedure CntNPTSPaymentCurrenciesRemote(string,var Array string,var Array string,var Array Integer,var Array string,var Integer);
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external function Boolean GetFullCurncyPurchaseRate (var string,Date,var val,var val,var val,var val,var val);
+remote function boolean CompanyIsJWLikeCompany(Integer);
+
+global 
+procedure OpenNPTSPaymentTClass(Integer mwn,LongInt sernr,val change,val tot,string curncy)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record IVCashVc IVCashr;
+  record LocalMachineBlock LMb;
+  Array string 255 acrncy,alabel,apaymentmode;
+  Array Integer apaymenttype;
+  Integer acrncnt;
+
+  RepSpec.vals1 = tot;
+  RepSpec.vals0 = change;
+//  if (RepSpec.vals0<0) then begin
+  if (true) then begin
+    nwn = OpenWindow("NPTSPaymentTClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      BlockLoad(LMb);
+      CntNPTSPaymentCurrenciesRemote(LMb.LocalMachineCode,alabel,acrncy,apaymenttype,apaymentmode,acrncnt);
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = sernr;
+      RepSpec.CurncyCode = curncy;
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"NPTSPaymentTClassAmount" & apaymentmode[0],true);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(20807,"");
+  end;
+  return;
+end;
+
+global 
+procedure OpenNPTSCashPaymentTClass(Integer mwn,LongInt sernr,val change,val tot,string curncy,string paymode,string label)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record BaseCurBlock BCb;
+  record POSCurrenciesBlock POSCb;
+
+  RepSpec.vals1 = tot;
+  RepSpec.vals0 = change;
+  
+//  if (RepSpec.vals0<0) then begin
+  if (true) then begin
+    nwn = OpenWindow("NPTSCashPaymentTClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      BlockLoad(BCb);
+      BlockLoad(POSCb);
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = sernr;
+      RepSpec.CurncyCode = curncy;
+      if (blank(RepSpec.CurncyCode)) then begin
+        RepSpec.CurncyCode = BCb.BaseCur1;
+      end;
+      RepSpec.AccStr = paymode;
+      RepSpec.f6 = label;
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"NPTSCashPaymentCashReceived0",true);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(20807,"");
+  end;
+  return;
+end;
+
+global 
+procedure OpenChequePayTouchScreenDClass(Integer mwn,Integer rownr,LongInt sernr,val change,val tot,string curncy,string paymode,string label)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record BaseCurBlock BCb;
+
+  RepSpec.vals0 = -change;
+
+  if (RepSpec.vals0==0) then begin
+    RepSpec.vals0 = tot;
+  end;
+  if (RepSpec.vals0>0) then begin
+    nwn = OpenWindow("ChequePayTouchScreenDClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      BlockLoad(BCb);
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = sernr;
+      RepSpec.long2 = rownr;
+      RepSpec.CurncyCode = BCb.BaseCur1;
+      RepSpec.AccStr = paymode;
+      RepSpec.f6 = label;
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"vals0",true);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(24195,"");
+  end;
+  return;
+end;
+
+global 
+procedure OpenCCPayTouchScreenDClass(Integer mwn,Integer rownr,LongInt sernr,val msum4,val mchange,val mtot,string curncy,string paymode,string label)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record BaseCurBlock BCb;
+  Boolean testf;
+	roundmode rnd;// Edit ************************** Friday, 15 March 2013 11:35:23
+	val invfr,invto1,to2,br1,br2;// Edit ************************** Monday, 25 March 2013 17:41:57
+	string 20 cur;
+	val tot,change,sum4;
+	
+	tot = mtot;
+	change = mchange;
+	sum4 = msum4;
+	
+	cur = curncy;
+	rnd = DefaultValRoundoff;
+  rnd.decimals = 0;
+  if(currentcompany==11 or currentcompany==12)then begin
+  	rnd.decimals = -4;
+  end;
+  rnd.mode = kRoundingModeHalfDown;
+	if(CompanyIsJWLikeCompany(currentcompany))then begin
+		cur = "AZN";
+		if (GetFullCurncyPurchaseRate(cur,CurrentDate,invfr,invto1,to2,br1,br2)==false) then begin// Edit ************************** Monday, 25 March 2013 17:43:29
+			GetFullCurncyRate(cur,CurrentDate,invfr,invto1,to2,br1,br2);// Edit ************************** Monday, 25 March 2013 17:43:28
+		end;
+		if(invfr==0 or invto1==0)then begin
+				invfr = 1; invto1 = 1;
+		end;
+		rnd.step = kRoundingStep5;
+		change = round(change*invfr/invto1,rnd);
+		tot = round(tot*invfr/invto1,rnd);
+		sum4 = round(sum4*invfr/invto1,rnd);
+  end;
+	
+  RepSpec.vals0 = -change;
+
+  if (RepSpec.vals0==0) then begin
+    RepSpec.vals0 = tot;
+  end;
+  testf = true;
+  if (sum4>0) then begin
+    if (RepSpec.vals0<=0) then begin
+      testf = false;
+    end;
+  end else begin
+    if (RepSpec.vals0>=0) then begin
+      testf = false;
+    end;
+  end;
+  if (testf) then begin
+    nwn = OpenWindow("CCPayTouchScreenDClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      BlockLoad(BCb);
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = sernr;
+      RepSpec.long2 = rownr;
+      RepSpec.CurncyCode = cur;
+			if(CompanyIsJWLikeCompany(currentcompany))then begin
+				
+			end;
+      if (blank(RepSpec.CurncyCode)) then begin
+        RepSpec.CurncyCode = BCb.BaseCur1;
+      end;
+      RepSpec.AccStr = paymode;
+      RepSpec.f6 = label;
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"vals0",true);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(24195,"");
+  end;
+  return;
+end;
+
+global 
+procedure OpenDCPayTouchScreenDClass(Integer mwn,Integer rownr,LongInt sernr,val sum4,val change,val tot,string curncy,string paymode,string label)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record BaseCurBlock BCb;
+  Boolean testf;
+
+  RepSpec.vals0 = -change;
+
+  if (RepSpec.vals0==0) then begin
+    RepSpec.vals0 = tot;
+  end;
+  testf = true;
+  if (sum4>0) then begin
+    if (RepSpec.vals0<=0) then begin
+      testf = false;
+    end;
+  end else begin
+    if (RepSpec.vals0>=0) then begin
+      testf = false;
+    end;
+  end;
+  if (testf) then begin
+    nwn = OpenWindow("DCPayTouchScreenDClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      BlockLoad(BCb);
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = sernr;
+      RepSpec.long2 = rownr;
+      RepSpec.CurncyCode = curncy;
+      if (blank(RepSpec.CurncyCode)) then begin
+        RepSpec.CurncyCode = BCb.BaseCur1;
+      end;
+      RepSpec.AccStr = paymode;
+      RepSpec.f6 = label;
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"vals0",true);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(24195,"");
+  end;
+  return;
+end;
+
+global 
+procedure RestAccDClassTouchScreenOpenInvoices()
+begin
+  RestAccCurUserTabs;
+  return;
+end;
+
+global 
+procedure RestAccDClassTouchScreenXReading()
+begin
+  TouchScreenXReading;
+  return;
+end;
+
+global 
+procedure OpenOnHotelGuestTouchScreenOClass(Integer mwn,LongInt sernr,val tot,string room,string paymode,string label)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record BaseCurBlock BCb;
+
+  RepSpec.vals0 = tot;
+  if (RepSpec.vals0>0) then begin
+    nwn = OpenWindow("OnHotelGuestTouchScreenOClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      BlockLoad(BCb);
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = sernr;
+      RepSpec.f1 = room;
+      RepSpec.CurncyCode = BCb.BaseCur1;
+      RepSpec.AccStr = paymode;
+      RepSpec.f6 = label;
+      PutWindowRecord(nwn,RepSpec);
+      if (blank(RepSpec.f1)) then begin
+        WindowFieldGoto(nwn,RepSpec,-1,"f1",true);
+      end else begin
+        WindowFieldGoto(nwn,RepSpec,-1,"f2",true);
+      end;
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(24195,"");
+  end;
+  return;
+end;
+
+global
+function string 40 OnHotelGuestTouchScreenOClassSpecPasteName(Integer wn,string defpsname)
+begin
+  string 255 psname;
+  record RcVc RepSpec;
+  
+  GetWindowRecord(wn,RepSpec);
+  psname = defpsname;
+  switch (WindowActiveField(wn)) begin
+    case "f2":
+      if (blank(RepSpec.f1)) then begin
+        psname = "CUGuestSClass";
+      end else begin
+        psname = "GuestSClass";
+      end;
+    case "f3":
+      if (blank(RepSpec.f1)) then begin
+        psname = "CUSClass";
+      end else begin
+        psname = "CUListSClass";
+      end;
+  end;
+  OnHotelGuestTouchScreenOClassSpecPasteName = psname;
+  return;
+end;
+
+global 
+procedure OpenSetBarTabClassTouchScreenTClass(Integer mwn,LongInt sernr)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+
+  if (true) then begin
+    nwn = OpenWindow("SetBarTabClassTouchScreenTClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      DeselectWindow(nwn,false);
+      RepSpec.long1 = sernr;
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"f1",true);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(20807,"");
+  end;
+  return;
+end;
+
+global 
+procedure OpenSetCoversTouchScreenTClass(Integer mwn,LongInt sernr,LongInt persons)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+
+  if (true) then begin
+    nwn = OpenWindow("SetCoversTouchScreenTClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = sernr;
+      RepSpec.long2 = persons;
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"long2",true);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(20807,"");
+  end;
+  return;
+end;
+
+global 
+procedure OpenMergeBarTabTouchScreenTClass(Integer mwn,LongInt sernr)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+
+  if (true) then begin
+    nwn = OpenWindow("MergeBarTabTouchScreenTClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = sernr;
+      RepSpec.long2 = -1;
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"long2",true);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(20807,"");
+  end;
+  return;
+end;
+
+global 
+procedure OpenSplitBarTabTouchScreenTClass(Integer mwn,record RestAccVc RestAccr)
+begin
+  Integer nwn;
+
+  if (true) then begin
+    nwn = OpenWindow("RestAccSplitOClass",0,mwn,"","",RestAccr);
+    if (nwn>0) then begin
+      DeselectWindow(nwn,false);
+    end;
+  end else begin
+    CloseWindow(nwn);
+    MessageBox(20807,"");
+  end;
+  return;
+end;
+
+global 
+procedure OpenTableLayoutCLass(Integer mwn,string atableview,LongInt bartabnr)
+begin
+  record RcVc RepSpec;
+  Integer nwn;
+  record LocalMachineBlock LMb;
+  string 255 tableview;
+  
+  tableview = atableview;
+  if (blank(tableview)) then begin
+    BlockLoad(LMb);
+    tableview = LMb.TableViewCode;
+  end;
+  if (nonblank(tableview)) then begin
+    RepSpec.ArtMode = 1;
+    RepSpec.long1 = bartabnr;
+    RepSpec.AccStr = tableview;
+    nwn = OpenWindow("TableLayoutClass",1,mwn,"","",RepSpec);    
+  end else begin
+    nwn = OpenWindow("SetTableTouchScreenOClass",0,mwn,"","",RepSpec);
+    if (nwn>0) then begin
+      DeselectWindow(nwn,false);
+      RepSpec.ArtMode = 1;
+      RepSpec.long1 = bartabnr;
+      PutWindowRecord(nwn,RepSpec);
+      WindowFieldGoto(nwn,RepSpec,-1,"f1",true);
+    end;
+  end;
+  return;
+end;
