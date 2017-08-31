@@ -1,0 +1,223 @@
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external function Boolean GetFullCurncyPurchaseRate (var string,Date,var val,var val,var val,var val,var val);
+external procedure Base1ToOther(var string,val,val,val,val,val,val,var val,roundmode);
+remote function boolean CompanyIsJWLikeCompany(Integer);
+
+global
+procedure NPTSCashPaymentonOpenTool(string curncytrue,val isum4,val iv,var Array string acrncy,var Array val acrncytotaldue,var Array val acrncyval,var Integer acrncnt)
+begin
+  Integer i;
+  val fr,to1,to2,br1,br2,temp;
+  Array Boolean achangecrncyf;
+  string 255 crncy;
+  val tempsum,tempret;
+  val invfr,invto1;// Edit ************************** Friday, 15 March 2013 11:36:06
+  val sum4,v;// Edit ************************** Friday, 15 March 2013 11:36:07
+  roundmode rnd;// Edit ************************** Friday, 15 March 2013 11:36:08
+    
+  rnd = DefaultValRoundoff;
+  rnd.decimals = 2;
+  rnd.mode = kRoundingModeHalfUp;
+  if(currentcompany==11 or currentcompany==12)then begin
+		rnd.decimals = -4;
+  end;
+  if(CompanyIsJWLikeCompany(currentcompany))then begin
+  	rnd.decimals = 0;
+		rnd.step = kRoundingStep5;
+  end;
+  if (GetFullCurncyPurchaseRate(curncytrue,CurrentDate,invfr,invto1,to2,br1,br2)==false) then begin
+		GetFullCurncyRate(curncytrue,CurrentDate,invfr,invto1,to2,br1,br2);
+	end;
+  if(invfr==0 or invto1==0)then begin
+			invfr = 1; invto1 = 1;
+	end;
+  sum4 = isum4/invfr*invto1;
+  v = iv/invfr*invto1;
+  
+  CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);
+  for (i=0;i<acrncnt;i=i+1) begin
+    crncy = acrncy[i];
+    if (GetFullCurncyPurchaseRate(crncy,CurrentDate,fr,to1,to2,br1,br2)==false) then begin
+      GetFullCurncyRate(crncy,CurrentDate,fr,to1,to2,br1,br2);
+    end;
+    if(fr==0 or to1==0)then begin
+    		fr = 1; to1 = 1;
+    end;
+
+			tempsum = sum4*fr/to1;
+			tempret = v*fr/to1;
+    	
+			//Base1ToOther(acrncy[i],sum4,fr,to1,to2,br1,br2,temp,DefaultCurRoundOff);
+			Base1ToOther(acrncy[i],tempsum,fr,to1,to2,br1,br2,temp,DefaultCurRoundOff);
+			acrncytotaldue[i] = round(tempsum,rnd);
+			//Base1ToOther(acrncy[i],-v,fr,to1,to2,br1,br2,temp,DefaultCurRoundOff);
+			Base1ToOther(acrncy[i],-tempret,fr,to1,to2,br1,br2,temp,DefaultCurRoundOff);
+			acrncyval[i] = round(-tempret,rnd);
+			if(currentuser=="SA")then begin
+				logtext(0,acrncytotaldue[i] & " " & acrncyval[i]);
+			end;
+			
+  end;
+  return;
+end;
+
+global
+procedure RecalculateNPTSCashPaymentTool(record RcVc RepSpec,Array string acrncy,
+                                        var Array val acashreceived,var Array val achangegiven,var Array val aamountdue,var Array val achangedue,
+                                        Integer acrncnt,
+                                        var val totb1changedue,var val totb1changegiven,var val totb1amountdue,var val totb1cashreceived)
+begin
+  Integer i;
+  val fr,to1,to2,br1,br2;
+  val tempchangegiven,temp2;
+  val tempcashreceived;
+  string 255 tstr;
+  val tot;
+	roundmode rnd;// Edit ************************** Friday, 15 March 2013 11:35:23
+	val due;// Edit ************************** Friday, 15 March 2013 11:35:22
+  val invfr,invto1;// Edit ************************** Friday, 15 March 2013 11:36:06
+    
+  rnd = DefaultValRoundoff;
+  rnd.decimals = 0;
+  rnd.mode = kRoundingModeHalfDown;
+  if(currentcompany==11 or currentcompany==12)then begin
+		rnd.decimals = -4;
+  end;
+	if(CompanyIsJWLikeCompany(currentcompany))then begin
+		rnd.step = kRoundingStep5;
+  end;
+  
+  for (i=0;i<acrncnt;i=i+1) begin
+  	if(CompanyIsJWLikeCompany(currentcompany))then begin
+  		acashreceived[i] = round(acashreceived[i],rnd);
+  	end;
+  end;
+  totb1changedue = blankval;
+  totb1changegiven = blankval;
+  totb1amountdue = blankval;
+  totb1cashreceived = blankval;
+  
+  if (GetFullCurncyPurchaseRate(RepSpec.CurncyCode,CurrentDate,invfr,invto1,to2,br1,br2)==false) then begin
+		GetFullCurncyRate(RepSpec.CurncyCode,CurrentDate,invfr,invto1,to2,br1,br2);
+	end;
+  if(invfr==0 or invto1==0)then begin
+			invfr = 1; invto1 = 1;
+	end;
+  
+  
+  for (i=0;i<acrncnt;i=i+1) begin
+    tempcashreceived = acashreceived[i];
+    if (GetFullCurncyPurchaseRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2)==false) then begin
+      GetFullCurncyRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2);
+    end;
+    if(fr==0 or to1==0)then begin
+    		fr = 1;	to1 = 1;
+    end;
+    
+    tempcashreceived = MulRateToBase1(acrncy[i],tempcashreceived,fr,to1,to2,br1,br2,DefaultCurRoundOff);// Edit ************************** Monday, 24 December 2012 10:53:44
+    totb1changegiven = totb1changegiven + MulRateToBase1(acrncy[i],achangegiven[i],fr,to1,to2,br1,br2,DefaultCurRoundOff);
+    totb1cashreceived = totb1cashreceived + tempcashreceived;    
+		
+  end;
+
+  due = Round(RepSpec.vals0/invfr*invto1,DefaultCurRoundOff);
+  for (i=0;i<acrncnt;i=i+1) begin
+  		if (GetFullCurncyPurchaseRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2)==false) then begin
+      GetFullCurncyRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2);
+    end;
+    if(fr==0 or to1==0)then begin
+    		fr = 1;	to1 = 1;
+    end;
+    
+  		aamountdue[i] = round((-due-totb1cashreceived)*fr/to1,rnd);
+  		if(aamountdue[i]<0)then begin
+  			rnd.mode = kRoundingModeHalfUp;
+  			achangedue[i] = -round((-due-totb1cashreceived)*fr/to1,rnd);
+  			aamountdue[i] = 0;
+  			rnd.mode = kRoundingModeHalfDown;
+  		end;
+  		
+  end;
+  
+  for (i=0;i<acrncnt;i=i+1) begin
+  		if (GetFullCurncyPurchaseRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2)==false) then begin
+      GetFullCurncyRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2);
+    end;
+    if(fr==0 or to1==0)then begin
+    		fr = 1;	to1 = 1;
+    end;
+    
+  		aamountdue[i] = round((-due-totb1cashreceived)*fr/to1,rnd);
+  		if(aamountdue[i]<0)then begin
+  			rnd.mode = kRoundingModeHalfUp;
+  			achangedue[i] = -round((-due-totb1cashreceived+totb1changegiven)*fr/to1,rnd);
+  			aamountdue[i] = 0;
+  			rnd.mode = kRoundingModeHalfDown;
+  		end else begin
+  			achangedue[i] = 0;
+  		end;
+  		
+  end;
+  
+	/*
+  tot = RepSpec.vals0 + tempcashreceived;
+  for (i=0;i<acrncnt;i=i+1) begin
+    tempchangegiven = achangegiven[i];
+    
+    if (GetFullCurncyPurchaseRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2)==false) then begin
+      GetFullCurncyRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2);
+    end;
+
+    tempchangegiven = tempchangegiven;//MulRateToBase1(acrncy[i],tempchangegiven,fr,to1,to2,br1,br2,DefaultCurRoundOff);
+    totb1changegiven = totb1changegiven + tempchangegiven;
+    Base1ToOther(acrncy[i],tot,fr,to1,to2,br1,br2,tempchangegiven,DefaultCurRoundOff);
+    tempchangegiven = tot;
+    achangedue[i] = tempchangegiven;
+  end;
+  
+  
+  for (i=0;i<acrncnt;i=i+1) begin
+
+    if (GetFullCurncyPurchaseRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2)==false) then begin
+      GetFullCurncyRate(acrncy[i],CurrentDate,fr,to1,to2,br1,br2);
+    end;
+    temp2 = achangedue[i];
+    
+    Base1ToOther(acrncy[i],totb1changegiven,fr,to1,to2,br1,br2,tempchangegiven,DefaultCurRoundOff);  
+      tempchangegiven = totb1changegiven;
+    temp2 = temp2 - tempchangegiven;    
+    if (RepSpec.vals1>0) then begin
+      if (temp2<0) then begin temp2 = 0.00; end;
+    end else begin
+      if (temp2>0) then begin temp2 = 0.00; end;
+    end;
+    achangedue[i] = temp2;
+
+    temp2 = aamountdue[i];
+    Base1ToOther(acrncy[i],totb1cashreceived,fr,to1,to2,br1,br2,tempcashreceived,DefaultCurRoundOff);    
+    tempcashreceived = totb1cashreceived;
+    temp2 = temp2 - tempcashreceived;    
+    if (RepSpec.vals1>0) then begin
+      if (temp2<0) then begin temp2 = 0.00; end;
+    end else begin
+      if (temp2>0) then begin temp2 = 0.00; end;
+    end;
+    aamountdue[i] = temp2;
+  end;
+
+  totb1changedue = tot - totb1changegiven;
+  if (RepSpec.vals1>0) then begin
+    if (totb1changedue<0) then begin totb1changedue = 0.00; end;
+  end else begin
+    if (totb1changedue>0) then begin totb1changedue = 0.00; end;
+  end;
+  totb1amountdue = -RepSpec.vals0 - totb1cashreceived;
+  if (RepSpec.vals1>0) then begin
+    if (totb1amountdue<0) then begin totb1amountdue = 0.00; end;
+  end else begin
+    if (totb1amountdue>0) then begin totb1amountdue = 0.00; end;
+  end;*/
+  return;
+end;

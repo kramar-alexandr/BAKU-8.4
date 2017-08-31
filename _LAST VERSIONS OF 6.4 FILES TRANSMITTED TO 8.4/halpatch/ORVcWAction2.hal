@@ -1,0 +1,223 @@
+remote function Boolean ORDelWithTBIV(record ORVc);// Edit ************************** Tuesday, 24 September 2013 13:04:46
+external function Boolean AllowCurChange(string,Boolean);// Edit ************************** Tuesday, 24 September 2013 13:04:26
+
+
+function Boolean ORAcceptanceStarted(record ORVc ORr)// Edit ************************** Tuesday, 24 September 2013 13:03:33
+begin
+  Boolean res;
+
+  res = false;
+  if (ORr.AcceptanceStatus>=kAcceptanceStatePending) then begin
+    res = true;
+  end;
+  ORAcceptanceStarted = res;
+  RETURN;
+END;
+
+function Boolean ORShipdTest(record ORVc ORp)// Edit ************************** Tuesday, 24 September 2013 13:04:01
+begin
+  Boolean res;
+  Boolean testf;
+  Integer i,rwcnt;
+  row ORVc ORrw;
+  
+  rwcnt = MatRowCnt(ORp);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(ORp,i,ORrw);
+    testf = (ORrw.Shipd1>0)==true;
+    if (testf) then begin
+      res = true;
+      goto LORShipdTest;
+    end;
+  end;
+LORShipdTest:;
+  ORShipdTest = res;
+  return;
+end;
+
+function Boolean ORInvdTest(record ORVc ORp)// Edit ************************** Tuesday, 24 September 2013 13:04:56
+begin
+  Boolean res;
+  Boolean testf;
+  Integer i,rwcnt;
+  row ORVc ORrw;
+  
+  rwcnt = MatRowCnt(ORp);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(ORp,i,ORrw);
+    testf = (ORrw.Invd>0)==true;
+    if (testf) then begin
+      res = true;
+      goto LORInvdTest;
+    end;
+  end;
+LORInvdTest:;
+  ORInvdTest = res;
+  return;
+end;
+
+global
+function Boolean ORDClassActiveEditField(Integer wn,string fieldname,Integer fn,Integer wnst,Integer rownr,Integer changed)
+BEGIN
+  Boolean res;
+  record ORVc ORr;
+  record ORVc OR2r;
+  row ORVc ORrw;
+  record INVc INr;
+  Integer nwn;
+    
+  nwn = FindWindow("SelectApproverWClass");
+  if (nwn>0) then begin
+    if (MotherWindow(nwn)==wn) then begin
+      res = false;
+      goto LORDClassActiveEditField;
+    end;
+  end;
+  if (wnst!=1) then begin//Rs_insert
+    if (fieldname=="SerNr") then begin
+      res = false;
+      goto LORDClassActiveEditField;
+    end;
+    if (ORAcceptanceStarted(ORr)) then begin 
+      res = false; 
+      goto LORDClassActiveEditField; 
+    end;
+  end;
+  res = true;
+  GetWindowRecord(wn,ORr);
+  switch (wnst) begin
+    case Rs_update:    
+      GetPrevWindowRecord(wn,OR2r);
+  end;
+  switch (wnst) begin
+    case Rs_insert:
+    otherwise
+      if (ORr.OKFlag!=0) then begin
+        switch (fieldname) begin
+          case "LangCode": ;
+          otherwise
+           res = false;
+            goto LORDClassActiveEditField;
+        end;
+      end;
+  end;  
+  switch (fieldname) begin
+    case "SerNr": 
+      switch (wnst) begin
+        case Rs_update:
+           if (OR2r.OKFlag==0) then begin
+             if (UserCanAction("AllowORSerNrChange",true)==false) then begin res = false; end;
+            end;
+        otherwise
+          if (UserCanAction("AllowORSerNrChange",true)==false) then begin res = false; end;
+      end;
+    case "rowGP": res = false;
+    case "PRCode": 
+      if (ORInvdTest(ORr)) then begin res = false; end;      
+      if (res) then begin
+        if (nonblank(ORr.PRCode)) then begin
+//          if (ORShipd2Test(ORr)) then begin res = false; end;
+          if (ORDelWithTBIV(ORr)) then begin res = false; end;
+        end;
+      end;
+    case "CustCode": 
+      if (ORShipdTest(ORr)) then begin res = false; end;      
+    case "FrRate": 
+      if (AllowCurChange(ORr.CurncyCode,false)==false) then begin res = false; end;
+    case "ToRateB1": 
+      if (AllowCurChange(ORr.CurncyCode,false)==false) then begin res = false; end;
+    case "ToRateB2": 
+      if (AllowCurChange(ORr.CurncyCode,false)==false) then begin res = false; end;
+    case "BaseRate1": 
+      if (AllowCurChange(ORr.CurncyCode,true)==false) then begin res = false; end;
+    case "BaseRate2": 
+      if (AllowCurChange(ORr.CurncyCode,true)==false) then begin res = false; end;      
+    case "PriceList": 
+      if (UserCanAction("ChangePrices",true)==false) then begin res = false; end;
+    case "Price": 
+      if (UserCanAction("ChangeUnitPrices",true)==false) then begin res = false; end;
+      if (UserCanAction("MyChangeUnitPricesOR",false)==true) then begin res = true; end;// Edit ************************** Tuesday, 24 September 2013 13:09:22
+      if (UserCanAction("MyChangeUnitPricesOR",true)==false) then begin res = false; end;// Edit ************************** Tuesday, 24 September 2013 13:09:22
+    case "vRebate": 
+      if (UserCanAction("ChangeUnitPrices",true)==false) then begin res = false; end;
+      if (UserCanAction("MyChangeUnitPricesOR",false)==true) then begin res = true; end;// Edit ************************** Tuesday, 24 September 2013 13:09:22
+      if (UserCanAction("MyChangeUnitPricesOR",true)==false) then begin res = false; end;// Edit ************************** Tuesday, 24 September 2013 13:09:22
+    case "Sum": 
+      if (UserCanAction("ChangeUnitPrices",true)==false) then begin res = false; end;
+      if (UserCanAction("MyChangeUnitPricesOR",false)==true) then begin res = true; end;// Edit ************************** Tuesday, 24 September 2013 13:09:22
+      if (UserCanAction("MyChangeUnitPricesOR",true)==false) then begin res = false; end;// Edit ************************** Tuesday, 24 September 2013 13:09:22
+    case "Shipd1": 
+       res = false;
+    case "Shipd2": 
+       res = false;
+    case "Invd": 
+       res = false;
+    case "Quant": 
+      MatRowGet(ORr,rownr,ORrw);
+      switch (ORrw.stp) begin
+        case kInvoiceRowTypeStructuredItemComponent:
+          res = false;
+      end;
+    case "Location":
+      if (rownr>=0) then begin
+        MatRowGet(ORr,rownr,ORrw);
+        res = (ORrw.Shipd1>0)==false;
+      end else begin          
+        res = ORShipdTest(ORr)==false;
+      end;
+    case "Spec": 
+      if (UserCanAction("ChangeORItemSpec",true)==false) then begin res = false; end;
+  end;
+  if (ORShipdTest(ORr)==false) then begin goto LORDClassActiveEditField; end;
+  if (wnst==Rs_update) then begin
+    if (OR2r.OKFlag!=0) then begin
+      switch (fieldname) begin
+        case "PlanShip": res = true;
+        otherwise res = false;
+      end;
+      if (rownr>=0) then begin
+        res = true;
+        switch (fieldname) begin
+          case "PlanShipRow":
+            res = true;
+          otherwise
+            res = false;
+            goto LORDClassActiveEditField;
+        end;
+      end else begin
+        if (res==false) then begin goto LORDClassActiveEditField; end;
+      end;      
+    end;
+    if ((rownr>=0) and (rownr<WindowOldRowcnt(wn))) then begin
+      switch (fieldname) begin
+        case "Recepy":
+          res = false;
+          if (changed!=0) then begin MessageBox(1304,""); end;
+        case "ArtCode":
+          res = false;
+          if (changed!=0) then begin MessageBox(1304,""); end;
+      end;
+    end;
+  end;  
+LORDClassActiveEditField:;  
+  ORDClassActiveEditField = res;
+  RETURN;
+END;
+
+global
+function Boolean ORDClassUpdateTest(Integer wn)
+BEGIN
+  Boolean res;
+  record ORVc ORr;
+  
+  res = true;
+  GetWindowRecord(wn,ORr);
+  if (ORr.Closed!=0) then begin
+    //res = false;
+  end;
+  if (ORAcceptanceStarted(ORr)) then begin
+    res = false;
+  end;
+  ORDClassUpdateTest = res;
+  RETURN;
+END;
