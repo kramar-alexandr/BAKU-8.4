@@ -3,9 +3,124 @@ external function Boolean POVc_PasteArtCode(var record POVc,Integer,Boolean);// 
 external procedure POVc_PasteQuant(var record POVc,Integer);// Edit ************************** Friday, 31 August 2012 16:50:20
 external function Boolean POVc_PasteVECode(var record POVc,Boolean);
 external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
+remote function boolean CompanyIsJWLikeCompany(Integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
+
+// edited by BPI { //functions transferred here from 6.4 file halcust/halpatch/WindowTagTools.hal bacause there is no such origin file in 8.4
+global
+function Boolean HasJewelleryInterface()
+begin
+  //record ModuleBlock Modb;
+  
+  if(CompanyIsJWLikeCompany(currentcompany))then begin
+  	HasJewelleryInterface = 1;
+  end;
+ /*if (IsEnterprise) then begin
+    BlockLoad(Modb);
+    HasJewelleryInterface = Modb.JewelleryInterface;
+  end else begin
+    HasJewelleryInterface = HasBooleanWTag("HasJewelleryInterface");
+  end;*/
+  return;
+end;
+
+
+function string 200 ParseClassification(string class)
+begin
+	string 200 res,cl;
+	record DIVc DIr;
+	integer pos;
+	
+	pos = 0;
+	ExtractObj(class,pos,cl);
+	DIr.Code = cl;
+	if(readfirstmain(DIr,1,true))then begin
+	res = DIr.Name;
+	end;
+  while (nonblank(cl)) begin
+    ExtractObj(class,pos,cl);
+    DIr.Code = cl;
+  	if(readfirstmain(DIr,1,true))then begin
+  		res = res & "	" & DIr.Name;
+  	end;	
+  end;
+	
+	ParseClassification = res;
+return;
+end;
+
+global function string 255 GetClassString(string artcode)
+begin
+record INVc INr;
+string 255 res;
+	
+	res = "";
+	INr.Code = artcode;
+	if(readfirstmain(INr,1,true))begin
+		res = ParseClassification(INr.DispGroups);
+	end;
+	
+	GetClassString = res;
+return;
+end;
+
+global function string 255 GetPriceString(string picelist,string artcode,string curcode,string serial)
+begin
+record INVc INr;
+Record PLDefVc PLDefr;
+string 255 res,plcur,pltstr;
+val plprice;
+record PLVc PLr;
+
+	res = "";
+	
+	if(nonblank(picelist))then begin
+		PLDefr.Code = picelist;
+		if(readfirstmain(PLDefr,1,true))then begin
+			plcur = PLDefr.CurncyCode;
+		end;
+		PLr.ArtCode = artcode;
+		PLr.PLCode = picelist;
+		PLr.SerialNr = serial;
+		if(readfirstkey("SerialNr",PLr,3,true))then begin
+			if(nonblank(PLr.CurncyCode) and PLr.CurncyCode!=plcur)then begin
+				plcur = PLr.CurncyCode;
+			end;
+			plprice = PLr.ExVatPrice;
+		end else begin
+			PLr.ArtCode = artcode;
+			PLr.PLCode = picelist;
+			if(readfirstmain(PLr,2,true))then begin
+				if(nonblank(PLr.CurncyCode) and PLr.CurncyCode!=plcur)then begin
+					plcur = PLr.CurncyCode;
+				end;
+				plprice = PLr.ExVatPrice;
+			end;			
+		end;
+	end;
+	pltstr = "";// Edit ************************** Thursday, 4 April 2013 10:43:51
+	if(curcode!=plcur and nonblank(plcur))then begin
+		pltstr = "(" & plprice & plcur &")";// Edit ************************** Thursday, 4 April 2013 10:43:52
+	end;
+	res = pltstr;
+	GetPriceString = res;
+	
+return;
+end;
+
+global procedure GetTwoStrings(string picelist,string artcode,string curcode,var string pricestr,var string classstr,string serial)
+begin
+
+	pricestr = "";
+	classstr = "";
+	
+	pricestr = GetPriceString(picelist,artcode,curcode,serial);
+	classstr = GetClassString(artcode);
+	
+return;
+end; // edited by BPI } //functions transferred here from 6.4 file halcust/halpatch/WindowTagTools.hal bacause there is no such origin file in 8.4
 
 global updating procedure CreatePOfromOR(record ORVc ORr)
 begin
