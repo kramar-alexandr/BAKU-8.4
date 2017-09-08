@@ -6,7 +6,7 @@ external function roundmode DefaultRoundMode();
 external function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean);
 external procedure IPVc_PasteRecVal(var record IPVc,Integer);
 external function roundmode SetRoundModeD(Integer);
-external function LongInt IPVcRecordCheck(var record IPVc,record IPVc,LongInt,LongInt);// Edit ************************** Friday, 13 March 2015 18:18:29
+external updating function LongInt IPVcRecordCheck(var record IPVc,record IPVc,LongInt,LongInt);// Edit ************************** Friday, 13 March 2015 18:18:29
 external function Boolean TRVc_PasteObjects(var record TRVc,Integer);
 external procedure PUVc_PasteLocation(var record PUVc,Integer); //Edit***************************Sasha2,11:37 07.04.2015
 external function Boolean PUVc_PasteArtCode(var record PUVc,Integer,var string,var string); //Edit***************************Sasha2,12:10 07.04.2015
@@ -44,6 +44,7 @@ external updating procedure CalcPriceListsMn(record RcVc); //Edit***************
 external function Boolean TimeInRange(Time,Time,Time); //Edit***************************Sasha2,11:26 27.07.2017
 
 SetLangMode(LangRussian,"RUS",0);
+
 
 global //Edit***************************Sasha2,14:27 02.08.2016 {
 procedure CalcEANCHS(var string str)
@@ -5619,3 +5620,205 @@ begin
 
   return;
 end; //Edit***************************Sasha2,15:10 07.07.2017 }
+
+procedure MakeReItemsMatrixFind(var record SHVc SHr, Boolean clearRows)
+begin
+  record IVVc IVr;
+  row IVVc IVrw;
+  row SHVc SHrw;
+  record CompaniesBlock Compb;
+  record INVc INr;
+  row CompaniesBlock Comprw;
+  boolean TrHs,testf,insertf;
+  record ItemHistVc IHr;
+  string 100 tstr,artcode,compname,compnr;
+  date todate;
+  Integer rwcnt,lastRowPos,i;
+  val tval;
+
+  artcode = SHr.DelAddrCode;
+  todate = SHr.ShipDate;
+  
+  INr.Code = artcode;
+  testf = ReadFirstMain(INr,1,true);
+  if (testf==false) then begin
+    INr.AlternativeCode = artcode;
+    testf = ReadFirstKey("AlternativeCode",INr,1,true);
+    if (testf) then begin
+      artcode = INr.Code;
+    end;
+  end;
+  if (testf==false) then begin
+    INr.BarCode = artcode;
+    testf = ReadFirstKey("BarCode",INr,1,true);
+    if (testf) then begin
+      artcode = INr.Code;
+    end;
+  end;
+  
+  BlockLoad(Compb);
+  rwcnt = MatRowCnt(Compb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Compb,i,Comprw);
+    if (StringToInt(Comprw.CompCode)==CurrentCompany) then begin
+      compnr = Comprw.CompCode;
+      compname = Comprw.CompName;
+      i = rwcnt;
+    end;
+  end;
+  
+  if (clearRows) then begin
+    rwcnt = MatRowCnt(SHr);
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowDelete(SHr,i);
+      rwcnt = MatRowCnt(SHr);
+      i = i-1;
+    end;
+  end;
+  
+  IHr.FileName = "IVVc";
+  IHr.ArtCode = artcode;
+  IHr.TransDate = todate;
+  TrHs = true;
+  while(loopkey("FNArtCode",IHr,3,TrHs)) begin
+  	testf = true;
+  	if(currentcompany==1)then begin
+			if(IHr.TransDate!=todate)then begin TrHs = false; testf = false; end;
+  	end else begin
+			if(IHr.TransDate<todate)then begin TrHs = false; testf = false; end;
+  	end;
+  	if(IHr.ArtCode!=artcode or IHr.FileName!="IVVc")then begin TrHs = false; testf = false; end;
+  	if(IHr.Invalid==1)then begin testf=false; end;
+  	if(IHr.StockAffectf!=1) then begin testf = false; end; //Edit***************************Sasha2,15:25 20.05.2015
+  	if(IHr.Qty>=0) then begin testf = false; end; //Edit***************************Sasha2,10:51 23.05.2016
+  	if(testf)then begin
+  		
+			IVr.SerNr = IHr.TransNr;
+			if(readfirstmain(IVr,1,true))then begin
+				matrowget(IVr,IHr.Row,IVrw);
+				if(IVrw.ArtCode==artcode)then begin
+				  rwcnt = MatRowCnt(SHr);
+				  lastRowPos = 0 /*rwcnt-1*/;
+				  insertf = true;
+				  if (MatRowCnt(SHr)==0) then begin
+				    ClearRow(SHr,SHrw,1);
+				  end else begin
+				    matrowget(SHr,lastRowPos,SHrw);
+				    if (SHrw.stp==IHr.Row and SHrw.OrdRow==IHr.TransNr) then begin
+				      insertf = false;
+				    end else begin
+				      ClearRow(SHr,SHrw,1);
+				    end;
+				  end;
+					SHrw.ArtCode = artcode;
+					if(currentcompany>1)then begin
+						SHrw.BestBefore = IHr.TransDate;
+					end;
+					SHrw.Ship = SHrw.Ship + AbsoluteVal(IHr.Qty);
+					SHrw.BasePrice = IVrw.Price;
+					if (IVrw.vRebate>0) then begin
+					  SHrw.PosCode = 0+IVrw.vRebate & "%";
+					end;
+					SHrw.TAX2Reb = SHrw.TAX2Reb + (IVrw.Sum/IVrw.Quant)*AbsoluteVal(IHr.Qty);
+					SHrw.Location = IHr.Location;
+					SHrw.CustArtCode = IVr.CustCode;
+					SHrw.Spec = IVr.Addr0;
+					SHrw.OrdRow = IHr.TransNr;
+					SHrw.FIFO = SHrw.FIFO + IHr.TotCostPrice;
+					if (NonBlank(SHrw.TAX2Code) and SHrw.TAX2Code!=IHr.CurncyCode) then begin
+					  CurValToOtherCur(IHr.InDate,IHr.CurncyCode,IHr.TotCostPriceCurncy,SHrw.TAX2Code,tval,DefaultCurRoundOff);
+					  SHrw.FIFORowVal = SHrw.FIFORowVal + tval;
+					  SHrw.TAX2Code = IHr.CurncyCode;
+					end else begin
+					  SHrw.FIFORowVal = SHrw.FIFORowVal + IHr.TotCostPriceCurncy;
+					  SHrw.TAX2Code = IHr.CurncyCode;
+					end;
+					SHrw.stp = IHr.Row;
+					SHrw.VARList = compname;
+					SHrw.Source = compnr;
+					if (insertf) then begin
+					  MatRowInsert(SHr,0/*rwcnt*/,SHrw);
+					end else begin
+					  MatRowPut(SHr,lastRowPos,SHrw);
+					end;
+        end;
+			end;
+  	end;
+  end; RESETLOOP(IHr);
+ 
+LMakeReItemsMatrixFind:;   
+      
+  return;
+end;
+
+global 
+procedure FindReItemsMatrix(var record SHVc SHr)
+begin
+  integer oldcomp;
+  
+    oldcomp = CurrentCompany;
+    MakeReItemsMatrixFind(SHr,true);
+    if (CompanyIsJWLikeCompany(oldcomp) and oldcomp!=3) then begin
+      if (SetCompanyCode("3",false)) then begin
+        MakeReItemsMatrixFind(SHr,false);
+        RESETCOMPANY(oldcomp);
+      end;
+    end;
+  
+return;
+end;
+
+global 
+procedure FindReItems(string artcode, date todate,var array string artcodes,var integer counter)
+begin
+record IVVc IVr;
+row IVVc IVrw;
+boolean TrHs,testf;
+record ItemHistVc IHr;
+string 100 tstr;
+
+  counter = 0;
+  IHr.FileName = "IVVc";
+  IHr.ArtCode = artcode;
+  IHr.TransDate = todate;
+  TrHs = true;
+  while(loopkey("FNArtCode",IHr,3,TrHs))begin
+  	testf = true;
+  	if(currentcompany==1)then begin
+			if(IHr.TransDate!=todate)then begin TrHs = false; testf = false; end;
+  	end else begin
+			if(IHr.TransDate<todate)then begin TrHs = false; testf = false; end;
+  	end;
+  	if(IHr.ArtCode!=artcode or IHr.FileName!="IVVc")then begin TrHs = false; testf = false; end;
+  	if(IHr.Invalid==1)then begin testf=false; end;
+  	if(IHr.StockAffectf!=1) then begin testf = false; end; //Edit***************************Sasha2,15:25 20.05.2015
+  	if(testf)then begin
+  		
+			IVr.SerNr = IHr.TransNr;
+			if(readfirstmain(IVr,1,true))then begin
+				matrowget(IVr,IHr.Row,IVrw);
+				if(IVrw.ArtCode==artcode)then begin
+					tstr = artcode;
+					if(currentcompany>1)then begin
+						tstr = tstr  & chr(9) & IVr.TransDate;
+					end;
+          artcodes[counter] = tstr;
+          artcodes[counter] = artcodes[counter] & chr(9) & IVrw.Quant;
+          artcodes[counter] = artcodes[counter] & chr(9) & IVrw.Price;
+          artcodes[counter] = artcodes[counter] & chr(9) & 0+IVrw.vRebate & "%";
+          artcodes[counter] = artcodes[counter] & chr(9) & IVrw.Sum;
+          artcodes[counter] = artcodes[counter] & chr(9) & IVr.Location;
+          artcodes[counter] = artcodes[counter] & chr(9) & "      " & IVr.CustCode;
+          artcodes[counter] = artcodes[counter] & chr(9) & "      " & IVr.Addr0;
+          artcodes[counter] = artcodes[counter] & chr(9) & "      #" & IVr.SerNr; //Edit***************************Sasha2,12:39 03.07.2015
+          artcodes[counter] = artcodes[counter] & chr(9) & IHr.Row; //Edit***************************Sasha2,12:39 03.07.2015
+          artcodes[counter] = artcodes[counter] & chr(9); //Edit***************************Sasha2,13:39 03.07.2015
+          counter = counter + 1;
+        end;
+			end;
+  	end;
+  end;
+  
+  
+return;
+end;
