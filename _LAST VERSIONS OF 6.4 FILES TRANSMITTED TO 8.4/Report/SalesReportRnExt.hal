@@ -5,6 +5,7 @@ external function Boolean SetInSet2(string,string);
 external function val AbsoluteVal(val);
 external function boolean CompanyIsJWLikeCompany(Integer);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
 
 function string 200 prepareStr(string input)
 begin
@@ -75,12 +76,12 @@ end;
 
 
 global
-procedure FindFIFOOrigValAndCurncyIV(longint sernr, integer rownr, var val fifo, var string cur,var val fifobase,boolean updst)
+procedure FindFIFOOrigValAndCurncyIV(longint sernr, integer rownr, var val fifo, var string cur,var val fifobase,boolean updst,var array string addCurs,var vector val currencyBalances,Boolean additionalCurF) //Edit***************************Sasha2,16:03 13.09.2017
 begin
 	record ItemHistVc IHr,IH2r;
 	record PUVc PUr;
 	row PUVc PUrw;
-	integer mtrw,i;
+	integer mtrw,i,j;
 	record INVc INr;
 	string 20 artcode;
 	date ivdate;
@@ -92,19 +93,25 @@ begin
 	record SHVc SHr;
 	row SHVc SHrw;
 	boolean TrHs,testf,findsec,TrHs1;
-	val fr,to1,to2,br1,br2;
+	val fr,to1,to2,br1,br2,tval;
 	integer halt;	
+	date curDate,blankd;
 	
 	fifo = 0;
 	cur = "";
 	fifobase = 0;
+	if (additionalCurF) then begin //Edit***************************Sasha2,14:23 14.09.2017 {
+    for (j=0;j<addCurs.length;j=j+1) begin
+      currencyBalances[addCurs[j]] = BlankVal;
+    end;
+	end; //Edit***************************Sasha2,14:23 14.09.2017 }
 	
 	if(updst)then begin
 		IHr.FileName = "IVVc";
 		IHr.TransNr = sernr;
 		IHr.Row = rownr;
 		TrHs = true;
-		while(loopkey("FNTransNr",IHr,3,TrHs))begin
+		while(loopkey("FNTransNr",IHr,3,TrHs)) begin
 			if(IHr.FileName!="IVVc")then begin TrHs = false; end;
 			if(IHr.TransNr!=sernr)then begin TrHs = false; end;
 			if(IHr.Row!=rownr)then begin TrHs = false; end;
@@ -113,6 +120,24 @@ begin
 				fifobase = fifobase + IHr.TotCostPrice;
 				fifo = fifo + IHr.TotCostPriceCurncy;
 				cur = IHr.CurncyCode;
+				if (additionalCurF) then begin  //Edit***************************Sasha2,16:09 13.09.2017 {
+  				for (j=0;j<addCurs.length;j=j+1) begin
+  				  if (addCurs[j]==IHr.CurncyCode) then begin
+  				    currencyBalances[addCurs[j]] = currencyBalances[addCurs[j]] + IHr.TotCostPriceCurncy;
+  				  end else begin
+  				    curDate = IHr.InDate;
+  				    if (BlankDate(curDate)) then begin
+  				      curDate = IHr.TransDate;
+  				    end;
+  				    if (NonBlankDate(curDate)) then begin
+  				      CurValToOtherCur(curDate,IHr.CurncyCode,IHr.TotCostPriceCurncy,addCurs[j],tval,DefaultCurRoundOff);
+  				      currencyBalances[addCurs[j]] = currencyBalances[addCurs[j]] + tval;
+  				    end else begin
+  				      LogText(0,"Report SalesReportExtRn. No date for IV #" & sernr & ", row #" & rownr);
+  				    end;
+  				  end;
+  				end;
+				end; //Edit***************************Sasha2,16:09 13.09.2017 }
 			end;
 		end;
 	end else begin
@@ -122,7 +147,7 @@ begin
 		halt = 0;
 		TrHs = true;
 		SHr.OrderNr=IVr.OrderNr;
-		while(loopkey("OrderKey",SHr,1,TrHs))begin
+		while(loopkey("OrderKey",SHr,1,TrHs)) begin
 			if(SHr.OrderNr!=IVr.OrderNr)then begin TrHs=false; end;
 			
 			if(TrHs)then begin
@@ -135,7 +160,7 @@ begin
 						IHr.Row = i;
 						TrHs1 = true;
 						resetloop(IHr);
-						while(loopkey("FNTransNr",IHr,3,TrHs1))begin
+						while(loopkey("FNTransNr",IHr,3,TrHs1)) begin
 							if(IHr.FileName!="SHVc")then begin TrHs1 = false; end;
 							if(IHr.TransNr!=SHr.SerNr)then begin TrHs1 = false; end;
 							if(IHr.Row!=i)then begin TrHs1 = false; end;
@@ -144,6 +169,24 @@ begin
 									fifobase = fifobase + IHr.TotCostPrice;
 									fifo = fifo + IHr.TotCostPriceCurncy;
 									cur = IHr.CurncyCode;
+									if (additionalCurF) then begin //Edit***************************Sasha2,16:09 13.09.2017 {
+  									for (j=0;j<addCurs.length;j=j+1) begin
+            				  if (addCurs[j]==IHr.CurncyCode) then begin
+            				    currencyBalances[addCurs[j]] = currencyBalances[addCurs[j]] + IHr.TotCostPriceCurncy;
+            				  end else begin
+            				    curDate = IHr.InDate;
+            				    if (BlankDate(curDate)) then begin
+            				      curDate = IHr.TransDate;
+            				    end;
+            				    if (NonBlankDate(curDate)) then begin
+            				      CurValToOtherCur(curDate,IHr.CurncyCode,IHr.TotCostPriceCurncy,addCurs[j],tval,DefaultCurRoundOff);
+            				      currencyBalances[addCurs[j]] = currencyBalances[addCurs[j]] + tval;
+            				    end else begin
+            				      LogText(0,"Report SalesReportExtRn. No date for SH #" & SHr.SerNr & ", row #" & i);
+            				    end;
+            				  end;
+            				end;
+									end; //Edit***************************Sasha2,16:09 13.09.2017 }
 									halt = halt - IHr.Qty;
 								end else begin
 									TrHs1 = false;
@@ -311,6 +354,13 @@ begin
 
 	if(fifo<0)then begin fifo=-fifo; end;
 	if(fifobase<0)then begin fifobase=-fifobase; end;
+	if (additionalCurF) then begin //Edit***************************Sasha2,14:23 14.09.2017 {
+    for (j=0;j<addCurs.length;j=j+1) begin
+      if (currencyBalances[addCurs[j]]<0) then begin
+        currencyBalances[addCurs[j]] = -currencyBalances[addCurs[j]];
+      end;
+    end;
+	end; //Edit***************************Sasha2,14:23 14.09.2017 }
 	
 return;
 end;
@@ -566,6 +616,11 @@ begin
   integer rwcnt,typescnt,pos1; //Edit***************************Sasha2,14:11 08.02.2016
   Boolean collf,metalf; //Edit***************************Sasha2,14:09 02.06.2016
   string 20 collstr,metalstr; //Edit***************************Sasha2,14:09 02.06.2016
+  vector val currencyBalances; //Edit***************************Sasha2,15:49 13.09.2017
+	array string 10 addCurs; //Edit***************************Sasha2,15:50 13.09.2017
+	Boolean additionalCurF; //Edit***************************Sasha2,10:33 14.09.2017
+	val EURprice,EURcusm; //Edit***************************Sasha2,11:26 14.09.2017
+	record CurncyCodeVc CurncyCoder; //Edit***************************Sasha2,13:55 14.09.2017
   
   blockload(BCb);
   bcur = BCb.BaseCur1;
@@ -618,6 +673,14 @@ begin
   	headrow = headrow + 1;
   	
   	EndHeader; //Edit***************************Sasha2,16:57 19.11.2014 }
+  	
+  	if (NonBlank(RepSpec.f7)) then begin //Edit***************************Sasha2,16:02 13.09.2017 {
+  	  CurncyCoder.CurncyCode = RepSpec.f7;
+  	  if (ReadFirstMain(CurncyCoder,1,true)) then begin
+    	  addCurs[addCurs.length] = CurncyCoder.CurncyCode; 
+    	  additionalCurF = true;
+  	  end;
+  	end;//Edit***************************Sasha2,16:02 13.09.2017 }
   	
   	if (CompanyIsJWLikeCompany(CurrentCompany)) then begin //Edit***************************Sasha2,11:27 02.06.2016 {
   	  addclassf = true;
@@ -773,6 +836,9 @@ begin
 					outstring(0,0,USetStr(13199),false);//EKNCode
 					outstring(0,0,USetStr(31052),false);
 					outstring(100,0,USetStr(31053),false);
+					if (additionalCurF) then begin //additional currency cost //Edit***************************Sasha2,17:02 13.09.2017
+					  outstring(100,0,USetStr(31055) & addCurs[0],false);
+					end;
 					if(bcur==azn)then begin
 						outstring(101,0,USetStr(31055) & bcur,false);
 					end;
@@ -780,13 +846,19 @@ begin
 						outstring(102,0,USetStr(31055) & bcur,false);
 					end;
 					outstring(110,0,USetStr(31056),false);
+					if (additionalCurF) then begin //additional currency cost sum//Edit***************************Sasha2,17:02 13.09.2017
+					  outstring(110,0,USetStr(31058) & addCurs[0],false);
+					end;
 					if(bcur==azn)then begin
-					outstring(111,0,USetStr(31058) & bcur,false);
+					  outstring(111,0,USetStr(31058) & bcur,false);
 					end;
 					if(bcur!=azn)then begin
 						outstring(112,0,USetStr(31058) & bcur,false);
 					end;
 					outstring(120,0,USetStr(31059),false);
+					if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+					  outstring(120,0,USetStr(31061) & addCurs[0],false);
+					end;
 					if(bcur==azn)then begin
 						outstring(121,0,USetStr(31061) & bcur,false);
 					end;
@@ -794,6 +866,9 @@ begin
 						outstring(122,0,USetStr(31061) & bcur,false);
 					end;
 					outstring(130,0,USetStr(31062),false);
+					if (additionalCurF) then begin //additional currency retail sum //Edit***************************Sasha2,17:02 13.09.2017
+					  outstring(130,0,USetStr(31064) & addCurs[0],false);
+					end;
 					if(bcur==azn)then begin
 						outstring(131,0,USetStr(31064) & bcur,false);
 					end;
@@ -801,6 +876,9 @@ begin
 						outstring(132,0,USetStr(31064) & bcur,false);
 					end;
 					outstring(140,0,USetStr(31065),false);
+					if (additionalCurF) then begin //additional currency retail difference //Edit***************************Sasha2,17:02 13.09.2017
+					  outstring(140,0,USetStr(31067) & addCurs[0],false);
+					end;
 					if(bcur==azn)then begin
 						outstring(141,0,USetStr(31067) & bcur,false);
 					end;
@@ -847,7 +925,7 @@ begin
 				btotal_price = 0;
 				btotal_gp = 0;
 				rangecnt = 0; //Edit***************************Sasha2,11:41 20.11.2014
-				arrsize = 20; 
+				arrsize = 25; 
 				
 				//arrsize = arrsize + ctypecnt; //Edit***************************Sasha2,16:49 11.11.2015
 				arrsize = arrsize + typescnt;
@@ -1226,7 +1304,7 @@ begin
 										end;
 										
 										
-										FindFIFOOrigValAndCurncyIV(IVr.SerNr,i,brandfifo,brandcur,fifob1,updst);
+										FindFIFOOrigValAndCurncyIV(IVr.SerNr,i,brandfifo,brandcur,fifob1,updst,addCurs,currencyBalances,additionalCurF); //Edit***************************Sasha2,16:02 13.09.2017
 										if(fifob1==0)then begin
 											fifob1 = INr.WeighedAvPrice * IVrw.Quant;
 										end;
@@ -1237,6 +1315,9 @@ begin
 										
 										brandfifo = AbsoluteVal(brandfifo/IVrw.Quant);
 										fifob1 = AbsoluteVal(fifob1/IVrw.Quant);
+										for (j=0;j<addCurs.length;j=j+1) begin //Edit***************************Sasha2,11:46 14.09.2017 {
+										  currencyBalances[addCurs[j]] = currencyBalances[addCurs[j]]/IVrw.Quant;
+										end; //Edit***************************Sasha2,11:46 14.09.2017 }
 										
 										GetFullCurncyRate(azn,IVr.TransDate,aznfr,aznto,to2,br1,br2);
 										if(aznfr==0 or aznto==0)then begin
@@ -1246,6 +1327,9 @@ begin
 										
 										if (modef) then begin
 											outstring(100,0,brandfifo,false);//brandcur
+											if (additionalCurF) then begin //additional currency cost //Edit***************************Sasha2,17:02 13.09.2017
+            					  outstring(100,0,currencyBalances[CurncyCoder.CurncyCode],false);
+            					end;
 											if(bcur==azn)then begin
 												outstring(101,0,fifoazn,false);//AZN
 											end;
@@ -1253,6 +1337,9 @@ begin
 												outstring(102,0,fifob1,false);//basecur
 											end;
 											outstring(110,0,brandfifo*IVrw.Quant*cred,false);//brandcur
+											if (additionalCurF) then begin //additional currency cost sum//Edit***************************Sasha2,17:02 13.09.2017
+            					  outstring(110,0,currencyBalances[CurncyCoder.CurncyCode]*IVrw.Quant*cred,false);
+            					end;
 											if(bcur==azn)then begin
 												outstring(111,0,fifoazn*IVrw.Quant*cred,false);//AZN
 											end;
@@ -1261,11 +1348,17 @@ begin
 											end;
 										end else begin //Edit***************************Sasha2,11:17 20.11.2014 {
 											arrvals[valscnt] = arrvals[valscnt] + brandfifo; valscnt = valscnt + 1;
+											if (additionalCurF) then begin //additional currency cost //Edit***************************Sasha2,17:02 13.09.2017
+            					  arrvals[valscnt] = arrvals[valscnt] + currencyBalances[CurncyCoder.CurncyCode]; valscnt = valscnt + 1;
+            					end;
 											arrvals[valscnt] = arrvals[valscnt] + fifoazn; valscnt = valscnt + 1;
 											if(bcur!=azn)then begin
 												arrvals[valscnt] = arrvals[valscnt] + fifob1; valscnt = valscnt + 1;
 											end;
 											arrvals[valscnt] = arrvals[valscnt] + brandfifo*IVrw.Quant*cred; valscnt = valscnt + 1;
+											if (additionalCurF) then begin //additional currency cost sum//Edit***************************Sasha2,17:02 13.09.2017
+            					  arrvals[valscnt] = arrvals[valscnt] + currencyBalances[CurncyCoder.CurncyCode]*IVrw.Quant*cred; valscnt = valscnt + 1;
+            					end;
 											arrvals[valscnt] = arrvals[valscnt] + fifoazn*IVrw.Quant*cred; valscnt = valscnt + 1;
 											if(bcur!=azn)then begin
 												arrvals[valscnt] = arrvals[valscnt] + fifob1*IVrw.Quant*cred; valscnt = valscnt + 1;
@@ -1290,14 +1383,29 @@ begin
 										btotal_cost = btotal_cost + fifob1*IVrw.Quant*cred;
 										
 										curprice = round(IVrw.Price*fr/to1,SetRoundModeD(1))*cred;
+										if (additionalCurF) then begin  //Edit***************************Sasha2,11:27 14.09.2017 {
+  										if (IVr.CurncyCode==CurncyCoder.CurncyCode) then begin
+  										  EURprice = IVrw.Price*cred;
+  										end else begin
+  										  EURprice = BlankVal;
+  										  CurValToOtherCur(IVr.InvDate,IVr.CurncyCode,IVrw.Price,CurncyCoder.CurncyCode,EURprice,DefaultCurRoundOff); //Edit***************************Sasha2,11:13 14.09.2017
+  										  EURprice = EURprice*cred;
+  										end;
+										end; //Edit***************************Sasha2,11:27 14.09.2017 }
 										
 										if (modef) then begin
 											outstring(120,0,curprice,false);//brandcur
+											if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+            					  outstring(120,0,EURprice,false);
+            					end;
 											if(bcur==azn)then begin
 												outstring(121,0,IVrw.Price*aznfr/aznto,false);//AZN
 											end;
 										end else begin //Edit***************************Sasha2,11:17 20.11.2014 {
 											arrvals[valscnt] = arrvals[valscnt] + curprice; valscnt = valscnt + 1;
+											if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+											  arrvals[valscnt] = arrvals[valscnt] + EURprice; valscnt = valscnt + 1;
+											end;
 											arrvals[valscnt] = arrvals[valscnt] + IVrw.Price*aznfr/aznto; valscnt = valscnt + 1;
 										end; //Edit***************************Sasha2,11:18 20.11.2014 }
 										
@@ -1314,14 +1422,23 @@ begin
 										end; //Edit***************************Sasha2,11:18 20.11.2014 }
 										
 										curcusm = round(IVrw.Sum*fr/to1,SetRoundModeD(1))*cred;
+										if (additionalCurF) then begin  //Edit***************************Sasha2,11:27 14.09.2017 {
+  										EURcusm = EURprice*cred; //Edit***************************Sasha2,11:34 14.09.2017
+										end; //Edit***************************Sasha2,11:27 14.09.2017 }
 										
 										if (modef) then begin
 											outstring(130,0,curcusm,false);//brandcur
+											if (additionalCurF) then begin //additional currency retail sum //Edit***************************Sasha2,17:02 13.09.2017
+            					  outstring(130,0,EURcusm,false);
+            					end;
 											if(bcur==azn)then begin
 												outstring(131,0,IVrw.Sum*aznfr/aznto*cred,false);//AZN
 											end;
 										end else begin //Edit***************************Sasha2,11:17 20.11.2014 {
 											arrvals[valscnt] = arrvals[valscnt] + curcusm; valscnt = valscnt + 1;
+											if (additionalCurF) then begin //additional currency retail sum //Edit***************************Sasha2,17:02 13.09.2017
+            					  arrvals[valscnt] = arrvals[valscnt] + EURcusm; valscnt = valscnt + 1;
+            					end;
 											arrvals[valscnt] = arrvals[valscnt] + IVrw.Sum*aznfr/aznto*cred; valscnt = valscnt + 1;
 										end; //Edit***************************Sasha2,11:17 20.11.2014 }
 										
@@ -1340,7 +1457,10 @@ begin
 										btotal_price = btotal_price + IVrw.Sum*cred;
 										
 										if (modef) then begin
-											outstring(140,0,curcusm - brandfifo*IVrw.Quant*cred,false);//brandcur
+											outstring(140,0,(curcusm - brandfifo*IVrw.Quant)*cred,false);//brandcur
+											if (additionalCurF) then begin //additional currency retail difference //Edit***************************Sasha2,17:02 13.09.2017
+            					  outstring(140,0,(EURcusm -  currencyBalances[CurncyCoder.CurncyCode]*IVrw.Quant)*cred,false);
+            					end;
 											if(bcur==azn)then begin
 												outstring(141,0,IVrw.Sum*aznfr/aznto*cred - fifob1*IVrw.Quant*aznfr/aznto*cred,false);//AZN
 											end;
@@ -1361,6 +1481,9 @@ begin
 											outstring(0,0,IVr.InvComment,false);
 										end else begin //Edit***************************Sasha2,11:17 20.11.2014 {
 											arrvals[valscnt] = arrvals[valscnt] + (curcusm - brandfifo*IVrw.Quant)*cred; valscnt = valscnt + 1;
+											if (additionalCurF) then begin //additional currency retail difference //Edit***************************Sasha2,17:02 13.09.2017
+            					  arrvals[valscnt] = arrvals[valscnt] + (EURcusm -  currencyBalances[CurncyCoder.CurncyCode]*IVrw.Quant)*cred; valscnt = valscnt + 1;
+            					end;
 											arrvals[valscnt] = arrvals[valscnt] + (IVrw.Sum*aznfr/aznto - fifob1*IVrw.Quant*aznfr/aznto)*cred; valscnt = valscnt + 1;
 											if(bcur!=azn)then begin
 												arrvals[valscnt] = arrvals[valscnt] + (IVrw.Sum - fifob1*IVrw.Quant)*cred; valscnt = valscnt + 1;
@@ -1461,6 +1584,9 @@ begin
 							outstring(14,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //INr.EKNCode
 							outstring(15,0,arrvals[valscnt],false); valscnt = valscnt + 1; //IVrw.Quant
 							outstring(16,0,arrvals[valscnt]/itemoccurrences,false); valscnt = valscnt + 1; //brandfifo
+							if (additionalCurF) then begin //additional currency cost //Edit***************************Sasha2,17:02 13.09.2017
+							  outstring(16,0,arrvals[valscnt]/itemoccurrences,false); valscnt = valscnt + 1;
+							end;
 							if(bcur==azn)then begin
 								outstring(17,0,arrvals[valscnt]/itemoccurrences,false); valscnt = valscnt + 1; //fifoazn
 							end;
@@ -1468,6 +1594,9 @@ begin
 								outstring(18,0,arrvals[valscnt]/itemoccurrences,false); valscnt = valscnt + 1; //fifob1
 							end;
 							outstring(19,0,arrvals[valscnt],false); valscnt = valscnt + 1; //brandfifo*IVrw.Quant
+							if (additionalCurF) then begin //additional currency cost sum//Edit***************************Sasha2,17:02 13.09.2017
+    					  outstring(19,0,arrvals[valscnt],false); valscnt = valscnt + 1;
+    					end;
 							if(bcur==azn)then begin
 								outstring(20,0,arrvals[valscnt],false); valscnt = valscnt + 1; //fifoazn*IVrw.Quant
 							end;
@@ -1475,6 +1604,9 @@ begin
 								outstring(21,0,arrvals[valscnt],false); valscnt = valscnt + 1; //fifob1*IVrw.Quant
 							end;
 							outstring(22,0,arrvals[valscnt]/itemoccurrences,false); valscnt = valscnt + 1; //curprice
+							if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+    					  outstring(22,0,arrvals[valscnt]/itemoccurrences,false); valscnt = valscnt + 1;
+    					end;
 							if(bcur==azn)then begin
 								outstring(23,0,arrvals[valscnt]/itemoccurrences,false); valscnt = valscnt + 1; //IVrw.Price*aznfr/aznto
 							end;
@@ -1482,6 +1614,9 @@ begin
 								outstring(24,0,arrvals[valscnt]/itemoccurrences,false); valscnt = valscnt + 1; //IVrw.Price
 							end;
 							outstring(25,0,arrvals[valscnt],false); valscnt = valscnt + 1; //curcusm
+							if (additionalCurF) then begin //additional currency retail sum //Edit***************************Sasha2,17:02 13.09.2017
+    					  outstring(25,0,arrvals[valscnt],false); valscnt = valscnt + 1; 
+    					end;
 							if(bcur==azn)then begin
 							outstring(26,0,arrvals[valscnt],false); valscnt = valscnt + 1; //IVrw.Sum*aznfr/aznto
 							end;
@@ -1489,6 +1624,9 @@ begin
 								outstring(27,0,arrvals[valscnt],false); valscnt = valscnt + 1; //IVrw.Sum
 							end;
 							outstring(28,0,arrvals[valscnt],false); valscnt = valscnt + 1; //curcusm - brandfifo*IVrw.Quant
+							if (additionalCurF) then begin //additional currency retail difference //Edit***************************Sasha2,17:02 13.09.2017
+    					  outstring(28,0,arrvals[valscnt],false); valscnt = valscnt + 1;
+    					end;
 							if(bcur==azn)then begin
 								outstring(29,0,arrvals[valscnt],false); valscnt = valscnt + 1; //IVrw.Sum*aznfr/aznto - fifob1*IVrw.Quant*aznfr/aznto
 							end;
@@ -1538,31 +1676,43 @@ begin
 					outstring(0,0,"",false);
 					outstring(0,0,USetStr(31074),false);
 					outstring(0,0,total_qty,false);
+					outstring(0,0,"",false);
 					if(bcur!=azn)then begin
 						outstring(0,0,"",false);
 					end;
 					if(bcur==azn)then begin
 						outstring(0,0,"",false);
 					end;
-					outstring(0,0,"",false);
+					if (additionalCurF) then begin //additional currency cost, additional currency cost sum //Edit***************************Sasha2,17:02 13.09.2017
+					  outstring(0,0,"",false);
+					  outstring(0,0,"",false);
+					end;
 					outstring(0,0,USetStr(31075),false);
 					if(bcur==azn)then begin
 						outstring(0,0,total_cost,false);
 					end;
 					if(bcur!=azn)then begin
 						outstring(0,0,btotal_cost,false);
-						outstring(0,0,"",false);
+					end;
+					outstring(0,0,"",false);
+					if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+					  outstring(0,0,"",false);
 					end;
 					if(bcur==azn)then begin
-					outstring(0,0,"",false);
+					  outstring(0,0,"",false);
 					end;
-					outstring(0,0,"",false);
+					if (additionalCurF) then begin //additional currency retail sum  //Edit***************************Sasha2,17:02 13.09.2017
+					  outstring(0,0,"",false);
+					end;
 					outstring(0,0,USetStr(31076),false);
 					if(bcur==azn)then begin
 						outstring(0,0,total_price,false);
 					end;
 					if(bcur!=azn)then begin
 						outstring(0,0,btotal_price,false);
+					end;
+					if (additionalCurF) then begin //additional currency retail difference//Edit***************************Sasha2,17:02 13.09.2017
+					  outstring(0,0,"",false);
 					end;
 					outstring(0,0,USetStr(31077),false);
 					if(bcur==azn)then begin

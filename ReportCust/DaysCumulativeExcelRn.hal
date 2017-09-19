@@ -1,5 +1,11 @@
 external function string 255 MonthName(Date);
 external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external function val IVToBaseMy(record IVVc,row IVVc,val);
+external function Boolean GetPMRow(string,var row PMBlock);
+external procedure GetObjs(string,string,var string);
+external function val AbsoluteVal(val);
+external function roundmode SetRoundModeD(Integer);
+external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
 
 external procedure XmlXlsxWorkBegin(string,string);
 external procedure CreateSheetsXLSX(integer,array string,string,integer,boolean);
@@ -15,27 +21,34 @@ external procedure EmptyCell(integer,string,var integer,integer,integer,integer)
 external procedure MergeCells(integer,string,array string,integer);
 external procedure FillSharedStrings(string,array string,integer,integer,array string);
 external procedure ConvertToXLSX(string,boolean);
-external function string 10 GetStringCellNum(integer,integer);
 
 SetLangMode(LangRussian,"RUS",0);
-
 
 global 
 procedure DaysCumulativeExcelRn(record RcVc RepSpec,var area areatofile)
 begin
   array string 255 LocArr,MonthArr,ConsultArr,NameArr;
-  boolean TrHs,testf,cnf,emptyf,giftf;
+  boolean TrHs,TrHs2,testf,cnf,emptyf,giftf,InvoiceRowTypeDownpaymentf;
   date startdate,enddate;
   record IVVc IVr,tIVr;
   record LocationVc Locr;
   record UserVc Userr;
   record GCSVc GCSr;
+  record ObjVc Objr;
+  record IPVc IPr;
+  record TRVc TRr;
+  record ORVc ORr;
+  record ARPayHistVc ARPayHistr;
   row IVVc IVrw,tIVrw;
-  integer keycnt,rwcnt,rwcnt2,LAi,MAi,CAi,i,j;
-  string 20 key;
-  string 255 tstr,month;
-  val sumoborot,sumvozvrat;
-  vector boolean LocInArr,MonthInArr,ConsultInArr,MonthLoc,LocSalesmanNameObor,LocSalesmanNameVozv;
+  row IPVc IPrw;
+  row PMBlock PMrw;
+  row TRVc TRrw;
+  row ORVc ORrw;
+  string 255 tstr,month,store;
+  integer rwcnt,rwcnt2,rwcnt3,LAi,MAi,CAi,i,j,k;
+  val sumoborot,sumvozvrat,recivedmoneybase,prepayment,gifted,giftsertpaym,loyaltypaym,percent,printedrmb,
+      sumbase,fr,to1,to2,br1,br2,printedprepval,rmbpart,recivedmoney;
+  vector boolean LocInArr,MonthInArr,ConsultInArr,MonthLoc;
   vector string 100 LocName,ConsultName;
   vector val Oborot,Vozvrat;
   array string 50 sheetNames;
@@ -48,8 +61,12 @@ begin
 	string 6 reportName;
   array string 255 mas;
   array integer lvlArray;
+  record BaseCurBlock BCb;// Edit ************************** Wednesday, 13 September 2017 16:41:14
+  boolean f1,f2;
   
   setexportcodepage("UTF8");
+  
+  BlockLoad(BCb);// Edit ************************** Wednesday, 13 September 2017 16:40:52
   
   Userr.Code = "";
   TrHs = true;
@@ -73,45 +90,54 @@ begin
     enddate = StringToDate("31/12/" & getyear(CurrentDate));
   end;
   IVr.InvDate = startdate;
-  if (nonblank(RepSpec.ObjStr)) then begin
-    IVr.Location = RepSpec.ObjStr;
-    key = "Location";
-    keycnt = 2;
-  end else begin
-    key = "InvDate";
-    keycnt = 1;
-  end;
   TrHs = true;
-  while (loopkey(key,IVr,keycnt,TrHs)) begin
+  while(loopkey("InvDate",IVr,1,TrHs))begin
     testf = true;
-    if (key=="Location") then begin
-      if (IVr.Location!=RepSpec.ObjStr) then begin TrHs = false; testf = false; end;
-      if (IVr.InvDate>enddate) then begin testf = false; end;
-    end else begin
-      if (IVr.InvDate>enddate) then begin TrHs = false; testf = false; end;
+    if (IVr.InvDate>enddate) then begin TrHs = false; testf = false; end;
+    if nonblank(RepSpec.ObjStr) then begin
+      store = "";
+      GetObjs("STORE",IVr.Objects,store);
+      if (RepSpec.ObjStr!=store) then begin testf = false; end;
     end;
     if (IVr.OKFlag==0) then begin testf = false; end;
     if (IVr.Invalid==1) then begin testf = false; end;
-    if (IVr.CustCode=="FOB36") then begin testf = false; end;
+    //if (IVr.CustCode=="FOB36") then begin testf = false; end;
+    if (testf) then begin
+      rwcnt = matrowcnt(IVr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        matrowget(IVr,i,IVrw);
+        if (IVrw.stp==kInvoiceRowTypeDownpayment) then begin
+          i = rwcnt;
+          testf = false;
+        end;
+      end;
+    end;
     if (testf) then begin
       if (currentcompany==9) then begin
-        IVr.Location = "CS";
-        if (LocInArr[IVr.Location]==false) then begin
-          LocInArr[IVr.Location] = true;
-          LocArr[LAi] = IVr.Location;
+        store = "CS";
+        if (LocInArr[store]==false) then begin
+          LocInArr[store] = true;
+          LocArr[LAi] = store;
           LAi = LAi + 1;
-          LocName[IVr.Location] = "CreativeSystem";
+          LocName[store] = "CreativeSystem";
         end;
       end else begin
-        if (LocInArr[IVr.Location]==false) then begin
-          LocInArr[IVr.Location] = true;
-          LocArr[LAi] = IVr.Location;
+        store = "";
+        GetObjs("STORE",IVr.Objects,store);
+        if (LocInArr[store]==false) then begin
+          LocInArr[store] = true;
+          LocArr[LAi] = store;
           LAi = LAi + 1;
-          Locr.Code = IVr.Location;
+          Locr.Code = store;
           if (ReadFirstMain(Locr,1,true)) then begin
-            LocName[IVr.Location] = Locr.Name;
+            LocName[store] = Locr.Name;
           end else begin
-            LocName[IVr.Location] = IVr.Location;
+            Objr.Code = store;
+            if (ReadFirstMain(Objr,1,true)) then begin
+              LocName[store] = Objr.Comment;
+            end else begin
+              LocName[store] = store;
+            end;
           end;
         end;
       end;
@@ -132,8 +158,11 @@ begin
         MonthArr[MAi] = month;
         MAi = MAi + 1;
       end;
-      MonthLoc[month & ";" & IVr.Location] = true;
-      tstr = IVr.Location & ";" & month & ";" & IVr.SalesMan & ";";
+      MonthLoc[month & ";" & store] = true;
+      tstr = store & ";" & month & ";" & IVr.SalesMan & ";";
+      if (IVr.CustCode=="FOB36") then begin
+        tstr = store & ";" & month & ";FOB36;";
+      end;
       if (IVr.PayDeal=="CN") then begin
         Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] - IVr.BaseSum4;
         Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1;
@@ -141,82 +170,524 @@ begin
       end;
       sumvozvrat = 0;
       sumoborot = 0;
+      recivedmoneybase = 0;
+      prepayment = 0;
+      gifted = 0;
+      giftsertpaym = 0;
+      loyaltypaym = 0;
       rwcnt = matrowcnt(IVr);
       for (i=0;i<rwcnt;i=i+1) begin
         matrowget(IVr,i,IVrw);
-        if (IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
-          giftf = false;
-          for (j=0;j<rwcnt;j=j+1) begin
-            matrowget(IVr,j,tIVrw);
-            if (tIVrw.PayMode=="G") then begin
-              giftf = true;
-              j = rwcnt;
-            end;
+        if (IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment) then begin
+          loyaltypaym = loyaltypaym + IVToBaseMy(IVr,IVrw,IVrw.Sum);
+          recivedmoneybase = recivedmoneybase + IVToBaseMy(IVr,IVrw,IVrw.Sum);
+        end;
+        if (IVrw.stp==kInvoiceRowTypePrepayment) then begin
+          prepayment = prepayment + IVToBaseMy(IVr,IVrw,IVrw.Sum);
+        end;
+        if (IVrw.stp==kInvoiceRowTypeCashPayment) then begin
+          recivedmoneybase = recivedmoneybase + IVToBaseMy(IVr,IVrw,IVrw.Sum);
+        end;
+        if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+          if ((IVrw.PayMode=="G") or (IVrw.PayMode=="D")) then begin
+            gifted = gifted + IVToBaseMy(IVr,IVrw,IVrw.Sum);
           end;
-          if (!giftf) then begin
-            if (LocSalesmanNameObor[tstr & "GV"]==false) then begin
-              LocSalesmanNameObor[tstr & "GV"] = true;
-              Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + 1;
-            end;
-            sumoborot = sumoborot + MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
-          end;
+          recivedmoneybase = recivedmoneybase + IVToBaseMy(IVr,IVrw,IVrw.Sum);
         end;
         if (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) then begin
-          GCSr.SerNr = IVrw.GCNr;
-          readfirstmain(GCSr,1,true);
-          tIVr.SerNr = GCSr.InvSerNr;
-          readfirstmain(tIVr,1,true);
-          rwcnt2 = matrowcnt(tIVr);
-          giftf = false;
-          for (j=0;j<rwcnt2;j=j+1) begin
-            matrowget(tIVr,j,tIVrw);
-            if (tIVrw.PayMode=="G") then begin
-              giftf = true;
-              j = rwcnt2;
+          //giftsertpaym = giftsertpaym + IVToBaseMy(IVr,IVrw,IVrw.Sum);
+          recivedmoneybase = recivedmoneybase + IVToBaseMy(IVr,IVrw,IVrw.Sum);
+        end;
+      end;
+      if ((currentcompany==9) and (IVr.PayDeal=="F")) then begin
+        recivedmoneybase = 0;
+      end;
+      recivedmoneybase = recivedmoneybase - gifted - giftsertpaym - loyaltypaym;
+      percent = recivedmoneybase/(recivedmoneybase + giftsertpaym + prepayment + loyaltypaym);
+      if (recivedmoneybase!=0) then begin
+        printedrmb = 0;
+        for (i=0;i<rwcnt;i=i+1) begin
+          matrowget(IVr,i,IVrw);
+          if (IVrw.stp==kInvoiceRowTypeNormal) then begin
+            if (i==rwcnt-1) then begin
+              sumbase = recivedmoneybase - printedrmb;
+            end else begin
+              sumbase = round(IVrw.Sum/IVr.Sum4*recivedmoneybase,SetRoundModeD(2));
+              printedrmb = printedrmb + sumbase;
+            end;
+            if (cnf) then begin
+              Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] + IVrw.Quant*percent;
+            end else begin
+              if (IVrw.Quant<0) then begin
+                Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] - IVrw.Quant*percent;
+                sumvozvrat = sumvozvrat + sumbase;
+              end else begin
+                Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + IVrw.Quant*percent;
+                sumoborot = sumoborot + sumbase;
+              end;
             end;
           end;
-          if (!giftf) then begin
-            if (LocSalesmanNameVozv[tstr & "GV"]==false) then begin
-              LocSalesmanNameVozv[tstr & "GV"] = true;
-              Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] + 1;
+          if (IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
+            giftf = false;
+            for (j=0;j<rwcnt;j=j+1) begin
+              matrowget(IVr,j,tIVrw);
+              if (tIVrw.PayMode=="G") then begin
+                giftf = true;
+                j = rwcnt;
+              end;
             end;
-            sumvozvrat = sumvozvrat - MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
-          end else begin
-            sumoborot = sumoborot - MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+            if (!giftf) then begin
+              if (i==rwcnt-1) then begin
+                sumbase = recivedmoneybase - printedrmb;
+              end else begin
+                sumbase = round(IVrw.Sum/IVr.Sum4*recivedmoneybase,SetRoundModeD(2));
+                printedrmb = printedrmb + sumbase;
+              end;
+              Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + 1*percent;
+              sumoborot = sumoborot + sumbase;
+            end;
+          end;
+          if (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) then begin
+            GCSr.SerNr = IVrw.GCNr;
+            readfirstmain(GCSr,1,true);
+            tIVr.SerNr = GCSr.InvSerNr;
+            readfirstmain(tIVr,1,true);
+            rwcnt2 = matrowcnt(tIVr);
+            giftf = false;
+            for (j=0;j<rwcnt2;j=j+1) begin
+              matrowget(tIVr,j,tIVrw);
+              if (tIVrw.PayMode=="G") then begin
+                giftf = true;
+                j = rwcnt2;
+              end;
+            end;
+            if (!giftf) then begin
+              Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] + 1*percent;
+              sumvozvrat = sumvozvrat - round(IVrw.Sum/IVr.Sum4*recivedmoneybase,SetRoundModeD(2));
+            end else begin
+              sumoborot = sumoborot - round(IVrw.Sum/IVr.Sum4*recivedmoneybase,SetRoundModeD(2));
+            end;
           end;
         end;
-        if (IVrw.stp==kInvoiceRowTypeNormal) then begin
-          if (cnf) then begin
-            if (LocSalesmanNameVozv[tstr & IVrw.ArtCode]==false) then begin
-              LocSalesmanNameVozv[tstr & IVrw.ArtCode] = true;
-              Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] + 1;
-            end;
-          end else begin
-            if (IVrw.Quant<0) then begin
-              if (LocSalesmanNameVozv[tstr & IVrw.ArtCode]==false) then begin
-                LocSalesmanNameVozv[tstr & IVrw.ArtCode] = true;
-                Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] + 1;
-              end;
-              sumvozvrat = sumvozvrat + MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
-            end else begin
-              if (LocSalesmanNameObor[tstr & IVrw.ArtCode]==false) then begin
-                LocSalesmanNameObor[tstr & IVrw.ArtCode] = true;
-                Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + 1;
-              end;
-              sumoborot = sumoborot + MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
-            end;
+        if (cnf) then begin
+        end else begin
+          if (sumvozvrat!=0) then begin
+            Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1*percent;
+            Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumvozvrat;
+          end;
+          if (sumoborot!=0) then begin
+            Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
+            Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
           end;
         end;
       end;
-      if (cnf) then begin
-      end else begin
-        if (Vozvrat[tstr & "naim"]!=0) then begin
-          Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1;
-          Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumvozvrat;
-        end;
-        if (Oborot[tstr & "naim"]!=0) then begin
-          Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1;
-          Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
+    end;
+  end;
+  
+  IPr.TransDate = startdate;
+  TrHs = true;
+  while (loopkey("TransDate",IPr,1,TrHs)) begin
+    testf = true;
+    if (IPr.TransDate>enddate) then begin  TrHs = false; testf = false; end;
+    if (IPr.OKFlag==0) then begin testf = false; end;
+    if (testf) then begin
+      recivedmoneybase = 0;
+      printedprepval = 0;// Edit ************************** Wednesday, 13 September 2017 13:51:40
+      GetPMRow(IPr.PayMode,PMrw);
+      if (left(PMrw.AccNr,1)=="5") then begin
+        rwcnt = matrowcnt(IPr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          sumvozvrat = 0;
+          sumoborot = 0;
+          sumbase = 0;
+          matrowget(IPr,i,IPrw);
+          if nonblank(RepSpec.ObjStr) then begin
+            store = "";
+            GetObjs("STORE",IPrw.Objects,store);
+            if (RepSpec.ObjStr!=store) then begin testf = false; end;
+          end;
+          if (testf) then begin
+            if (currentcompany==9) then begin
+              store = "CS";
+              if (LocInArr[store]==false) then begin
+                LocInArr[store] = true;
+                LocArr[LAi] = store;
+                LAi = LAi + 1;
+                LocName[store] = "CreativeSystem";
+              end;
+            end else begin
+              store = "";
+              GetObjs("STORE",IPrw.Objects,store);
+              if (LocInArr[store]==false) then begin
+                LocInArr[store] = true;
+                LocArr[LAi] = store;
+                LAi = LAi + 1;
+                Locr.Code = store;
+                if (ReadFirstMain(Locr,1,true)) then begin
+                  LocName[store] = Locr.Name;
+                end else begin
+                  Objr.Code = store;
+                  if (ReadFirstMain(Objr,1,true)) then begin
+                    LocName[store] = Objr.Comment;
+                  end else begin
+                    LocName[store] = store;
+                  end;
+                end;
+              end;
+            end;
+            cnf = false;
+            month = getmonth(IPr.TransDate) & "_" & getyear(IPr.TransDate);
+            if (MonthInArr[month]==false) then begin
+              MonthInArr[month] = true;
+              MonthArr[MAi] = month;
+              MAi = MAi + 1;
+            end;
+            MonthLoc[month & ";" & store] = true;
+            TRr.Number = IPr.SerNr;
+            TRr.IntYc = IPYc;
+            if (ReadFirstMain(TRr,2,true)) then begin
+              fr = 1;
+              rwcnt2 = MatRowCnt(TRr);
+              for(j=0;j<rwcnt2;j=j+1) begin
+                MatRowGet(TRr,j,TRrw);
+                if ((left(TRrw.AccNumber,1) == "5") and (TRrw.ovst <> 1) and TRrw.Curncy!=BCb.BaseCur1) then begin// Edit ************************** Wednesday, 13 September 2017 16:40:41
+                  to1 = TRrw.DebVal/TRrw.CurDebVal;
+                  if (to1==0) then begin
+                    to1 = TRrw.CredVal/TRrw.CurCredVal;
+                  end;
+                  j = rwcnt2;
+                end;
+              end;
+            end else begin
+              GetFullCurncyRate(IPrw.BankCurncy,IPr.TransDate,fr,to1,to2,br1,br2);
+            end;
+            if (fr==0 or to1==0) then begin
+              fr = 1; to1 = 1;
+            end;
+            recivedmoneybase = MulRateToBase1(IPrw.BankCurncy,IPrw.BankVal,fr,to1,to2,br1,br2,DefaultCurRoundOff);
+            recivedmoney = IPrw.InvVal;// Edit ************************** Friday, 15 September 2017 11:15:47
+            if (IPrw.InvoiceNr!=-1) then begin
+              IVr.SerNr = IPrw.InvoiceNr;
+              ReadFirstMain(IVr,1,true);
+              if (ConsultInArr[IVr.SalesMan]==false) then begin
+                ConsultInArr[IVr.SalesMan] = true;
+                ConsultArr[CAi] = IVr.SalesMan;
+                CAi = CAi + 1;
+                Userr.Code = IVr.SalesMan;
+                if (ReadFirstMain(Userr,1,true)) then begin
+                  ConsultName[IVr.SalesMan] = Userr.Name;
+                end else begin
+                  ConsultName[IVr.SalesMan] = IVr.SalesMan;
+                end;
+              end;
+              tstr = store & ";" & month & ";" & IVr.SalesMan & ";";
+              if (IPrw.CustCode=="FOB36") then begin
+                tstr = store & ";" & month & ";FOB36;";
+              end;
+              percent = IPrw.RecVal/IVr.Sum4;
+              printedrmb = 0;
+              rwcnt2 = matrowcnt(IVr);
+              InvoiceRowTypeDownpaymentf = false;
+              // Edit Start ---------------------------------------------- Edit Start
+	//Thursday, 14 September 2017 15:16:35
+	
+              if(recivedmoneybase<0)then begin// Edit ************************** Thursday, 14 September 2017 15:15:38
+              	for (j=0;j<rwcnt2;j=j+1) begin
+              		matrowget(IVr,j,IVrw);
+									if(IVrw.stp==kInvoiceRowTypeDownpayment)then begin
+										sumbase = recivedmoneybase;
+										sumvozvrat = sumvozvrat + sumbase;
+										Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumbase;
+										InvoiceRowTypeDownpaymentf = true;
+										logtext(0,IPr.SerNr & "sumvozvrat1 " & sumvozvrat);
+										goto LDownpaymentFoundRet;
+									end;
+              	end;
+              end;
+              f1 = false;
+              f2 = false;
+              if(recivedmoneybase>0)then begin// Edit ************************** Thursday, 14 September 2017 15:15:38
+              	for (j=0;j<rwcnt2;j=j+1) begin
+              		matrowget(IVr,j,IVrw);
+									if(IVrw.stp==kInvoiceRowTypeDownpayment and IVrw.Sum>0)then begin
+										f1 = true;
+									end;
+									if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+										f2 = true;
+									end;
+              	end;
+              	if(f1 and f2)then begin
+              		sumbase = recivedmoneybase;
+              		Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1;
+              		sumoborot = sumoborot + sumbase;
+                  Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
+                  InvoiceRowTypeDownpaymentf = true;
+                  goto LDownpaymentFoundRet;
+              	end;
+              end;
+              
+	// Edit End ---------------------------------------------- Edit End
+	
+              for (j=0;j<rwcnt2;j=j+1) begin
+                matrowget(IVr,j,IVrw);
+                sumbase = 0;
+                if (IVrw.stp==kInvoiceRowTypeDownpayment) then begin
+                  InvoiceRowTypeDownpaymentf = true;
+                  ORr.SerNr = IVrw.Spec;
+                  ReadFirstMain(ORr,1,true);
+                  printedrmb = 0;
+                  rwcnt3 = matrowcnt(ORr);
+                  for (k=0;k<rwcnt3;k=k+1) begin
+                    matrowget(ORr,k,ORrw);
+                    sumbase = 0;
+                    if (k==rwcnt3-1) then begin
+                      sumbase = recivedmoneybase - printedrmb;
+                    end else begin
+                      sumbase = round(ORrw.Sum/ORr.Sum4*recivedmoneybase,SetRoundModeD(2));
+                      printedrmb = printedrmb + sumbase;
+                    end;
+                    Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + ORrw.Quant*percent;
+                    sumoborot = sumoborot + sumbase;
+                  end;
+                  if (sumvozvrat!=0) then begin
+                    Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1*percent;
+                    Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumvozvrat;
+                    logtext(0,IPr.SerNr & "sumvozvrat2 " & sumvozvrat);
+                  end;
+                  if (sumoborot!=0) then begin
+                    Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
+                    Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
+                  end;
+                  j = rwcnt2;
+                end;
+                if (IVrw.stp==kInvoiceRowTypeNormal) then begin
+                  if (j==rwcnt2-1) then begin
+                    sumbase = recivedmoneybase - printedrmb;
+                  end else begin
+                    sumbase = round(IVrw.Sum/IVr.Sum4*recivedmoneybase,SetRoundModeD(2));
+                    printedrmb = printedrmb + sumbase;
+                  end;
+                  if (IVrw.Quant<0) then begin
+                    Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] - IVrw.Quant*percent;
+                    sumvozvrat = sumvozvrat + sumbase;
+                  end else begin
+                    Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + IVrw.Quant*percent;
+                    sumoborot = sumoborot + sumbase;
+                  end;
+                end;
+                if (IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
+                  giftf = false;
+                  for (j=0;j<rwcnt;j=j+1) begin
+                    matrowget(IVr,j,tIVrw);
+                    if (tIVrw.PayMode=="G") then begin
+                      giftf = true;
+                      j = rwcnt;
+                    end;
+                  end;
+                  if (!giftf) then begin
+                    if (i==rwcnt-1) then begin
+                      sumbase = recivedmoneybase - printedrmb;
+                    end else begin
+                      sumbase = round(IVrw.Sum/IVr.Sum4*recivedmoneybase,SetRoundModeD(2));
+                      printedrmb = printedrmb + sumbase;
+                    end;
+                    Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + 1*percent;
+                    sumoborot = sumoborot + sumbase;
+                  end;
+                end;
+              end;
+LDownpaymentFoundRet:;
+              if (!InvoiceRowTypeDownpaymentf) then begin
+                if (sumvozvrat!=0) then begin
+                  Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1*percent;
+                  Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumvozvrat;
+                  logtext(0,IPr.SerNr & "sumvozvrat3 " & sumvozvrat);
+                end;
+                if (sumoborot!=0) then begin
+                  Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
+                  Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
+                end;
+              end;
+            end else begin
+              if (IPrw.OrderNr!=-1) then begin
+                ORr.SerNr = IPrw.OrderNr;
+                ReadFirstMain(ORr,1,true);
+                if (ConsultInArr[ORr.SalesMan]==false) then begin
+                  ConsultInArr[ORr.SalesMan] = true;
+                  ConsultArr[CAi] = ORr.SalesMan;
+                  CAi = CAi + 1;
+                  Userr.Code = ORr.SalesMan;
+                  if (ReadFirstMain(Userr,1,true)) then begin
+                    ConsultName[ORr.SalesMan] = Userr.Name;
+                  end else begin
+                    ConsultName[ORr.SalesMan] = ORr.SalesMan;
+                  end;
+                end;
+                tstr = store & ";" & month & ";" & ORr.SalesMan & ";";
+                if (IPrw.CustCode=="FOB36") then begin
+                  tstr = store & ";" & month & ";FOB36;";
+                end;
+                printedrmb = 0;
+                rwcnt3 = matrowcnt(ORr);
+                for (k=0;k<rwcnt3;k=k+1) begin
+                  matrowget(ORr,k,ORrw);
+                  if (k==rwcnt3-1) then begin
+                    sumbase = recivedmoneybase - printedrmb;
+                  end else begin
+                    sumbase = round(ORrw.Sum/ORr.Sum4*recivedmoneybase,SetRoundModeD(2));
+                    printedrmb = printedrmb + sumbase;
+                  end;
+                  Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + ORrw.Quant*percent;
+                  sumoborot = sumoborot + sumbase;
+                end;
+                if (sumvozvrat!=0) then begin
+                  Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1*percent;
+                  Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumvozvrat;
+                end;
+                if (sumoborot!=0) then begin
+                  Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
+                  Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
+                end;
+              end else begin
+                if (IPrw.CUPNr!=-1) then begin
+                  if (recivedmoneybase>0) then begin
+                    ARPayHistr.FileName = "IVVc";
+                    ARPayHistr.CUPNr = IPrw.CUPNr;
+                    TrHs2 = true;
+                    resetloop(ARPayHistr);
+                    printedprepval = 0;
+                    while (loopmain(ARPayHistr,2,TrHs2)) begin
+                      if (ARPayHistr.FileName!="IVVc") then begin TrHs2=false; end;
+                      if (ARPayHistr.CUPNr!=IPrw.CUPNr) then begin TrHs2=false; end;
+                      if (TrHs2) then begin
+                        rmbpart = ARPayHistr.BookVal;
+                        IVr.SerNr = ARPayHistr.SerNr;
+                        ReadFirstMain(IVr,1,true);
+                        if (ConsultInArr[IVr.SalesMan]==false) then begin
+                          ConsultInArr[IVr.SalesMan] = true;
+                          ConsultArr[CAi] = IVr.SalesMan;
+                          CAi = CAi + 1;
+                          Userr.Code = IVr.SalesMan;
+                          if (ReadFirstMain(Userr,1,true)) then begin
+                            ConsultName[IVr.SalesMan] = Userr.Name;
+                          end else begin
+                            ConsultName[IVr.SalesMan] = IVr.SalesMan;
+                          end;
+                        end;
+                        tstr = store & ";" & month & ";" & IVr.SalesMan & ";";
+                        if (IPrw.CustCode=="FOB36") then begin
+                          tstr = store & ";" & month & ";FOB36;";
+                        end;
+                        percent = rmbpart/IVr.BaseSum4;
+                        printedrmb = 0;
+                        rwcnt2 = matrowcnt(IVr);
+                        InvoiceRowTypeDownpaymentf = false;
+                        for (j=0;j<rwcnt2;j=j+1) begin
+                          matrowget(IVr,j,IVrw);
+                          sumbase = 0;
+                          if (IVrw.stp==kInvoiceRowTypeDownpayment) then begin
+                            InvoiceRowTypeDownpaymentf = true;
+                            ORr.SerNr = IVrw.Spec;
+                            ReadFirstMain(ORr,1,true);
+                            printedrmb = 0;
+                            rwcnt3 = matrowcnt(ORr);
+                            for (k=0;k<rwcnt3;k=k+1) begin
+                              matrowget(ORr,k,ORrw);
+                              sumbase = 0;
+                              if (k==rwcnt3-1) then begin
+                                sumbase = recivedmoneybase - printedrmb;
+                              end else begin
+                                sumbase = round(ORrw.Sum/ORr.Sum4*recivedmoneybase,SetRoundModeD(2));
+                                printedrmb = printedrmb + sumbase;
+                              end;
+                              Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + ORrw.Quant*percent;
+                              sumoborot = sumoborot + sumbase;
+                            end;
+                            if (sumvozvrat!=0) then begin
+                              Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1*percent;
+                              Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumvozvrat;
+                            end;
+                            if (sumoborot!=0) then begin
+                              Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
+                              Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
+                            end;
+                            j = rwcnt2;
+                          end;
+                          if (IVrw.stp==kInvoiceRowTypeNormal) then begin
+                            if (j==rwcnt2-1) then begin
+                              sumbase = recivedmoneybase - printedrmb;
+                            end else begin
+                              sumbase = round(IVrw.Sum/IVr.Sum4*recivedmoneybase,SetRoundModeD(2));
+                              printedrmb = printedrmb + sumbase;
+                            end;
+                            if (cnf) then begin
+                              Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] + IVrw.Quant*percent;
+                            end else begin
+                              if (IVrw.Quant<0) then begin
+                                Vozvrat[tstr & "naim"] = Vozvrat[tstr & "naim"] - IVrw.Quant*percent;
+                                sumvozvrat = sumvozvrat + sumbase;
+                              end else begin
+                                Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + IVrw.Quant*percent;
+                                sumoborot = sumoborot + sumbase;
+                              end;
+                            end;
+                          end;
+                          if (IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
+                            giftf = false;
+                            for (j=0;j<rwcnt;j=j+1) begin
+                              matrowget(IVr,j,tIVrw);
+                              if (tIVrw.PayMode=="G") then begin
+                                giftf = true;
+                                j = rwcnt;
+                              end;
+                            end;
+                            if (!giftf) then begin
+                              if (i==rwcnt-1) then begin
+                                sumbase = recivedmoneybase - printedrmb;
+                              end else begin
+                                sumbase = round(IVrw.Sum/IVr.Sum4*recivedmoneybase,SetRoundModeD(2));
+                                printedrmb = printedrmb + sumbase;
+                              end;
+                              Oborot[tstr & "naim"] = Oborot[tstr & "naim"] + 1*percent;
+                              sumoborot = sumoborot + sumbase;
+                            end;
+                          end;
+                        end;
+                        if (sumvozvrat!=0) then begin
+                          Vozvrat[tstr & "chek"] = Vozvrat[tstr & "chek"] + 1*percent;
+                          Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumvozvrat;
+                        end;
+                        if (sumoborot!=0) then begin
+                          Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
+                          Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
+                        end;
+                        printedprepval = printedprepval + rmbpart;
+                      end;
+                    end;
+                  end;
+                  if (AbsoluteVal(recivedmoneybase)>AbsoluteVal(printedprepval)) then begin
+                    if (IPrw.CustCode=="FOB36") then begin
+                      tstr = store & ";" & month & ";FOB36;";
+                    end else begin
+                    tstr = store & ";" & month & ";STORE;";
+                      if (ConsultInArr["STORE"]==false) then begin
+                        ConsultInArr["STORE"] = true;
+                        ConsultArr[CAi] = "STORE";
+                        CAi = CAi + 1;
+                        ConsultName["STORE"] = "STORE";
+                      end;
+                    end;
+                    sumbase = recivedmoneybase - printedprepval;
+                    if (sumbase>0) then begin
+                      Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumbase;
+                    end else begin
+                      Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumbase;
+                    end;
+                  end;
+                end;
+              end;
+            end;
+          end;
         end;
       end;
     end;
@@ -272,104 +743,124 @@ begin
         sheetnum = sheetnum + 1;
         SetSheetsCols(sheetnum,sheetColls,lvlArray,fileToSave);
         BeginSheetData(sheetnum,fileToSave);
-        mergeCell[0] = "C6:E6";
-        mergeCell[1] = "F6:H6";
-        mergeCell[2] = "I6:I7";
-        mergeCell[3] = "B6:B7";
-        qtyMergeCell = 4;
-        rownum = 1;
-        colnum = 3;
-        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-          style = 2;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Отчет за день с накопительным эффектом",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-        EndRow(sheetnum,fileToSave,rownum);
-        rownum = rownum + 1;
-        colnum = 2;
-        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-          style = 3;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,LocName[LocArr[LAi]],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-        EndRow(sheetnum,fileToSave,rownum);
-        colnum = 2;
-        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-          style = 3;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,startdate & ":" & enddate,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-        EndRow(sheetnum,fileToSave,rownum);
-        rownum = rownum + 1;
-        colnum = 2;
-        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-          style = 26;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Имя консультанта",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          style = 28;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Оборот",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          style = 29;
-          qtyOfEmpStr = 1;
-          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-          style = 30;
-          qtyOfEmpStr = 1;
-          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-          style = 28;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Возвраты",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          style = 29;
-          qtyOfEmpStr = 1;
-          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-          style = 30;
-          qtyOfEmpStr = 1;
-          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-          style = 31;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Сумма",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-        EndRow(sheetnum,fileToSave,rownum);
-        colnum = 2;
-        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-          style = 27;
-          qtyOfEmpStr = 1;
-          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-          style = 12;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Приход",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          style = 13;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. чеков",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          style = 14;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. наим.",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          style = 12;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Возврат",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          style = 13;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. чеков",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          style = 14;
-          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. наим.",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          style = 32;
-          qtyOfEmpStr = 1;
-          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-        EndRow(sheetnum,fileToSave,rownum);
-        for (CAi=0;CAi<ConsultArr.length;CAi=CAi+1) begin
-          tstr = LocArr[LAi] & ";" & MonthArr[MAi] & ";" & ConsultArr[CAi] & ";";
-          //if ((Oborot[tstr & "chek"]!=blankval) or (Vozvrat[tstr & "chek"]!=blankval)) then begin
+          mergeCell[0] = "C6:E6";
+          mergeCell[1] = "F6:H6";
+          mergeCell[2] = "I6:I7";
+          mergeCell[3] = "B6:B7";
+          qtyMergeCell = 4;
+          rownum = 1;
+          colnum = 3;
+          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+            style = 2;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Отчет за день с накопительным эффектом",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          EndRow(sheetnum,fileToSave,rownum);
+          rownum = rownum + 1;
+          colnum = 2;
+          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+            style = 3;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,LocName[LocArr[LAi]],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          EndRow(sheetnum,fileToSave,rownum);
+          colnum = 2;
+          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+            style = 3;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,startdate & ":" & enddate,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          EndRow(sheetnum,fileToSave,rownum);
+          rownum = rownum + 1;
+          colnum = 2;
+          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+            style = 16;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Имя консультанта",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+            style = 11;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Оборот",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+            style = 12;
+            qtyOfEmpStr = 1;
+            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+            style = 13;
+            qtyOfEmpStr = 1;
+            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+            style = 11;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Возвраты",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+            style = 12;
+            qtyOfEmpStr = 1;
+            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+            style = 13;
+            qtyOfEmpStr = 1;
+            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+            style = 14;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Сумма",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          EndRow(sheetnum,fileToSave,rownum);
+          colnum = 2;
+          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+            style = 17;
+            qtyOfEmpStr = 1;
+            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+            style = 7;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Приход",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+            style = 8;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. чеков",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+            style = 9;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. наим.",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+            style = 7;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Возврат",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+            style = 8;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. чеков",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+            style = 9;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол. наим.",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+            style = 15;
+            qtyOfEmpStr = 1;
+            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+          EndRow(sheetnum,fileToSave,rownum);
+          for (CAi=0;CAi<ConsultArr.length;CAi=CAi+1) begin
+            tstr = LocArr[LAi] & ";" & MonthArr[MAi] & ";" & ConsultArr[CAi] & ";";
             colnum = 2;
             BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-              style = 7;
+              style = 4;
               StringCell(sheetnum,fileToSave,colnum,rownum,style,ConsultName[ConsultArr[CAi]],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-              style = 8;
+              style = 5;
               NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "sum"]);
-              style = 4;
+              style = 18;
               NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "chek"]);
-              style = 9;
+              style = 19;
               NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "naim"]);
-              style = 8;
+              style = 5;
               NumericCell(sheetnum,fileToSave,colnum,rownum,style,Vozvrat[tstr & "sum"]);
-              style = 4;
+              style = 18;
               NumericCell(sheetnum,fileToSave,colnum,rownum,style,Vozvrat[tstr & "chek"]);
-              style = 9;
+              style = 19;
               NumericCell(sheetnum,fileToSave,colnum,rownum,style,Vozvrat[tstr & "naim"]);
-              style = 11;
+              style = 6;
               NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "sum"] + Vozvrat[tstr & "sum"]);
             EndRow(sheetnum,fileToSave,rownum);
-          //end;
-        end;
-          
-        colnum = 2;
-        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-          style = 25;
-          qtyOfEmpStr = 8;
-          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-        EndRow(sheetnum,fileToSave,rownum);
+          end;
+          colnum = 2;
+          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+            style = 10;
+            qtyOfEmpStr = 8;
+            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+          EndRow(sheetnum,fileToSave,rownum);
+          colnum = 2;
+          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+            style = 3;
+            StringCell(sheetnum,fileToSave,colnum,rownum,style,"FOB36",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          EndRow(sheetnum,fileToSave,rownum);
+          colnum = 3;
+          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+            style = 20;
+            tstr = LocArr[LAi] & ";" & MonthArr[MAi] & ";FOB36;";
+            NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "sum"]);
+            style = 21;
+            NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "chek"]);
+            style = 22;
+            NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "naim"]);
+            style = 23;
+            NumericCell(sheetnum,fileToSave,colnum,rownum,style,Vozvrat[tstr & "sum"]);
+            style = 22;
+            NumericCell(sheetnum,fileToSave,colnum,rownum,style,Vozvrat[tstr & "chek"]);
+            style = 22;
+            NumericCell(sheetnum,fileToSave,colnum,rownum,style,Vozvrat[tstr & "naim"]);
+            style = 24;
+            NumericCell(sheetnum,fileToSave,colnum,rownum,style,Oborot[tstr & "sum"] + Vozvrat[tstr & "sum"]);
+          EndRow(sheetnum,fileToSave,rownum);
         EndSheetData(sheetnum,fileToSave);
         MergeCells(sheetnum,fileToSave,mergeCell,qtyMergeCell);
         EndSheet(sheetnum,fileToSave,0);
