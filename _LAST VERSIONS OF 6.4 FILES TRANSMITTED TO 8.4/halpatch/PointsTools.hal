@@ -1,3 +1,38 @@
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+
+//Edit***************************Sasha2,15:22 15.09.2017 {
+function val CountIVPurePaidSum(record IVVc IVr)
+begin
+  val purePaidSum;
+  record BaseCurBlock BCb;
+  row IVVc IVrw;
+  integer rwcnt,i;
+    
+    BlockLoad(BCb);
+    if (IVr.SerNr>-1) then begin
+      purePaidSum = IVr.Sum4;
+      if (IVr.CurncyCode!=BCb.BaseCur1) then begin
+        purePaidSum = MulRateToBase1(IVr.CurncyCode,IVr.Sum4,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+      end;
+      if (purePaidSum!=0) then begin
+        rwcnt = MatRowCnt(IVr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(IVr,i,IVrw);
+          switch (IVrw.stp) begin
+            case kInvoiceRowTypeLoyaltyPointsPayment:
+              purePaidSum = purePaidSum - IVrw.Points;
+          end;
+        end;
+        if (purePaidSum<0) then begin
+          purePaidSum = 0;
+        end;
+      end;
+    end;
+    
+  CountIVPurePaidSum = purePaidSum;
+  return;
+end; //Edit***************************Sasha2,15:22 15.09.2017 }
+
 global
 function val GetLCardStartBalance(string card,string location,date tilldate)
 begin 
@@ -89,11 +124,28 @@ begin
   string 20 cardnr,nextlevel;
   val points;
   boolean TrHs; //Edit***************************Sasha2,17:56 26.07.2017
+  record IVVc IVr; //Edit***************************Sasha2,17:47 15.09.2017
+  record LCCashbackLevelVc LCCBLevelr; //Edit***************************Sasha2,17:13 15.09.2017
+  val pointsStatistic; //Edit***************************Sasha2,17:13 15.09.2017
 
   PHr.TransNr = transnr;
   PHr.FileName = filename;
   if (ReadFirstKey("TransNr",PHr,2,true)) then begin// Edit ************************** Thursday, 20 April 2017 09:40:10
     points = PHr.Points;
+    IVr.SerNr = PHr.TransNr; //Edit***************************Sasha2,17:15 15.09.2017 {
+    ReadFirstMain(IVr,1,true);
+    LCCBLevelr.LCMLevel = IVr.LCMLevel;
+    if (ReadFirstMain(LCCBLevelr,1,true)) then begin
+      pointsStatistic = CountIVPurePaidSum(IVr);
+      if (IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales) then begin
+        //maybe here credited invoice should be found and passed to CountIVPurePaidSum
+        //to count negative pointsStatistic. Because for credit invoice we 
+        //do not take into account LoyaltyPointsPayment of the credited invoice
+        pointsStatistic = -pointsStatistic;
+      end;
+    end else begin
+      pointsStatistic = points;
+    end; //Edit***************************Sasha2,17:15 15.09.2017 }
     cardnr = PHr.LMCardNr;
     RecordDelete(PHr);
     
@@ -114,8 +166,8 @@ begin
       if (LoyaltyCardr.Closed==0) then begin
         RecordCopy(oldLoyaltyCardr,LoyaltyCardr);
         LoyaltyCardr.PointsBalance = LoyaltyCardr.PointsBalance - points;
-        LoyaltyCardr.CashbackLevelPoints = LoyaltyCardr.CashbackLevelPoints - points; //Edit***************************Sasha2,11:46 14.07.2017
-        LoyaltyCardr.PointsBalanceTotal = LoyaltyCardr.PointsBalanceTotal - points; //Edit***************************Sasha2,11:46 14.07.2017
+        LoyaltyCardr.CashbackLevelPoints = LoyaltyCardr.CashbackLevelPoints - pointsStatistic; //Edit***************************Sasha2,11:46 14.07.2017
+        LoyaltyCardr.PointsBalanceTotal = LoyaltyCardr.PointsBalanceTotal - pointsStatistic; //Edit***************************Sasha2,11:46 14.07.2017
         LogText(0,"DeletePointsHist Invoice #" & transnr & " LoyProgram:" & LoyaltyCardr.LCMLevel & " points:" & points);
         if (oldLoyaltyCardr.PointsBalance<LoyaltyCardr.PointsBalance) then begin
           nextlevel = NextLCMLevel(LoyaltyCardr.PointsBalance);
@@ -186,7 +238,8 @@ begin
   val qty;
   boolean testf;
   string 20 nextlevel;
-  
+  record LCCashbackLevelVc LCCBLevelr; //Edit***************************Sasha2,17:13 15.09.2017
+  val pointsStatistic; //Edit***************************Sasha2,17:13 15.09.2017
   
   RecordNew(PHr);
   qty = 0;
@@ -219,14 +272,26 @@ begin
       end else begin 
         qty = IVr.Points;
       end;  
+      LCCBLevelr.LCMLevel = LoyaltyCardr.LCMLevel; //Edit***************************Sasha2,17:15 15.09.2017 {
+      if (ReadFirstMain(LCCBLevelr,1,true)) then begin
+        pointsStatistic = CountIVPurePaidSum(IVr);
+        if (invtype==kInvoiceTypeCredit or invtype==kInvoiceTypeCreditSpecialSales) then begin
+          //maybe here credited invoice should be found and passed to CountIVPurePaidSum
+          //to count negative pointsStatistic. Because for credit invoice we 
+          //do not take into account LoyaltyPointsPayment of the credited invoice
+          pointsStatistic = -pointsStatistic;
+        end;
+      end else begin
+        pointsStatistic = qty;
+      end; //Edit***************************Sasha2,17:15 15.09.2017 }
       PHr.Points = qty;
       PHr.SerNr = NextSerNr("PointsHistVc",PHr.TransDate,-1,false,"");
       testf = RecordStore(PHr,false); 
       if (blank(LoyaltyCardr.PointsTo)) then begin
         RecordCopy(oldLoyaltyCardr,LoyaltyCardr);
         LoyaltyCardr.PointsBalance = LoyaltyCardr.PointsBalance + qty;
-        LoyaltyCardr.CashbackLevelPoints = LoyaltyCardr.CashbackLevelPoints + qty; //Edit***************************Sasha2,11:46 14.07.2017
-        LoyaltyCardr.PointsBalanceTotal = LoyaltyCardr.PointsBalanceTotal + qty; //Edit***************************Sasha2,11:46 14.07.2017
+        LoyaltyCardr.CashbackLevelPoints = LoyaltyCardr.CashbackLevelPoints + pointsStatistic; //Edit***************************Sasha2,11:46 14.07.2017
+        LoyaltyCardr.PointsBalanceTotal = LoyaltyCardr.PointsBalanceTotal + pointsStatistic; //Edit***************************Sasha2,11:46 14.07.2017
         LogText(0,"AddPointsHist Invoice #" & IVr.SerNr & " LoyProgram:" & LoyaltyCardr.LCMLevel & " points:" & qty);
         if (oldLoyaltyCardr.PointsBalance<LoyaltyCardr.PointsBalance) then begin
           nextlevel = NextLCMLevel(LoyaltyCardr.PointsBalance);
@@ -245,8 +310,8 @@ begin
         // which card level to update ??
         RecordCopy(oldLoyaltyCardr,LoyaltyCard2r);
         LoyaltyCard2r.PointsBalance = LoyaltyCard2r.PointsBalance + qty;
-        LoyaltyCard2r.CashbackLevelPoints = LoyaltyCard2r.CashbackLevelPoints + qty; //Edit***************************Sasha2,11:46 14.07.2017
-        LoyaltyCard2r.PointsBalanceTotal = LoyaltyCard2r.PointsBalanceTotal + qty; //Edit***************************Sasha2,11:46 14.07.2017
+        LoyaltyCard2r.CashbackLevelPoints = LoyaltyCard2r.CashbackLevelPoints + pointsStatistic; //Edit***************************Sasha2,11:46 14.07.2017
+        LoyaltyCard2r.PointsBalanceTotal = LoyaltyCard2r.PointsBalanceTotal + pointsStatistic; //Edit***************************Sasha2,11:46 14.07.2017
         if (oldLoyaltyCardr.PointsBalance<LoyaltyCard2r.PointsBalance) then begin
           nextlevel = NextLCMLevel(LoyaltyCard2r.PointsBalance);
           if (nonblank(nextlevel)) then begin 
