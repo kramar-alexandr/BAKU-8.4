@@ -1,5 +1,21 @@
+external procedure AutomatedSalesOrderly(string);
+external procedure OutEmpty(record RcVc,Integer);
+external function Integer CountObjects(string);
+external procedure MulM4OneRate(val,val,var val,roundmode,Boolean);
+external function val MulRateToBase2(var string,val,val,val,val,val,val,roundmode);
+external procedure GetFullCurncyRateText(Boolean,var string,val,val,val,val,val);
+external procedure GetConsolidationRate(string,string,Date,var val,var val,var val,var val,var val);
+external procedure HForm(record RcVc,record AccVc,val,val,val,Boolean);
+external function Boolean HasMultiCurrency();
+external function roundmode DefaultRoundMode();
 external procedure AddVATSumToVATSum(record SMVc,record SMVc);
+external procedure AddCurncyTotals(var array string,var array val,var Integer,string,val);
+external procedure PrintCurncyTotals(array string,array val,array val,array val,Integer,Integer,Integer,Integer,Integer,Boolean,Integer);
+external procedure BeginCurncyTotals(var Integer);
+external function Integer GetLocalCompanyNr(string,Boolean);
 external procedure ClearAcums();
+external procedure PrintMainHeaders(record RcVc,var Boolean,Array Boolean,Array string,Array string,Array LongInt,Boolean);
+external procedure GetAccountDescription2(string,string,var string);
 external procedure ReadFBRow(record RcVc,record FBVc,string,var Integer,var val,
                     record SMVc,Integer,string,var Boolean,
                     var val,val,val,var val,var val,var LongInt,
@@ -18,6 +34,11 @@ external procedure ReadSMRow(record RcVc,record SMVc,string,Date,var Integer,var
                     var Boolean,Array Boolean,Array string,Array string,Array LongInt,
                     record AccVc,Boolean,
                     var array string,var array val,var array val,var array val,var Integer);
+external procedure ReadTrR2(record RcVc,record TRVc,record BaseCurBlock,string,Date,var Integer,
+                   var val,record SMVc,Integer,string,
+                   var Boolean,val,val,val,var val,var val,var LongInt,
+                   var Boolean,Array Boolean,Array string,Array string,Array LongInt,
+                   record AccVc,Boolean,var array string,var array val,var array val,var array val,var Integer);
 external procedure ReadTrRow(record RcVc,record TRVc,record BaseCurBlock,string,var Integer,var val,
                     record SMVc,Integer,string,var Boolean,
                     var val,var val,var val,var val,var val,var LongInt,
@@ -25,7 +46,29 @@ external procedure ReadTrRow(record RcVc,record TRVc,record BaseCurBlock,string,
                     record AccVc,Boolean,var array string,var array val,var array val,var array val,var Integer);
 external procedure FindNLAccBal(string,string,string,Integer,Date,Date,Integer,Integer,Boolean,string,Integer,string,string,var val);
 external function Boolean AccInRange(string,string);
+external procedure ListPerTrans(record RcVc);
+external function Boolean DatePrel(Date);
+external procedure HTVatNr(string,var string);
+external procedure HTOT(string,var string);
+external procedure HTObj(string,var string);
+external procedure HTAccPer(Date,Date,var string);
+external procedure HT2Per(Date, Date , var string);
+external procedure LstRegDat(var string);
+external procedure HTAccs(string,string,Integer, var string);
 external procedure FindAccSD(Date,var Date,var Boolean);
+
+global
+procedure OutputReportIndent(record RCVc RepSpec,Integer cnt)
+begin
+  Integer i;
+  
+  if (RepSpec.Media==mtFile or RepSpec.Media==mtExcel) then begin
+    for (i=0;i<cnt;i=i+1) begin
+      OutString(0,0,"",false);
+    end;
+  end;
+  return;
+end;
 
 function
 Boolean MainLoopNext(Array Boolean mhractivef,Array Boolean mhrfoundf,Array Boolean mhrfirstf,
@@ -155,6 +198,18 @@ LMainLoopAccp:;
   RETURN;
 END;
 
+function 
+Boolean AccBlockedTest(record AccessVc Accessp,string accnr)
+begin
+  Boolean resa;
+  
+  if (AccInRange(accnr,Accessp.BlockAccs)) then begin
+    resa = true;
+  end;
+  AccBlockedTest = resa;
+  return;
+end;
+
 function Boolean CurUserAccBlockedTest(string accnr)
 BEGIN
   Boolean resb;
@@ -165,7 +220,7 @@ BEGIN
   if (ReadFirstMain(Userr,1,true)) then begin
     Accessr.Code = Userr.AccessGroup;
     if (ReadFirstMain(Accessr,1,true)) then begin
-      if (AccInRange(accnr,Accessr.BlockAccs)) then begin
+      if (AccBlockedTest(Accessr,accnr)) then begin
         resb = true;
       end;
     end;
@@ -173,6 +228,54 @@ BEGIN
   end;  
   CurUserAccBlockedTest = resb;
   RETURN;
+END;
+
+procedure PrintVATCodesSubtotals(record RcVc RepSpec,record SMVc VATSumr)
+BEGIN
+  val totdeb,totcred;
+  string 255 tstr;
+  Integer j,rwcnt;
+  Integer i,vatrows;
+  row SMVc VATSumrw;
+  record VATCodeBlock VATCodeRec;
+  row VATCodeBlock VATCoderw;
+  
+  vatrows = MatRowCnt(VATSumr);
+  BlockLoad(VATCodeRec);
+  rwcnt = MatRowCnt(VATCodeRec);
+  StartFormat(15);
+  EndFormat;
+  StartFormat(15);
+  OutString(60,0,USetStr(3198),false);
+  OutEmpty(RepSpec,1);
+  OutString(3,0,USetStr(3187),true);
+  OutString(4,0,USetStr(3188),true);
+  EndFormat;
+  Gray_Divider(100,4);
+  for (i=0;i<vatrows;i=i+1) begin
+    MatRowGet(VATSumr,i,VATSumrw);
+    for (j=0;j<rwcnt;j=j+1) begin
+      MatRowGet(VATCodeRec,j,VATCoderw);
+      if (VATSumrw.VATCode==VATCoderw.VATCode) then begin
+        tstr = VATCoderw.Comment;
+      end;
+    end;
+    StartFormat(15);
+    OutString(60,0,VATSumrw.VATCode,false);
+    OutString(90,0,tstr,false);
+    OutVal(3,0,VATSumrw.DebVal,M4Val,true);
+    OutVal(4,0,VATSumrw.CredVal,M4Val,true);
+    EndFormat;
+    totdeb = totdeb + VATSumrw.DebVal;
+    totcred = totcred + VATSumrw.CredVal;
+  end;
+  Gray_Divider(100,4);
+  StartFormat(15);
+  OutEmpty(RepSpec,2);
+  OutVal(3,0,totdeb,M4Val,true);
+  OutVal(4,0,totcred,M4Val,true);
+  EndFormat;
+  RETURN;      
 END;
 
 procedure MainInnerLoop(record RcVc RepSpec,Boolean showbasecurf,record SMVc VATSump,var Boolean FirstTrans,var val CurBal,Date AccumStartDate,
@@ -183,9 +286,10 @@ procedure MainInnerLoop(record RcVc RepSpec,Boolean showbasecurf,record SMVc VAT
                         var LongInt TotTransCnt)
 BEGIN
   val v;
-  val MainIS,MainOS,tmpMainOS;
+  val MainIS,MainOS,NetChange,tmpMainOS;
   LongInt MainCnt,tmpMainCnt;
   record MainVc mainr;
+  record ObjBalVc ObjBalr;
   record TRVc MR3;
   record FBVc FBr;
   record RegArchiveDetailVc RADr;
@@ -195,6 +299,9 @@ BEGIN
   Boolean TrHs,testf;
   Integer OldTransMonth;
   val SumDebet,SumCredit;
+  val SumDebetCER,SumCreditCER,CurBalCER;
+  val tmp;
+  string 255 tstr,balostr,index;
   Integer curcnt;
   array val av1;
   array val av2;
@@ -202,6 +309,8 @@ BEGIN
   array string 20 acur;
   record BaseCurBlock BCb;
   record SMVc VATSumr;
+  val cerfr,certo1,certo2,cerbr1,cerbr2;
+  Date fbd;
   
   MainCnt = 0;
   MainLoopAccp(mhrckey,mhrvc,mhrLLoop,Accr);
@@ -213,10 +322,51 @@ BEGIN
     testf = false;
   end;
   if (testf) then begin  
+    if (RepSpec.flags[12]==kReportBCOneConsolidationRate) then begin
+      GetConsolidationRate(Accr.AccNumber,BCb.BaseCur1,RepSpec.sEndDate,cerfr,certo1,certo2,cerbr1,cerbr2);
+    end;
     FirstTrans = true;
-
-    FindNLAccBal(Accr.AccNumber,RepSpec.ObjStr,RepSpec.ObjType,Accr.AccType,AccumStartDate,RepSpec.sStartDate,
+//    glRepp->AccOut = false;
+    balostr = RepSpec.ObjStr;
+/*
+    if (CountObjects(balostr)==1) then begin
+      if (RepSpec.flags[21]!=0) and (RepSpec.flags[22]==0) then begin
+        balostr = balostr & ";;;";
+      end;
+      if (RepSpec.flags[21]==0) and (RepSpec.flags[22]!=0) then begin
+        balostr = balostr & ";;;";
+      end;
+    end;
+*/
+    fbd = RepSpec.sStartDate;
+    FindNLAccBal(Accr.AccNumber,balostr,RepSpec.ObjType,Accr.AccType,AccumStartDate,fbd,
                  RepSpec.SimVerf,RepSpec.basecurncy,resUseAccum,RepSpec.CurncyCode,RepSpec.IncDaughter,RepSpec.f3,"",CurBal);
+
+    if (CurBal!=0) then begin
+      PrintMainHeaders(RepSpec,headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,printf);
+      if (RepSpec.IncDaughter!=0) then begin
+        if (FirstTrans) then begin
+          HForm(RepSpec,Accr,CurBal,TotSumDebetCur,TotSumCreditCur,printf);
+          FirstTrans = false;
+        end;
+      end;
+      if (RepSpec.flags[12]==kReportBCOneConsolidationRate) then begin
+        MulM4OneRate(CurBal,(certo1/cerfr)*100,CurBalCER,DefaultCurRoundOff,true);
+        TotSumFwBal = TotSumFwBal + CurBalCER;
+      end else begin
+        if (RepSpec.ArtMode==0) then begin
+          TotSumFwBal = TotSumFwBal + CurBal;
+        end;
+      end;
+    end;
+
+    if (CurBal==0) and (RepSpec.IncDaughter!=0) then begin
+      PrintMainHeaders(RepSpec,headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,printf);
+      if (FirstTrans) then begin
+        HForm(RepSpec,Accr,CurBal,TotSumDebetCur,TotSumCreditCur,printf);
+        FirstTrans = false;
+      end;
+    end;
 
     TotSumDebetCur = blankval;
     TotSumCreditCur = blankval;
@@ -230,8 +380,13 @@ BEGIN
         TotSumCreditCur = v;
       end;
     end;
-    MainIS = CurBal;
-    MainOS = CurBal;
+    if (RepSpec.flags[12]==kReportBCOneConsolidationRate) then begin
+      MainIS = CurBalCER;
+      MainOS = CurBalCER;
+    end else begin
+      MainIS = CurBal;
+      MainOS = CurBal;
+    end;
     if (Accr.AccType==0) then begin
       if (CompYear.NS1[0]==1) then begin
         MainOS = -MainOS;
@@ -274,10 +429,17 @@ BEGIN
       SumCredit = 0;
     end;
     OldTransMonth = 0;
+//##    if (RepSpec.UsedOnly==0) then MainLAccOut(accp); //##
+    BeginCurncyTotals(curcnt);
+    AddCurncyTotals(acur,av1,curcnt,Accr.Curncy,TotSumDebetCur+TotSumCreditCur);
     TrHs = true;
     mainr.AccNumber = Accr.AccNumber;
     mainr.TransDate = RepSpec.sStartDate;
-    while (LoopKey("MainKey",mainr,2,TrHs)) begin    
+    index = "MainKey";
+    if (RepSpec.flags[28]!=0) then begin
+      index = "MainKeyTime";
+    end;
+    while (LoopKey(index,mainr,2,TrHs)) begin    
       if (TrHs) then begin
         if (mainr.TransDate>RepSpec.sEndDate) then begin
           TrHs = false;
@@ -295,6 +457,9 @@ BEGIN
           if (ReadFirstMain(MR3,2,true)) then begin
 
             testf = true;
+            if (nonblank(RepSpec.LastAcc)) then begin
+              if (MR3.RefStr!=RepSpec.LastAcc) then begin testf = false; end;
+            end;
             switch (RepSpec.flags[26]) begin
               case 1: if (MR3.SeqNr>0) then begin testf = false; end;
               case 2: if (MR3.SeqNr<=0) then begin testf = false; end;
@@ -306,7 +471,7 @@ BEGIN
 			    ReadTrRow(RepSpec,MR3,BCb,RepSpec.ObjStr,OldTransMonth,tmpMainOS,
                           VATSumr,RepSpec.basecurncy,RepSpec.CurncyCode,FirstTrans,
                           CurBal,TotSumDebetCur,TotSumCreditCur,SumDebet,SumCredit,MainCnt,
-                          headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,Accr,false,
+                          headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,Accr,printf,
                           acur,av1,av2,av3,curcnt);
                 if (tmpMainCnt!=MainCnt) then begin
                   if (RepSpec.ArtMode==0) or (blank(RepSpec.ObjStr)) or (RepSpec.ArtMode!=0 and nonblank(RepSpec.ObjStr)) then begin
@@ -315,9 +480,48 @@ BEGIN
                     MainOS = MainOS + tmpMainOS;
                   end;
                 end;              
+              end else begin
+                if (RepSpec.flags[1]!=0) then begin
+                  ReadTrR2(RepSpec,MR3,BCb,RepSpec.ObjStr,mainr.TransDate,OldTransMonth,
+                           MainOS,VATSumr,RepSpec.basecurncy,RepSpec.CurncyCode,
+                           FirstTrans,CurBal,TotSumDebetCur,TotSumCreditCur,SumDebet,SumCredit,MainCnt,
+                           headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,Accr,printf,
+                           acur,av1,av2,av3,curcnt);
+                end;
               end;
             end;
           end;
+        end;
+        if (mainr.FileName=="SMVc") then begin
+            if (RepSpec.SimVerf!=0) then begin
+              SMr.SerNr = mainr.TransNr;
+              if (ReadFirstMain(SMr,1,true)) then begin
+                testf = true;
+                if (nonblank(RepSpec.LastAcc)) then begin
+                  if (SMr.RefStr!=RepSpec.LastAcc) then begin testf = false; end;
+                end;
+                if (testf) then begin
+                  tmpMainOS = blankval;
+                  tmpMainCnt = MainCnt;
+//                if (DateComp(&mainr.TransDate,&SMr.TransDate)==0) then begin
+                   ReadSMRow(RepSpec,SMr,RepSpec.ObjStr,mainr.TransDate,OldTransMonth,tmpMainOS,
+                             VATSumr,RepSpec.basecurncy,RepSpec.SimVerf,FirstTrans,
+                             CurBal,TotSumDebetCur,TotSumCreditCur,SumDebet,SumCredit,MainCnt,
+                             headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,Accr,printf,
+                             acur,av1,av2,av3,curcnt);
+//                end;
+                  if (RepSpec.flags[12]==kReportBCOneConsolidationRate) then begin
+                    MulM4OneRate(tmpMainOS,(certo1/cerfr)*100,tmpMainOS,DefaultCurRoundOff,true);
+                    MainOS = MainOS + tmpMainOS;
+                  end else begin
+                    if (tmpMainCnt!=MainCnt) then begin
+                      MainOS = tmpMainOS;
+                    end;
+                  end;
+
+                end;
+              end;
+            end;
         end;
         if (mainr.FileName=="FBVc") then begin
             FBr.SerNr = mainr.TransNr;
@@ -330,10 +534,15 @@ BEGIN
                   ReadFBRow(RepSpec,FBr,RepSpec.ObjStr,OldTransMonth,tmpMainOS,
                             VATSumr,RepSpec.basecurncy,RepSpec.CurncyCode,FirstTrans,
                             CurBal,TotSumDebetCur,TotSumCreditCur,SumDebet,SumCredit,MainCnt,
-                            headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,Accr,false,
+                            headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,Accr,printf,
                            acur,av1,av2,av3,curcnt);
-                  if (tmpMainCnt!=MainCnt) then begin
-                    MainOS = tmpMainOS;
+                  if (RepSpec.flags[12]==kReportBCOneConsolidationRate) then begin
+                    MulM4OneRate(tmpMainOS,(certo1/cerfr)*100,tmpMainOS,DefaultCurRoundOff,true);
+                    MainOS = MainOS + tmpMainOS;
+                  end else begin
+                    if (tmpMainCnt!=MainCnt) then begin
+                      MainOS = tmpMainOS;
+                    end;
                   end;
                 end;
               end;
@@ -348,15 +557,23 @@ BEGIN
                 ReadRADRecord(RepSpec,RADr,RepSpec.ObjStr,OldTransMonth,tmpMainOS,
                           VATSumr,RepSpec.basecurncy,RepSpec.CurncyCode,FirstTrans,
                           CurBal,TotSumDebetCur,TotSumCreditCur,SumDebet,SumCredit,
-                          headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,Accr,false,
+                          headeroutf,mhrheaderf,mhrvc,mhrckey,mhrLLoop,Accr,printf,
                           acur,av1,av2,av3,curcnt);
-                if (tmpMainCnt!=MainCnt) then begin
-                  MainOS = tmpMainOS;
+                if (RepSpec.flags[12]==kReportBCOneConsolidationRate) then begin
+                  MulM4OneRate(tmpMainOS,(certo1/cerfr)*100,tmpMainOS,DefaultCurRoundOff,true);
+                  MainOS = MainOS + tmpMainOS;
+                end else begin
+                  if (tmpMainCnt!=MainCnt) then begin
+                    MainOS = tmpMainOS;
+                  end;
                 end;
               end;
             end;
         end;
       end;
+    end;
+    if (RepSpec.flags[12]==kReportBCOneConsolidationRate) then begin
+      MainOS = MainOS - CurBalCER;//??
     end;
     if ((headeroutf) or (RepSpec.UsedOnly==0)) then begin
       if (ProgramType==typHansaRaama) then begin          
@@ -395,6 +612,136 @@ BEGIN
   TotSumBal = TotSumBal + MainOS;
   AddVATSumToVATSum(VATSumr,VATSump);
   RETURN;
+END;
+
+procedure MainListTopHdrs(record RcVc RepSpec,Boolean resUseAccum,Date AccumStartDate)
+BEGIN
+  string 255 tstr;
+  Integer rw;
+  record BaseCurBlock BC;
+  
+  BlockLoad(BC);
+      
+  rw = 1;
+  HTAccs(RepSpec.f4,RepSpec.f4,RepSpec.UsedOnly,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  LstRegDat(tstr);
+  Header(rw,tstr,0);
+  HT2Per(RepSpec.sStartDate,RepSpec.sEndDate,tstr);
+  Header(rw,tstr,1);
+  rw = rw + 1;
+  
+  if (HasMultiCurrency) then begin
+    tstr = USetStr(2513);
+    if (blank(RepSpec.CurncyCode)) then begin
+      BlockLoad(BC);
+      if (repspec.basecurncy==0) then begin
+        tstr = tstr & BC.BaseCur1;
+      end;
+      if (repspec.basecurncy==1) then begin
+        tstr = tstr & " " & BC.BaseCur2;
+      end;
+    end else begin
+      tstr = tstr & " " & RepSpec.CurncyCode;
+    end;
+    Header(rw,tstr,0);
+  end;
+
+  if (resUseAccum) then begin
+    HTAccPer(AccumStartDate,RepSpec.sEndDate,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.ObjStr)) then begin
+    HTObj(RepSpec.ObjStr,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.ObjType)) then begin
+    HTOT(RepSpec.ObjType,tstr);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.Stext)) then begin
+    tstr = USetStr(3018);
+    tstr = tstr & RepSpec.Stext;
+    tstr = tstr & "\"";
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  HTVatNr(RepSpec.f1,tstr);
+  if (nonblank(tstr)) then begin
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.SimVerf==1) then begin
+    tstr = USetStr(3019);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (RepSpec.flags[1]!=0) then begin
+    tstr = USetStr(3197);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end else begin
+    if (HasLocalization("ISL")) then begin//vatIcelandic
+      tstr = USetStr(3199);
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;
+  end;
+  if (DatePrel(RepSpec.sEndDate)) begin
+    tstr = USetStr(3023);
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  if (nonblank(RepSpec.CurncyCode)) then begin
+    tstr = USetStr(7672);
+    tstr = tstr & ": ";
+    tstr = tstr & RepSpec.CurncyCode;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;  
+  if (IsBooks==false) then begin
+    if (RepSpec.flags[21]!=0) then begin
+      tstr = USetStr(6930);
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;  
+    if (RepSpec.flags[22]!=0) then begin
+      tstr = USetStr(1329);
+      Header(rw,tstr,1);
+      rw = rw + 1;
+    end;          
+  end;
+  if (nonblank(RepSpec.f3)) then begin
+    tstr = USetStr(1318) & " " & RepSpec.f3;
+    Header(rw,tstr,1);
+    rw = rw + 1;
+  end;
+  EndHeader;  
+  SetRepCol(2,75);
+  if (RepSpec.ArtMode==1) then begin
+    SetRepCol(3,320);//288);
+    SetRepCol(4,400);//384);
+  end else begin
+    SetRepCol(3,314);
+    SetRepCol(4,384);
+  end;
+  SetRepCol(5,465);
+  SetRepCol(8,413);
+  SetRepCol(9,221);
+  if (RepSpec.flags[6]==1) then begin
+    SetRepCol(6,190);
+  end else begin
+    SetRepCol(6,160);
+  end;
+  if ((nonblank(RepSpec.ObjType)) or (RepSpec.flags[3]!=0)) then begin
+    SetRepCol(6,200);
+  end;
+  SetRepCol(7,120);
+  RETURN;      
 END;
 
 procedure MainLoopInit(record RcVc RepSpec,Integer lnr,
@@ -443,7 +790,7 @@ BEGIN
   if (mhrvc[arrcnt]=="AccVc") then begin
     mhrckey[arrcnt] = "AccNumber";
     Accr.AccNumber = mhrfromstr[arrcnt];
-    mhrfoundf[arrcnt] = LoopKey("AccNumber",Accr,1,true);
+    mhrfoundf[arrcnt] = LoopKey("AccNumber",Accr,1,true);//mlp->foundf = m4_ReadFirstLMain(AccVc,Accp,1,false,&mlp->LLoop);
     mhrLLoop[arrcnt] = GetLoopPosition(Accr);
   end;
   if (mhrvc[arrcnt]=="ObjVc") then begin
