@@ -4,7 +4,9 @@ external function Boolean SetInSet2(string,string);
 external function roundmode SetRoundMode(Integer,Integer,Integer,Integer);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 remote function boolean CompanyIsJWLikeCompany(Integer);
-
+external function string 255 StrReplace(string,string,string);// Edit ************************** Tuesday, 3 October 2017 17:25:37
+external function string 255 imgStrReplace(string);// Edit ************************** Tuesday, 10 October 2017 15:20:55
+external procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var string);
 
 //SetLangMode(LangRussian,"RUS",0); //Edit***************************Sasha2,18:20 11.12.2014
 
@@ -134,6 +136,72 @@ return;
 end;
 
 
+global function val ItemQtyPerDateGlob(string artcode, date idate,string location)
+begin
+	record ItemHistVc IHr;
+	val res;
+	string 50 key;
+	integer keys;
+	boolean TrHs,testf;
+	string 100 oldartcode,oldfilename;
+	longint oldsernr;
+  integer oldrow,oldinvalid;
+  record ItemStatusVc ISr;
+  record SerBalVc SBr;
+  vector boolean vcur;
+  integer i;
+    
+  res = 0;
+
+  	if(idate>=currentdate)then begin
+  		if(nonblank(location))then begin		
+				TrHs = true;
+				res = 0;
+				While(loopkey(key,IHr,keys,TrHs)) begin
+					testf = true;
+					if (IHr.ArtCode!=artcode or IHr.Location!=location or IHr.TransDate>idate) then begin testf = false; TrHs = false; end;
+					if(IHr.StockAffectf<1)then begin testf = false; end;
+			
+					if(testf)then begin
+						res = res + IHr.Qty;
+					end;
+				end; 
+  		end else begin
+  			ISr.Code = artcode;
+  			ISr.Location = ";;;";
+  			readfirstmain(ISr,2,true);
+  			res = ISr.Instock;
+  		end;
+  	end else begin
+			IHr.ArtCode = artcode;
+			if(nonblank(location))then begin
+				IHr.Location = location;
+				key = "ArtCodeLoc";
+				keys = 2;
+			end else begin
+				key = "ArtCode";
+				keys = 1;
+			end;
+		
+			TrHs = true;
+			While(loopkey(key,IHr,keys,TrHs)) begin
+				testf = true;
+				if (IHr.ArtCode!=artcode or IHr.Location!=location or IHr.TransDate>=idate) then begin testf = false; TrHs = false; end;
+				if(IHr.StockAffectf<1)then begin testf = false; end;
+			
+				if(testf)then begin
+					res = res + IHr.Qty;
+				end; 
+			end;
+		end;
+		
+		
+		ItemQtyPerDateGlob = res;
+		
+return;
+end;
+
+
 function boolean CheckIfContainForbiddenBrand(string brand,string field)
 begin
 integer pos;
@@ -164,7 +232,85 @@ return;
 end;
 
 
-procedure FindAwerageCostCur(string artcode, string location,string curcode,date todate,string realcur,string brandcur,var val curcost,var val curcost2)
+global procedure CalcCostInCurncyCurDate(record ItemHistVc IHr,var val curcost2, string brandcur,integer neg)
+begin
+	val tempcost,fr,to1,to2,br1,br2;
+	
+	tempcost = 0;
+	if(brandcur==IHr.CurncyCode or blank(brandcur))then begin
+		curcost2 = curcost2 + IHr.RemCostPriceCurncy * neg;
+	end else begin
+		if(IHr.CurncyCode=="AZN")then begin
+			GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
+			if(fr==0 or to1==0)then begin
+				fr=1; to1=1;
+			end;
+			tempcost = IHr.RemCostPriceCurncy / to1 * fr;
+			curcost2 = curcost2 + tempcost*neg;
+		end else begin
+			GetFullCurncyRate(IHr.CurncyCode,IHr.TransDate,fr,to1,to2,br1,br2);
+			if(fr==0 or to1==0)then begin
+				fr=1; to1=1;
+			end;
+			tempcost = IHr.RemCostPriceCurncy * to1 / fr;
+			GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
+			if(fr==0 or to1==0)then begin
+				fr=1; to1=1;
+			end;
+			tempcost = tempcost / to1 * fr;
+			curcost2 = curcost2 + tempcost*neg;
+		end;
+	end;
+
+return;
+end;
+
+global procedure CalcCostInCurncyOldDate(record ItemHistVc IHr,var val curcost2, string brandcur,integer neg)
+begin
+	val tempcost,fr,to1,to2,br1,br2;
+	
+	tempcost = 0;
+	if(brandcur==IHr.CurncyCode or blank(brandcur))then begin
+		curcost2 = curcost2 + IHr.TotCostPriceCurncy * neg;
+	end else begin
+		if(IHr.CurncyCode=="AZN")then begin
+			if(nonblankdate(IHr.InDate))then begin
+				GetFullCurncyRate(brandcur,IHr.InDate,fr,to1,to2,br1,br2);
+			end else begin
+				GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
+			end;
+			if(fr==0 or to1==0)then begin
+				fr=1; to1=1;
+			end;
+			tempcost = IHr.TotCostPriceCurncy / to1 * fr;
+			curcost2 = curcost2 + tempcost*neg;
+		end else begin
+			if(nonblankdate(IHr.InDate))then begin
+				GetFullCurncyRate(IHr.CurncyCode,IHr.InDate,fr,to1,to2,br1,br2);
+			end else begin
+				GetFullCurncyRate(IHr.CurncyCode,IHr.TransDate,fr,to1,to2,br1,br2);
+			end;
+			if(fr==0 or to1==0)then begin
+				fr=1; to1=1;
+			end;
+			tempcost = IHr.TotCostPriceCurncy * to1 / fr;
+			if(nonblankdate(IHr.InDate))then begin
+				GetFullCurncyRate(brandcur,IHr.InDate,fr,to1,to2,br1,br2);
+			end else begin
+				GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
+			end;
+			if(fr==0 or to1==0)then begin
+				fr=1; to1=1;
+			end;
+			tempcost = tempcost / to1 * fr;
+			curcost2 = curcost2 + tempcost*neg;
+		end;
+	end;	
+return;
+end;
+
+global
+procedure FindAwerageCostCurProc(string artcode, string location,string curcode,date todate,string realcur,string brandcur,var val curcost,var val curcost2)
 begin
 	record ItemHistVc IHr,IH2r;
 	record PUVc PUr;
@@ -197,30 +343,7 @@ begin
 			if(testf)then begin
 				tempcost = 0;
 				curcost = curcost + IHr.RemCostPriceCurncy;
-				if(brandcur==IHr.CurncyCode or blank(brandcur))then begin
-					curcost2 = curcost2 + IHr.RemCostPriceCurncy;
-				end else begin
-					if(IHr.CurncyCode=="AZN")then begin
-						GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
-						if(fr==0 or to1==0)then begin
-							fr=1; to1=1;
-						end;
-						tempcost = IHr.RemCostPriceCurncy / to1 * fr;
-						curcost2 = curcost2 + tempcost;
-					end else begin
-						GetFullCurncyRate(IHr.CurncyCode,IHr.TransDate,fr,to1,to2,br1,br2);
-						if(fr==0 or to1==0)then begin
-							fr=1; to1=1;
-						end;
-						tempcost = IHr.RemCostPriceCurncy * to1 / fr;
-						GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
-						if(fr==0 or to1==0)then begin
-							fr=1; to1=1;
-						end;
-						tempcost = tempcost / to1 * fr;
-						curcost2 = curcost2 + tempcost;
-					end;
-				end;
+				CalcCostInCurncyCurDate(IHr,curcost2,brandcur,1);
 				curqty = curqty + IHr.RemQty;
 			end;
 		end;
@@ -246,81 +369,11 @@ begin
 				tempcost = 0;
 				if(IHr.Qty>=0)then begin
 					curcost = curcost + IHr.TotCostPriceCurncy;
-					if(brandcur==IHr.CurncyCode or blank(brandcur))then begin
-						curcost2 = curcost2 + IHr.TotCostPriceCurncy;
-					end else begin
-						if(IHr.CurncyCode=="AZN")then begin
-							if(nonblankdate(IHr.InDate))then begin
-								GetFullCurncyRate(brandcur,IHr.InDate,fr,to1,to2,br1,br2);
-							end else begin
-								GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
-							end;
-							if(fr==0 or to1==0)then begin
-								fr=1; to1=1;
-							end;
-							tempcost = IHr.TotCostPriceCurncy / to1 * fr;
-							curcost2 = curcost2 + tempcost;
-						end else begin
-							if(nonblankdate(IHr.InDate))then begin
-								GetFullCurncyRate(IHr.CurncyCode,IHr.InDate,fr,to1,to2,br1,br2);
-							end else begin
-								GetFullCurncyRate(IHr.CurncyCode,IHr.TransDate,fr,to1,to2,br1,br2);
-							end;
-							if(fr==0 or to1==0)then begin
-								fr=1; to1=1;
-							end;
-							tempcost = IHr.TotCostPriceCurncy * to1 / fr;
-							if(nonblankdate(IHr.InDate))then begin
-								GetFullCurncyRate(brandcur,IHr.InDate,fr,to1,to2,br1,br2);
-							end else begin
-								GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
-							end;
-							if(fr==0 or to1==0)then begin
-								fr=1; to1=1;
-							end;
-							tempcost = tempcost / to1 * fr;
-							curcost2 = curcost2 + tempcost;
-						end;
-					end;
+					CalcCostInCurncyOldDate(IHr,curcost2,brandcur,1);
 				end else begin
 					tempcost = 0;
 					curcost = curcost - IHr.TotCostPriceCurncy;
-					if(brandcur==IHr.CurncyCode or blank(brandcur))then begin
-						curcost2 = curcost2 - IHr.TotCostPriceCurncy;
-					end else begin
-						if(IHr.CurncyCode=="AZN")then begin
-							if(nonblankdate(IHr.InDate))then begin
-								GetFullCurncyRate(brandcur,IHr.InDate,fr,to1,to2,br1,br2);
-							end else begin
-								GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
-							end;
-							if(fr==0 or to1==0)then begin
-								fr=1; to1=1;
-							end;
-							tempcost = IHr.TotCostPriceCurncy / to1 * fr;
-							curcost2 = curcost2 - tempcost;
-						end else begin
-							if(nonblankdate(IHr.InDate))then begin
-								GetFullCurncyRate(IHr.CurncyCode,IHr.InDate,fr,to1,to2,br1,br2);
-							end else begin
-								GetFullCurncyRate(IHr.CurncyCode,IHr.TransDate,fr,to1,to2,br1,br2);
-							end;
-							if(fr==0 or to1==0)then begin
-								fr=1; to1=1;
-							end;
-							tempcost = IHr.TotCostPriceCurncy * to1 / fr;
-							if(nonblankdate(IHr.InDate))then begin
-								GetFullCurncyRate(brandcur,IHr.InDate,fr,to1,to2,br1,br2);
-							end else begin
-								GetFullCurncyRate(brandcur,IHr.TransDate,fr,to1,to2,br1,br2);
-							end;
-							if(fr==0 or to1==0)then begin
-								fr=1; to1=1;
-							end;
-							tempcost = tempcost / to1 * fr;
-							curcost2 = curcost2 - tempcost;
-						end;
-					end;
+					CalcCostInCurncyOldDate(IHr,curcost2,brandcur,-1);
 				end;
 				curqty = curqty + IHr.Qty;
 			end;
@@ -329,7 +382,7 @@ begin
 		curcost2 = curcost2/curqty;
 	end;
 	
-	return;
+return;
 end;
 
 global function val FindAwerageCost(string artcode, string location,string curcode,date todate,string realcur)
@@ -416,7 +469,7 @@ begin
   Boolean collf,metalf;
   string 20 collstr,metalstr;
   
-  rmode5 = SetRoundMode(0,kRoundingDirectionToFromPosInf,kRoundingModeHalfUp,kRoundingStep5);	//Edit----------------------Dima  17.04.2015
+  rmode5 = SetRoundMode(0,kRoundingDirectionToFromPosInf,kRoundingModeHalfUp,/*kRoundingStep5*/kRoundingStepNone);	//Edit----------------------Dima  17.04.2015
   
   
   if(serstock==0)then begin
@@ -632,7 +685,7 @@ begin
 		awercostcur = 0;
 		awercostbrandcur = 0;
 		awercost = FindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur);
-		FindAwerageCostCur(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,curcost,curcost2);
+		FindAwerageCostCurProc(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,curcost,curcost2);
 		awercostcur = curcost;
 		awercostbrandcur = curcost2;
 		if(costprice>0 and nonblank(serial) and INr.SerNrf>0)then begin
@@ -798,11 +851,13 @@ begin
   row IVVc IVrw;
   record Attach2Vc Attachr;
 	record RLinkVc RLr;
-	string 255 filename,uid,res,inrcode;
-	string 50 comfolder;
+	string 255 filename,uid,res,inrcode,tstr;
+	string 50 comfolder,modelname,brandname;
 	record CompaniesBlock Compb;//Edit-------------------Vitalii 14:14 25.12.2015
 	row CompaniesBlock Comprw;//Edit-------------------Vitalii 14:14 25.12.2015
 	Boolean founddi; //Edit***************************Sasha2,10:45 25.01.2016
+	string 50 realcur,brandcur;
+	val curcost,curcost2;
 	
   if(serstock==0)then begin
   	instock = ISr.Instock;
@@ -824,24 +879,27 @@ begin
 				
 		ExportString("<td height=\"300\">" & INr.Code & "</td>");
 		ExportString("<td>" & INr.AlternativeCode & "</td>");
+		ExportString("<td>" & INr.BarCode & "</td>");
 		ExportString("<td>" & ISr.Location & "</td>");
 		pos = 0;
 		uloc = ""; 
 		founddi = false; //Edit***************************Sasha2,10:13 25.01.2016 {
 		ExtractObj(INr.DispGroups,pos,uloc); 
+		modelname = "";
+		brandname = "";
 		while(nonblank(uloc)) begin
 			DIr.Code = uloc;
 			readfirstmain(DIr,1,true);
 			if(DIr.CType=="BRAND")then begin
-				ExportString("<td>" & DIr.Name & "</td>");
-				pos = len(INr.DispGroups);
-				founddi = true;
+				brandname = DIr.Name;
+			end;
+			if(DIr.CType=="MODEL")then begin
+				modelname = DIr.Name;
 			end;
 			ExtractObj(INr.DispGroups,pos,uloc);
 		end; 
-		if (founddi==false) then begin
-		  ExportString("<td>" & "" & "</td>");
-		end; //Edit***************************Sasha2,10:13 25.01.2016 }
+		ExportString("<td>" & brandname & "</td>");
+		ExportString("<td>" & modelname & "</td>");
 		
 		/*ExtractObj(INr.DispGroups,pos,uloc);
 		DIr.Code = uloc;
@@ -855,6 +913,12 @@ begin
 		ExportString("<td>" & INr.Name & "</td>");
 		ExportString("<td>" & serial & "</td>");// Edit ************************** Tuesday, 7 May 2013 10:13:07
 		ExportString("<td>" & instock & "</td>");
+		
+		realcur = INr.LastPurchCurncyCode;
+		curcost = blankval;
+		FindAwerageCostCurProc(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,curcost,curcost2);
+		ExportString("<td>" & curcost & INr.LastPurchCurncyCode & "</td>");
+		
 		GetFullCurncyRate(INr.LastPurchCurncyCode,todate,fr,to1,to2,br1,br2);
 		if(fr==0 or to1==0)then begin
 			fr=1; to1=0;
@@ -913,6 +977,9 @@ begin
 		switch (dispcur) begin //Edit***************************Sasha2,15:50 21.04.2015 {
   		case 0: 
   		  ExportString("<td>" & price & "</td>");
+  		  ExportString("<td>" & round(baseprice,rnd) & "</td>");
+  		  
+  		  
   		  ExportString("<td>" & INr.LastPurchCurncyCode & "</td>");
   		case 1:
   		  ExportString("<td>" & round(baseprice,rnd) & "</td>");
@@ -923,19 +990,22 @@ begin
 		uid = "";
 		
 		BlockLoad(Compb);
-		MatRowGet(Compb,currentcompany-1,Comprw);
+		/*MatRowGet(Compb,currentcompany-1,Comprw);
 		if (currentcompany==9) then begin
 			inrcode = INr.AlternativeCode;
 		end else begin
 			inrcode = INr.Code;
 		end;
+		inrcode = imgStrReplace(inrcode);// Edit ************************** Tuesday, 3 October 2017 17:27:01
+		
 		if (fileexists("webcust/" & Comprw.ShortName & "/" & inrcode & ".jpg")) then begin
 			filename = "http://" & serverip & "/" & inrcode & ".jpg";
 		end;
 		if (fileexists("webcust/" & Comprw.ShortName & "/" & inrcode & ".png")) then begin
 			filename = "http://" & serverip & "/" & inrcode & ".png";
-		end;
-				
+		end;*/
+    FindAndStoreINVcImgLink(INr,currentcompany,tstr,filename);
+    filename = "http://" & serverip & "/" & filename;
 		if(nonblank(filename))then begin
 			ExportString("<td width=\"300\" height=\"300\" align=\"center\"><div align=\"justify\"><img src=\"" & filename & "\" width=\"100%\" height=\"100%\"/></div></td>");
 		end else begin
@@ -1579,7 +1649,7 @@ begin
   BlockLoad(bcur); //Edit***************************Sasha2,14:03 27.04.2015
   rnd = DefaultValRoundoff; //Edit***************************Sasha2,15:47 21.04.2015
   rnd.decimals = 0; //Edit***************************Sasha2,15:47 21.04.2015
-	rnd.step = kRoundingStep5; //Edit***************************Sasha2,15:47 21.04.2015
+	//rnd.step = kRoundingStep5; //Edit***************************Sasha2,15:47 21.04.2015
 	rnd.mode = kRoundingModeHalfUp; //Edit***************************Sasha2,15:47 21.04.2015
   
   userlocation = false;
@@ -1601,14 +1671,18 @@ begin
   	endformat;
   end else begin
 		ExportString("<tr>");
-		ExportString("<td>" & USetStr(31042) & "</td>");
-		ExportString("<td>" & USetStr(31042) & "</td>");
+		ExportString("<td>" & USetStr(31042) & "</td>");//Code
+		ExportString("<td>" & USetStr(31042) & "</td>");//AltCode
+		ExportString("<td>BAR/EAN Code</td>");//AltCode
 		ExportString("<td>" & USetStr(31103) & "</td>");
 		ExportString("<td>" & USetStr(31044) & "</td>");
+		ExportString("<td>" & USetStr(31120) & "</td>");//MODEL
 		ExportString("<td>" & USetStr(31204) & "</td>");
 		ExportString("<td>" & USetStr(31051) & "</td>");
 		ExportString("<td>" & USetStr(31121) & "</td>");
+		ExportString("<td>" & USetStr(31160) & "</td>");//cost
 		ExportString("<td>" & USetStr(31059) & "</td>");
+		ExportString("<td>Price, AZN</td>");
 		ExportString("<td>" & USetStr(31169) & "</td>");
 		ExportString("<td>" & USetStr(31170) & "</td>");
 		ExportString("</tr>");
