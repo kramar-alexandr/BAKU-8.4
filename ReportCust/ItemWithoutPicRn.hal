@@ -1,0 +1,200 @@
+external procedure ExtractObj(string,var Integer,var string);
+
+external procedure XmlXlsxWorkBegin(string,string);
+external procedure CreateSheetsXLSX(integer,array string,string,integer,boolean);
+external procedure EndSheet(integer,string,integer);
+external procedure SetSheetsCols(integer,array val,array integer,string);
+external procedure BeginSheetData(integer,string);
+external procedure EndSheetData(integer,string);
+external procedure BeginRow(integer,string,integer,integer,val);
+external procedure EndRow(integer,string,var integer);
+external procedure StringCell(integer,string,var integer,integer,integer,string,var array string,var integer,var integer);
+external procedure NumericCell(integer,string,var integer,integer,integer,val);
+external procedure EmptyCell(integer,string,var integer,integer,integer,integer);
+external procedure MergeCells(integer,string,array string,integer);
+external procedure FillSharedStrings(string,array string,integer,integer,array string);
+external procedure ConvertToXLSX(string,boolean);
+external function string 255 StrReplace(string,string,string);// Edit ************************** Tuesday, 3 October 2017 17:25:37
+external function string 255 imgStrReplace(string);// Edit ************************** Tuesday, 10 October 2017 15:20:55
+external procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var string);
+
+procedure ItemWithoutPic(record RcVc RepSpec)
+begin
+	record CompaniesBlock Compb;
+  record DIVc DIr;
+	row CompaniesBlock Comprw;
+  integer curcomp,mtrw,i,pos;
+  record INVc INr;
+  record ItemStatusVc ISr;
+  string 255 fullpath,tstr;
+  string 100 inrcode,brand,class;
+  boolean mainf,cs1f;
+  
+  array string 50 sheetNames;
+	array val sheetColls;
+	array string 21 mergeCell;
+	string 255 fileToSave;
+	integer qtyOfSheets,sheetnum,rownum,colnum,style,qtyOfEmpStr;
+	array string 100 SharedStrings;
+	integer numOfUniqueSharedStrings,numOfSharedStrings,qtyMergeCell;
+	string 6 reportName;
+  array string 255 mas;
+  array integer lvlArray;
+  
+  setexportcodepage("UTF8");
+  
+  reportName = "DummyRn";
+	if(windowsmode==1)then begin
+		fileToSave = RepSpec.f6;
+	end else begin
+		fileToSave = "/" & RepSpec.f6;
+	end;
+  delete_file(fileToSave);
+	deletefolder(Left(fileToSave,(len(fileToSave) - 5)));
+  
+  curcomp = CurrentCompany;
+  BlockLoad(Compb);
+  mtrw = matrowcnt(Compb);
+  for (i=0;i<mtrw;i=i+1) begin
+    MatRowGet(Compb,i,Comprw);
+    sheetNames[qtyOfSheets] = Comprw.CompName;
+    qtyOfSheets = qtyOfSheets + 1;
+  end;
+  sheetColls[0] = 12.14;
+  numOfUniqueSharedStrings = 0;
+	numOfSharedStrings = 0;
+	XmlXlsxWorkBegin(fileToSave,reportName);
+	CreateSheetsXLSX(qtyOfSheets,sheetNames,fileToSave,0,true);
+  sheetnum = 0;
+  
+  for (i=0;i<mtrw;i=i+1) begin
+    SetCompany(i+1,false);
+    MatRowGet(Compb,i,Comprw);
+    sheetnum = sheetnum + 1;
+    SetSheetsCols(sheetnum,sheetColls,lvlArray,fileToSave);
+    BeginSheetData(sheetnum,fileToSave);
+      rownum = 1;
+      if DirExists("webcust/" & Comprw.ShortName) then begin
+        colnum = 1;
+        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+          style = 1;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Code",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Alternative Code",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"Brand",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+          EmptyCell(sheetnum,fileToSave,colnum,rownum,style,1);
+          NumericCell(sheetnum,fileToSave,colnum,rownum,style,CountRecords("INVc"));
+        EndRow(sheetnum,fileToSave,rownum);
+        resetloop(INr);
+        INr.Code = "";
+        while loopmain(INr,1,true) begin
+          if (i==8) then begin
+            mainf = false;
+            cs1f = false;
+            ISr.Code = INr.Code;
+            ISr.Location = "MAIN";
+            if (readfirstmain(ISr,2,true)) then begin
+              if (ISr.Instock>0) then begin
+                mainf = true;
+              end;
+            end;
+            ISr.Code = INr.Code;
+            ISr.Location = "CS1";
+            if (readfirstmain(ISr,2,true)) then begin
+              if (ISr.Instock>0) then begin
+                cs1f = true;
+              end;
+            end;
+            if (mainf or cs1f) then begin
+              FindAndStoreINVcImgLink(INr,i+1,fullpath,tstr);
+                if (blank(fullpath)) then begin
+                  colnum = 1;
+                  BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+                    style = 1;
+                    StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.Code,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+                    StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.AlternativeCode,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+                    brand = "";
+                    pos = 0;
+                    class = "";
+                    ExtractObj(INr.DispGroups,pos,class);
+                    while (nonblank(class)) begin
+                      DIr.Code = class;
+                      readfirstmain(DIr,1,true);
+                      if(DIr.CType=="BRAND")then begin
+                        brand = DIr.Name;
+                      end;
+                      ExtractObj(INr.DispGroups,pos,class);
+                    end;
+                    StringCell(sheetnum,fileToSave,colnum,rownum,style,brand,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+                  EndRow(sheetnum,fileToSave,rownum);
+                end;
+            end;
+          end else begin
+            ISr.Code = INr.Code;
+            ISr.Location = ";;;";
+            if (readfirstmain(ISr,2,true)) then begin
+              if (ISr.Instock>0) then begin
+                FindAndStoreINVcImgLink(INr,i+1,fullpath,tstr);
+                if (blank(fullpath)) then begin
+                  colnum = 1;
+                  BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+                    style = 1;
+                    StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.Code,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+                    StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.AlternativeCode,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+                    brand = "";
+                    pos = 0;
+                    class = "";
+                    ExtractObj(INr.DispGroups,pos,class);
+                    while (nonblank(class)) begin
+                      DIr.Code = class;
+                      readfirstmain(DIr,1,true);
+                      if(DIr.CType=="BRAND")then begin
+                        brand = DIr.Name;
+                      end;
+                      ExtractObj(INr.DispGroups,pos,class);
+                    end;
+                    StringCell(sheetnum,fileToSave,colnum,rownum,style,brand,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+                  EndRow(sheetnum,fileToSave,rownum);
+                end;
+              end;
+            end;
+          end;
+        end;
+      end else begin
+        colnum = 1;
+        BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+          style = 1;
+          StringCell(sheetnum,fileToSave,colnum,rownum,style,"No directory",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+        EndRow(sheetnum,fileToSave,rownum);
+      end;
+    EndSheetData(sheetnum,fileToSave);
+    MergeCells(sheetnum,fileToSave,mergeCell,qtyMergeCell);
+    EndSheet(sheetnum,fileToSave,0);
+  end;
+  
+  FillSharedStrings(fileToSave,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings,mas);
+	ConvertToXLSX(fileToSave,true);
+	MilliSleep(5000);
+	resetcompany(curcomp);
+return;
+end;
+
+global
+procedure ItemWithoutPicRn(record RcVc RepSpec)
+begin
+  string 250 filename,tstr;
+  
+  RepSpec.Media = mtScreen;
+  tstr = "ItemWithoutPic";
+  tstr = tstr & "_" & CurrentUser;
+  filename = tstr & ".xlsx";
+  RepSpec.f6 = filename;
+  
+  StartReportNoHeaderJob("Download Link");
+		StartFormat(15);
+      ItemWithoutPic(RepSpec);
+			OutString(0,"DblImagesExcel",RepSpec.f7 & filename,false);
+    EndFormat;
+	EndJob;
+	
+  return;
+end;

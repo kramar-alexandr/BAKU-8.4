@@ -76,7 +76,7 @@ end;
 
 
 global
-procedure FindFIFOOrigValAndCurncyIV(longint sernr, integer rownr, var val fifo, var string cur,var val fifobase,boolean updst,var array string addCurs,var vector val currencyBalances,Boolean additionalCurF) //Edit***************************Sasha2,16:03 13.09.2017
+procedure FindFIFOOrigValAndCurncyIV(longint sernr, integer rownr, var val fifo, var string cur,var val fifobase,boolean updst,var array string addCurs,var vector val currencyBalances,Boolean additionalCurF,var boolean fifofound) //Edit***************************Sasha2,16:03 13.09.2017
 begin
 	record ItemHistVc IHr,IH2r;
 	record PUVc PUr;
@@ -92,7 +92,7 @@ begin
 	row ORVc ORrw;
 	record SHVc SHr;
 	row SHVc SHrw;
-	boolean TrHs,testf,findsec,TrHs1;
+	boolean TrHs,testf,findsec,TrHs1,TrHs2;
 	val fr,to1,to2,br1,br2,tval;
 	integer halt;	
 	date curDate,blankd;
@@ -100,6 +100,7 @@ begin
 	fifo = 0;
 	cur = "";
 	fifobase = 0;
+  fifofound = false;
 	if (additionalCurF) then begin //Edit***************************Sasha2,14:23 14.09.2017 {
     for (j=0;j<addCurs.length;j=j+1) begin
       currencyBalances[addCurs[j]] = BlankVal;
@@ -118,6 +119,31 @@ begin
 			
 			if(TrHs)then begin
 				fifobase = fifobase + IHr.TotCostPrice;
+				fifofound = true;
+				if(IHr.CurncyCode=="AZN")then begin
+					INr.Code = IHr.ArtCode;
+					if(readfirstmain(INr,1,true))then begin
+						if(INr.LastPurchCurncyCode!="AZN")then begin
+							IH2r.FileName = "IVVc";
+							IH2r.ArtCode = IHr.ArtCode;
+							IH2r.TransDate = IHr.TransDate;
+							IH2r.SerNr = IHr.SerNr;
+							TrHs2 = true;
+							while(loopbackkey("FNArtCode",IH2r,4,TrHs2))begin
+								if(IH2r.FileName!="IVVc")then begin TrHs2 = false; end;
+								if(IH2r.ArtCode!=IHr.ArtCode)then begin TrHs2 = false; end;
+								
+								if(TrHs2 and IH2r.CurncyCode==INr.LastPurchCurncyCode and IHr.TotCostPrice==IHr.TotCostPrice)then begin
+									IHr.TotCostPriceCurncy = IH2r.TotCostPriceCurncy;
+									IHr.CurncyCode = IH2r.CurncyCode;
+									TrHs2 = false;
+								end;
+							end;
+							resetloop(IH2r);
+						end;
+					end;
+				end;
+				
 				fifo = fifo + IHr.TotCostPriceCurncy;
 				cur = IHr.CurncyCode;
 				if (additionalCurF) then begin  //Edit***************************Sasha2,16:09 13.09.2017 {
@@ -142,7 +168,7 @@ begin
 		end;
 	end else begin
 		IVr.SerNr = sernr;
-		readfirstmain(IVr,1,true);
+    readfirstmain(IVr,1,true);
 		matrowget(IVr,rownr,IVrw);
 		halt = 0;
 		TrHs = true;
@@ -165,8 +191,33 @@ begin
 							if(IHr.TransNr!=SHr.SerNr)then begin TrHs1 = false; end;
 							if(IHr.Row!=i)then begin TrHs1 = false; end;
 							if(TrHs1)then begin
-								if(halt<IVrw.Quant)then begin
+								//if(halt<IVrw.Quant)then begin//Edit-------------------Vitalii 10:51 13.10.2017
 									fifobase = fifobase + IHr.TotCostPrice;
+									fifofound = true;
+									if(IHr.CurncyCode=="AZN")then begin
+										INr.Code = IHr.ArtCode;
+										if(readfirstmain(INr,1,true))then begin
+											if(INr.LastPurchCurncyCode!="AZN")then begin
+												IH2r.FileName = "IVVc";
+												IH2r.ArtCode = IHr.ArtCode;
+												IH2r.TransDate = IHr.TransDate;
+												IH2r.SerNr = IHr.SerNr;
+												TrHs2 = true;
+												while(loopbackkey("FNArtCode",IH2r,4,TrHs2))begin
+													if(IH2r.FileName!="IVVc")then begin TrHs2 = false; end;
+													if(IH2r.ArtCode!=IHr.ArtCode)then begin TrHs2 = false; end;
+								
+													if(TrHs2 and IH2r.CurncyCode==INr.LastPurchCurncyCode and IHr.TotCostPrice==IHr.TotCostPrice)then begin
+														IHr.TotCostPriceCurncy = IH2r.TotCostPriceCurncy;
+														IHr.CurncyCode = IH2r.CurncyCode;
+														TrHs2 = false;
+													end;
+												end;
+												resetloop(IH2r);
+											end;
+										end;
+									end;
+									
 									fifo = fifo + IHr.TotCostPriceCurncy;
 									cur = IHr.CurncyCode;
 									if (additionalCurF) then begin //Edit***************************Sasha2,16:09 13.09.2017 {
@@ -188,170 +239,19 @@ begin
             				end;
 									end; //Edit***************************Sasha2,16:09 13.09.2017 }
 									halt = halt - IHr.Qty;
-								end else begin
+								/*end else begin//Edit-------------------Vitalii 10:51 13.10.2017
 									TrHs1 = false;
 									TrHs = false;
-								end;
+								end;*/
 							end;
 						end;
 					end;
 				end;
 			end;
 		end;
+    fifo = fifo/halt*IVrw.Quant;//Edit-------------------Vitalii 10:51 13.10.2017
+    fifobase = fifobase/halt*IVrw.Quant;//Edit-------------------Vitalii 10:51 13.10.2017
 	end;
-	
-	
-	/*if(updst)then begin
-		resetloop(IHr);
-		IHr.FileName = "IVVc";
-		IHr.TransNr = sernr;
-		IHr.Row = rownr;
-		TrHs = true;
-		while(loopkey("FNTransNr",IHr,3,TrHs))begin
-			if(IHr.FileName!="IVVc")then begin TrHs = false; end;
-			if(IHr.TransNr!=sernr)then begin TrHs = false; end;
-			if(IHr.Row!=rownr)then begin TrHs = false; end;
-			
-			if(TrHs)then begin
-				fifobase = fifobase + IHr.TotCostPrice;
-				find = false;
-				IH2r.Source = IHr.Source;
-				halt = 0;
-				IH2r.SerNr = IHr.Source;
-				while(IH2r.Source>0 and halt<40) begin
-					readfirstmain(IH2r,1,true);
-					IH2r.SerNr = IH2r.Source;
-					halt = halt + 1;
-				end;
-				if(IH2r.FileName=="PUVc")then begin
-					PUr.SerNr = IH2r.TransNr;
-					readfirstmain(PUr,1,true);
-					matrowget(PUr,IH2r.Row,PUrw);
-					fifo = fifo + PUrw.UPrice*IHr.Qty;
-					cur = PUr.CurncyCode;
-					find = true;
-				end;
-				findsec=false;
-				if(find==false)then begin
-					IH2r.ArtCode = artcode;
-					IH2r.TransDate = ivdate;
-					find = true;
-					while(loopbackkey("ArtCode",IH2r,2,find))begin
-						if(IH2r.ArtCode!=artcode)then begin find = false; end;
-						if(IH2r.FileName=="PUVc" and find)then begin
-							PUr.SerNr = IH2r.TransNr;
-							readfirstmain(PUr,1,true);
-							matrowget(PUr,IH2r.Row,PUrw);
-							fifo = fifo + PUrw.UPrice*IHr.Qty;
-							cur = PUr.CurncyCode;
-							find = false;
-							findsec = true;
-						end;
-					end;
-					resetloop(IH2r);
-					if(blank(cur) or findsec==false)then begin
-						INr.Code = IHr.ArtCode;
-						readfirstmain(INr,1,true);
-						if(INr.LastPurchPrice2<>0)then begin
-							fifo = fifo + INr.LastPurchPrice2*IHr.Qty;
-						end else begin
-							GetFullCurncyRate(INr.LastPurchCurncyCode,INr.LastBasePriceChange,fr,to1,to2,br1,br2);
-							if(fr==0 or to1==0)then begin
-								fr = 1; to1 = 1;
-							end;
-							fifo = fifo + INr.InPrice*fr/to1*IHr.Qty;
-						end;
-						cur = INr.LastPurchCurncyCode;
-					end;
-				end;
-			end;
-		end;
-	end else begin
-		IVr.SerNr = sernr;
-		readfirstmain(IVr,1,true);
-		matrowget(IVr,rownr,IVrw);
-		
-		TrHs = true;
-		SHr.OrderNr=IVr.OrderNr;
-		while(loopkey("OrderKey",SHr,1,TrHs))begin
-			if(SHr.OrderNr!=IVr.OrderNr)then begin TrHs=false; end;
-			
-			if(TrHs)then begin
-			mtrw = matrowcnt(SHr);
-			For(i=0;i<mtrw;i=i+1) begin
-				matrowget(SHr,i,SHrw);
-				if(SHrw.OrdRow==IVrw.OrdRow)then begin
-					IHr.FileName = "SHVc";
-					IHr.TransNr = SHr.SerNr;
-					IHr.Row = i;
-					TrHs1 = true;
-					resetloop(IHr);
-					while(loopkey("FNTransNr",IHr,3,TrHs1))begin
-						if(IHr.FileName!="SHVc")then begin TrHs1 = false; end;
-						if(IHr.TransNr!=SHr.SerNr)then begin TrHs1 = false; end;
-						if(IHr.Row!=i)then begin TrHs1 = false; end;
-						
-					
-						if(TrHs1)then begin
-							fifobase = fifobase + IHr.TotCostPrice;
-							find = false;
-							IH2r.Source = IHr.Source;
-							halt = 0;
-							IH2r.SerNr = IHr.Source;
-							while(IH2r.Source>0 and halt<40) begin
-								readfirstmain(IH2r,1,true);
-								IH2r.SerNr = IH2r.Source;
-								halt = halt + 1;
-							end;
-							if(IH2r.FileName=="PUVc")then begin
-								PUr.SerNr = IH2r.TransNr;
-								readfirstmain(PUr,1,true);
-								matrowget(PUr,IH2r.Row,PUrw);
-								fifo = fifo + PUrw.UPrice*IHr.Qty;
-								cur = PUr.CurncyCode;
-								find = true;
-							end;
-							findsec=false;
-							if(find==false)then begin
-								IH2r.ArtCode = artcode;
-								IH2r.TransDate = ivdate;
-								find = true;
-								while(loopbackkey("ArtCode",IH2r,2,find))begin
-									if(IH2r.ArtCode!=artcode)then begin find = false; end;
-									if(IH2r.FileName=="PUVc" and find)then begin
-										PUr.SerNr = IH2r.TransNr;
-										readfirstmain(PUr,1,true);
-										matrowget(PUr,IH2r.Row,PUrw);
-										fifo = fifo + PUrw.UPrice*IHr.Qty;
-										cur = PUr.CurncyCode;
-										find = false;
-										findsec = true;
-									end;
-								end;
-								resetloop(IH2r);
-								if(blank(cur) or findsec==false)then begin
-									INr.Code = IHr.ArtCode;
-									readfirstmain(INr,1,true);
-									if(INr.LastPurchPrice2<>0)then begin
-										fifo = fifo + INr.LastPurchPrice2*IHr.Qty;
-									end else begin
-										GetFullCurncyRate(INr.LastPurchCurncyCode,INr.LastBasePriceChange,fr,to1,to2,br1,br2);
-										if(fr==0 or to1==0)then begin
-											fr = 1; to1 = 1;
-										end;
-										fifo = fifo + INr.InPrice*fr/to1*IHr.Qty;
-									end;
-									cur = INr.LastPurchCurncyCode;
-								end;
-							end;
-						end;
-					end;
-				end;	  
-			end; 
-			end;
-		end;
-	end;*/
-
 	if(fifo<0)then begin fifo=-fifo; end;
 	if(fifobase<0)then begin fifobase=-fifobase; end;
 	if (additionalCurF) then begin //Edit***************************Sasha2,14:23 14.09.2017 {
@@ -601,7 +501,7 @@ begin
   array string 20 arrstrs; //Edit***************************Sasha2,10:46 20.11.2014
   integer valscnt,strscnt,rangeval,rangecnt,arrsize; //Edit***************************Sasha2,12:11 20.11.2014
   val itemoccurrences; //Edit***************************Sasha2,12:11 20.11.2014
-  boolean iteminf,addclassf;
+  boolean iteminf,addclassf,tmpbool;
   integer cred;
   Record CTypeVc CTyper; //Edit***************************Sasha2,12:23 11.11.2015
   integer ctypecnt,m; //Edit***************************Sasha2,12:24 11.11.2015
@@ -1304,7 +1204,7 @@ begin
 										end;
 										
 										
-										FindFIFOOrigValAndCurncyIV(IVr.SerNr,i,brandfifo,brandcur,fifob1,updst,addCurs,currencyBalances,additionalCurF); //Edit***************************Sasha2,16:02 13.09.2017
+										FindFIFOOrigValAndCurncyIV(IVr.SerNr,i,brandfifo,brandcur,fifob1,updst,addCurs,currencyBalances,additionalCurF,tmpbool); //Edit***************************Sasha2,16:02 13.09.2017
 										if(fifob1==0)then begin
 											fifob1 = INr.WeighedAvPrice * IVrw.Quant;
 										end;
