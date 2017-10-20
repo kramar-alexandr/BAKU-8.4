@@ -107,6 +107,7 @@ enum begin //edited by BPI {  //RUSWINDOWFUNCT
   kPOSButtonTypeOSashaChtotoDelal = 207,
   kPOSButtonTypeGetBirthRebate = 208,
   kPOSButtonTypeIssueCBLoyaltyCard = 209
+  kPOSButtonTypeTAXBackRet = 210
 end;
 
 function string 200 ParseClassification(string class)
@@ -705,6 +706,81 @@ procedure GetBirthRebateDsm() begin
 return;
 end;
 
+global procedure GetTAXBackRetDsm() begin
+	Integer wn,nwn,i;
+  record IVVc IVr;
+  row IVVc IVrw;
+  record UserVc Userr;
+  string 255 subset;
+  integer mtrw,rwcnt;
+  string 50 artcode;
+  Integer sernrf;
+  string 255 inwarning,warning;
+  record BirthdayRebateBlock BRb;
+  date startdate,enddate;
+  date birthmin,birth,mirthmax;
+  val lastquant; 
+  record CUVc CUr;
+  boolean notused;
+  record RebVc Rebr;
+  
+	//blockload(BRb);
+	BRb.PrcRebate = 18;
+	wn = CurWindow;
+	getwindowrecord(wn,IVr);
+	CUr.Code = IVr.CustCode;
+	
+	Rebr.Code = IVr.RebCode;
+	if(readfirstmain(Rebr,1,true))then begin
+
+	end;
+	
+	if(readfirstmain(CUr,1,true))then begin
+		
+		notused = true;
+
+		if(notused)then begin
+			if(IVr.OKFlag==0)then begin
+			
+				if(true)then begin 	
+					if(BRb.PrcRebate!=0)then begin
+						mtrw = matrowcnt(IVr);
+						For(i=0;i<mtrw;i=i+1) begin
+							matrowget(IVr,i,IVrw);
+							if(nonblank(IVrw.ArtCode) and IVrw.stp==1 and IVrw.Quant<0)then begin
+								lastquant = IVrw.Quant;
+								IVVc_PasteArtCode(IVr,i,inwarning,warning,TouchScreenLook,sernrf);
+								matrowget(IVr,i,IVrw);
+								IVrw.Quant = lastquant;
+								matrowput(IVr,i,IVrw);
+								IVVc_PasteQuantity(IVr,i);										
+								matrowget(IVr,i,IVrw);
+								if(IVrw.vRebate==Rebr.vra0)then begin
+									IVrw.vRebate = (1-(100-IVrw.vRebate)/100*(100-BRb.PrcRebate)/100)*100;
+									IVrw.UsedBirthRebate = 1;
+									IVr.UsedBirthRebateH = 1;
+								end;
+								matrowput(IVr,i,IVrw);
+								IVDchrsum(IVr,i);
+								IVDchsum(IVr,i);
+							end;
+						end;
+						IVSumup(IVr,true);
+						putwindowrecord(wn,IVr);
+						IVDClass_RefreshStringList(wn,IVr);
+					end;
+				end else begin
+					//messagebox(35101,"");
+				end;
+			
+				//DisplayIVItem(IVr,rownr);
+			end;
+		end;
+	end;
+	
+return;
+end;
+
 
 global
 procedure GetBirthRebateORDsm() begin
@@ -1072,7 +1148,10 @@ begin
       case kPOSButtonTypeIssueCBLoyaltyCard: //Edit***************************Sasha2,17:30 11.08.2017
       	OpenGCBCardckIssueTouchScreenDClass;
       	goto LIVDClassTouchScreenPasteButtonDo;
-    end;
+      case kPOSButtonTypeTAXBackRet:// Edit ************************** Tuesday, 17 October 2017 15:22:12
+      	GetTAXBackRetDsm;
+      	goto LIVDClassTouchScreenPasteButtonDo;
+      end;
   end;
 LIVDClassTouchScreenPasteButtonDo:;
   return;
@@ -3875,6 +3954,7 @@ begin
 LIVDClassTouchScreenDeleteAll:;  
   return;
 end; //edited by BPI }
+
 global //edited by BPI {
 function Boolean IVDClassUpdateWebBrowser()
 begin
@@ -3883,7 +3963,7 @@ begin
   row CompaniesBlock CBrw;// Edit ************************** Tuesday, 4 December 2012 15:41:08
   string 50 path,port,tstr1;// Edit ************************** Tuesday, 4 December 2012 15:58:05
   record ProgramStatusBlock PSb;	
-  string 255 tag;
+  string 255 tag,hostIp;
   record IVVc IVr;
   row IVVc IVrw;
   record INVc INr;
@@ -3912,8 +3992,9 @@ begin
 				blockload(PSb);
 				port = PSb.httpPort;
 				path = CBrw.TCPIP;
+				hostIp = CBrw.TCPIP;
 				//SWAROVSKI LLADRO J&W V&B Creative Ambiance Carpets Cadenza
-				if(currentcompany==5)then begin
+				/*if(currentcompany==5)then begin
 					tstr1 = GetINImageAttach(IVrw.ArtCode);//J&W Cartier itp
 				end else begin
 					if(currentcompany==9)then begin
@@ -3925,8 +4006,11 @@ begin
 					end else begin
 						tstr1 = IVrw.ArtCode;
 					end;
-				end;
-				setwindowsubset(wn,"http://" & path & ":" & port & "/WebGetINImage.hal?image=" & tstr1 & "&curcomp=" & currentcompany & "&user=" & currentuser);
+				end;*/
+				tstr1 = IVrw.ArtCode;
+				
+				setwindowsubset(wn,"http://" & hostIp & ":1070/index?user=" & currentuser & curmachinename & CurrentCompany);
+				//setwindowsubset(wn,"http://" & path & ":" & port & "/WebGetINImage.hal?image=" & tstr1 & "&curcomp=" & currentcompany & "&user=" & currentuser);
 				ReRunWindowDef(wn);
 
 			end;
