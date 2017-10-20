@@ -78,6 +78,7 @@ remote procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
 remote procedure ORDchsum(var record ORVc,Integer);
 remote procedure ORSumup(var record ORVc);
 external procedure OpenGCBCardckIssueTouchScreenDClass(); //Edit***************************Sasha2,17:30 11.08.2017
+remote procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);// Edit ************************** Friday, 20 October 2017 15:15:28
 
 enum begin
   kPOSButtonTypeGoodsReturn = 100,
@@ -843,9 +844,11 @@ begin
   string 255 tag;
   record RcVc RepSpec;
   Integer line,rownr;
-  string 255 tstr,t2;
+  string 255 tstr,t2,paymode,crncy;// Edit ************************** Friday, 20 October 2017 15:09:52
   integer i,mtrw;// Edit ************************** Friday, 22 March 2013 14:08:42
-	
+  val amount;// Edit ************************** Friday, 20 October 2017 15:09:59
+	val from,to1,to2,base1,base2;// Edit ************************** Monday, 25 March 2013 17:41:57
+
   wn = CurWindow;
   DeselectWIndow(wn,true);
   GetWindowRecord(wn,IVr);
@@ -950,7 +953,41 @@ begin
         BlockLoad(Rahaxib);
         switch (Rahaxib.TerminalType) begin
           case kLocalCCTerminalNone:
-            OpenCCPayTouchScreenDClass(wn,-1,IVr.SerNr,IVr.Sum4,IVr.RetnValue,blankval,IVr.CurncyCode,POSBrw.Code,POSBrw.Label);
+          	// Edit ************************** Friday, 20 October 2017 15:07:36
+          	// Edit Start ---------------------------------------------- Edit Start
+	//Friday, 20 October 2017 15:12:45
+	
+          	paymode = FirstInRange(POSBrw.Code,10); //Edit***************************Sasha2,16:55 11.02.2015
+						amount = StringToVal(LastInRange(POSBrw.Code,10),M4Val); //Edit***************************Sasha2,16:55 
+          	if(amount==0)then begin
+							OpenCCPayTouchScreenDClass(wn,-1,IVr.SerNr,IVr.Sum4,IVr.RetnValue,blankval,IVr.CurncyCode,POSBrw.Code,POSBrw.Label);
+            end else begin
+            	if(IVr.Sum4<amount)then begin
+								amount = IVr.Sum4;
+							end;
+            	
+            	MessageBox(0,USetStr(31001) & amount & " AZN");
+            	ClearRow(IVr,IVrw,kInvoiceRowTypeCreditCardPayment);
+            	IVrw.CurncyCode = IVr.CurncyCode;
+							IVrw.PayMode = paymode;        
+							IVrw.Spec = "Gift Voucher";
+							IVrw.Sum = amount;
+							crncy = IVr.CurncyCode;
+							GetFullCurncyRate(crncy,IVr.TransDate,from,to1,to2,base1,base2);
+							IVrw.CurncyCode = crncy;
+							IVrw.FrRate = from;
+							IVrw.ToRateB1 = to1;
+							IVrw.ToRateB2 = to2;
+							IVrw.BaseRate1 = base1;
+							IVrw.BaseRate2 = base2;  
+            	MatRowPut(IVr,MatRowCnt(IVr),IVrw);
+							putwindowrecord(wn,IVr);
+							ProceedLoyaltyPaymentNPTSSClassExecuteMy(wn);
+            end;
+            
+	// Edit End ---------------------------------------------- Edit End
+	
+            
           case kLocalCCTerminalYomaniBanksys:
             CredCardIVsmExecute(POSBrw.Code,POSBrw.Label);
           case kLocalCCTerminalIngenico6550:
