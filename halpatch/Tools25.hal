@@ -27,16 +27,16 @@ external function val MulWithRateToBase1(var string,Date,val,roundmode);
 external function string 255 GetNextValue(var string);
 external function string 255 AddStr(string,string,string);
 remote updating function Integer UpdateUserLicenses(Integer);
-remote updating procedure UpdateRemoteUserChargeFields();
-remote updating procedure UpdateRemoteCompaniesChargeFields();
-remote procedure GetRemoteUserChargeFields(var Integer,var Integer,var Integer,var Integer,var Date);
-remote procedure GetRemoteCompaniesChargeFields(var Integer,var Integer,var Integer,var Integer,var Date);
+remote updating procedure GetRemoteUserChargeFields();
+remote updating procedure GetRemoteCompaniesChargeFields();
 external function Boolean PasteActTypeInAct(string,var record ActVc);
 external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);// Edit ************************** Wednesday, 23 August 2017 18:07:23
 external function val AbsoluteVal(val);// Edit ************************** Wednesday, 23 August 2017 18:07:26
 external function boolean CompanyIsJWLikeCompany(Integer);// Edit ************************** Wednesday, 23 August 2017 18:07:27
 remote function Time GetCurTimeOnServ();// Edit ************************** Wednesday, 23 August 2017 18:07:28
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);// Edit ************************** Wednesday, 23 August 2017 18:07:29
+remote updating function Boolean GetLicensesFromServer(array record LicensesVc);
+external function Boolean LicenseShouldBeMovedToServer(record LicensesVc);
 
 
 global
@@ -951,25 +951,37 @@ end;
 global
 updating procedure SendLicensesVctoServer()
 begin
-  record LicensesVc Licensesr,OldLicensesr,LicensesrTemp;
-  array record LicensesVc Licensesra;
-  boolean foundf,updatef;
+  record LicensesVc Lr,oldLr;
+  array record LicensesVc Lica1;
+  array record LicensesVc Lica2;
+  boolean updatef;
   Longint i,cnta;
   string 255 UserCode;
   
   cnta = 0;
-  foundf = true;
-  Licensesr.Function = "ServerSlot";
-  while (LoopMain(Licensesr,1,foundf)) begin
-    if (Licensesr.Function!="ServerSlot") then begin foundf = false; end;
-    if (foundf) then begin
-      Licensesra[cnta] = Licensesr;
+  while (LoopMain(Lr,1,true)) begin
+    if (LicenseShouldBeMovedToServer(Lr)) then begin
+      Lica1[cnta] = Lr;
       cnta = cnta + 1;
     end;
   end;  
   if (cnta>0) then begin 
-    RemoteLicensesUpdateFromClient(Licensesra,cnta);
-  end; 
+    RemoteLicensesUpdateFromClient(Lica1,cnta);
+
+    GetLicensesFromServer(Lica2);
+    for (i = 0; i<Lica2.length; i = i + 1) begin
+      Lr = Lica2[i];
+      if (ReadFirstKey("OrigTransId",Lr,1,true)==false) then begin
+        Lr = Lica2[i];
+        Lr.SerNr = -1;
+        RecordStore(Lr,false);
+      end else begin
+        oldLr = Lr;
+        Lr = Lica2[i];
+        RecordUpdate(oldLr,Lr,true);
+      end;
+    end;
+  end;
   return;
 end;
 
@@ -980,41 +992,45 @@ begin
   Integer NrUsersToCharge,NrUsersChargedForCurPeriod,AvailableMonths,TotalUserMonths;
   Date CurPeriodEndDate;
   
-  if (ClientMode==false or UseExternalLicenseModel==false) then begin
-    goto LUpdateLocalUserChargeFields;
+  if (ClientMode and UseExternalLicenseModel) then begin
+    AsyncRemote.GetRemoteUserChargeFields;
   end;
-  UpdateRemoteUserChargeFields;
+end;
+
+global
+updating procedure StoreUpdateLocalUserChargeFields(Integer NrUsersToCharge,Integer NrUsersChargedForCurPeriod,Integer AvailableMonths,Integer TotalUserMonths,Date CurPeriodEndDate)
+begin
+  record CurLicensesBlock CLb;
+
   BlockLoad(CLb);
-  GetRemoteUserChargeFields(NrUsersToCharge,NrUsersChargedForCurPeriod,AvailableMonths,TotalUserMonths,CurPeriodEndDate);
   CLb.NrUsersToCharge = NrUsersToCharge;
   CLb.NrUsersChargedForCurPeriod = NrUsersChargedForCurPeriod;
   CLb.AvailableMonths = AvailableMonths;
   CLb.TotalUserMonths = TotalUserMonths;
   CLb.CurPeriodEndDate = CurPeriodEndDate;
   BlockStore(CLb);
-LUpdateLocalUserChargeFields:;
 end;
 
 global
 updating procedure UpdateLocalCompaniesChargeFields()
 begin
-  record CurLicensesBlock CLb;
-  Integer NrCompaniesToCharge,NrCompaniesChargedForCurPeriod,CompaniesAvailableMonths,TotalCompaniesMonths;
-  Date CurPeriodEndDate;
-  
-  if (ClientMode==false or UseExternalLicenseModel==false) then begin
-    goto LUpdateLocalCompaniesChargeFields;
+  if (ClientMode and UseExternalLicenseModel) then begin
+    AsyncRemote.GetRemoteCompaniesChargeFields;
   end;
-  UpdateRemoteCompaniesChargeFields;
+end;
+
+global
+updating procedure StoreUpdateLocalCompaniesChargeFields(Integer NrCompaniesToCharge,Integer NrCompaniesChargedForCurPeriod,Integer CompaniesAvailableMonths,Integer TotalCompaniesMonths,Date CurPeriodEndDate)
+begin
+  record CurLicensesBlock CLb;
+
   BlockLoad(CLb);
-  GetRemoteCompaniesChargeFields(NrCompaniesToCharge,NrCompaniesChargedForCurPeriod,CompaniesAvailableMonths,TotalCompaniesMonths,CurPeriodEndDate);
   CLb.NrCompaniesToCharge = NrCompaniesToCharge;
   CLb.NrCompaniesChargedForCurPeriod = NrCompaniesChargedForCurPeriod;
   CLb.CompaniesAvailableMonths = CompaniesAvailableMonths;
   CLb.TotalCompaniesMonths = TotalCompaniesMonths;
   CLb.CurPeriodEndDate = CurPeriodEndDate;
   BlockStore(CLb);
-LUpdateLocalCompaniesChargeFields:;
 end;
 
 global
