@@ -90,6 +90,7 @@ begin
 	while(loopkey("ActCustCode",oldLCr,1,TrHs))begin
 		testf = true;
 		if(oldLCr.CustCode!=CUr.Code)then begin TrHs = false; testf = false; end;
+		
 		if(currentcompany!=25)then begin
 			if(oldLCr.LCMLevel!="1")then begin testf = false; end;
 		end else begin
@@ -104,11 +105,12 @@ begin
 			LCr.LCMLevel = oldLCr.LCMLevel;
 			LCr.CustName = oldLCr.CustName;
 			LCr.StartDate = currentdate;
-			LoyaltyCardr.SerNr = "ID001";
-			loopmain(LoyaltyCardr,1,true);
+			LoyaltyCardr.SerNr = "9999999999999";
+			/*loopmain(LoyaltyCardr,1,true);
 			stepback(LoyaltyCardr);
 			stepback(LoyaltyCardr);
-			loopmain(LoyaltyCardr,1,true);
+			loopmain(LoyaltyCardr,1,true);*/
+			readlastmain(LoyaltyCardr,1,false);
 			code = left(LoyaltyCardr.SerNr,12);
 			code = right(code,9);
 			newcode = stringtolongint(code);
@@ -116,6 +118,32 @@ begin
 			code = "999" & newcode;
 			CalcEANCHS(code);
 			LCr.SerNr = code;			
+		end else begin
+			if(left(oldLCr.LCMLevel,4)=="EMPL")then begin
+				foundf = true;
+				Messagebox(0,1);
+				LCr.SerNr = "";
+				LCr.CustCode = oldLCr.CustCode;
+				LCr.LCMLevel = oldLCr.LCMLevel;
+				LCr.CustName = oldLCr.CustName;
+				LCr.StartDate = currentdate;
+				LoyaltyCardr.SerNr = "2999999999999";
+				/*loopmain(LoyaltyCardr,1,true);
+				stepback(LoyaltyCardr);
+				stepback(LoyaltyCardr);
+				loopmain(LoyaltyCardr,1,true);*/
+				readlastmain(LoyaltyCardr,1,false);
+				if(len(LoyaltyCardr.SerNr)!=13)then begin
+					LoyaltyCardr.SerNr = "2000000000000";
+				end;
+				code = left(LoyaltyCardr.SerNr,12);
+				code = right(code,9);
+				newcode = stringtolongint(code);
+				newcode = newcode+1;
+				code = "200" & newcode;
+				CalcEANCHS(code);
+				LCr.SerNr = code;	
+			end;
 		end;
 	end;
 	
@@ -570,6 +598,7 @@ begin
       case 22: res=true;
       case 23: res=true;
       case 24: res=true;
+      case 27: res=true;
     end;
   
     CompanyIsJWLikeCompany = res;
@@ -5675,122 +5704,120 @@ begin
 end;
 
 global
-procedure FindAndStoreINVcImgLink(record INVc INr, integer compnr, var string fullpath, var string filename)
+procedure FindAndStoreINVcImgLink(record INVc INr, integer compnr, var string myfullpath, var string myfilename)
 begin
   record CompaniesBlock Compb;
   row CompaniesBlock Comprw;
-  string 50 incode,incodeurl,inalt,inalturl,inbar,inbarurl,foundcode;
+  string 50 incode,incodeurl,inalt,inalturl,inbar,inbarurl;
+  boolean urlenc;
   integer pos;
   
   logtext(0,"FindAndStoreINVcImgLink");
   
   BlockLoad(Compb);
   MatRowGet(Compb,compnr-1,Comprw);
-  fullpath = "";
-  filename = "";
-  /*if (nonblank(INr.ImgLink) and fileexists(INr.ImgLink)) then begin
-    fullpath = INr.ImgLink;
-    pos = 0;
-    ExtractObjWithSeparator("/",INr.ImgLink,true,pos,filename);
-    ExtractObjWithSeparator("/",INr.ImgLink,true,pos,filename);
-    ExtractObjWithSeparator("/",INr.ImgLink,true,pos,filename);
-  end else begin*/
-    incode = imgStrReplace(INr.Code);
-    incodeurl = urlencode(incode);
-    inalt = imgStrReplace(INr.AlternativeCode);
-    inalturl = urlencode(incode);
-    inbar = imgStrReplace(INr.BarCode);
-    inbarurl = urlencode(incode);
+  myfullpath = "";
+  myfilename = "";
+  urlenc = false;
+  
+  incode = imgStrReplace(INr.Code);
+  incodeurl = urlencode(incode);
+  inalt = imgStrReplace(INr.AlternativeCode);
+  inalturl = urlencode(inalt);
+  inbar = imgStrReplace(INr.BarCode);
+  inbarurl = urlencode(inbar);
+  
+  if fileexists("webcust/" & Comprw.ShortName & "/" & incodeurl & ".jpg") then begin
+    myfilename = incodeurl & ".jpg";
+    urlenc = true;
+  end;
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & incodeurl & ".png") then begin
+      myfilename = incodeurl & ".png";
+      urlenc = true;
+    end;
+  end;
+  
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & inalturl & ".jpg") then begin
+      myfilename = inalturl & ".jpg";
+      urlenc = true;
+    end;
+  end;
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & inalturl & ".png") then begin
+      myfilename = inalturl & ".png";
+      urlenc = true;
+    end;
+  end;
+  
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & inbarurl & ".jpg") then begin
+      myfilename = inbarurl & ".jpg";
+      urlenc = true;
+    end;
+  end;
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & inbarurl & ".png") then begin
+      myfilename = inbarurl & ".png";
+      urlenc = true;
+    end;
+  end;
+  
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & incode & ".jpg") then begin
+      myfilename = incode & ".jpg";
+    end;
+  end;
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & incode & ".png") then begin
+      myfilename = incode & ".png";
+    end;
+  end;
+  
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & inalt & ".jpg") then begin
+      myfilename = inalt & ".jpg";
+    end;
+  end;
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & inalt & ".png") then begin
+      myfilename = inalt & ".png";
+    end;
+  end;
+  
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & inbar & ".jpg") then begin
+      myfilename = inbar & ".jpg";
+    end;
+  end;
+  if (blank(myfilename)) then begin
+    if fileexists("webcust/" & Comprw.ShortName & "/" & inbar & ".png") then begin
+      myfilename = inbar & ".png";
+    end;
+  end;
     
-    if fileexists("webcust/" & Comprw.ShortName & "/" & incodeurl & ".jpg") then begin
-      filename = incodeurl & ".jpg";
-    end;
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & incodeurl & ".png") then begin
-        filename = incodeurl & ".png";
+  if (nonblank(myfilename)) then begin
+    if (!urlenc) then begin
+      if (myfilename!=urlencode(myfilename)) then begin
+        renamefile("webcust/" & Comprw.ShortName & "/" & myfilename,"webcust/" & Comprw.ShortName & "/" & urlencode(myfilename));
+        myfilename = urlencode(myfilename);
       end;
     end;
-    
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & inalturl & ".jpg") then begin
-        filename = inalturl & ".jpg";
-      end;
-    end;
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & inalturl & ".png") then begin
-        filename = inalturl & ".png";
-      end;
-    end;
-    
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & inbarurl & ".jpg") then begin
-        filename = inbarurl & ".jpg";
-      end;
-    end;
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & inbarurl & ".png") then begin
-        filename = inbarurl & ".png";
-      end;
-    end;
-    
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & incode & ".jpg") then begin
-        filename = incode & ".jpg";
-      end;
-    end;
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & incode & ".png") then begin
-        filename = incode & ".png";
-      end;
-    end;
-    
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & inalt & ".jpg") then begin
-        filename = inalt & ".jpg";
-      end;
-    end;
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & inalt & ".png") then begin
-        filename = inalt & ".png";
-      end;
-    end;
-    
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & inbar & ".jpg") then begin
-        filename = inbar & ".jpg";
-      end;
-    end;
-    if (blank(filename)) then begin
-      if fileexists("webcust/" & Comprw.ShortName & "/" & inbar & ".png") then begin
-        filename = inbar & ".png";
-      end;
-    end;
-    
-  //end;
-  if (nonblank(filename)) then begin
-    if (filename!=urlencode(filename)) then begin
-      renamefile("webcust/" & Comprw.ShortName & "/" & filename,"webcust/" & Comprw.ShortName & "/" & urlencode(filename));
-      filename = urlencode(filename);
-    end;
-    fullpath = "webcust/" & Comprw.ShortName & "/" & filename;
-    /*if (INr.ImgLink!=fullpath) then begin
-      INr.ImgLink = fullpath;
-      recordStore(INr,true);5720
-      
-    end;*/
+    myfullpath = "webcust/" & Comprw.ShortName & "/" & myfilename;
   end;
   
   return;
 end;
 
-global
+/*global
 procedure FillImgInINVcMn(record RcVc RepSpec)
 begin
   record CompaniesBlock Compb;
   record INVc INr;
   row CompaniesBlock Comprw;
   integer oldcompany,i,rwcnt;
-  string 255 fullpath,filename;
+  string 255 myfullpath,myfilename;
   
   oldcompany = CurrentCompany;
   BlockLoad(Compb);
@@ -5801,13 +5828,13 @@ begin
     resetloop(INr);
     INr.Code = "";
     while loopmain(INr,1,true) begin
-      FindAndStoreINVcImgLink(INr,i+1,fullpath,filename);
+      FindAndStoreINVcImgLink(INr,i+1,myfullpath,myfilename);
     end;
   end;
 	
 	ResetCompany(oldcompany);
   return;
-end;
+end;*/
 
 global updating procedure ChangeOptionalFeaturedMn()
 begin
