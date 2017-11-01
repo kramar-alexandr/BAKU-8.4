@@ -1,3 +1,4 @@
+//server-only
 external function roundmode SetRoundModeD(Integer);
 
 
@@ -90,6 +91,20 @@ LCorspTRTest:;
 end;
 */
 
+global
+function Boolean CorspTRIgnore(string accnumber)
+begin
+  Boolean res;
+  record AccBlock Accb;
+  
+  BlockLoad(Accb);
+  if (accnumber==Accb.RndAcc or accnumber==Accb.BaseRoundOffAcc or accnumber==Accb.EMURndOffAcc or accnumber==Accb.RateRndOffAcc) then begin
+    res = true;
+  end;
+  CorspTRIgnore = res;
+  return;
+end;
+
 global 
 function Boolean CorspTRTest(record TRVc TRp,record AccVc MainAccp,Integer trrow,var val debvalp,var val credvalp)
 begin
@@ -118,6 +133,7 @@ begin
   accexists = false;
   MatRowGet(TRp,trrow,corspTRrw);
   corspser = corspTRrw.CorspSer;
+
   rwcnt = MatRowCnt(TRp);
   for (i=0;i<rwcnt;i=i+1) begin
     MatRowGet(TRp,i,TRrw);
@@ -128,35 +144,50 @@ begin
     if (testf) then begin
       if (TRrw.AccNumber==MainAccp.AccNumber) then begin
         if (TRrw.DebVal<>0) then begin
-          debsum = debsum + TRrw.DebVal;
+          if (CorspTRIgnore(TRrw.AccNumber)==false) then begin
+            debsum = debsum + TRrw.DebVal;
+          end;
         end;  
         if (TRrw.CredVal<>0) then begin
-          credsum = credsum + TRrw.CredVal;
+          if (CorspTRIgnore(TRrw.AccNumber)==false) then begin
+            credsum = credsum + TRrw.CredVal;
+          end;
         end;  
         accexists = true;                      
       end;
       skipdlineaddf = false;
+/*      
+Lithuanians dont like it, they think amount < 1 should be includeded in corespondence
       if ((TRrw.DebVal>0) and (TRrw.DebVal<1) and (debcnt>0)) then begin
         skipdlineaddf = true;
       end;
       if ((TRrw.CredVal>0) and (TRrw.CredVal<1) and (credcnt>0)) then begin
         skipdlineaddf = true;
       end;
+*/      
       if (skipdlineaddf==false) then begin
         if (TRrw.DebVal>0) then begin
-          debcnt = debcnt + 1;
+          if (CorspTRIgnore(TRrw.AccNumber)==false) then begin
+            debcnt = debcnt + 1;
+          end;
           if (firstdebrow==-1) then begin firstdebrow = i; end;
         end;
         if (TRrw.CredVal>0) then begin
-          credcnt = credcnt + 1;
+          if (CorspTRIgnore(TRrw.AccNumber)==false) then begin
+            credcnt = credcnt + 1;
+          end;
           if (firstcredrow==-1) then begin firstcredrow = i; end;
         end;    
         if (TRrw.DebVal<0) then begin
-          debcnt = debcnt + 1;
+          if (CorspTRIgnore(TRrw.AccNumber)==false) then begin
+            debcnt = debcnt + 1;
+          end;
           if (firstdebrow==-1) then begin firstdebrow = i; end;
         end;
         if (TRrw.CredVal<0) then begin
-          credcnt = credcnt + 1;
+          if (CorspTRIgnore(TRrw.AccNumber)==false) then begin
+            credcnt = credcnt + 1;
+          end;
           if (firstcredrow==-1) then begin firstcredrow = i; end;
         end;
       end;
@@ -164,7 +195,6 @@ begin
       runbal = runbal - TRrw.CredVal;
               
       if (round(runbal,SetRoundModeD(2))==0) then begin// Edit ************************** Monday, 6 July 2015 17:44:52??????????
-      	
         if (i>=trrow) then begin
           if (((debcnt==1) and (firstdebrow==trrow)) or ((credcnt==1) and (firstcredrow==trrow))) then begin
             if (accexists) then begin
@@ -199,11 +229,11 @@ LSKIPROW:;
     end;  //testf    
   end;
 LCorspTRTest:;
-/*
-// Edit Start ---------------------------------------------- Edit Start
+
+	// Edit Start ---------------------------------------------- Edit Start
 	//Monday, 28 August 2017 18:06:34
 	
-	if(res==false and TRp.Number>0)then begin
+	/*if(res==false and TRp.Number>0)then begin
 		debsum = 0;
 		credsum = 0;
 		debcnt = 0;
@@ -227,16 +257,15 @@ LCorspTRTest:;
 			res = true;
 		end;
 			
-	end;
+	end;*/
 	
 	// Edit End ---------------------------------------------- Edit End
-	*/
+
   CorspTRTest = res;
   return;
 end;
 
-global
-procedure ReadCorspTRRowSums(record TRVc TRp,record AccVc MainAccp,record AccVc CorAccp,var val SumDebet,var val SumCredit,string object)
+procedure ReadCorspTRRowSums(record TRVc TRp,record AccVc MainAccp,record AccVc CorAccp,var val SumDebet,var val SumCredit,string object)// Edit ************************** Saturday, 19 August 2017 09:50:31
 BEGIN
   Integer i,rwcnt;
   row TRVc TRrw;
@@ -278,7 +307,6 @@ begin
   Boolean found,found2,testf;
   record MainVc mainr;
   record AccVc CorAccr; 
-
   
   found = true;
   CorAccr.AccNumber = CorAcc;
@@ -299,7 +327,7 @@ begin
             TRr.IntYc = mainr.IntYc;
             if (ReadFirstMain(TRr,2,true)) then begin                
               if (mainr.TransDate==TRr.TransDate) then begin
-                ReadCorspTRRowSums(TRr,MainAccp,CorAccr,SumDebet,SumCredit,RepSpec.ObjStr);                  
+                ReadCorspTRRowSums(TRr,MainAccp,CorAccr,SumDebet,SumCredit,RepSpec.ObjStr);  // Edit ************************** Saturday, 19 August 2017 09:50:11                
               end;
             end;                            
           end;
