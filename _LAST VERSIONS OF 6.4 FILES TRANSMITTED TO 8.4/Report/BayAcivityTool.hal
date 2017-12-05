@@ -754,6 +754,260 @@ return;
 end;
 
 
+global procedure LoyaltyCardCounterCoinRn(record RcVc RepSpec)
+begin
+	string 20 custcode,loyaltycard;
+	record CUVc CUr;
+	record IVVc IVr;
+	record LoyaltyCardVc LCr;
+	record CompaniesBlock CBb;
+	integer mtrw,i,k,arsz,rwcnt;
+	boolean TrHs,testf,findf,TrHsCu,testfCu,testf1;
+	val sum,psum;
+	record LocationVc Locationr;
+	integer curcomp;
+	array string 50 loycards;
+	vector boolean culoycard;
+	vector val loysum;
+	record LCCashbackLevelVc LCCr;
+	row LCCashbackLevelVc LCCrw;
+	integer cbacklevel;
+	val tonextlevel,balout;
+	row IVVc IVrw;
+	
+	
+	curcomp = currentcompany;
+	
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);
+	startreportnoheaderjob("Отчет по накопленным баллам клиента CoinCasa");
+	startformat(15);
+		outstring(0,0,"Клиент",false);
+		outstring(50,0,"Имя",false);
+		outstring(100,0,"Пол",false);
+		outstring(150,0,"Возраст",false);
+		outstring(200,0,"Уровень участия в ПЛ (% накопления)",false);
+		outstring(250,0,"Дата последней покупки",false);
+		outstring(300,0,"Накоплено cashback",false);
+		outstring(350,0,"Использовано cashback",false);
+		outstring(400,0,"Осталось до следующего уровня",false);
+		outstring(450,0,"Моб. телефон",false);
+		outstring(500,0,"E-mail",false);
+	endformat;
+	
+	LCr.SerNr = -1;
+	
+	LCCr.LCMLevel = "CASACOIN";
+	readfirstmain(LCCr,1,true);
+	mtrw = matrowcnt(LCCr);
+	
+	while(loopmain(LCr,1,true))begin
+		testf = true;
+		if(LCr.Closed>0)then begin testf = false; end;
+		if(LCr.LCMLevel!="CASACOIN")then begin testf = false; end;
+		if(nonblank(RepSpec.f1) and RepSpec.f1!=LCr.CustCode)then begin testf = false; end;
+		if(nonblank(RepSpec.f2) and RepSpec.f2!=LCr.SerNr)then begin testf = false; end;
+		
+		
+		if(testf)then begin
+			CUr.Code = LCr.CustCode;
+			if(readfirstmain(CUr,1,true))then begin
+				startformat(15);
+					outstring(0,"DblCUVc",CUr.Code,false);
+					outstring(50,0,CUr.Name,false);
+					Switch(CUr.Gender)begin
+						case 0: outstring(100,0,"Мужской",false);
+						case 1: outstring(100,0,"Женский",false);
+						case 2: outstring(100,0,"Компания",false);
+					end;
+					
+					if(nonblankdate(CUr.BirthDate))then begin
+						outstring(150,0,getYear(currentdate)-getyear(CUr.BirthDate),false);
+					end else begin
+						outstring(150,0," ",false);
+					end;
+					cbacklevel = 0;
+					tonextlevel = 0;
+					For(i=0;i<mtrw;i=i+1) begin
+	  				matrowget(LCCr,i,LCCrw);
+	  				if(LCr.CashbackLevelPoints>=LCCrw.FromPoints and LCr.CashbackLevelPoints<=LCCrw.ToPoints)then begin
+	  					cbacklevel = LCCrw.CashbackPercent;
+	  					tonextlevel = LCCrw.ToPoints - LCr.CashbackLevelPoints + 1;
+	  				end;
+					end; 
+					outstring(200,0,cbacklevel,false);
+					IVr.CustCode = CUr.Code;
+					readlastkey("CustCode",IVr,1,true);
+					if(IVr.CustCode==CUr.Code)then begin
+						outdate(250,0,IVr.InvDate,false);
+					end else begin
+						outstring(250,0,"",false);
+					end;
+					
+					outstring(300,0,LCr.CashbackLevelPoints,false);
+					
+					IVr.CustCode = CUr.Code;
+					TrHs = true;
+					balout = 0;
+					while(loopkey("CustCode",IVr,1,TrHs))begin
+						testf1 = true;
+						if(IVr.CustCode!=CUr.Code)then begin TrHs = false; testf1 = false; end;
+						if(IVr.OKFlag==0)then begin testf1 = false; end;
+						//if(IVr.LoyaltyCardNr!=LCr.SerNr)then begin testf1 = false; end;
+						
+						if(testf1)then begin
+							rwcnt = matrowcnt(IVr);
+							For(i=0;i<mtrw;i=i+1) begin
+	  						matrowget(IVr,i,IVrw);
+	  						if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
+	  							balout = balout + IVrw.Points;
+	  						end;
+							end; 
+						end;
+					end;
+					resetloop(IVr);
+					outstring(350,0,balout,false);
+					outstring(400,0,tonextlevel,false);
+					outstring(450,0,CUr.Mobile,false);
+					outstring(500,0,CUr.eMail,false);
+				endformat;
+			
+			end;
+		
+		end;
+	end;
+	
+	
+	endjob;
+
+return;
+end;
+
+global procedure LoyaltyCardDinamicCoinRn(record RcVc RepSpec)
+begin
+	string 20 custcode,loyaltycard;
+	record CUVc CUr;
+	record IVVc IVr;
+	record LoyaltyCardVc LCr;
+	record CompaniesBlock CBb;
+	integer mtrw,i,k,arsz,rwcnt;
+	boolean TrHs,testf,findf,TrHsCu,testfCu,testf1;
+	val sum,psum;
+	record LocationVc Locationr;
+	integer curcomp;
+	array string 50 loycards;
+	vector boolean culoycard;
+	vector val loysum;
+	record LCCashbackLevelVc LCCr;
+	row LCCashbackLevelVc LCCrw;
+	integer cbacklevel;
+	val tonextlevel,balout,balin;
+	row IVVc IVrw;
+	
+	
+	curcomp = currentcompany;
+	
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);
+	startreportnoheaderjob("Динамика cashback CoinCasa");
+	startformat(15);
+		outstring(0,0,"Дата регистрации сч/ф",false);
+		outstring(50,0,"Время регистрации сч/ф",false);
+		outstring(100,0,"Id клиента",false);
+		outstring(150,0,"Возраст",false);
+		outstring(200,0,"Пол",false);
+		outstring(250,0,"Сумма накопления cashback по данной сч/ф",false);
+		outstring(300,0,"Сумма расходования cashback - данной сч/ф",false);
+		outstring(350,0,"Cashback остаток на счету",false);
+	endformat;
+	
+	LCr.SerNr = -1;
+	
+	LCCr.LCMLevel = "CASACOIN";
+	readfirstmain(LCCr,1,true);
+	mtrw = matrowcnt(LCCr);
+	
+	while(loopmain(LCr,1,true))begin
+		testf = true;
+		if(LCr.Closed>0)then begin testf = false; end;
+		if(LCr.LCMLevel!="CASACOIN")then begin testf = false; end;
+		if(nonblank(RepSpec.f1) and RepSpec.f1!=LCr.CustCode)then begin testf = false; end;
+		if(nonblank(RepSpec.f2) and RepSpec.f2!=LCr.SerNr)then begin testf = false; end;
+		
+		
+		if(testf)then begin
+			CUr.Code = LCr.CustCode;
+			if(readfirstmain(CUr,1,true))then begin					
+					IVr.CustCode = CUr.Code;
+					TrHs = true;
+					balout = 0;
+					balin = 0;
+					while(loopkey("CustCode",IVr,1,TrHs))begin
+						testf1 = true;
+						if(IVr.CustCode!=CUr.Code)then begin TrHs = false; testf1 = false; end;
+						if(IVr.OKFlag==0)then begin testf1 = false; end;
+						if(blank(IVr.LoyaltyCardNr))then begin testf1 = false; end;
+						//if(IVr.LoyaltyCardNr!=LCr.SerNr)then begin testf1 = false; end;
+						
+						if(testf1)then begin
+							
+							balout = 0;
+							rwcnt = matrowcnt(IVr);
+							For(i=0;i<mtrw;i=i+1) begin
+	  						matrowget(IVr,i,IVrw);
+	  						if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
+	  							balout = balout + IVrw.Points;
+	  						end;
+							end; 
+							balin = balin + IVr.Points - balout;
+							
+							cbacklevel = 0;
+							tonextlevel = 0;
+							For(i=0;i<mtrw;i=i+1) begin
+								matrowget(LCCr,i,LCCrw);
+								if(LCr.CashbackLevelPoints>=LCCrw.FromPoints and LCr.CashbackLevelPoints<=LCCrw.ToPoints)then begin
+									cbacklevel = LCCrw.CashbackPercent;
+									tonextlevel = LCCrw.ToPoints - LCr.CashbackLevelPoints + 1;
+								end;
+							end; 
+
+
+							
+							startformat(15);
+								outstring(0,0,IVr.InvDate,false);
+								outstring(50,0,IVr.TransTime,false);
+								outstring(100,0,CUr.Code,false);
+								if(nonblankdate(CUr.BirthDate))then begin
+									outstring(150,0,getYear(currentdate)-getyear(CUr.BirthDate),false);
+								end else begin
+									outstring(150,0," ",false);
+								end;
+								Switch(CUr.Gender)begin
+									case 0: outstring(100,0,"Мужской",false);
+									case 1: outstring(100,0,"Женский",false);
+									case 2: outstring(100,0,"Компания",false);
+								end;
+								outstring(250,0,IVr.Points,false);
+								outstring(300,0,balout,false);
+								outstring(350,0,balin,false);
+							endformat;
+							
+						end;
+					end;
+					resetloop(IVr);
+					
+			
+			end;
+		
+		end;
+	end;
+	
+	
+	endjob;
+
+return;
+end;
+
 global procedure LoyaltyCardCounterRn(record RcVc RepSpec)
 begin
 	string 20 custcode,loyaltycard;
