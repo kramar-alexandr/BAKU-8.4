@@ -22,6 +22,7 @@ external procedure ExtractElemFromSet(string,integer,var string);
 external function Boolean IsVATCodeDefined(string);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string); //Edit***************************Sasha2,15:42 19.04.2017
 external procedure ParsePhones(string, var integer, var array string);
+external function Integer InString2(string,string);
 
 updating procedure AddToNumberLookupRegister(string phoneno,Integer compno,string custcode)
 begin
@@ -789,12 +790,25 @@ BEGIN
   SplitAlphaDigit(CUr.Code,curcustr,curcunr);
   if (curcustr==lastcustr) then begin
     if (curcunr!=lastcunr) then begin
-      SRRec.LastCustCode = CUr.Code;
+    	if(currentcompany==25)then begin
+    		if(left(CUr.Code,2)=="CC")then begin
+    			SRRec.LastCustCode = CUr.Code;
+    		end;
+    	end else begin
+    		SRRec.LastCustCode = CUr.Code;
+    	end;
+      
       BlockStore(SRRec);
     end;
   end else begin
+  	if(currentcompany==25)then begin
+			if(left(CUr.Code,2)=="CC")then begin
+				SRRec.LastCustCode = CUr.Code;
+			end;
+			BlockStore(SRRec);
+		end;
     //SRRec.LastCustCode = CUr.Code;
-    //BlockStore(SRRec);
+    //
   end;
 
 //  RemoveNormalizedNumbers(CUr); // No need when saving...
@@ -1293,6 +1307,48 @@ begin
 end; //Edit***************************Sasha2,15:11 19.04.2017 }
 
 global
+function Boolean ValidateEmail(string email)
+begin
+  Boolean res;
+  Integer i,cnt,cn,pos,atPos,dotPos;
+  string 255 emailtmp;
+  
+  res = true;
+  cnt = len(email);
+  for (i=0;i<cnt;i=i+1) begin
+    cn = Asc(Mid(email,i,1));
+    if (((cn>=44) and (cn<=46)) or ((cn>=48) and (cn<=57)) or ((cn>=64) and (cn<=90)) or (cn==95) or ((cn>=97) and (cn<=122))) then begin end else begin
+      res = false;
+      i = cnt; // exit
+    end;
+  end;
+  if (res) then begin
+    pos = 0;
+    ExtractObjWithSeparator(",",email,true,pos,emailtmp);
+    while (NonBlank(emailtmp)) begin
+      atPos = InString2(emailtmp,"@");
+      if (atPos<1) then begin
+        res = false;
+        pos = cnt; // exit
+      end;
+      dotPos = InString2(emailtmp,".");
+      if (dotPos <= atPos + 1) then begin
+        res = false;
+        pos = cnt; // exit
+      end;
+      if (dotPos==len(emailtmp)-1) then begin
+        res = false;
+        pos = cnt; // exit
+      end;
+      ExtractObjWithSeparator(",",email,true,pos,emailtmp);
+    end;
+  end;
+  
+  ValidateEmail = res;
+  return;
+end;
+
+global
 function LongInt CUVcRecordCheck(var record CUVc CUr,record CUVc CU2r,LongInt stat,LongInt long4)
 BEGIN
   LongInt res;
@@ -1327,8 +1383,8 @@ BEGIN
   updatemode = 2;
   BlockLoad(CSb);
   oldnr = CUr.Code;
-  /*
-  if(currentcompany==1)then begin// Edit ************************** Thursday, 24 October 2013 15:13:13
+  
+  if(currentcompany==25)then begin// Edit ************************** Thursday, 24 October 2013 15:13:13
 		if (blank(CUr.Code)) then begin
 			if (GetNextCustNr(tstr)) then begin end;
 			CUr.Code = tstr;
@@ -1340,7 +1396,14 @@ BEGIN
 			end;
 		end;
   end;// Edit ************************** Thursday, 24 October 2013 15:13:11
-  */
+  
+  // Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 27 November 2017 12:14:56
+  if (blank(CUr.Code)) then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 27 November 2017 12:14:57
+		RecordCheckError(1547,CUr.Code,-1,"Code");      
+		res = -1; 
+		goto LCUVcRecordCheck;
+	end;
+  
   if (blank(CUr.Name)) then begin
     RecordCheckError(1058,CUr.Name,-1,"Name");      
     res = -1; 
@@ -1785,6 +1848,13 @@ BEGIN
     end;   
   end; 
   
+  if (nonblank(CUr.eMail)) then begin
+    if (!ValidateEmail(CUr.eMail)) then begin
+      RecordCheckError(35113,"",-1,"eMail");      
+      res = -1; 
+      goto LCUVcRecordCheck;
+    end;
+  end;
 LCUVcRecordCheck:;
   if (res!=0) then begin CUr.Code = oldnr; end;
   CUVcRecordCheck = res;
@@ -1810,4 +1880,3 @@ begin
   CUVcRecordSync = res;
   return;
 end;
-

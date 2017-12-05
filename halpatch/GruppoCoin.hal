@@ -200,7 +200,7 @@ begin
   record INVc INr;
   record IVVc IVr;
   row IVVc IVrw;
-	string 20 sstoreID,vendtran,transdateStr,quant,pricevalue,discountCode,discountvalue;
+	string 20 storeID,vendtran,transdateStr,quant,pricevalue,discountCode,discountvalue;
 	string 10 operatorID,terminalID,transNr,countStr,typeOfRegistration;
 	string 255 rowdata,path,backUpPath;
 	date transdate;
@@ -234,7 +234,7 @@ begin
 	
 	nextline = chr(13) & chr(10);
 	vendtran = "VENDTRAN";
-	sstoreID = CoinSb.ClientCode;
+	storeID = CoinSb.ClientCode;
 	operatorID = "0001"; //IVr.SalesMan field is longer then 4 chars. so we fill it with "0001" always.
 	terminalID = "01"; //POS-terminal number
 	typeOfRegistration = "LL"; //first char for ArtCode, second for price
@@ -242,7 +242,7 @@ begin
 	//and D - that value was entered manually
 	
 	//Header
-	AddTextToArea("**INIT**" & vendtran & transdateStr & sstoreID & nextline, ames);
+	AddTextToArea("**INIT**" & vendtran & transdateStr & storeID & nextline, ames);
 	
 	//Sales/returns transaction
 	TrHs = true;
@@ -271,7 +271,7 @@ begin
 					end;
 					CEANr.EANNumber = INr.BarCode;
 					if(readfirstkey("EANNumber",CEANr,1,true))then begin
-						rowdata = rowdata & transdateStr & sstoreID & itemcode;
+						rowdata = rowdata & transdateStr & storeID & itemcode;
 						qty = AbsoluteVal(IVrw.Quant); //cut decimals;
 						quant = "+" & Right("000000" & qty,6);	
 						price = AbsoluteVal(IVrw.Price * IVrw.Quant * 100);
@@ -296,7 +296,7 @@ begin
 	
 	//Trailer record
 	countStr = Right("0000000" & count,7);
-	AddTextToArea("**FINE**" & vendtran & transdateStr & sstoreID & countStr & nextline, ames);
+	AddTextToArea("**FINE**" & vendtran & transdateStr & storeID & countStr & nextline, ames);
 	WriteAreaToFile(ames,path & filename,0);
 	millisleep(100);
 	
@@ -416,14 +416,19 @@ begin
   string 255 filename,rowdata,path,backUpPath;
   area ames;
   string 20 curloc,datestring;
-  integer pos,storenumber,sstoreID,rwcnt,i,intValue;
+  integer pos,storenumber,storeID,rwcnt,i,intValue;
   boolean TrHs,testf,foundf;
   LongInt count;
   string 5 nextline;
     
     BlockLoad(CoinSb);
-    sstoreID = CoinSb.ClientCode;
-    if (sstoreID<=0 or len(sstoreID)!=4) then begin
+    
+    if(CoinSb.LastMNDate==currentdate)then begin
+    	goto LGruppoCoinManageGoods;
+    end;
+    
+    storeID = CoinSb.ClientCode;
+    if (storeID<=0 or len(storeID)!=4) then begin
       LogText(0,"Check storeID in CoinSettingsBlock");
       goto LGruppoCoinManageGoods;
     end;
@@ -434,7 +439,7 @@ begin
     end;
     
     datestring = DateToString(CurrentDate,"YYYYMMDD");
-    filename = "PAD" & "10000" & sstoreID & "_" & datestring & ".TXT";
+    filename = "PAD" & "10000" & storeID & "_" & datestring & ".TXT";
   	//CreateFile(path & filename);
   	//CloseFile;
     
@@ -465,9 +470,9 @@ begin
             if (foundf==false) then begin
   				    foundf = true;
   				    //Header
-  	          AddTextToArea("**INIT**MERCTRAN" & datestring & sstoreID & nextline, ames);
+  	          AddTextToArea("**INIT**MERCTRAN" & datestring & storeID & nextline, ames);
   				  end;
-  				  rowdata = "MERCTRAN" & sstoreID & datestring & "0303";
+  				  rowdata = "MERCTRAN" & storeID & datestring & "0303";
   				  intValue = RetPUrw.Quant;
   				  rowdata = rowdata & RetPUrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
   				  rowdata = rowdata & NewM4PadString(CoinPackListHistr.TransportBill,16,"0",true) & CoinPackListHistr.TransportBillDate;
@@ -481,7 +486,7 @@ begin
   			if (foundf) then begin
   			  count = count + 2;
   			  //Footer
-  	      AddTextToArea("**FINE**MERCTRAN" & datestring & sstoreID & Right("0000000" & count,7) & nextline, ames);
+  	      AddTextToArea("**FINE**MERCTRAN" & datestring & storeID & Right("0000000" & count,7) & nextline, ames);
   	      RetPUr.FileNameCoin = filename;
   	      RetPUr.SentDateCoin = CurrentDate;
   	      RECORDSTORE(RetPUr,true);
@@ -514,9 +519,9 @@ begin
   				  if (foundf==false) then begin
   				    foundf = true;
   				    //Header
-  	          AddTextToArea("**INIT**MERCTRAN" & datestring & sstoreID & nextline, ames);
+  	          AddTextToArea("**INIT**MERCTRAN" & datestring & storeID & nextline, ames);
   				  end;
-  				  rowdata = "MERCTRAN" & sstoreID & datestring;
+  				  rowdata = "MERCTRAN" & storeID & datestring;
             switch (StockMovr.TypeCoin) begin
               case 0:;
               case 1:
@@ -539,7 +544,7 @@ begin
         if (foundf) then begin
           count = count + 2;
           //Footer
-          AddTextToArea("**FINE**MERCTRAN" & datestring & sstoreID & Right("0000000" & count,7) & nextline, ames);
+          AddTextToArea("**FINE**MERCTRAN" & datestring & storeID & Right("0000000" & count,7) & nextline, ames);
           StockMovr.FileNameCoin = filename;
           StockMovr.SentDateCoin = CurrentDate;
           RECORDSTORE(StockMovr,true);
@@ -549,8 +554,8 @@ begin
     //Edit-------------------Vitalii 14:33 27.07.2016 }
     
   	if (GetAreaLength(ames)==0) then begin
-  	  AddTextToArea("**INIT**MERCTRAN" & datestring & sstoreID & nextline, ames);
-  	  AddTextToArea("**FINE**MERCTRAN" & datestring & sstoreID & "0000002" & nextline, ames);
+  	  AddTextToArea("**INIT**MERCTRAN" & datestring & storeID & nextline, ames);
+  	  AddTextToArea("**FINE**MERCTRAN" & datestring & storeID & "0000002" & nextline, ames);
   	end;
   	
   	if (GetAreaLength(ames)>0) then begin
@@ -576,6 +581,9 @@ begin
         WriteAreaToFile(ames,backUpPath & filename,0);
       end;
     end;
+	  CoinSb.LastMNDate = currentdate;
+	  BlockStore(CoinSb);
+	  
 	  
 LGruppoCoinManageGoods:;
 	 
@@ -592,14 +600,14 @@ begin
   area ames;
   string 20 curloc,datestring;
   array LongInt serNrs;
-  integer pos,storenumber,sstoreID,i,rwcnt,serNrsLen;
+  integer pos,storenumber,storeID,i,rwcnt,serNrsLen;
   boolean TrHs,testf,foundRowsf,headerf;
   LongInt count;
   string 5 nextline;
     
     BlockLoad(CoinSb);
-    sstoreID = CoinSb.ClientCode;
-    if (sstoreID<=0 or len(sstoreID)!=4) then begin
+    storeID = CoinSb.ClientCode;
+    if (storeID<=0 or len(storeID)!=4) then begin
       LogText(0,"Check storeID in CoinSettingsBlock");
       goto LGruppoCoinMissingEANSMn;
     end;
@@ -610,7 +618,7 @@ begin
     end;
     
     datestring = DateToString(CurrentDate,"YYYYMMDD");
-    filename = "BMA" & "10000" & sstoreID & "_" & datestring & ".TXT";
+    filename = "BMA" & "10000" & storeID & "_" & datestring & ".TXT";
     
     nextline = chr(13) & chr(10);
     count = 0;
@@ -629,9 +637,9 @@ begin
   				  if (headerf==false) then begin
   				    headerf = true;
   				    //Header
-  	          AddTextToArea("**INIT**MISSEAN*" & datestring & sstoreID & nextline, ames);
+  	          AddTextToArea("**INIT**MISSEAN*" & datestring & storeID & nextline, ames);
   				  end;
-    				AddTextToArea("MISSEAN*" & sstoreID & CoinMissingEANrw.EANNumber & nextline, ames);
+    				AddTextToArea("MISSEAN*" & storeID & CoinMissingEANrw.EANNumber & nextline, ames);
     				foundRowsf = true;
     				count = count + 1;  
   				end;
@@ -645,13 +653,13 @@ begin
   	
   	if (serNrsLen>0) then begin
   	  //Trailer record
-  	  AddTextToArea("**FINE**MISSEAN*" & datestring & sstoreID & Right("0000000" & count,7) & nextline, ames);
+  	  AddTextToArea("**FINE**MISSEAN*" & datestring & storeID & Right("0000000" & count,7) & nextline, ames);
     	WriteAreaToFile(ames,path & filename,0);
     	for (i=0;i<serNrsLen;i=i+1) begin
     	  CoinMissingEANr.SerNr = serNrs[i];
     	  if (ReadFirstMain(CoinMissingEANr,1,true)) then begin
     	    CoinMissingEANr.FileName = filename;
-    	    CoinMissingEANr.StoreID = sstoreID;
+    	    CoinMissingEANr.StoreID = storeID;
     	    CoinMissingEANr.ImpDate = CurrentDate;
     	    CoinMissingEANr.ImpTime = CurrentTime;
     	    RECORDSTORE(CoinMissingEANr,true);
@@ -721,12 +729,12 @@ date sd,ed;
   return;
 end;
 
-procedure SetHeaderCoinPackList(var record CoinPackListVc CoinPackListr,string sstoreID,string storeID2,string transpBill,
+procedure SetHeaderCoinPackList(var record CoinPackListVc CoinPackListr,string storeID,string storeID2,string transpBill,
                                 string transpBillDate,string deliverer,string recipient,string importer,
                                 string oviVATNum,string goodsCollAddr)
 begin
   
-    CoinPackListr.StoreID = sstoreID;
+    CoinPackListr.StoreID = storeID;
     CoinPackListr.StoreID2 = storeID2;
     CoinPackListr.TransportBill = transpBill;
     CoinPackListr.TransportBillDate = transpBillDate;
@@ -747,7 +755,7 @@ begin
   record CoinPackListHistVc CoinPLHr;
   area inData,acarriage,extractedData;
   string 5 nextline;
-  string 15 sstoreID,storeID2,transpBill,transpBillDate;
+  string 15 storeID,storeID2,transpBill,transpBillDate;
   string 100 deliverer,recipient,importer,oviVATNum,goodsCollAddr;
   string 255 backUpPath;
   LongInt j,i,inDataLen,extrDataLen,prevpos,pos,k; ///////////
@@ -782,7 +790,7 @@ begin
               case "TS":
                 i = i + 2;
                 headerf = true;
-                sstoreID = GetStringFromArea(extractedData,i,4);
+                storeID = GetStringFromArea(extractedData,i,4);
                 i = i + 4;
                 storeID2 = GetStringFromArea(extractedData,i,4);
                 i = i + 4;
@@ -810,7 +818,7 @@ begin
                   CoinPackListr.ImpTime = CurrentTime;
                   CoinPackListr.SerNr = NextSerNr("CoinPackListVc",CoinPackListr.ImpDate,-1,false,"");
                   CoinPackListr.FileName = filename;
-                  SetHeaderCoinPackList(CoinPackListr,sstoreID,storeID2,transpBill,transpBillDate,deliverer,recipient,importer,oviVATNum,goodsCollAddr);
+                  SetHeaderCoinPackList(CoinPackListr,storeID,storeID2,transpBill,transpBillDate,deliverer,recipient,importer,oviVATNum,goodsCollAddr);
                   i = i + 2 + 4 + 4 + 9 + 8;
                   if ((i + 5)<=extrDataLen) then begin
                     CoinPackListr.RowNumber = GetStringFromArea(extractedData,i,5);
@@ -924,7 +932,7 @@ begin
                   CoinPackListr.ImpTime = CurrentTime;
                   CoinPackListr.SerNr = NextSerNr("CoinPackListVc",CoinPackListr.ImpDate,-1,false,"");
                   CoinPackListr.FileName = filename;
-                  SetHeaderCoinPackList(CoinPackListr,sstoreID,storeID2,transpBill,transpBillDate,deliverer,recipient,importer,oviVATNum,goodsCollAddr);
+                  SetHeaderCoinPackList(CoinPackListr,storeID,storeID2,transpBill,transpBillDate,deliverer,recipient,importer,oviVATNum,goodsCollAddr);
                   i = i + 2 + 4 + 4 + 9 + 8;
                   if ((i + 5)<=extrDataLen) then begin 
                     CoinPackListr.RowNumber = GetStringFromArea(extractedData,i,5);

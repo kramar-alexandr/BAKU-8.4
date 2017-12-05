@@ -3890,7 +3890,7 @@ begin
         MatRowGet(newPUr,i,newPUrw);
         if (nonblank(newPUrw.ArtCode)) then begin
           addtexttoarea("FR\"1\"" & chr(13) & chr(10),aLabel); // to retrieve a form that was previously stored in memory
-          addtexttoarea("?" & chr(13) & chr(10),aLabel); //command signals the printer to “fill-in” variable or counter “prompt” data field
+          addtexttoarea("?" & chr(13) & chr(10),aLabel); //command signals the printer to ífill-inì variable or counter ípromptì data field
           addtexttoarea(newPUrw.Spec & chr(13) & chr(10),aLabel);
           addtexttoarea(newPUrw.ArtCode & chr(13) & chr(10),aLabel);
           addtexttoarea(newPUrw.SerialNr & chr(13) & chr(10),aLabel);
@@ -4364,7 +4364,7 @@ begin
     for (j=0;j<rwcnt;j=j+1) begin
     	MatRowGet(Compb,j,Comprw);
     	includecompf = false;
-    	switch (StringToInt(Comprw.CompCode)) begin //çÛÊÌÓ ‚ÍÎ˛˜ËÚ¸ ÌÂÓ·ıÓ‰ËÏ˚Â ÍÓÏÔ‡ÌËË.
+    	switch (StringToInt(Comprw.CompCode)) begin //ÕÛÊÌÓ ‚ÍÎ˛˜ËÚ¸ ÌÂÓ·ıÓ‰ËÏ˚Â ÍÓÏÔ‡ÌËË.
     	  case 3: includecompf = false;
     	  otherwise 
     	    if (CompanyIsJWLikeCompany(StringToInt(Comprw.CompCode))) then begin
@@ -5799,8 +5799,42 @@ begin
   end;
 	
 	ResetCompany(oldcompany);
+  
   return;
-end;*/
+  end;
+*/
+  
+global
+procedure RemDoublURLEncInImgMn(record RcVc RepSpec)
+begin
+  // Û·‡Ú¸ %25 ËÁ Ù‡ÈÎÓ‚ //Edit-------------------Vitalii 12:37 14.11.2017
+  integer filescnt,i,j,rwcnt;
+  string 255 path,filename,filenametmp;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  
+  BlockLoad(Compb);
+  rwcnt = MatRowCnt(Compb); 
+	for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Compb,i,Comprw);
+    
+    path = "webcust/" & Comprw.ShortName & "/";
+    
+    filescnt = countfilesindir(path);
+    for (j=0;j<filescnt;j=j+1) begin
+      filenametmp = GetFileNameInDir(path,j);
+      filename = filenametmp;
+      while (filename!=urldecode(filename)) begin
+        filename = urldecode(filename);
+      end;
+      filename = urlencode(filename);
+      renamefile("webcust/" & Comprw.ShortName & "/" & filenametmp,"webcust/" & Comprw.ShortName & "/" & filename);
+    end;
+  end;
+  
+  return;
+  
+end;
 
 global updating procedure ChangeOptionalFeaturedMn()
 begin
@@ -5813,3 +5847,79 @@ begin
 	blockstore(MBb);
 return;
 end;
+
+
+global updating procedure FixPOSButtonsMn()
+begin
+	record POSButtonsVc POSButtonsr;
+	row POSButtonsVc POSButtonsrw;
+	record CompaniesBlock CBb;
+	row CompaniesBlock Comprw;
+	integer i,j,mtrw,rwcnt;
+	
+	logtext(0,"FixPOSButtonsMn");
+	
+	blockload(CBb);
+	mtrw = matrowcnt(CBb);
+	For(i=0;i<mtrw;i=i+1) begin
+	  matrowget(CBb,i,Comprw);
+	  if (SetCompany(i,false)) then begin
+	  	logtext(0,"Comp " & i);
+			POSButtonsr.WindowClass = "";
+			while(loopmain(POSButtonsr,1,true))begin
+				rwcnt = matrowcnt(POSButtonsr);
+				For(j=0;j<rwcnt;j=j+1) begin
+	  			matrowget(POSButtonsr,j,POSButtonsrw);
+	  			if(POSButtonsrw.ButtonType>=100)then begin
+						POSButtonsrw.ButtonType = POSButtonsrw.ButtonType + 100;
+						matrowput(POSButtonsr,j,POSButtonsrw);
+						logtext(0,POSButtonsrw.Label);
+					end;
+				end; 
+				recordstore(POSButtonsr,true);
+			end;
+			resetloop(POSButtonsr);
+		end;
+	end; 
+	
+
+return;
+end;
+
+global updating procedure DelSpacesInAltCodeMn()
+begin
+	record INVc INr;
+	boolean find,updf;
+	
+	while(loopmain(INr,1,true))begin
+		updf = false;
+		find = true;
+		while(find)begin
+			if(left(INr.AlternativeCode,1)==" ")then begin
+				INr.AlternativeCode = right(INr.AlternativeCode,len(INr.AlternativeCode)-1);
+				updf = true;
+			end else begin
+				find = false;
+			end;
+		end;
+		
+		find = true;
+		while(find)begin
+			if(right(INr.AlternativeCode,1)==" ")then begin
+				INr.AlternativeCode = left(INr.AlternativeCode,len(INr.AlternativeCode)-1);
+				updf = true;
+			end else begin
+				find = false;
+			end;
+		end;
+		
+		if(updf)then begin
+			logtext(0,INr.Code & " " & INr.AlternativeCode);
+			recordstore(INr,true);
+		end;
+		
+	end;
+	
+return;
+end;
+
