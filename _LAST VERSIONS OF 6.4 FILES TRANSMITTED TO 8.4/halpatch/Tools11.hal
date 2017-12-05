@@ -1,6 +1,7 @@
 external function roundmode SetRoundModeD(Integer);
 external procedure M4PadString(string,Integer,string,Boolean,var string);
 external procedure CalculateIVVcPoints(var record IVVc);
+external procedure ExtractObj(string,var Integer,var string);
 
 global
 procedure NextOfficialSerNr(string filename,LongInt sernr,Date td,string langcode,var string offserno)
@@ -1138,39 +1139,52 @@ global
 updating procedure LinkIVtoLoyaltyCard(string ivnr,string cardnr,var record LoyaltyCardVc LCr,var longint err)
 begin
   record IVVc IVr;
+  integer pos;
+  string 20 tstr;
+  longint ivsernr;
   
-  IVr.SerNr = ivnr;
-  ReadFirstMain(IVr,1,true);
   LCr.SerNr = cardnr;
-  ReadFirstMain(LCr,1,true);
-  if (LCr.LCMLevel=="1") then begin
-    if (blank(IVr.LinkLoyaltyCardNr)) then begin
-      if (blank(IVr.LoyaltyCardNr)) then begin
-        if (blank(LCr.IVSerNr)) then begin
-          LCr.IVSerNr = IVr.SerNr;
-          LCr.CompNr = CurrentCompany;
-        end else begin
-          LCr.IVSerNr = LCr.IVSerNr & "," & IVr.SerNr;
-          LCr.CompNr = LCr.CompNr & "," & CurrentCompany;
-        end;
-        IVr.LinkLoyaltyCardNr = LCr.SerNr;
-        IVr.LoyaltyCardNr = "1";
-        IVr.LCMLevel = "1";
-        CalculateIVVcPoints(IVr);
-        IVr.LoyaltyCardNr = "";
-        IVr.LCMLevel = "";
-        LCr.StartBalance = LCr.StartBalance + IVr.Points;
-        LCr.PointsBalance = LCr.PointsBalance + IVr.Points;
-        IVr.Points = blankval;
-        RecordStore(IVr,true);
-      end else begin
-        err = 35104;
-      end;
-    end else begin
-      err = 35105;
-    end;
-  end else begin
-    err = 35103;
+	ReadFirstMain(LCr,1,true);
+  tstr = "";
+	pos=0;
+	ExtractObj(ivnr,pos,tstr);
+	while(nonblank(tstr))begin
+		if(nonblank(tstr))then begin
+			ivsernr = StringToLongInt(tstr);
+			IVr.SerNr = ivsernr;
+			ReadFirstMain(IVr,1,true);
+			
+			if (LCr.LCMLevel=="1") then begin
+				if (blank(IVr.LinkLoyaltyCardNr)) then begin
+					if (blank(IVr.LoyaltyCardNr)) then begin
+						if (blank(LCr.IVSerNr)) then begin
+							LCr.IVSerNr = IVr.SerNr;
+							LCr.CompNr = CurrentCompany;
+						end else begin
+							LCr.IVSerNr = LCr.IVSerNr & "," & IVr.SerNr;
+							LCr.CompNr = LCr.CompNr & "," & CurrentCompany;
+						end;
+						IVr.LinkLoyaltyCardNr = LCr.SerNr;
+						IVr.LoyaltyCardNr = "1";
+						IVr.LCMLevel = "1";
+						CalculateIVVcPoints(IVr);
+						IVr.LoyaltyCardNr = "";
+						IVr.LCMLevel = "";
+						LCr.StartBalance = LCr.StartBalance + IVr.Points;
+						LCr.PointsBalance = LCr.PointsBalance + IVr.Points;
+						IVr.Points = blankval;
+						RecordStore(IVr,true);
+					end else begin
+						err = 35104;
+					end;
+				end else begin
+					err = 35105;
+				end;
+			end else begin
+				err = 35103;
+			end;
+		end;
+		ExtractObj(ivnr,pos,tstr);
   end;
   
   return;
