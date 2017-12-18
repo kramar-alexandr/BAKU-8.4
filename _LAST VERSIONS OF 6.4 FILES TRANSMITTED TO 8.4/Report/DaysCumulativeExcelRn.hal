@@ -24,8 +24,7 @@ external procedure ConvertToXLSX(string,boolean);
 
 SetLangMode(LangRussian,"RUS",0);
 
-global 
-procedure DaysCumulativeExcelRn(record RcVc RepSpec,var area areatofile)
+procedure DaysCumulativeExcel(record RcVc RepSpec)
 begin
   array string 255 LocArr,MonthArr,ConsultArr,NameArr;
   boolean TrHs,TrHs2,testf,testf2,emptyf,giftf,InvoiceRowTypeDownpaymentf;
@@ -511,11 +510,11 @@ begin
                 if (IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
                   artcnt = artcnt + 1;
                   giftf = false;
-                  for (j=0;j<rwcnt;j=j+1) begin
-                    matrowget(IVr,j,tIVrw);
+                  for (k=0;k<rwcnt2;k=k+1) begin
+                    matrowget(IVr,k,tIVrw);
                     if (tIVrw.PayMode=="G") then begin
                       giftf = true;
-                      j = rwcnt;
+                      k = rwcnt2;
                     end;
                   end;
                   if (!giftf) then begin
@@ -694,11 +693,11 @@ LDownpaymentFoundRet:;
                           if (IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
                             artcnt = artcnt + 1;
                             giftf = false;
-                            for (j=0;j<rwcnt;j=j+1) begin
-                              matrowget(IVr,j,tIVrw);
+                            for (k=0;k<rwcnt2;k=k+1) begin
+                              matrowget(IVr,k,tIVrw);
                               if (tIVrw.PayMode=="G") then begin
                                 giftf = true;
-                                j = rwcnt;
+                                k = rwcnt2;
                               end;
                             end;
                             if (!giftf) then begin
@@ -772,9 +771,9 @@ LDownpaymentFoundRet:;
   
   reportName = "DaysCumulativeExcelRn";
 	if(windowsmode==1)then begin
-		fileToSave = "tmpxlsx.xlsx";
+		fileToSave = RepSpec.f6;
 	end else begin
-		fileToSave = "/tmpxlsx.xlsx";
+		fileToSave = "/" & RepSpec.f6;
 	end;
 	deletefolder(Left(fileToSave,(len(fileToSave) - 5)));
   for (MAi=0;MAi<MonthArr.length;MAi=MAi+1) begin
@@ -945,10 +944,64 @@ LDownpaymentFoundRet:;
     end;
   end;
   FillSharedStrings(fileToSave,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings,mas);
-	ConvertToXLSX(fileToSave,false);
-	MilliSleep(2000);
-	addfiletoarea(fileToSave,areatofile,false);
-	delete_file(fileToSave);
+	ConvertToXLSX(fileToSave,true);
+	MilliSleep(5000);
+	
+  return;
+end;
+
+global 
+procedure DaysCumulativeExcelRn(record RcVc RepSpec)
+begin
+  string 250 filename,tstr,errstr,tstr2;
+  boolean testf;
+  record ObjVc Objr;
+  integer i,char;
   
+  testf = true;
+  logtext(0,"Report DaysCumulativeExcelRn");
+  if nonblank(RepSpec.ObjStr) then begin
+    Objr.Code = RepSpec.ObjStr;
+    if readfirstmain(Objr,1,true) then begin
+      if (Objr.OTCode!="STORE") then begin
+        testf = false;
+        errstr = "Объект не соответсткует типу STORE";
+      end;
+    end else begin
+      testf = false;
+      errstr = "Магазин не найден";
+    end;
+  end;
+  if testf then begin
+    tstr = "DaysCumulativeExcel";
+    if nonblank(RepSpec.ObjStr) then begin
+      tstr2 = "";
+      for (i=0;i<Len(RepSpec.ObjStr);i=i+1) begin
+        char = Asc(Mid(RepSpec.ObjStr,i,1));
+        if (((char>47) and (char<58)) or 
+            ((char>64) and (char<91)) or 
+            ((char>96) and (char<123))) then begin
+          tstr2 = tstr2 & Chr(char);
+        end;
+      end;
+      tstr = tstr & "_" & tstr2;
+    end;
+    tstr = tstr & "_" & CurrentUser;
+    filename = tstr & ".xlsx";
+    RepSpec.f6 = filename;
+    DaysCumulativeExcel(RepSpec);
+    StartReportNoHeaderJob("Отчет за день с накопительным эффектом");
+    StartFormat(15);
+      OutString(0,"DblImagesExcel",RepSpec.f7 & filename,false);
+    EndFormat;
+    EndJob;
+  end else begin
+    StartReportNoHeaderJob("Отчет за день с накопительным эффектом");
+      StartFormat(15);
+        OutString(0,0,errstr,false);
+      EndFormat;
+    EndJob;
+  end;
+	
   return;
 end;
