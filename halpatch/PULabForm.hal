@@ -583,6 +583,122 @@ BEGIN
   Integer dwcnt,di;
   LongInt frlab,tolab;
   string 255 frin, toin;
+  Boolean test,onlyPrintQuantf;
+  record INVc INr;
+  record ItemStatusVc ISr;
+  record SerBalVc SBr;
+  string 10 location;
+  boolean printerfl;
+  string 200 tstr;
+  
+  GetLangNr("",LangNrr);
+  BlockLoad(SysFormatRec);
+  
+
+  pucnt = 0;
+  Docr.Code = formcode;
+  if (ReadFirstMain(Docr,1,true)) then begin end;
+  frompu = FirstInRange(RepSpec.f1,20);
+  topu = LastInRange(RepSpec.f1,20);
+  if nonblank(RepSpec.f1) then begin 
+    PUr.SerNr = frompu;
+  end;  
+  TrHs = true;
+  while (LoopMain(PUr,1,TrHs)) begin
+    test = true;
+    if (TrHs) then begin
+      if (topu!=-1) then begin
+        if (PUr.SerNr>topu) then begin
+          TrHs = false;
+          test = false;
+        end;
+      end;
+    end;
+    if nonblank(RepSpec.LastAcc) then begin 
+      if (RepSpec.LastAcc<>PUr.VECode) then begin 
+        test = false;
+      end;
+    end;
+		
+		
+		
+    if (test) then begin
+      onlyPrintQuantf = false; //Edit***************************Sasha2,11:48 19.05.2016 {
+      rwcnt = MatRowCnt(PUr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(PUr,i,PUrw);
+        if (PUrw.PrintQuant>0) then begin
+          onlyPrintQuantf = true;
+          i = rwcnt;
+        end;
+      end; //Edit***************************Sasha2,11:48 19.05.2016 }
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(PUr,i,PUrw);
+        test = true;
+        if(onlyPrintQuantf and PUrw.PrintQuant==0) then begin test = false; end; //Edit***************************Sasha2,11:55 19.05.2016
+        if(blank(PUrw.ArtCode)) then begin test = false; end; //Edit***************************Sasha2,11:55 19.05.2016
+        if (test) then begin
+          if (onlyPrintQuantf and PUrw.PrintQuant>0) then begin //Edit***************************Sasha2,11:59 19.05.2016 {
+            vquant = PUrw.PrintQuant;
+          end else begin
+            vquant = PUrw.Quant;
+          end; //Edit***************************Sasha2,12:34 19.05.2016 ]
+          //vquant = PUrw.Quant;
+          quant = vquant;
+          vquant = vquant - quant;
+          if (vquant>0) then begin
+            quant = quant + 1;
+          end;
+					
+          for (j=0;j<quant;j=j+1) begin
+						if (formisopen==false) then begin
+							if (OpenForm(formcode)==false) then begin goto LDoPULabFormPrint; end;
+							SetPrinter(printer); 
+							printerfl = true; 
+							lbls = LabelSetup(RepSpec.ArtMode,0);
+							formisopen = true;
+						end;
+          
+            PULab(PUr,PUrw,LangNrr,SysFormatRec,totcostprice);
+            formisopen = EndAndTestLabel(lbls,pucnt);
+            LSKIPLABEL:;            
+            labcnt = labcnt + 1;
+          end;
+        end;
+      end;
+    end;
+    
+    
+    
+  end;
+LDoPULabFormPrint:;
+  if (formisopen) then begin
+    CloseForm;
+  end;
+  RETURN;
+END;  
+
+/*
+
+procedure DoPULabFormPrint(record RcVc RepSpec,string formcode,string printer,var Integer labcnt)
+BEGIN
+  LongInt frompu,topu;
+  record PUVc PUr;
+  Boolean TrHs;
+  Integer lbls;
+  row PUVc PUrw;
+  Integer rwcnt,i,j;
+  LongInt quant,pucnt;
+  record SysFormatBlock SysFormatRec;
+  record LangNrVc LangNrr;
+  val totcostprice;
+  Boolean formisopen;
+  val vquant;
+  record DocVc Docr;
+  row DocVc Docrw;
+  Integer dwcnt,di;
+  LongInt frlab,tolab;
+  string 255 frin, toin;
   Boolean test,onlyPrintQuantf;// Edit ************************** Tuesday, 22 August 2017 11:27:31
   record INVc INr;
   record ItemStatusVc ISr;
@@ -607,10 +723,7 @@ BEGIN
   end;
 
   pucnt = 0;
-  /*
-  FormLabelGrid(1,1,1,1);
-  lbls = 1;
-  */
+
   Docr.Code = formcode;
   if (ReadFirstMain(Docr,1,true)) then begin end;
   frompu = FirstInRange(RepSpec.f1,20);
@@ -652,13 +765,17 @@ BEGIN
         if(test)then begin
         	
 					if (nonblank(PUrw.ArtCode)) then begin
+					
+						messagebox(0,RepSpec.f3);
 						if (nonblank(RepSpec.f3)) then begin
 							if (PUrw.ArtCode<frin) then begin goto LSKIPLABEL; end;
 							if (PUrw.ArtCode>frin) then begin goto LSKIPLABEL; end;
 						end;
+						messagebox(0,PUrw.ArtCode);
 						if nonblank(RepSpec.FirstAcc) then begin 
 							if (PUrw.SerialNr<>RepSpec.FirstAcc) then begin goto LSKIPLABEL; end;
 						end;
+						messagebox(0,PUrw.ArtCode);
 						if nonblank(RepSpec.f5) or nonblank(RepSpec.f4) then begin 
 							if (ReadFirstItem(PUrw.ArtCode,INr,true,true)) then begin end;
 							if nonblank(RepSpec.f4) then begin 
@@ -672,6 +789,7 @@ BEGIN
 								end;
 							end;
 						end;
+						messagebox(0,PUrw.ArtCode);
 						if nonblank(RepSpec.f6) then begin 
 							if nonblank(PUrw.Location) then begin
 								if (RepSpec.f6<>PUrw.Location) then begin 
@@ -698,6 +816,7 @@ BEGIN
 								end;
 							end;  
 						end;    
+						messagebox(0,PUrw.ArtCode & " " & PUrw.PrintQuant);
 							if (onlyPrintQuantf and PUrw.PrintQuant>0) then begin //Edit***************************Sasha2,11:59 19.05.2016 {
 								vquant = PUrw.PrintQuant;
 							end else begin
@@ -724,6 +843,7 @@ BEGIN
 		//            lbls = 0; //Why zero ? 
 									formisopen = true;
 								end;
+								messagebox(0,formcode);
 								PULab(PUr,PUrw,LangNrr,SysFormatRec,totcostprice);
 								PrintValue("F_TOTPRIS",totcostprice,M4Val,LangNrr,SysFormatRec,false);
 								dwcnt = MatRowCnt(Docr);
@@ -734,13 +854,7 @@ BEGIN
 									end;
 								end;    
 								formisopen = EndAndTestLabel(lbls,pucnt);
-								/*
-								EndFormLabel;
-								if (formisopen) then begin
-									CloseForm;
-									formisopen = false;
-								end;
-								*/
+
 		LSKIPLABEL:;            
 								labcnt = labcnt + 1;
 							end;
@@ -755,7 +869,7 @@ LDoPULabFormPrint:;
     CloseForm;
   end;
   RETURN;
-END;  
+END;  */
 
 global //Edit***************************Sasha2,13:54 07.08.2015 {
 updating procedure Zebra_PrintingRec(record RcVc RepSpec)
@@ -796,11 +910,14 @@ BEGIN
   row FormDefVc FDrw;
   Integer labcnt;
   record DocVc Docr;// Edit ************************** Tuesday, 22 August 2017 11:37:37
-
+	
+	
+	
   FDr.repname = RepSpec.repname;
   FDr.shortname = RepSpec.shortname;
   
   if (RepSpec.ArtMode==0) then begin //Edit***************************Sasha2,13:53 07.08.2015 {
+  	messagebox(0,2);
     ClientRemoteAsync.Zebra_PrintingRec(RepSpec);
     goto LDoPULabForm;
   end; //Edit***************************Sasha2,13:53 07.08.2015 }
@@ -813,6 +930,7 @@ BEGIN
     MessageBox(1624, " " & USetStr(1623));
     goto LDoPULabForm;
   end;
+  
   rwcnt = MatRowCnt(FDr);
   intdocnr = 1;
   printf = true;
@@ -827,6 +945,7 @@ BEGIN
       end;
     end;
 LBREAKPULab:;
+		
     if (nonblank(formcode)) then begin
     	if (CurrentCompany==8 and isWin) then begin
         formcode = formcode & "_WIN"; //Edit***************************Sasha2,11:55 29.01.2016
@@ -838,9 +957,9 @@ LBREAKPULab:;
       end;// Edit ************************** Tuesday, 22 August 2017 11:34:33
       labcnt = 1;
       DoPULabFormPrint(RepSpec,formcode,FDrw.PrintGroupCode,labcnt);
-      if (RepSpec.flags[1]!=0) then begin
+      /*if (RepSpec.flags[1]!=0) then begin// Edit ************************** BPI Ukraine - KramarAlexandr - понеділок, 25 грудня 2017 р. о 13:11:37
         DoProdLabFormPrint(RepSpec,formcode,FDrw.PrintGroupCode,labcnt);
-      end;
+      end;*/
     end else begin
       printf = false;
       if (intdocnr==1) then begin
