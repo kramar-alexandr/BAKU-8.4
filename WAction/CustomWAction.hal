@@ -1,5 +1,8 @@
 external procedure ExtractObj(string,var Integer,var string);
+remote updating procedure R_ProceedChangeLoyCard(record RcVc);
 
+
+SetLangMode(LangRussian,"RUS",0);
 
 global 
 procedure ItemSaldoRClassReportDefaults(integer wn)
@@ -149,13 +152,113 @@ begin
 return;
 end;
 
+
 global 
-procedure OrderStatusInfoMn()
+procedure ChangeLoyaltyCardDsm()
+begin
+	record IVVc IVr;
+	record RcVc RepSpec;
+	integer wn;
+	area arec;
+	
+	wn = curwindow;
+	getwindowrecord(wn,IVr);
+	if(nonblank(IVr.CustCode) and IVr.CustCode!="NONAME")then begin
+		RepSpec.f4 = IVr.CustCode;
+	end;
+	if(nonblank(IVr.LoyaltyCardNr))then begin
+		RepSpec.f1 = IVr.LoyaltyCardNr;
+	end;
+	
+	OpenWindow("ChangeLoyCardDClass",0,0,"","",RepSpec);
+		
+return;
+end;
+
+global 
+updating procedure ProceedChangeLoyCard()
+begin
+	record IVVc IVr;
+	record RcVc RepSpec;
+	integer wn;
+	boolean testf;
+	record LoyaltyCardVc LoyaltyCardr;
+
+	testf = true;
+	wn = curwindow;
+	deselectwindow(wn,true);
+	getwindowrecord(wn,RepSpec);
+	
+	if(RepSpec.flags[0]==0)then begin
+		messagebox(0,"Укажите причину выдачи карты");
+		testf = false;
+	end;
+	if(blank(RepSpec.f2))then begin
+		messagebox(0,"Укажите новый штрихкод карты");
+		testf = false;
+	end;
+	if(RepSpec.flags[0]==1 and blank(RepSpec.f1))then begin
+		messagebox(0,"Укажите старый штрихкод карты");
+		testf = false;
+	end;
+	if(blank(RepSpec.f4))then begin
+		messagebox(0,"Укажите ID клиента, которому выдается новая карта");
+		testf = false;
+	end;
+	
+	if(blank(RepSpec.f3))then begin
+		messagebox(0,"Укажите код сотрудника выполнявшего выдачу");
+		testf = false;
+	end;
+	
+	if(nonblank(RepSpec.f2))then begin
+		LoyaltyCardr.SerNr = RepSpec.f2;
+		if(readfirstmain(LoyaltyCardr,1,true))then begin
+			messagebox(0,"Карта лояльности с таким штрих-кодом уже зарегестрирована!");
+			testf = false;
+		end;
+	end;
+	
+	if(testf)then begin
+		R_ProceedChangeLoyCard(RepSpec);
+		closewindow(wn);
+	end;
+		
+return;
+end;
+
+
+global 
+updating procedure OrderStatusInfoMn()
 begin
 	integer wn,nwn;
 	record RcVc RepSpec;
 
 	nwn = OpenWindow("OrderStatusInfoAClass",0,0,"","",RepSpec);
 
+  return;
+end;
+
+global
+function Boolean ChangeLoyCardDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+  record LoyaltyCardVc LoyaltyCardr;
+	record RcVc RepSpec;
+	
+  switch (fieldname) begin
+    case "f1": 	getwindowrecord(wn,RepSpec);
+    						LoyaltyCardr.SerNr = RepSpec.f1;
+    						if(readfirstmain(LoyaltyCardr,1,true))then begin
+    							if(nonblank(LoyaltyCardr.CustCode))then begin
+    								RepSpec.f4 = LoyaltyCardr.CustCode;
+    								putwindowrecord(wn,RepSpec);
+    							end;
+    						end else begin
+    							messagebox(0,"Номер карты указан неверно");
+    						end;
+    
+  end;
+  ChangeLoyCardDClassAfterEditField = true;
   return;
 end;
