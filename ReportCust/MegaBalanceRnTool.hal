@@ -531,14 +531,15 @@ procedure PrintStockSD32(integer brandscnt,date sd, date ed,string location,arra
 begin
 	val fr,to1,to2,br1,br2;
 	val BrandsPUUSDtotal,BrandsPUUSDtotalcons;
-	integer i,mtrw,mtrw2,j;
+	integer i,mtrw,mtrw2,j,k;
 	array val aBrandsPUEUR,aBrandsPUEURcons;
 	array val aBrandsPUCHF,aBrandsPUCHFcons;
 	array val aBrandsPUUSD,aBrandsPUUSDcons;
 	array val aBrandsPUGBP,aBrandsPUGBPcons;
+	array val aBrandsPUAZN,aBrandsPUAZNcons;
 	date curdate;
 	record ItemHistVc IHr;
-	boolean TrHs,testf,foundf,testf2,testf3,TrHs2,TrHs3,TrHs1,testf1;
+	boolean TrHs,testf,foundf,testf2,testf3,TrHs2,TrHs3,TrHs1,testf1,foundf2;
 	record INVc INr;
 	string 10 incurncy;
 	integer sign;
@@ -555,6 +556,7 @@ begin
 		endformat;
 		
 		For(i=0;i<brandscnt;i=i+1) begin
+			aBrandsPUAZN[i] = 0;
 			aBrandsPUEUR[i] = 0;
 			aBrandsPUCHF[i] = 0;
 			aBrandsPUUSD[i] = 0;
@@ -635,95 +637,122 @@ begin
 			
 			if(testf)then begin
 				mtrw = matrowcnt(IVr);
+				foundf2 = false;
 				For(i=0;i<mtrw;i=i+1) begin
-	  			matrowget(IVr,i,IVrw);
-	  			if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold)then begin
-	  				foundf = false;
-	  				GCRr.GCSSerNr = IVrw.GCNr;
-	  				TrHs1 = true;
-	  				while(loopkey("GCSSerNr",GCRr,1,TrHs1))begin
-	  					if(GCRr.GCSSerNr!=IVrw.GCNr)then begin TrHs1 = false; end;
-	  					
-	  					if(TrHs1)then begin
-	  						IV2r.SerNr = GCRr.InvSerNr;
-	  						if(readfirstmain(IV2r,1,true))then begin
-	  							GCsum = 0;
-	  							mtrw2 = matrowcnt(IV2r);
-	  							For(j=0;j<mtrw2;j=j+1) begin
-	  								matrowget(IV2r,j,IV2rw);
-	  								if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment)then begin
-	  									GCsum = GCsum + IVrw.Sum;
-	  								end;
-									end;
-									GCsum = GCsum / IVr.BaseSum4;
-									
-									For(j=0;j<mtrw2;j=j+1) begin
-	  								matrowget(IV2r,j,IV2rw);
-	  								if(IV2rw.stp==kInvoiceRowTypeNormal)then begin
-	  									INr.Code = IV2rw.ArtCode;
-											while(loopmain(INr,1,INr.Code==IV2rw.ArtCode))begin
-											
-												if(nonblank(INr.LastPurchCurncyCode))then begin
-													incurncy = INr.LastPurchCurncyCode;
-												end else begin
-													incurncy = "USD";
-												end;
-												
-												foundf = false;
-												For(i=0;i<brandscnt;i=i+1) begin
-													if(setinset(aBrands[i],INr.DispGroups))then begin
-														br = i;
-														foundf = true;
-													end;
-												end; 
-												foundf = (INr.Code==IV2rw.ArtCode);
-												if(setinset("30",INr.DispGroups))then begin foundf = false; end;
-												if(setinset("31",INr.DispGroups))then begin foundf = false; end;
-												if(setinset("32",INr.DispGroups))then begin foundf = false; end;
-												if(setinset("33",INr.DispGroups))then begin foundf = false; end;
-												if(setinset("34",INr.DispGroups))then begin foundf = false; end;
-												if(setinset("35",INr.DispGroups))then begin foundf = false; end;
-	
-												IHr.FileName = "IVVc";
-												IHr.TransNr = IV2r.SerNr;
-												IHr.Row = j;
-												IHr.ArtCode = INr.Code;
-												TrHs3 = foundf;
-												curdate = "";
-												while(loopkey("ArtCode",IHr,2,TrHs3))begin
-													testf3 = true;
-													if(IHr.FileName!="IVVc")then begin testf3 = false; TrHs3 = false; end;
-													if(IHr.TransNr = IV2r.SerNr)then begin testf3 = false; TrHs3 = false; end;
-													if(IHr.Row!=j)then begin testf3 = false; TrHs3 = false; end;
-													
-													if(testf3)then begin
-														if(IHr.Qty>=0)then begin
-															sign = 1;
-														end else begin
-															sign = -1;
-														end;
-			
-														switch(IHr.CurncyCode)begin
-															case"EUR":aBrandsPUEUR[br] = aBrandsPUEUR[br] + IHr.TotCostPriceCurncy * sign * GCsum;
-															case"CHF":aBrandsPUCHF[br] = aBrandsPUCHF[br] + IHr.TotCostPriceCurncy * sign * GCsum;
-															case"USD":aBrandsPUUSD[br] = aBrandsPUUSD[br] + IHr.TotCostPriceCurncy * sign * GCsum;
-															case"GBP":aBrandsPUGBP[br] = aBrandsPUGBP[br] + IHr.TotCostPriceCurncy * sign * GCsum;
-														end;
-													end;
-												end;
-												resetloop(IHr);
+					matrowget(IVr,i,IVrw);
+						if(IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
+						if(IVrw.PayMode=="G")then begin
+							foundf2 = true;
+						end;
+					end;
+				end;
+				if(foundf2)then begin
+					For(i=0;i<mtrw;i=i+1) begin
+						matrowget(IVr,i,IVrw);
+						if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold)then begin
+							foundf2 = false;
+							GCRr.GCSSerNr = IVrw.GCNr;
+							TrHs1 = true;
+							while(loopkey("GCSSerNr",GCRr,1,TrHs1))begin
+								if(GCRr.GCSSerNr!=IVrw.GCNr)then begin TrHs1 = false; end;
+							
+								if(TrHs1)then begin
+									IV2r.SerNr = GCRr.InvSerNr;
+									if(readfirstmain(IV2r,1,true))then begin
+										GCsum = 0;
+										mtrw2 = matrowcnt(IV2r);
+										For(j=0;j<mtrw2;j=j+1) begin
+											matrowget(IV2r,j,IV2rw);
+											if(IV2rw.stp==kInvoiceRowTypeGiftVoucherPayment)then begin
+												GCsum = GCsum + IVrw.Sum;
 											end;
-	  								end;
-									end;
+										end;
+										GCsum = GCsum / IV2r.BaseSum4;
 									
-	  						end;
-	  					end;
-	  				end;
-	  			end;
-				end; 
+										For(j=0;j<mtrw2;j=j+1) begin
+											matrowget(IV2r,j,IV2rw);
+											if(IV2rw.stp==kInvoiceRowTypeNormal)then begin
+												INr.Code = IV2rw.ArtCode;
+												while(loopmain(INr,1,INr.Code==IV2rw.ArtCode))begin
+											
+													if(nonblank(INr.LastPurchCurncyCode))then begin
+														incurncy = INr.LastPurchCurncyCode;
+													end else begin
+														incurncy = "USD";
+													end;
+												
+													foundf = false;
+													For(k=0;k<brandscnt;k=k+1) begin
+														if(setinset(aBrands[k],INr.DispGroups))then begin
+															br = k;
+															foundf = true;
+														end;
+													end; 
+													foundf = (INr.Code==IV2rw.ArtCode);
+													if(setinset("30",INr.DispGroups))then begin foundf = false; end;
+													if(setinset("31",INr.DispGroups))then begin foundf = false; end;
+													if(setinset("32",INr.DispGroups))then begin foundf = false; end;
+													if(setinset("33",INr.DispGroups))then begin foundf = false; end;
+													if(setinset("34",INr.DispGroups))then begin foundf = false; end;
+													if(setinset("35",INr.DispGroups))then begin foundf = false; end;
+	
+													IHr.FileName = "IVVc";
+													IHr.TransNr = IV2r.SerNr;
+													IHr.Row = j;
+													IHr.ArtCode = INr.Code;
+													TrHs3 = foundf;
+													logtext(0,"ArtCode GC " & INr.Code & " foundf " & foundf);
+													logtext(0,"GCsum GC " & GCsum);
+													while(loopkey("FNTransNr",IHr,3,TrHs3))begin
+														testf3 = true;
+														if(IHr.FileName!="IVVc")then begin testf3 = false; TrHs3 = false; end;
+														if(IHr.TransNr!=IV2r.SerNr)then begin testf3 = false; TrHs3 = false; end;
+														if(IHr.Row!=j)then begin testf3 = false; TrHs3 = false; end;
+													
+														if(testf3)then begin
+															sign = 1;
+															foundf2 = true;
+															switch(IHr.CurncyCode)begin
+																case"EUR":aBrandsPUEUR[br] = aBrandsPUEUR[br] + IHr.TotCostPriceCurncy * sign * GCsum;
+																case"CHF":aBrandsPUCHF[br] = aBrandsPUCHF[br] + IHr.TotCostPriceCurncy * sign * GCsum;
+																case"USD":aBrandsPUUSD[br] = aBrandsPUUSD[br] + IHr.TotCostPriceCurncy * sign * GCsum;
+																case"GBP":aBrandsPUGBP[br] = aBrandsPUGBP[br] + IHr.TotCostPriceCurncy * sign * GCsum;
+															end;
+														end;
+													end;
+													resetloop(IHr);
+												end;
+												resetloop(INr);
+											end;
+										end;
+									
+									end;
+								end;
+							end;
+							resetloop(GCRr);
+							if(foundf2==false)then begin
+								aBrandsPUAZN[br] = aBrandsPUAZN[br] + IVrw.Sum;
+							end;
+						end;
+					end; 
+				end;
 			end;
 		end;
 		
+		incurncy = "AZN";
+		totrow = 0;
+		For(i=0;i<brandscnt;i=i+1) begin
+			totrow = totrow + aBrandsPUAZN[i];
+		end;
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(100,0,incurncy,false);
+			outstring(0,0,totrow,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  		outstring(150+i*50,0,aBrandsPUAZN[i],false);
+	  		BrandsPUUSDtotal = BrandsPUUSDtotal + aBrandsPUAZN[i];
+			end; 
+		endformat;
 		
 		incurncy = "EUR";
 		GetFullCurncyRate(incurncy,CurrentDate,fr,to1,to2,br1,br2);
