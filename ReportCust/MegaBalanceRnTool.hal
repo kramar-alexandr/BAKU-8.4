@@ -1574,12 +1574,13 @@ begin
 	record INVc INr;
 	record DIVc DIr;
 	integer pmi,pmmtrw,k;
-	val servprc,prepaymentval,TOTUSD,totrow;
+	val servprc,prepaymentval,TOTUSD,totrow,Sum4;
 	vector val servcash,servterm,servcashfob;
 	record ORVc ORr;
 	row ORVc ORrw;
 	record PMBlock PMb;
 	row PMBlock PMrw;
+	record ARPayHistVc ARPayr;
 
 	startformat(15);
 		outstring(0,0,"4",false);
@@ -1829,14 +1830,87 @@ begin
 							
 						end;
 					end else begin
+						ARPayr.CUPNr = IPrw.CUPNr;
+						ARPayr.FileName = "IVVc";
+						TrHs1 = true;
+						For(k=0;k<brandscnt;k=k+1) begin
+							aBrandPercent[k] = 0;
+						end;
+						Sum4 = 0;
+						
+						while(loopmain(ARPayr,2,TrHs1))begin
+							testf1 = true;
+							if(ARPayr.CUPNr!=IPrw.CUPNr)then begin TrHs1 = false; testf1 = false; end;
+							if(ARPayr.FileName!="IVVc")then begin TrHs1 = false; testf1 = false; end;
+							
+							if(testf1)then begin
+								IVr.SerNr = ARPayr.SerNr;
+								if(readfirstmain(IVr,1,true))then begin
+									servprc = blankval;
+									mtrw = matrowcnt(IVr);
+									Sum4 = Sum4 + IVr.Sum4;
+									servitem = false;
+									For(j=0;j<mtrw;j=j+1) begin
+										matrowget(IVr,j,IVrw);
+										if(IVrw.stp==kInvoiceRowTypeNormal and IVrw.Sum>=0)then begin
+											INr.Code = IVrw.ArtCode;
+											readfirstmain(INr,1,true);
+											For(k=0;k<brandscnt;k=k+1) begin
+												if(setinset(aBrands[k],INr.DispGroups))then begin
+													aBrandPercent[k] = aBrandPercent[k] + IVrw.Sum;
+												end;
+											end; 
+											if(INr.Code=="5420208VR1")then begin
+												servprc = servprc + IVrw.Sum;
+												servitem = true;
+											end;
+										end;
+									end;
+							
+									
+								end;
+							end;	
+						end;	
+						resetloop(ARPayr);
+						if(servitem)then begin
+							servprc = servprc/Sum4;
+						end;
+						For(k=0;k<brandscnt;k=k+1) begin
+							aBrandPercent[k] = aBrandPercent[k]/Sum4;
+						end;
+								
 						if(left(IVr.CustCode,3)!="FOB")then begin
 								if(PMrw.AccNr=="50")then begin
-									servcash[IPrw.BankCurncy] = servcash[IPrw.BankCurncy] +  IPrw.BankVal;
+									if(Sum4>0)then begin
+										For(j=0;j<brandscnt;j=j+1) begin
+											switch(IPrw.BankCurncy)begin
+												case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IPrw.BankVal * aBrandPercent[j];	
+												case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IPrw.BankVal * aBrandPercent[j];
+												case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IPrw.BankVal * aBrandPercent[j];
+												case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IPrw.BankVal * aBrandPercent[j];
+												case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IPrw.BankVal * aBrandPercent[j];
+											end;
+										end;
+									end else begin
+										servcash[IPrw.BankCurncy] = servcash[IPrw.BankCurncy] +  IPrw.BankVal;
+									end;
 								end else begin
-									servterm[IPrw.BankCurncy] = servterm[IPrw.BankCurncy] +  IPrw.BankVal;
+									if(Sum4>0)then begin
+										For(j=0;j<brandscnt;j=j+1) begin
+											switch(IPrw.BankCurncy)begin
+												case "EUR":aBrandsCashEURFOB[j] = aBrandsCashEURFOB[j] + IPrw.BankVal * aBrandPercent[j];	
+												case "AZN":aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IPrw.BankVal * aBrandPercent[j];
+												case "USD":aBrandsCashUSDFOB[j] = aBrandsCashUSDFOB[j] + IPrw.BankVal * aBrandPercent[j];
+												case "GBP":aBrandsCashGBPFOB[j] = aBrandsCashGBPFOB[j] + IPrw.BankVal * aBrandPercent[j];
+												case "CHF":aBrandsCashCHFFOB[j] = aBrandsCashCHFFOB[j] + IPrw.BankVal * aBrandPercent[j];
+											end;
+										end;
+									end else begin
+										servterm[IPrw.BankCurncy] = servterm[IPrw.BankCurncy] +  IPrw.BankVal;
+									end;
 								end;
 						end else begin
-							servcashfob[IPrw.BankCurncy] = servcashfob[IPrw.BankCurncy] +  IPrw.BankVal;
+							servcashfob[IPrw.BankCurncy] = servcashfob[IPrw.BankCurncy] + IPrw.BankVal;
 						end;
 					end;
 				end;
