@@ -1035,7 +1035,7 @@ begin
 	
 	
 	
-	startformat(15);
+	/*startformat(15);
 			outstring(0,0,"4.6",false);
 			outstring(0,0,"Стоимость возврата от покупателей",false);
 		endformat;
@@ -1110,7 +1110,7 @@ begin
 			outstring(0,0,"",false);
 			outstring(100,0,"Итого " & incurncy,false);
 	  	outstring(150,0,BrandsRetUSDtotal*fr/to1,false);
-		endformat;
+		endformat;*/
 	
 		startformat(15);
 			outstring(0,0,"4.7",false);
@@ -2295,25 +2295,51 @@ begin
 					fr=1;
 					to1=1;
 				end;
-				For(i=0;i<brandscnt;i=i+1) begin
-	  			aBrandPercent[i] = 0;
-				end; 
+				
 				servitem = false;
 				mtrw = matrowcnt(IVr);
 				For(i=0;i<mtrw;i=i+1) begin
 					matrowget(IVr,i,IVrw);
+					if(IVrw.stp==kInvoiceRowTypeNormal and IVrw.Sum<0 and IVrw.IVForRetNr<=0)then begin
+						For(i=0;i<brandscnt;i=i+1) begin
+							aBrandPercent[i] = 0;
+						end; 
+						INr.Code = IVrw.ArtCode;
+						readfirstmain(INr,1,true);
+						For(j=0;j<brandscnt;j=j+1) begin
+							if(setinset(aBrands[j],INr.DispGroups))then begin
+								aBrandPercent[j] = 1;
+							end;
+						end;
+						For(j=0;j<brandscnt;j=j+1) begin
+							switch(IVr.CurncyCode)begin
+								case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] - IVrw.Sum * aBrandPercent[j];	
+								case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] - IVrw.Sum * aBrandPercent[j];
+								case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] - IVrw.Sum * aBrandPercent[j];
+								case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] - IVrw.Sum * aBrandPercent[j];
+								case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] - IVrw.Sum * aBrandPercent[j];
+							end;
+						end;
+					end;
 					if(IVrw.stp==kInvoiceRowTypeNormal and IVrw.Sum<0 and IVrw.IVForRetNr>0)then begin
 						INr.Code = IVrw.ArtCode;
 						readfirstmain(INr,1,true);
 						
+						logtext(0,IVrw.IVForRetNr);
 						IVorig.SerNr=IVrw.IVForRetNr;
 						if(readfirstmain(IVorig,1,true))then begin
+							INr.Code = IVrw.ArtCode;
+							readfirstmain(INr,1,true);
+							For(j=0;j<brandscnt;j=j+1) begin
+								aBrandPercent[j] = 0;
+							end; 
+							
 							For(k=0;k<matrowcnt(IVorig);k=k+1) begin
 								matrowget(IVorig,k,IV2rw);
 								if(IV2rw.ArtCode==INr.Code)then begin
 									For(j=0;j<brandscnt;j=j+1) begin
 										if(setinset(aBrands[j],INr.DispGroups))then begin
-											aBrandPercent[j] = aBrandPercent[j] + IVrw.Sum;
+											aBrandPercent[j] = aBrandPercent[j] + IV2rw.Sum;
 										end;
 									end; 
 								end;
@@ -2321,25 +2347,32 @@ begin
 					
 				
 							For(j=0;j<brandscnt;j=j+1) begin
-								aBrandPercent[j] = -aBrandPercent[j]/IVr.Sum4;
+								aBrandPercent[j] = aBrandPercent[j]/IVorig.Sum4;
+								logtext(0,aBrandPercent[j]);
 							end;
 				
 							For(k=0;k<matrowcnt(IVorig);k=k+1) begin
 								matrowget(IVorig,k,IV2rw);
 								if(IV2rw.stp==kInvoiceRowTypeCashPayment and IV2rw.Sum>0)then begin
 									For(j=0;j<brandscnt;j=j+1) begin
-										switch(IVrw.CurncyCode)begin
-											case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IVrw.Sum * aBrandPercent[j];	
-											case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IVrw.Sum * aBrandPercent[j];
-											case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IVrw.Sum * aBrandPercent[j];
-											case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IVrw.Sum * aBrandPercent[j];
-											case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IVrw.Sum * aBrandPercent[j];
+										switch(IV2rw.CurncyCode)begin
+											case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IV2rw.Sum * aBrandPercent[j];	
+											case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IV2rw.Sum * aBrandPercent[j];
+											case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IV2rw.Sum * aBrandPercent[j];
+											case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IV2rw.Sum * aBrandPercent[j];
+											case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IV2rw.Sum * aBrandPercent[j];
 										end;
 									end;
 								end;
-								if(IVrw.stp==kInvoiceRowTypeCreditCardPayment  and IVrw.Sum<0)then begin
+								if(IV2rw.stp==kInvoiceRowTypeCreditCardPayment  and IVrw.Sum>0)then begin
 									For(j=0;j<brandscnt;j=j+1) begin
-										aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IVrw.Sum * aBrandPercent[j];
+										switch(IV2rw.CurncyCode)begin
+											case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IV2rw.Sum * aBrandPercent[j];	
+											case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IV2rw.Sum * aBrandPercent[j];
+											case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IV2rw.Sum * aBrandPercent[j];
+											case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IV2rw.Sum * aBrandPercent[j];
+											case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IV2rw.Sum * aBrandPercent[j];
+										end;
 									end;
 								end;
 							end;
@@ -2356,7 +2389,6 @@ begin
 		For(i=0;i<brandscnt;i=i+1) begin
 			totrow = totrow + aBrandsCashAZN[i];
 		end;
-		totrow = totrow + servcash[incurncy];
 		TOTUSD = TOTUSD + totrow;
 		startformat(15);
 			outstring(0,0,"",false);
@@ -2373,7 +2405,6 @@ begin
 		For(i=0;i<brandscnt;i=i+1) begin
 			totrow = totrow + aBrandsCashEUR[i];
 		end;
-		totrow = totrow + servcash[incurncy];
 		TOTUSD = TOTUSD + totrow/fr*to1;
 		startformat(15);
 			outstring(0,0,"",false);
@@ -2390,7 +2421,6 @@ begin
 			For(i=0;i<brandscnt;i=i+1) begin
 				totrow = totrow + aBrandsCashUSD[i];
 			end;
-			totrow = totrow + servcash[incurncy];
 			TOTUSD = TOTUSD + totrow/fr*to1;
 		startformat(15);
 			outstring(0,0,"",false);
@@ -2406,7 +2436,6 @@ begin
 			For(i=0;i<brandscnt;i=i+1) begin
 				totrow = totrow + aBrandsCashGBP[i];
 			end;
-			totrow = totrow + servcash[incurncy];
 			TOTUSD = TOTUSD + totrow/fr*to1;
 		startformat(15);
 			outstring(0,0,"",false);
@@ -2427,113 +2456,6 @@ begin
 		
 return;
 end;
-
-/*global
-procedure PrintCashIn412(array val aBrandsCashAZN,array val aBrandsCashEUR,array val aBrandsCashUSD,array val aBrandsCashGBP,array val aBrandsCCAZN,array val aBrandsCCUSD,integer brandscnt)
-begin
-		string 10 incurncy;
-		integer j,i;
-		val totrow;
-		boolean foundf;
-		
-		startformat(15);
-			outstring(0,0,"4",false);
-			outstring(0,0,"ВЫРУЧКА, в том числе  USD",false);
-		endformat;
-		startformat(15);
-			outstring(0,0,"4.1",false);
-			outstring(0,0,"Приход денежных средств (cash)",false);
-		endformat;
-		
-		incurncy = "AZN";
-		totrow = 0;
-			For(i=0;i<brandscnt;i=i+1) begin
-				totrow = totrow + aBrandsCashAZN[i];
-			end;
-			startformat(15);
-				outstring(0,0,"",false);
-				outstring(100,0,incurncy,false);
-				outstring(0,0,totrow,false);
-				For(j=0;j<brandscnt;j=j+1) begin
-					outstring(150+j*50,0,aBrandsCashAZN[j],false);
-				end;
-			endformat;
-
-		incurncy = "EUR";
-		totrow = 0;
-			For(i=0;i<brandscnt;i=i+1) begin
-				totrow = totrow + aBrandsCashEUR[i];
-			end;
-			startformat(15);
-				outstring(0,0,"",false);
-				outstring(100,0,incurncy,false);
-				outstring(0,0,totrow,false);
-				For(j=0;j<brandscnt;j=j+1) begin		
-					outstring(150+j*50,0,aBrandsCashEUR[j],false);
-				end;
-			endformat;
-		incurncy = "USD";
-		totrow = 0;
-			For(i=0;i<brandscnt;i=i+1) begin
-				totrow = totrow + aBrandsCashUSD[i];
-			end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(j=0;j<brandscnt;j=j+1) begin
-				outstring(150+j*50,0,aBrandsCashUSD[j],false);
-			end;
-		endformat;
-		incurncy = "GBP";
-		totrow = 0;
-			For(i=0;i<brandscnt;i=i+1) begin
-				totrow = totrow + aBrandsCashGBP[i];
-			end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(j=0;j<brandscnt;j=j+1) begin
-				outstring(150+j*50,0,aBrandsCashGBP[j],false);
-			end;
-		endformat;
-		
-		startformat(15);
-			outstring(0,0,"4.2",false);
-			outstring(0,0,"Оплата посредством Терминала",false);
-		endformat;
-		
-		incurncy = "AZN";
-		totrow = 0;
-			For(i=0;i<brandscnt;i=i+1) begin
-				totrow = totrow + aBrandsCCAZN[i];
-			end;
-		startformat(15);			
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(j=0;j<brandscnt;j=j+1) begin
-				outstring(150+j*50,0,aBrandsCCAZN[j],false);
-			end;
-		endformat;
-		incurncy = "USD";
-		totrow = 0;
-			For(i=0;i<brandscnt;i=i+1) begin
-				totrow = totrow + aBrandsCCUSD[i];
-			end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(j=0;j<brandscnt;j=j+1) begin
-				outstring(150+j*50,0,aBrandsCCUSD[j],false);
-			end;
-		endformat;
-		
-return;
-end;*/
-
 
 global 
 procedure	PrintCLIn43(integer brandscnt,date sd, date ed,string location,array string aBrands)
@@ -2636,7 +2558,7 @@ return;
 end;
 
 global
-procedure PrintCUDEb445(date sd,date ed,string location)
+procedure PrintCUDEb445(date sd,date ed,string location, integer brandscnt,array string aBrands)
 begin
 	record IVVc IVr;
 	row IVVc IVrw;
@@ -2646,58 +2568,28 @@ begin
 	record IPrsVc IPrsr;
 	record IPVc IPr;
 	row IPVc IPrw;
-	integer mtrw,i;
+	integer mtrw,i,k,j;
 	val ivfr,ivto1;
 	val fr,to1,to2,br1,br2;
 	string 10 curncy;
 	boolean TrHs1,testf1;
+	array val aBrandsCashEUR;
+	array val aBrandsCashAZN;
+	array val aBrandsCashUSD;
+	array val aBrandsCashGBP;
+	array val aBrandsCashCHF;
+	array val aBrandPercent;
+	record INVc INr;
 	
-		/*startformat(15);
-			outstring(0,0,"4.4",false);
-			outstring(0,0,"Погашена зад-ть Покупателей",false);
-		endformat;
-		
-		IPr.TransDate = sd;
-		TrHs = true;
-		while(loopkey("TransDate",IPr,1,TrHs))BEGIN
-			testf = true;
-			if(IPr.TransDate>ed)then begin TrHs = false; testf = false; end;
-			if(IPr.OKFlag==0)then begin testf = false; end;
+	
+	For(i=0;i<brandscnt;i=i+1) begin
+	  aBrandsCashEUR[i] = 0;
+	  aBrandsCashAZN[i] = 0;
+	  aBrandsCashUSD[i] = 0;
+	  aBrandsCashGBP[i] = 0;
+	  aBrandsCashCHF[i] = 0;
+	end; 
 			
-			if(testf)then begin
-				mtrw = matrowcnt(IPr);
-				For(i=0;i<mtrw;i=i+1) begin
-					matrowget(IPr,i,IPrw);
-					if(IPrw.InvoiceNr>0)then begin
-						IVr.SerNr = IPrw.InvoiceNr;
-						if(readfirstmain(IVr,1,true) and (IVr.InvDate<sd or IVr.InvDate>ed))then begin
-							switch(IPrw.RecCurncy)begin
-								case"AZN":credAZN = credAZN + IPrw.RecVal;
-								case"USD":credUSD = credUSD + IPrw.RecVal;
-								case"EUR":credEUR = credEUR + IPrw.RecVal;								
-							end;
-						end;
-					end;	  
-				end; 
-			end;
-		end;
-		
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(50,0,"AZN",false);
-			outstring(100,0,credAZN,false);
-		endformat;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(50,0,"EUR",false);
-			outstring(100,0,credEUR,false);
-		endformat;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(50,0,"USD",false);
-			outstring(100,0,credUSD,false);
-		endformat;*/
-		
 		IVr.InvDate = sd;
 		TrHs = true;
 		while(loopkey("InvDate",IVr,1,TrHs))begin
@@ -2709,6 +2601,37 @@ begin
 			if(left(IVr.CustCode,3)=="FOB")then begin testf = false; end;
 			
 			if(testf)then begin
+				mtrw = matrowcnt(IVr);
+				For(j=0;j<brandscnt;j=j+1) begin
+					aBrandPercent[j] = 0;
+				end; 
+							
+				For(i=0;i<mtrw;i=i+1) begin
+					matrowget(IVr,i,IVrw);
+					if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+						INr.Code = IVrw.ArtCode;
+						readfirstmain(INr,1,true);
+						For(j=0;j<brandscnt;j=j+1) begin
+							if(setinset(aBrands[j],INr.DispGroups))then begin
+								aBrandPercent[j] = aBrandPercent[j] + IVrw.Sum;
+							end;
+						end; 
+					end;
+				end;
+				
+				For(j=0;j<brandscnt;j=j+1) begin
+					aBrandPercent[j] = aBrandPercent[j]/IVr.Sum4;
+				end; 
+				
+				For(j=0;j<brandscnt;j=j+1) begin
+					switch(IVr.CurncyCode)begin
+						case"AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IVr.Sum4 * aBrandPercent[j];
+						case"USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IVr.Sum4 * aBrandPercent[j];
+						case"EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IVr.Sum4 * aBrandPercent[j];
+						case"CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IVr.Sum4 * aBrandPercent[j];
+						case"GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IVr.Sum4 * aBrandPercent[j];
+					end;
+				end;		
 				switch(IVr.CurncyCode)begin
 					case"AZN":debAZN = debAZN + IVr.Sum4;
 					case"USD":debUSD = debUSD + IVr.Sum4;
@@ -2721,11 +2644,20 @@ begin
 					ivfr = 1;
 					ivto1 = 1;
 				end;
-				mtrw = matrowcnt(IVr);
+				
 				For(i=0;i<mtrw;i=i+1) begin
 					matrowget(IVr,i,IVrw);
 					
 					if(IVrw.stp==kInvoiceRowTypePrepayment)then begin
+						For(j=0;j<brandscnt;j=j+1) begin
+							switch(IVr.CurncyCode)begin
+								case"AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] - IVrw.Sum * aBrandPercent[j];
+								case"USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] - IVrw.Sum * aBrandPercent[j];
+								case"EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] - IVrw.Sum * aBrandPercent[j];
+								case"CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] - IVrw.Sum * aBrandPercent[j];
+								case"GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] - IVrw.Sum * aBrandPercent[j];
+							end;
+						end;
 						switch(IVr.CurncyCode)begin
 							case"AZN":debAZN = debAZN - IVrw.Sum;
 							case"USD":debUSD = debUSD - IVrw.Sum;
@@ -2740,6 +2672,15 @@ begin
 							fr = 1; to1 = 1;
 						end;
 						IVrw.Sum = IVrw.Sum/fr*to1*ivfr/ivto1;
+						For(j=0;j<brandscnt;j=j+1) begin
+							switch(IVr.CurncyCode)begin
+								case"AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] - IVrw.Sum * aBrandPercent[j];
+								case"USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] - IVrw.Sum * aBrandPercent[j];
+								case"EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] - IVrw.Sum * aBrandPercent[j];
+								case"CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] - IVrw.Sum * aBrandPercent[j];
+								case"GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] - IVrw.Sum * aBrandPercent[j];
+							end;
+						end;
 						switch(IVr.CurncyCode)begin
 							case"AZN":debAZN = debAZN - IVrw.Sum;
 							case"USD":debUSD = debUSD - IVrw.Sum;
@@ -2755,6 +2696,15 @@ begin
 							fr = 1; to1 = 1;
 						end;
 						IVrw.Sum = IVrw.Sum/fr*to1*ivfr/ivto1;
+						For(j=0;j<brandscnt;j=j+1) begin
+							switch(IVr.CurncyCode)begin
+								case"AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] - IVrw.Sum * aBrandPercent[j];
+								case"USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] - IVrw.Sum * aBrandPercent[j];
+								case"EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] - IVrw.Sum * aBrandPercent[j];
+								case"CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] - IVrw.Sum * aBrandPercent[j];
+								case"GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] - IVrw.Sum * aBrandPercent[j];
+							end;
+						end;
 						switch(IVr.CurncyCode)begin
 							case"AZN":debAZN = debAZN - IVrw.Sum;
 							case"USD":debUSD = debUSD - IVrw.Sum;
@@ -2770,6 +2720,15 @@ begin
 							fr = 1; to1 = 1;
 						end;
 						IVrw.Sum = IVrw.Sum/fr*to1*ivfr/ivto1;
+						For(j=0;j<brandscnt;j=j+1) begin
+							switch(IVr.CurncyCode)begin
+								case"AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] - IVrw.Sum * aBrandPercent[j];
+								case"USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] - IVrw.Sum * aBrandPercent[j];
+								case"EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] - IVrw.Sum * aBrandPercent[j];
+								case"CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] - IVrw.Sum * aBrandPercent[j];
+								case"GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] - IVrw.Sum * aBrandPercent[j];
+							end;
+						end;
 						switch(IVr.CurncyCode)begin
 							case"AZN":debAZN = debAZN - IVrw.Sum;
 							case"USD":debUSD = debUSD - IVrw.Sum;
@@ -2796,6 +2755,15 @@ begin
 							For(i=0;i<mtrw;i=i+1) begin
 	  						matrowget(IPr,i,IPrw);
 	  						if(IPrw.InvoiceNr==IVr.SerNr)then begin
+	  							For(j=0;j<brandscnt;j=j+1) begin
+										switch(IVr.CurncyCode)begin
+											case"AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] - IPrw.RecVal * aBrandPercent[j];
+											case"USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] - IPrw.RecVal * aBrandPercent[j];
+											case"EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] - IPrw.RecVal * aBrandPercent[j];
+											case"CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] - IPrw.RecVal * aBrandPercent[j];
+											case"GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] - IPrw.RecVal * aBrandPercent[j];
+										end;
+									end;
 	  							switch(IVr.CurncyCode)begin
 										case"AZN":debAZN = debAZN - IPrw.RecVal;
 										case"USD":debUSD = debUSD - IPrw.RecVal;
@@ -2821,26 +2789,41 @@ begin
 			outstring(0,0,"",false);
 			outstring(50,0,"AZN",false);
 			outstring(100,0,debAZN,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  		outstring(150+i*50,0,aBrandsCashAZN[i],false);
+	  	end;
 		endformat;
 		startformat(15);
 			outstring(0,0,"",false);
 			outstring(50,0,"EUR",false);
 			outstring(100,0,debEUR,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  		outstring(150+i*50,0,aBrandsCashEUR[i],false);
+	  	end;
 		endformat;
 		startformat(15);
 			outstring(0,0,"",false);
 			outstring(50,0,"USD",false);
 			outstring(100,0,debUSD,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  		outstring(150+i*50,0,aBrandsCashUSD[i],false);
+	  	end;
 		endformat;
 		startformat(15);
 			outstring(0,0,"",false);
 			outstring(50,0,"CHF",false);
 			outstring(100,0,debCHF,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  		outstring(150+i*50,0,aBrandsCashCHF[i],false);
+	  	end;
 		endformat;
 		startformat(15);
 			outstring(0,0,"",false);
 			outstring(50,0,"GBP",false);
 			outstring(100,0,debGBP,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  		outstring(150+i*50,0,aBrandsCashGBP[i],false);
+	  	end;
 		endformat;
 
 return;
