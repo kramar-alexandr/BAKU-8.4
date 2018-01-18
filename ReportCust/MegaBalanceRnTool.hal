@@ -932,6 +932,7 @@ begin
 	record ItemHistVc IHr;
 	date curdate;
 	val totrow;
+	boolean consig; 
 	
 	For(i=0;i<brandscnt;i=i+1) begin
 		aBrandsRetEUR[i]= 0;
@@ -963,6 +964,10 @@ begin
 			end;
 		end; 
 		
+		consig = false;
+		if(INr.ConsgType==1)then begin
+			consig = true;
+		end;
 		if(setinset("30",INr.DispGroups))then begin foundf = false; end;
 		if(setinset("31",INr.DispGroups))then begin foundf = false; end;
 		if(setinset("32",INr.DispGroups))then begin foundf = false; end;
@@ -982,47 +987,29 @@ begin
 			if(nonblank(location) and location!=IHr.Location)then begin testf = false; end;
 			
 			if(testf)then begin
-				if(IHr.Qty>=0)then begin
-					sign = 1;
-				end else begin
-					sign = -1;
-				end;			
+				sign = 1;		
 														
-				if(IHr.TransDate>=sd and IHr.FileName=="RetVc")then begin
+				if(IHr.TransDate>=sd and (IHr.FileName=="IVVc" or IHr.FileName=="SHVc") and IHr.Qty<=0)then begin
 					switch(IHr.CurncyCode)begin
-						case"EUR":aBrandsRetEUR[br] = aBrandsRetEUR[br] + IHr.TotCostPriceCurncy * sign;
-						case"CHF":aBrandsRetCHF[br] = aBrandsRetCHF[br] + IHr.TotCostPriceCurncy * sign;
-						case"USD":aBrandsRetUSD[br] = aBrandsRetUSD[br] + IHr.TotCostPriceCurncy * sign;
-						case"GBP":aBrandsRetGBP[br] = aBrandsRetGBP[br] + IHr.TotCostPriceCurncy * sign;
-					end;
-					BrandsRetUSDtotal = BrandsRetUSDtotal + IHr.TotCostPrice * sign;
-				end;
-				
-				if(IHr.TransDate>=sd and IHr.FileName=="IVVc" and IHr.Qty>0)then begin
-					switch(IHr.CurncyCode)begin
-						case"EUR":aBrandsRetEUR[br] = aBrandsRetEUR[br] + IHr.TotCostPriceCurncy * sign;
-						case"CHF":aBrandsRetCHF[br] = aBrandsRetCHF[br] + IHr.TotCostPriceCurncy * sign;
-						case"USD":aBrandsRetUSD[br] = aBrandsRetUSD[br] + IHr.TotCostPriceCurncy * sign;
-						case"GBP":aBrandsRetGBP[br] = aBrandsRetGBP[br] + IHr.TotCostPriceCurncy * sign;
-					end;
-				end;
-				if(IHr.TransDate>=sd and IHr.FileName=="IVVc" and IHr.Qty<=0)then begin
-					switch(IHr.CurncyCode)begin
-						case"EUR":aBrandsSelEUR[br] = aBrandsSelEUR[br] - IHr.TotCostPriceCurncy * sign;
-											if(IHr.ConsigStock==1)then begin
+						case"EUR":if(consig)then begin
 												aBrandsSelEURcons[br] = aBrandsSelEURcons[br] + IHr.TotCostPriceCurncy * sign;
+											end else begin
+												aBrandsSelEUR[br] = aBrandsSelEUR[br] + IHr.TotCostPriceCurncy * sign;
 											end;
-						case"CHF":aBrandsSelCHF[br] = aBrandsSelCHF[br] - IHr.TotCostPriceCurncy * sign;
-											if(IHr.ConsigStock==1)then begin
-												aBrandsSelCHFcons[br] = aBrandsSelCHFcons[br] - IHr.TotCostPriceCurncy * sign;
+						case"CHF":if(consig)then begin
+												aBrandsSelCHFcons[br] = aBrandsSelCHFcons[br] + IHr.TotCostPriceCurncy * sign;
+											end else begin
+												aBrandsSelCHF[br] = aBrandsSelCHF[br] + IHr.TotCostPriceCurncy * sign;
 											end;
-						case"USD":aBrandsSelUSD[br] = aBrandsSelUSD[br] - IHr.TotCostPriceCurncy * sign;
-											if(IHr.ConsigStock==1)then begin
-												aBrandsSelUSDcons[br] = aBrandsSelUSDcons[br] - IHr.TotCostPriceCurncy * sign;
+						case"USD":if(consig)then begin
+												aBrandsSelUSDcons[br] = aBrandsSelUSDcons[br] + IHr.TotCostPriceCurncy * sign;
+											end else begin
+												aBrandsSelUSD[br] = aBrandsSelUSD[br] + IHr.TotCostPriceCurncy * sign;
 											end;
-						case"GBP":aBrandsSelGBP[br] = aBrandsSelGBP[br] - IHr.TotCostPriceCurncy * sign;
-											if(IHr.ConsigStock==1)then begin
-												aBrandsSelGBPcons[br] = aBrandsSelGBPcons[br] - IHr.TotCostPriceCurncy * sign;
+						case"GBP":if(consig)then begin
+												aBrandsSelGBPcons[br] = aBrandsSelGBPcons[br] + IHr.TotCostPriceCurncy * sign;
+											end else begin
+												aBrandsSelGBP[br] = aBrandsSelGBP[br] + IHr.TotCostPriceCurncy * sign;
 											end;
 					end;
 				end;
@@ -1032,85 +1019,6 @@ begin
 		resetloop(IHr);
 	end;
 	resetloop(INr);
-	
-	
-	
-	/*startformat(15);
-			outstring(0,0,"4.6",false);
-			outstring(0,0,"Стоимость возврата от покупателей",false);
-		endformat;
-		
-		incurncy = "EUR";
-		GetFullCurncyRate(incurncy,ed,fr,to1,to2,br1,br2);
-		totrow = 0;
-		For(i=0;i<brandscnt;i=i+1) begin
-			totrow = totrow + aBrandsRetEUR[i];
-		end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(i=0;i<brandscnt;i=i+1) begin
-	  		outstring(150+i*50,0,aBrandsRetEUR[i],false);
-	  		BrandsRetUSDtotal = BrandsRetUSDtotal + aBrandsRetEUR[i]/fr*to1;
-			end; 
-		endformat;
-		
-		incurncy = "CHF";
-		GetFullCurncyRate(incurncy,ed,fr,to1,to2,br1,br2);
-		totrow = 0;
-		For(i=0;i<brandscnt;i=i+1) begin
-			totrow = totrow + aBrandsRetCHF[i];
-		end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(i=0;i<brandscnt;i=i+1) begin
-	  		outstring(150+i*50,0,aBrandsRetCHF[i],false);
-	  		BrandsRetUSDtotal = BrandsRetUSDtotal + aBrandsRetCHF[i]/fr*to1;
-			end; 
-		endformat;
-		
-		incurncy = "USD";
-		GetFullCurncyRate(incurncy,ed,fr,to1,to2,br1,br2);
-		totrow = 0;
-		For(i=0;i<brandscnt;i=i+1) begin
-			totrow = totrow + aBrandsRetUSD[i];
-		end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(i=0;i<brandscnt;i=i+1) begin
-	  		outstring(150+i*50,0,aBrandsRetUSD[i],false);
-	  		BrandsRetUSDtotal = BrandsRetUSDtotal + aBrandsRetUSD[i]/fr*to1;
-			end; 
-		endformat;
-		
-		incurncy = "GBP";
-		GetFullCurncyRate(incurncy,ed,fr,to1,to2,br1,br2);
-		totrow = 0;
-		For(i=0;i<brandscnt;i=i+1) begin
-			totrow = totrow + aBrandsRetGBP[i];
-		end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(i=0;i<brandscnt;i=i+1) begin
-	  		outstring(150+i*50,0,aBrandsRetGBP[i],false);
-	  		BrandsRetUSDtotal = BrandsRetUSDtotal + aBrandsRetGBP[i]/fr*to1;
-			end; 
-		endformat;
-		
-		incurncy = "USD";
-		GetFullCurncyRate(incurncy,ed,fr,to1,to2,br1,br2);
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,"Итого " & incurncy,false);
-	  	outstring(150,0,BrandsRetUSDtotal*fr/to1,false);
-		endformat;*/
 	
 		startformat(15);
 			outstring(0,0,"4.7",false);
