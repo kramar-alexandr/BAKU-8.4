@@ -1,0 +1,176 @@
+external function LongInt CalculateLateDays(Date,Date,Date,Boolean,Boolean);
+external function Boolean ConvertPurgeNLTrans_IVVc(record PurgeTRVc,record IPrsVc,record CUVc,Boolean,var record IVVc);
+external function Boolean ConvertNLTrans_IVVc(record TRVc,record IPrsVc,record CUVc,Boolean,var record IVVc);
+external procedure GetARAcc(string,var string);
+external function Boolean ARInvoiceTest(record RcVc,record IVVc,Boolean);
+external procedure ARRnGetInvBalance(record IVVc,var Date,Integer,var val,var val,var LongInt);
+external procedure SubCashRows_IVVc(record IVVc,Boolean,var val,var val);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external procedure SubPrePayments(record IVVc,var val,var val);
+external procedure SumAged(Date,Integer,Integer,var val,var val,var val,var val,var val,var val,var val,var val,var val,var val);
+external procedure ClassTypef(string,string,var boolean);
+
+
+global
+procedure RunARRnToGetDebtOnDateByCurrency(record RcVc RepSpec,array string aBrands,var vector val vtot1Sum)
+BEGIN
+  record ARVc ARr;
+  record CUVc CUr;
+  record IVVc IVr;
+  record PurgeTRVc PurgeTRr;
+  record TRVc TRr;
+  record IPrsVc IPrsr;
+  record INVc INr;
+  row IVVc IVrw;
+  Boolean TrHs,TrHs2;
+  Boolean testf,test2f,firstf;
+  val CurSum;
+  LongInt latedays;
+  Integer i,j,rwcnt;
+  val rval,rvalb1;
+  
+  CUr.Name = "";
+  CUr.Code = "";
+  TrHs = true;
+  while (LoopKey("Name",CUr,1,TrHs)) begin
+    testf = true;
+    if (CUr.CUType==0) then begin testf = false; end;
+    if (left(CUr.Code,3)=="FOB") then begin
+      if (CUr.CustCat=="STORE") then begin testf = false; end;
+    end;
+    if (testf) then begin
+      CurSum = 0;
+      ResetLoop(IPrsr);
+      IPrsr.CustCode = CUr.Code;
+      IPrsr.TransType = kIPrsTransTypeInvoice;
+      TrHs2 = LoopKey("CustType",IPrsr,2,true);    
+      firstf = true;            
+      while (TrHs2==true) begin
+        testf = false;
+        if (firstf) then begin 
+          firstf = false; 
+          ResetLoop(IPrsr); 
+        end;
+        TrHs2 = LoopKey("CustType",IPrsr,2,true);    
+        if (TrHs2) then begin 
+          if (CUr.Code<>IPrsr.CustCode) then begin TrHs2 = false; end;
+          if (IPrsr.TransType!=kIPrsTransTypeInvoice) then begin TrHs2 = false; end;
+        end;  
+        if (TrHs2) then begin
+          testf = true;
+          RecordClear(IVr);
+          switch (IPrsr.TransType) begin
+            case kIPrsTransTypeInvoice:
+              IVr.SerNr = IPrsr.TransNr;
+              testf = ReadFirstMain(IVr,1,true);
+            case kIPrsTransTypePurgeNLTransaction:
+              PurgeTRr.Number = IPrsr.TransNr;
+              PurgeTRr.IntYc = IPrsr.IntYc;
+              PurgeTRr.TransRow = IPrsr.TransRow;
+              if (ReadFirstMain(PurgeTRr,3,true)) then begin
+                testf = ConvertPurgeNLTrans_IVVc(PurgeTRr,IPrsr,CUr,false,IVr);
+              end;
+            case kIPrsTransTypeNLTransaction:
+              TRr.Number = IPrsr.TransNr;
+              TRr.IntYc = IPrsr.IntYc;
+              if (ReadFirstMain(TRr,2,true)) then begin
+                testf = ConvertNLTrans_IVVc(TRr,IPrsr,CUr,false,IVr);
+              end;
+            otherwise
+              testf = false;
+          end;
+          if (testf) then begin
+            testf = ARInvoiceTest(RepSpec,IVr,true);
+            if (nonblank(RepSpec.ObjStr)) then begin
+              if (SetInSet(RepSpec.ObjStr,IVr.Objects)==false) then begin
+                testf = false;
+              end;
+            end;
+            latedays = CalculateLateDays(IVr.InvDate,IVr.PayDate,RepSpec.d1,false,true);
+            if (testf) then begin
+              rvalb1 = blankval;
+              if ((IVr.InvType<>kInvoiceTypeCredit and IVr.InvType!=kInvoiceTypeCreditSpecialSales) and (IVr.InvType<>kInvoiceTypeCash and IVr.InvType<>kInvoiceTypeCashInvoiceReceiptPRT)) then begin
+                rval = IVr.Sum4;
+                if (nonblank(IVr.CurncyCode)) then begin
+                  rvalb1 = IVr.BaseSum4;
+                end;
+                if (rvalb1==0) then begin
+                  rvalb1 = MulRateToBase1(IVr.CurncyCode,rval,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);                
+                end;
+              end;
+              if (IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales) then begin
+                test2f = false;
+                if (IVr.CredInv==-1) then begin test2f = true; end;
+                if (test2f==false) then begin
+                  rwcnt = MatRowCnt(IVr);
+                  for (i=0;i<rwcnt;i=i+1) begin
+                    MatRowGet(IVr,i,IVrw);
+                    if (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment or IVrw.stp==kInvoiceRowTypeCashPayment or IVrw.stp==kInvoiceRowTypeCreditCardPayment or IVrw.stp==kInvoiceRowTypeSwishPayment or IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment or IVrw.stp==kInvoiceRowTypeChequePayment) then begin
+                      test2f = true;
+                      i = rwcnt;
+                    end;
+                  end;
+                end;
+
+                if (test2f) then begin
+                  rval = -IVr.Sum4;
+                  if (nonblank(IVr.CurncyCode)) then begin
+                    rvalb1 = -IVr.BaseSum4;
+                  end;
+                  if (rvalb1==0) then begin
+                    rvalb1 = MulRateToBase1(IVr.CurncyCode,rval,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+                  end;
+                end else begin
+                  rval = blankval;
+                  rvalb1 = blankval;
+                end;    
+              end;
+              if (IVr.InvType==kInvoiceTypeCash or IVr.InvType==kInvoiceTypeCashInvoiceReceiptPRT or IVr.InvType==kInvoiceTypeCreditSpecialSales) then begin
+                rval = blankval;
+                rvalb1 = blankval;
+              end;       
+              if (IVr.TransDate>RepSpec.d1) then begin          
+                rval = blankval;
+                rvalb1 = blankval;
+                testf = false;            
+              end else begin
+                ARRnGetInvBalance(IVr,RepSpec.d1,IVr.InvType,rval,rvalb1,latedays);
+                SubPrePayments(IVr,rval,rvalb1);
+                if (IVr.InvType!=kInvoiceTypeCash and IVr.InvType!=kInvoiceTypeCashInvoiceReceiptPRT) then begin
+                  SubCashRows_IVVc(IVr,false,rval,rvalb1);
+                end;
+                if (rval==0) then begin
+                  testf = false;
+                end else begin
+                  rwcnt = MatRowCnt(IVr);
+                  for (i=0;i<rwcnt;i=i+1) begin
+                    MatRowGet(IVr,i,IVrw);
+                    if (IVrw.stp==kInvoiceRowTypeNormal) then begin
+                      INr.Code = IVrw.ArtCode;
+                      readfirstmain(INr,1,true);
+                      for(j=0;j<aBrands.length;j=j+1) begin
+                        if (SetInSet(aBrands[j],INr.DispGroups)) then begin
+                          vtot1Sum[aBrands[j] & ":" & IVr.CurncyCode] = vtot1Sum[aBrands[j] & ":" & IVr.CurncyCode] + IVrw.Sum*rval/IVr.Sum4;
+                          j = aBrands.length;
+                        end;
+                      end;
+                    end;
+                  end;
+                end;
+              end;
+            end;
+          end;
+        end;
+        if (testf) then begin
+          CurSum = rval + CurSum;
+        end;
+      end;
+      rval = 0;
+      
+      CurSum = rval + CurSum;
+      
+      vtot1Sum["TOTAL:" & RepSpec.CurncyCode] = CurSum + vtot1Sum["TOTAL:" & RepSpec.CurncyCode];
+    end;
+  end;
+  RETURN;
+END;

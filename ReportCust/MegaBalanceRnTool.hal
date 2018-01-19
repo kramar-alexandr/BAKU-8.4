@@ -3398,86 +3398,58 @@ return;
 end; 
 
 global
-procedure	PrintStockIVDeb8(date ed,
-            vector val vCUIVAZN,vector val vCUIPAZN,
-            vector val vCUIVEUR,vector val vCUIPEUR,
-            vector val vCUIVCHF,vector val vCUIPCHF,
-            vector val vCUIVUSD,vector val vCUIPUSD,
-            vector val vCUIVGBP,vector val vCUIPGBP,
-            integer brandscnt,var val totusd)
+procedure	PrintStockIVDeb8(date ed,string loc,array string aBrands,var val totusd)
 begin
-	val CUIVTotalUSD;
-	val fr,to1,to2,br1,br2;
+  array string 5 TmpList;
+  integer i,j;
+  record RcVc RepSpec;
+  record LocationVc Locr;
 	string 10 incurncy;
-  integer i;
+	val total;
+	val fr,to1,to2,br1,br2;
+  vector val vtot1Sum;
 	
+  TmpList[0] = "AZN";
+  TmpList[1] = "EUR";
+  TmpList[2] = "CHF";
+  TmpList[3] = "USD";
+  TmpList[4] = "GBP";
+  ReportDefaults(RepSpec,"ARRClass");
+  Locr.Code = loc;
+  ReadFirstMain(Locr,1,true);
+  RepSpec.ObjStr = Locr.Objects;
+  RepSpec.d1 = ed;
+  RepSpec.flags[2] = 1;
+  RepSpec.flags[21] = 2;
+  for(i=0;i<TmpList.length;i=i+1) begin
+    RepSpec.CurncyCode = TmpList[i];
+    RunARRnToGetDebtOnDateByCurrency(RepSpec,aBrands,vtot1Sum);
+  end;
+
 	startformat(15);
-			outstring(0,0,"8",false);
-			outstring(0,0,"Задолженность Покупателей",false);
-		endformat;
-		
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(50,0,"AZN",false);
-			outstring(100,0,vCUIVAZN["tot"] - vCUIPAZN["tot"],false);
-      For(i=0;i<brandscnt;i=i+1) begin
-				outstring(150+50*i,0,vCUIVAZN[i & ""] - vCUIPAZN[i & ""],false);
-			end;
-		endformat;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(50,0,"EUR",false);
-			outstring(100,0,vCUIVEUR["tot"] - vCUIPEUR["tot"],false);
-      For(i=0;i<brandscnt;i=i+1) begin
-				outstring(150+50*i,0,vCUIVEUR[i & ""] - vCUIPEUR[i & ""],false);
-			end;
-		endformat;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(50,0,"CHF",false);
-			outstring(100,0,vCUIVCHF["tot"] - vCUIPCHF["tot"],false);
-      For(i=0;i<brandscnt;i=i+1) begin
-				outstring(150+50*i,0,vCUIVCHF[i & ""] - vCUIPCHF[i & ""],false);
-			end;
-		endformat;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(50,0,"USD",false);
-			outstring(100,0,vCUIVUSD["tot"] - vCUIPUSD["tot"],false);
-      For(i=0;i<brandscnt;i=i+1) begin
-				outstring(150+50*i,0,vCUIVUSD[i & ""] - vCUIPUSD[i & ""],false);
-			end;
-		endformat;
+    outstring(0,0,"8",false);
+    outstring(0,0,"Задолженность Покупателей",false);
+  endformat;
+  for(i=0;i<TmpList.length;i=i+1) begin
     startformat(15);
-			outstring(0,0,"",false);
-			outstring(50,0,"GBP",false);
-			outstring(100,0,vCUIVGBP["tot"] - vCUIPGBP["tot"],false);
-      For(i=0;i<brandscnt;i=i+1) begin
-        outstring(150+50*i,0,vCUIVGBP[i & ""] - vCUIPGBP[i & ""],false);
-			end;
-		endformat;
-		
-		CUIVTotalUSD = CUIVTotalUSD + (vCUIVAZN["tot"] - vCUIPAZN["tot"]);
-		incurncy = "EUR";
-		GetFullCurncyRate(incurncy,ed,fr,to1,to2,br1,br2);
-		CUIVTotalUSD = CUIVTotalUSD + (vCUIVEUR["tot"] - vCUIPEUR["tot"])/fr*to1;
-		incurncy = "CHF";
-		GetFullCurncyRate(incurncy,ed,fr,to1,to2,br1,br2);
-		CUIVTotalUSD = CUIVTotalUSD + (vCUIVCHF["tot"] - vCUIPCHF["tot"])/fr*to1;
-		incurncy = "USD";
-		GetFullCurncyRate(incurncy,ed,fr,to1,to2,br1,br2);
-		CUIVTotalUSD = CUIVTotalUSD + (vCUIVUSD["tot"] - vCUIPUSD["tot"])/fr*to1;
-    incurncy = "GBP";
-		GetFullCurncyRate(incurncy,ed,fr,to1,to2,br1,br2);
-		CUIVTotalUSD = CUIVTotalUSD + (vCUIVGBP["tot"] - vCUIPGBP["tot"])/fr*to1;
-		
-		CUIVTotalUSD = CUIVTotalUSD*fr/to1;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(50,0,"Итого USD",false);
-			outstring(100,0,CUIVTotalUSD,false);
-		endformat;
-		totusd = totusd + CUIVTotalUSD;
+      outstring(0,0,"",false);
+      outstring(50,0,TmpList[i],false);
+      outstring(100,0,vtot1Sum["TOTAL:" & TmpList[i]],false);
+      for(j=0;j<aBrands.length;j=j+1) begin
+        outstring(150+50*j,0,vtot1Sum[aBrands[j] & ":" & TmpList[i]],false);
+      end;
+      GetFullCurncyRate(TmpList[i],ed,fr,to1,to2,br1,br2);
+      total = total + vtot1Sum["TOTAL:" & TmpList[i]]/fr*to1;
+    endformat;
+  end;
+  GetFullCurncyRate(TmpList[3],ed,fr,to1,to2,br1,br2);// usd
+  total = total*fr/to1;
+  startformat(15);
+    outstring(0,0,"",false);
+    outstring(50,0,"Итого USD",false);
+    outstring(100,0,total,false);
+  endformat;
+  totusd = totusd + total;
 	
 return;
 end;
