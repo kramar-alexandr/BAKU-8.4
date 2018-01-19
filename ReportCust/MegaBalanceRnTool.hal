@@ -3016,11 +3016,77 @@ return;
 end;
 
 global
-procedure PrintStockVEPAy6(array val aBrandsPaymAZN,array val aBrandsPaymEUR,array val aBrandsPaymCHF,array val aBrandsPaymUSD,integer brandscnt)
+procedure PrintStockVEPAy6(date sd, date ed,integer brandscnt,array string aBrands)
 begin
-	integer i;
+	integer i,j,k,mtrw,rwcnt;
+	boolean TrHs,testf;
+	record OPVc OPr;
+	row OPVc OPrw;
 	string 10 incurncy;
 	val totrow;
+	array val aBrandsPaymAZN;
+	array val aBrandsPaymEUR;
+	array val aBrandsPaymCHF;
+	array val aBrandsPaymUSD;
+	array val aBrandsPaymGBP;
+	record DIVc DIr;
+	record OPrsVc OPrsr;
+	record CUVc CUr;
+
+	For(i=0;i<brandscnt;i=i+1) begin
+		aBrandsPaymAZN[i] = 0;
+		aBrandsPaymEUR[i] = 0;
+		aBrandsPaymUSD[i] = 0;
+		aBrandsPaymCHF[i] = 0;
+		aBrandsPaymGBP[i] = 0;
+	end;
+	
+	For(i=0;i<brandscnt;i=i+1) begin
+		DIr.Code = aBrands[i];
+		readfirstmain(DIr,1,true);
+		CUr.Name = DIr.Name;
+		readfirstkey("Name",CUr,1,true);
+		OPrsr.VECode = CUr.Code;
+		OPrsr.TransDate = sd;
+		
+		logtext(0,"CUr " & CUr.Code);
+		TrHs = true;
+		while(loopmain(OPrsr,2,TrHs))begin
+			testf = true;
+			if(OPrsr.VECode!=CUr.Code)then begin TrHs = false; testf = false; end;
+			if(OPrsr.TransDate>ed)then begin TrHs = false; testf = false; end;
+			if(OPrsr.TransType!=1)then begin testf = false; end;
+			
+			if(testf)then begin
+				LOGTEXT(0,"---" & OPrsr.VECode);
+				OPr.SerNr = OPrsr.TransNr;
+				logtext(0,OPrsr.TransNr);
+				if(readfirstmain(OPr,1,true))then begin
+					logtext(0," ***" & OPr.SerNr);
+					mtrw = matrowcnt(OPr);
+					for(j=0;j<mtrw;j=j+1)begin
+						matrowget(OPr,j,OPrw);
+						logtext(0,OPrw.VECode);
+						logtext(0,OPrsr.VINr);
+						logtext(0,OPrsr.ChequeNr);
+						if(OPrw.VECode==OPrsr.VECode)then begin
+							logtext(0,OPrw.RecCurncy);
+							logtext(0,OPrw.RecVal);
+							switch(OPrw.RecCurncy)begin
+								case "AZN": aBrandsPaymAZN[i] = aBrandsPaymAZN[i] + OPrw.RecVal;
+								case "EUR": aBrandsPaymEUR[i] = aBrandsPaymEUR[i] + OPrw.RecVal;
+								case "CHF":	aBrandsPaymCHF[i] = aBrandsPaymCHF[i] + OPrw.RecVal;
+								case "USD": aBrandsPaymUSD[i] = aBrandsPaymUSD[i] + OPrw.RecVal;
+								case "GBP": aBrandsPaymGBP[i] = aBrandsPaymGBP[i] + OPrw.RecVal;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+		resetloop(OPrsr);
+	end; 
+	
 	
 	startformat(15);
 		outstring(0,0,"6",false);
