@@ -4200,32 +4200,37 @@ begin
       if (mainr.IntYc==IVYc) begin
         IVr.SerNr = mainr.TransNr;
         if (ReadFirstMain(IVr,1,true)) then begin
-          if ((left(IVr.CustCode,3)!="FOB") and (blank(location) or (IVr.Location==location))) then begin
+          testf = true;
+          if (nonblank(location) and (Retr.Location!=location)) then begin testf = false; end;
+          if (left(IVr.CustCode,3)=="FOB") then begin
             CUr.Code = IVr.CustCode;
             readfirstmain(CUr,1,true);
             if (CUr.CustCat=="STORE") then begin
-              rwcnt = matrowcnt(IVr);
-              for (i=0;i<rwcnt;i=i+1) begin
-                matrowget(IVr,i,IVrw);
-                if ((IVrw.stp==kInvoiceRowTypeNormal) and (IVrw.Quant<0) and nonblank(IVrw.IVForRetNr)) then begin
-                  IV2r.SerNr=IVrw.IVForRetNr;
-                  if (readfirstmain(IV2r,1,true)) then begin
-                    if (IV2r.InvDate<sd) then begin
-                      INr.Code = IVrw.ArtCode;
-                      readfirstmain(INr,1,true);
-                      for (j=0;j<brandscnt;j=j+1) begin
-                        if(setinset(aBrands[j],INr.DispGroups))then begin
-                          if (IVrw.FIFORowValCur!=blankval) then begin
-                            cost[aBrands[j] & ":" & IVrw.CurncyCodeCur] = cost[aBrands[j] & ":" & IVrw.CurncyCodeCur] + IVrw.FIFORowValCur;
-                            cost["TOTVAL:" & IVrw.CurncyCodeCur] = cost["TOTVAL:" & IVrw.CurncyCodeCur] + IVrw.FIFORowValCur;
-                          end else begin
-                            IHr.ArtCode = IVrw.ArtCode;
-                            IHr.FileName = "IVVc";
-                            IHr.TransNr = IVr.SerNr;
-                            if readfirstkey("FutArtFile",IHr,3,true) then begin
-                              cost[aBrands[j] & ":" & IHr.CurncyCode] = cost[aBrands[j] & ":" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
-                              cost["TOTVAL:" & IHr.CurncyCode] = cost["TOTVAL:" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
-                            end;
+              testf = false;
+            end;
+          end;
+          if (testf) then begin
+            rwcnt = matrowcnt(IVr);
+            for (i=0;i<rwcnt;i=i+1) begin
+              matrowget(IVr,i,IVrw);
+              if ((IVrw.stp==kInvoiceRowTypeNormal) and (IVrw.Quant<0) and nonblank(IVrw.IVForRetNr)) then begin
+                IV2r.SerNr=IVrw.IVForRetNr;
+                if (readfirstmain(IV2r,1,true)) then begin
+                  if (IV2r.InvDate<sd) then begin
+                    INr.Code = IVrw.ArtCode;
+                    readfirstmain(INr,1,true);
+                    for (j=0;j<brandscnt;j=j+1) begin
+                      if(setinset(aBrands[j],INr.DispGroups))then begin
+                        if (IVrw.FIFORowValCur!=blankval) then begin
+                          cost[aBrands[j] & ":" & IVrw.CurncyCodeCur] = cost[aBrands[j] & ":" & IVrw.CurncyCodeCur] + IVrw.FIFORowValCur;
+                          cost["TOTVAL:" & IVrw.CurncyCodeCur] = cost["TOTVAL:" & IVrw.CurncyCodeCur] + IVrw.FIFORowValCur;
+                        end else begin
+                          IHr.ArtCode = IVrw.ArtCode;
+                          IHr.FileName = "IVVc";
+                          IHr.TransNr = IVr.SerNr;
+                          if readfirstkey("FutArtFile",IHr,3,true) then begin
+                            cost[aBrands[j] & ":" & IHr.CurncyCode] = cost[aBrands[j] & ":" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
+                            cost["TOTVAL:" & IHr.CurncyCode] = cost["TOTVAL:" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
                           end;
                         end;
                       end;
@@ -4246,29 +4251,35 @@ begin
     testf = true;
     if (Retr.TransDate>ed) then begin TrHs = false; testf = false; end;
     if (Retr.OKFlag!=1) then begin testf = false; end;
+    if (nonblank(location) and (Retr.Location!=location)) then begin testf = false; end;
+    if (left(IVr.CustCode,3)=="FOB") then begin
+      CUr.Code = IVr.CustCode;
+      readfirstmain(CUr,1,true);
+      if (CUr.CustCat=="STORE") then begin
+        testf = false;
+      end;
+    end;
 		if (testf) then begin
-      if ((blank(location) or (Retr.Location==location)) and (left(Retr.CustCode,3)!="FOB")) then begin
-        CUr.Code = Retr.CustCode;
-        readfirstmain(CUr,1,true);
-        if (CUr.CustCat=="STORE") then begin
-          if nonblank(Retr.SHNr) then begin
-            SHr.SerNr = Retr.SHNr;
-            if readfirstmain(SHr,1,true) then begin
-              if (SHr.ShipDate<sd) then begin
-                resetloop(IHr);
-                IHr.FileName = "RetVc";
-                IHr.TransNr = Retr.SerNr;
-                TrHs2 = true;
-                while (LoopKey("FNTransNr",IHr,2,TrHs2)) begin
-                  if ((IHr.FileName!="RetVc") or (IHr.TransNr!=Retr.SerNr)) then begin TrHs2 = false; end;
-                  if (TrHs2) then begin
-                    INr.Code = IHr.ArtCode;
-                    readfirstmain(INr,1,true);
-                    for (j=0;j<brandscnt;j=j+1) begin
-                      if(setinset(aBrands[j],INr.DispGroups))then begin
-                        cost[aBrands[j] & ":" & IHr.CurncyCode] = cost[aBrands[j] & ":" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
-                        cost["TOTVAL:" & IHr.CurncyCode] = cost["TOTVAL:" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
-                      end;
+      CUr.Code = Retr.CustCode;
+      readfirstmain(CUr,1,true);
+      if (CUr.CustCat=="STORE") then begin
+        if nonblank(Retr.SHNr) then begin
+          SHr.SerNr = Retr.SHNr;
+          if readfirstmain(SHr,1,true) then begin
+            if (SHr.ShipDate<sd) then begin
+              resetloop(IHr);
+              IHr.FileName = "RetVc";
+              IHr.TransNr = Retr.SerNr;
+              TrHs2 = true;
+              while (LoopKey("FNTransNr",IHr,2,TrHs2)) begin
+                if ((IHr.FileName!="RetVc") or (IHr.TransNr!=Retr.SerNr)) then begin TrHs2 = false; end;
+                if (TrHs2) then begin
+                  INr.Code = IHr.ArtCode;
+                  readfirstmain(INr,1,true);
+                  for (j=0;j<brandscnt;j=j+1) begin
+                    if(setinset(aBrands[j],INr.DispGroups))then begin
+                      cost[aBrands[j] & ":" & IHr.CurncyCode] = cost[aBrands[j] & ":" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
+                      cost["TOTVAL:" & IHr.CurncyCode] = cost["TOTVAL:" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
                     end;
                   end;
                 end;
