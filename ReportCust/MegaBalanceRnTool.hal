@@ -69,6 +69,64 @@ begin
 return;
 end;
 
+procedure CalcBal(date ed,string acc,var val BalAZN,var val BalEUR,var val BalUSD)
+begin
+	record MainVc Mainr;
+	record TRVc TRr;
+	row TRVc TRrw;
+	record FBVc FBr;
+	row FBVc FBrw;
+	boolean TrHs,testf;
+	integer i,mtrw;
+	
+	FBr.TransDate = "";
+	TrHs = true;
+	while(loopkey("TransSerNr",FBr,1,TrHs))begin
+		testf = true;
+		if(FBr.TransDate>ed)then begin TrHs = false; testf = false; end;
+		
+		if(testf)then begin
+			mtrw = matrowcnt(FBr);
+			For(i=0;i<mtrw;i=i+1) begin
+	  		matrowget(FBr,i,FBrw);
+	  		if(FBrw.AccNumber==acc)then begin
+	  			BalAZN = BalAZN + FBrw.DebVal - FBrw.CredVal;
+	  		end;
+			end; 
+		end;
+	end;
+	
+	Mainr.TransNr = "";
+	Mainr.AccNumber = acc;
+	TrHs = true;
+	while(loopmain(Mainr,2,TrHs))begin
+		testf = true;
+		if(Mainr.TransDate>ed)then begin TrHs = false; testf = false; end;
+		if(Mainr.AccNumber!=acc)then begin TrHs = false; testf = false; end;
+
+		if(testf)then begin
+			TRr.Number = Mainr.TransNr;
+			TRr.IntYc = Mainr.IntYc;
+			if(readfirstmain(TRr,2,true))then begin
+				mtrw = matrowcnt(TRr);
+				For(i=0;i<mtrw;i=i+1) begin
+	  			matrowget(TRr,i,TRrw);
+					if(TRrw.AccNumber==acc)then begin
+						switch(TRrw.Curncy)begin
+						case "AZN":BalAZN = BalAZN + TRrw.CurDebVal - TRrw.CurCredVal;
+						case "EUR":BalEUR = BalEUR + TRrw.CurDebVal - TRrw.CurCredVal;
+						case "USD":BalUSD = BalUSD + TRrw.CurDebVal - TRrw.CurCredVal;
+						otherwise BalAZN = BalAZN + TRrw.DebVal - TRrw.CredVal;
+						end;
+					end;
+				end; 
+			end;
+		end;
+	end;
+
+return;
+end;
+
 global
 procedure PrintStockVECred7(date ed,array val aVEVIAZN,array val aVEOPAZN,array val aVEVIEUR,array val aVEOPEUR,array val aVEVICHF,array val aVEOPCHF,array val aVEVIUSD,array val aVEOPUSD,integer brandscnt,var val totusd) 
 begin
@@ -458,7 +516,171 @@ begin
 return;
 end;
 
-// from PrintStockCLOut312 in the end of procedure
+global 
+procedure	PrintCLOut61(integer brandscnt,date sd, date ed,string location,array string aBrands)
+begin
+	string 10 incurncy;
+	record CLOutVc CLOutr;
+	boolean TrHs,testf;
+	array val BrandsCLOutAZN,BrandsCLOutEUR,BrandsCLOutUSD,BrandsCLOutCHF,BrandsCLOutGBP;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record ItemHistVc IHr;
+	integer i,mtrw,j,br;
+	record INVc INr;
+	array val SumEUR;
+	array val SumCHF;
+	array val SumUSD;
+	val TotSumUSD;
+	integer sign;
+	val rateusd,ratechf,rateeur,rategbp;
+	val t,fr,to1,to2,br1,br2;
+	string 10 curcode;
+	val totrow;
+	
+	
+	curcode = "USD";
+	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
+	rateusd = fr * to1;
+	
+	curcode = "CHF";
+	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
+	ratechf = fr * to1;
+	
+	curcode = "EUR";
+	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
+	rateeur = fr * to1;
+	
+	curcode = "CHF";
+	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
+	ratechf = fr * to1;
+	
+	curcode = "GBP";
+	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
+	rategbp = fr * to1;
+	
+	startformat(15);
+		outstring(0,0,"6.1",false);
+		outstring(0,0,"Оплата товара бутикам ювелирной Программы",false);
+	endformat;
+	
+	For(i=0;i<brandscnt;i=i+1) begin
+	  BrandsCLOutAZN[i] = 0;
+	  BrandsCLOutEUR[i] = 0;
+	  BrandsCLOutUSD[i] = 0;
+	  BrandsCLOutCHF[i] = 0;
+	  BrandsCLOutGBP[i] = 0;
+	end; 
+	
+	TrHs = true;
+	CLOutr.TransDate =sd;
+	while(loopkey("TransDate",CLOutr,1,TrHs))begin
+		testf = true;
+		if(CLOutr.TransDate>ed)then begin TrHs = false; testf = false; end;
+		if(CLOutr.OKFlag==0)then begin testf = false; end;
+		if(CLOutr.Invalid==1)then begin testf = false; end;
+		if(CLOutr.CorspCode!="76.08")then begin testf = false; end;
+	
+		if(testf)then begin
+			For(i=0;i<brandscnt;i=i+1) begin
+				if(setinset(CLOutr.Objects,aBrands[i]))then begin
+					switch(CLOutr.CurncyCode)begin
+						case"AZN":BrandsCLOutAZN[i] = BrandsCLOutAZN[i] + CLOutr.Total;
+											TotSumUSD = TotSumUSD + CLOutr.Total/rateusd;
+						case"EUR":BrandsCLOutEUR[i] = BrandsCLOutEUR[i] + CLOutr.Total;
+											TotSumUSD = TotSumUSD + CLOutr.Total*rateeur/rateusd;
+						case"USD":BrandsCLOutUSD[i] = BrandsCLOutUSD[i] + CLOutr.Total;
+											TotSumUSD = TotSumUSD + CLOutr.Total;
+						case"CHF":BrandsCLOutCHF[i] = BrandsCLOutCHF[i] + CLOutr.Total;
+											TotSumUSD = TotSumUSD + CLOutr.Total*ratechf/rateusd;
+						case"GBP":BrandsCLOutGBP[i] = BrandsCLOutGBP[i] + CLOutr.Total;
+											TotSumUSD = TotSumUSD + CLOutr.Total*rategbp/rateusd;
+					end;
+				end;
+			end; 
+		end;
+	end;
+		
+		
+		incurncy = "AZN";
+		totrow = 0;
+		For(i=0;i<brandscnt;i=i+1) begin
+			totrow = totrow + BrandsCLOutAZN[i];
+		end;
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(100,0,incurncy,false);
+			outstring(0,0,totrow,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  	outstring(150+i*50,0,BrandsCLOutAZN[i],false);
+	  	end;
+		endformat;
+		incurncy = "EUR";
+		totrow = 0;
+		For(i=0;i<brandscnt;i=i+1) begin
+			totrow = totrow + BrandsCLOutEUR[i];
+		end;
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(100,0,incurncy,false);
+			outstring(0,0,totrow,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  	outstring(150+i*50,0,BrandsCLOutEUR[i],false);
+	  	end;
+		endformat;
+		incurncy = "USD";
+		totrow = 0;
+		For(i=0;i<brandscnt;i=i+1) begin
+			totrow = totrow + BrandsCLOutUSD[i];
+		end;
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(100,0,incurncy,false);
+			outstring(0,0,totrow,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  	outstring(150+i*50,0,BrandsCLOutUSD[i],false);
+	  	end;
+		endformat;
+		incurncy = "CHF";
+		totrow = 0;
+		For(i=0;i<brandscnt;i=i+1) begin
+			totrow = totrow + BrandsCLOutCHF[i];
+		end;
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(100,0,incurncy,false);
+			outstring(0,0,totrow,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  	outstring(150+i*50,0,BrandsCLOutCHF[i],false);
+	  	end;
+		endformat;
+		incurncy = "GBP";
+		totrow = 0;
+		For(i=0;i<brandscnt;i=i+1) begin
+			totrow = totrow + BrandsCLOutGBP[i];
+		end;
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(100,0,incurncy,false);
+			outstring(0,0,totrow,false);
+			For(i=0;i<brandscnt;i=i+1) begin
+	  	outstring(150+i*50,0,BrandsCLOutGBP[i],false);
+	  	end;
+		endformat;
+		
+		
+		incurncy = "USD";
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(100,0,"Итого" & incurncy,false);
+	  	outstring(150+i*50,0,TotSumUSD,false);
+		endformat;
+	
+		
+return;
+end;
+
+// from PrintStockCLOut312 in end of procedure
 
 		IVr.CustCode = "FOB";
 		IVr.InvDate = sd;
@@ -1592,7 +1814,7 @@ begin
 	array val aBrandPercent;
 	boolean servitem;
 	
-	boolean TrHs,testf,TrHs1,testf1;
+	boolean TrHs,testf,TrHs1,testf1,addedf;
 	integer rwcnt,mtrw,i,j,keyi,ori;
 	record CUVc CUr;
 	record IPVc IPr;
@@ -1717,21 +1939,28 @@ begin
 					matrowget(IVr,i,IVrw);
 					if(IVrw.stp==kInvoiceRowTypeCashPayment)then begin
 						For(j=0;j<brandscnt;j=j+1) begin
-							if(left(IVr.CustCode,3)!="FOB")then begin
+              addedf = false;
+							if(left(IVr.CustCode,3)=="FOB")then begin
+                CUr.Code = IVr.CustCode;
+                readfirstmain(CUr,1,true);
+                if (CUr.CustCat=="STORE") then begin
+                  addedf = true;
+                  switch(IVrw.CurncyCode)begin
+                    case "EUR":aBrandsCashEURFOB[j] = aBrandsCashEURFOB[j] + IVrw.Sum * aBrandPercent[j];	
+                    case "AZN":aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IVrw.Sum * aBrandPercent[j];
+                    case "USD":aBrandsCashUSDFOB[j] = aBrandsCashUSDFOB[j] + IVrw.Sum * aBrandPercent[j];
+                    case "GBP":aBrandsCashGBPFOB[j] = aBrandsCashGBPFOB[j] + IVrw.Sum * aBrandPercent[j];
+                    case "CHF":aBrandsCashCHFFOB[j] = aBrandsCashCHFFOB[j] + IVrw.Sum * aBrandPercent[j];
+                  end;
+                end;
+              end;
+              if (!addedf) then begin
 								switch(IVrw.CurncyCode)begin
 									case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IVrw.Sum * aBrandPercent[j];	
 									case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IVrw.Sum * aBrandPercent[j];
 									case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IVrw.Sum * aBrandPercent[j];
 									case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IVrw.Sum * aBrandPercent[j];
 									case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IVrw.Sum * aBrandPercent[j];
-								end;
-							end else begin
-								switch(IVrw.CurncyCode)begin
-									case "EUR":aBrandsCashEURFOB[j] = aBrandsCashEURFOB[j] + IVrw.Sum * aBrandPercent[j];	
-									case "AZN":aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IVrw.Sum * aBrandPercent[j];
-									case "USD":aBrandsCashUSDFOB[j] = aBrandsCashUSDFOB[j] + IVrw.Sum * aBrandPercent[j];
-									case "GBP":aBrandsCashGBPFOB[j] = aBrandsCashGBPFOB[j] + IVrw.Sum * aBrandPercent[j];
-									case "CHF":aBrandsCashCHFFOB[j] = aBrandsCashCHFFOB[j] + IVrw.Sum * aBrandPercent[j];
 								end;
 							end;
 						end;
@@ -1741,10 +1970,17 @@ begin
 					end;
 					if(IVrw.stp==kInvoiceRowTypeCreditCardPayment and IVrw.Sum>0)then begin
 						For(j=0;j<brandscnt;j=j+1) begin
-							if(left(IVr.CustCode,3)!="FOB")then begin
+              addedf = false;
+							if(left(IVr.CustCode,3)=="FOB")then begin
+                CUr.Code = IVr.CustCode;
+                readfirstmain(CUr,1,true);
+                if (CUr.CustCat=="STORE") then begin
+                  addedf = true;
+                  aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IVrw.Sum * aBrandPercent[j];
+                end;
+							end;
+              if (!addedf) then begin
 								aBrandsCCAZN[j] = aBrandsCCAZN[j] + IVrw.Sum * aBrandPercent[j];
-							end else begin
-								aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IVrw.Sum * aBrandPercent[j];
 							end;
 						end;
 						if(servitem)then begin
@@ -1813,9 +2049,25 @@ begin
 									aBrandPercent[k] = aBrandPercent[k]/IVr.Sum4;
 								end;
 							
-							
-								if(left(IVr.CustCode,3)!="FOB")then begin
-									if(PMrw.AccNr=="50")then begin
+                addedf = false;
+								if(left(IVr.CustCode,3)=="FOB")then begin
+                  CUr.Code = IVr.CustCode;
+                  readfirstmain(CUr,1,true);
+                  if (CUr.CustCat=="STORE") then begin
+                    addedf = true;
+                    For(j=0;j<brandscnt;j=j+1) begin
+                      switch(IPrw.BankCurncy)begin
+                        case "EUR":aBrandsCashEURFOB[j] = aBrandsCashEURFOB[j] + IPrw.BankVal * aBrandPercent[j];	
+                        case "AZN":aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IPrw.BankVal * aBrandPercent[j];
+                        case "USD":aBrandsCashUSDFOB[j] = aBrandsCashUSDFOB[j] + IPrw.BankVal * aBrandPercent[j];
+                        case "GBP":aBrandsCashGBPFOB[j] = aBrandsCashGBPFOB[j] + IPrw.BankVal * aBrandPercent[j];
+                        case "CHF":aBrandsCashCHFFOB[j] = aBrandsCashCHFFOB[j] + IPrw.BankVal * aBrandPercent[j];
+                      end;
+                    end;
+                  end;
+                end;
+                if (!addedf) then begin
+                  if(PMrw.AccNr=="50")then begin
 										For(j=0;j<brandscnt;j=j+1) begin
 											if(dateinrange(IVr.InvDate,sd,ed))then begin
 												switch(IPrw.BankCurncy)begin
@@ -1849,17 +2101,6 @@ begin
 										if(servitem)then begin
 											servterm[IPrw.BankCurncy] = servterm[IPrw.BankCurncy] +  IPrw.BankVal*servprc;
 										end; 
-									end;
-							
-								end else begin
-									For(j=0;j<brandscnt;j=j+1) begin
-										switch(IPrw.BankCurncy)begin
-											case "EUR":aBrandsCashEURFOB[j] = aBrandsCashEURFOB[j] + IPrw.BankVal * aBrandPercent[j];	
-											case "AZN":aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IPrw.BankVal * aBrandPercent[j];
-											case "USD":aBrandsCashUSDFOB[j] = aBrandsCashUSDFOB[j] + IPrw.BankVal * aBrandPercent[j];
-											case "GBP":aBrandsCashGBPFOB[j] = aBrandsCashGBPFOB[j] + IPrw.BankVal * aBrandPercent[j];
-											case "CHF":aBrandsCashCHFFOB[j] = aBrandsCashCHFFOB[j] + IPrw.BankVal * aBrandPercent[j];
-										end;
 									end;
 								end;
 							
@@ -1913,39 +2154,41 @@ begin
 							For(k=0;k<brandscnt;k=k+1) begin
 								aBrandPercent[k] = aBrandPercent[k]/Sum4;
 							end;
-								
-							if(left(IVr.CustCode,3)!="FOB")then begin
-									if(PMrw.AccNr=="50")then begin
-										if(true)then begin
-											For(j=0;j<brandscnt;j=j+1) begin
-												switch(IPrw.BankCurncy)begin
-													case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IPrw.BankVal * aBrandPercent[j];	
-													case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IPrw.BankVal * aBrandPercent[j];
-													case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IPrw.BankVal * aBrandPercent[j];
-													case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IPrw.BankVal * aBrandPercent[j];
-													case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IPrw.BankVal * aBrandPercent[j];
-												end;
-											end;
-										end else begin
-											servcash[IPrw.BankCurncy] = servcash[IPrw.BankCurncy] +  IPrw.BankVal;
-										end;
-									end else begin
-										if(true)then begin
-											For(j=0;j<brandscnt;j=j+1) begin
-												switch(IPrw.BankCurncy)begin
-													case "EUR":aBrandsCashEURFOB[j] = aBrandsCashEURFOB[j] + IPrw.BankVal * aBrandPercent[j];	
-													case "AZN":aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IPrw.BankVal * aBrandPercent[j];
-													case "USD":aBrandsCashUSDFOB[j] = aBrandsCashUSDFOB[j] + IPrw.BankVal * aBrandPercent[j];
-													case "GBP":aBrandsCashGBPFOB[j] = aBrandsCashGBPFOB[j] + IPrw.BankVal * aBrandPercent[j];
-													case "CHF":aBrandsCashCHFFOB[j] = aBrandsCashCHFFOB[j] + IPrw.BankVal * aBrandPercent[j];
-												end;
-											end;
-										end else begin
-											servterm[IPrw.BankCurncy] = servterm[IPrw.BankCurncy] +  IPrw.BankVal;
-										end;
-									end;
-							end else begin
-								servcashfob[IPrw.BankCurncy] = servcashfob[IPrw.BankCurncy] + IPrw.BankVal;
+              addedf = false;
+							if(left(IVr.CustCode,3)=="FOB")then begin
+                CUr.Code = IVr.CustCode;
+                readfirstmain(CUr,1,true);
+                if (CUr.CustCat=="STORE") then begin
+                  addedf = true;
+                  servcashfob[IPrw.BankCurncy] = servcashfob[IPrw.BankCurncy] + IPrw.BankVal;
+                end;
+              end;
+              if (!addedf) then begin
+                if(PMrw.AccNr=="50")then begin
+                  if(true)then begin
+                    For(j=0;j<brandscnt;j=j+1) begin
+                      switch(IPrw.BankCurncy)begin
+                        case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IPrw.BankVal * aBrandPercent[j];	
+                        case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IPrw.BankVal * aBrandPercent[j];
+                        case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IPrw.BankVal * aBrandPercent[j];
+                        case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IPrw.BankVal * aBrandPercent[j];
+                        case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IPrw.BankVal * aBrandPercent[j];
+                      end;
+                    end;
+                  end else begin
+                    servcash[IPrw.BankCurncy] = servcash[IPrw.BankCurncy] +  IPrw.BankVal;
+                  end;
+                end else begin
+                  For(j=0;j<brandscnt;j=j+1) begin
+                    switch(IPrw.BankCurncy)begin
+                      case "EUR":aBrandsCashEURFOB[j] = aBrandsCashEURFOB[j] + IPrw.BankVal * aBrandPercent[j];	
+                      case "AZN":aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IPrw.BankVal * aBrandPercent[j];
+                      case "USD":aBrandsCashUSDFOB[j] = aBrandsCashUSDFOB[j] + IPrw.BankVal * aBrandPercent[j];
+                      case "GBP":aBrandsCashGBPFOB[j] = aBrandsCashGBPFOB[j] + IPrw.BankVal * aBrandPercent[j];
+                      case "CHF":aBrandsCashCHFFOB[j] = aBrandsCashCHFFOB[j] + IPrw.BankVal * aBrandPercent[j];
+                    end;
+                  end;
+                end;
 							end;
 						end;
 					end;
@@ -2282,6 +2525,7 @@ begin
 	record INVc INr;
 	val cursum;
 	string 100 incurncy;
+  record CUVc CUr;
 	
 	For(i=0;i<brandscnt;i=i+1) begin
 	  aBrandsCashEUR[i] = 0;
@@ -2299,7 +2543,13 @@ begin
 			if(nonblank(location) and IVr.Location!=location)then begin testf = false; end;
 			if(IVr.OKFlag!=1)then begin testf = false; end;
 			if(IVr.InvType!=1 and IVr.InvType!=3)then begin testf = false; end;
-			if(left(IVr.CustCode,3)=="FOB")then begin testf = false; end;
+			if(left(IVr.CustCode,3)=="FOB")then begin
+        CUr.Code = IVr.CustCode;
+        readfirstmain(CUr,1,true);
+        if (CUr.CustCat=="STORE") then begin
+          testf = false;
+        end;
+      end;
 			
 			if(testf)then begin
 				mtrw = matrowcnt(IVr);
@@ -2554,64 +2804,6 @@ begin
 			outstring(100,0,cursum*fr/to1,false);
 		endformat;
 		sumusd = sumusd + cursum*fr/to1;
-
-return;
-end;
-
-procedure CalcBal(date ed,string acc,var val BalAZN,var val BalEUR,var val BalUSD)
-begin
-	record MainVc Mainr;
-	record TRVc TRr;
-	row TRVc TRrw;
-	record FBVc FBr;
-	row FBVc FBrw;
-	boolean TrHs,testf;
-	integer i,mtrw;
-	
-	FBr.TransDate = "";
-	TrHs = true;
-	while(loopkey("TransSerNr",FBr,1,TrHs))begin
-		testf = true;
-		if(FBr.TransDate>ed)then begin TrHs = false; testf = false; end;
-		
-		if(testf)then begin
-			mtrw = matrowcnt(FBr);
-			For(i=0;i<mtrw;i=i+1) begin
-	  		matrowget(FBr,i,FBrw);
-	  		if(FBrw.AccNumber==acc)then begin
-	  			BalAZN = BalAZN + FBrw.DebVal - FBrw.CredVal;
-	  		end;
-			end; 
-		end;
-	end;
-	
-	Mainr.TransNr = "";
-	Mainr.AccNumber = acc;
-	TrHs = true;
-	while(loopmain(Mainr,2,TrHs))begin
-		testf = true;
-		if(Mainr.TransDate>ed)then begin TrHs = false; testf = false; end;
-		if(Mainr.AccNumber!=acc)then begin TrHs = false; testf = false; end;
-
-		if(testf)then begin
-			TRr.Number = Mainr.TransNr;
-			TRr.IntYc = Mainr.IntYc;
-			if(readfirstmain(TRr,2,true))then begin
-				mtrw = matrowcnt(TRr);
-				For(i=0;i<mtrw;i=i+1) begin
-	  			matrowget(TRr,i,TRrw);
-					if(TRrw.AccNumber==acc)then begin
-						switch(TRrw.Curncy)begin
-						case "AZN":BalAZN = BalAZN + TRrw.CurDebVal - TRrw.CurCredVal;
-						case "EUR":BalEUR = BalEUR + TRrw.CurDebVal - TRrw.CurCredVal;
-						case "USD":BalUSD = BalUSD + TRrw.CurDebVal - TRrw.CurCredVal;
-						otherwise BalAZN = BalAZN + TRrw.DebVal - TRrw.CredVal;
-						end;
-					end;
-				end; 
-			end;
-		end;
-	end;
 
 return;
 end;
@@ -2984,6 +3176,7 @@ begin
 	boolean consig; 
 	record IVVc IVr;
 	record SHVc SHr;
+  record CUVc CUr;
 	
 	For(i=0;i<brandscnt;i=i+1) begin
 		aBrandsRetEUR[i]= 0;
@@ -3042,7 +3235,11 @@ begin
 					IVr.SerNr = IHr.TransNr;
 					if(readfirstmain(IVr,1,true))then begin
 						if(left(IVr.CustCode,3)=="FOB")then begin
-							testf = false;
+              CUr.Code = IVr.CustCode;
+              readfirstmain(CUr,1,true);
+              if (CUr.CustCat=="STORE") then begin
+                testf = false;
+              end;
 						end;
 					end;
 				end;
@@ -3050,7 +3247,11 @@ begin
 					SHr.SerNr = IHr.TransNr;
 					if(readfirstmain(SHr,1,true))then begin
 						if(left(SHr.CustCode,3)=="FOB")then begin
-							testf = false;
+              CUr.Code = SHr.CustCode;
+              readfirstmain(CUr,1,true);
+              if (CUr.CustCat=="STORE") then begin
+                testf = false;
+              end;
 						end;
 					end;
 				end;
@@ -3614,165 +3815,164 @@ end;
 global 
 procedure	PrintCLOut61(integer brandscnt,date sd, date ed,string location,array string aBrands)
 begin
-	string 10 incurncy;
-	record CLOutVc CLOutr;
-	boolean TrHs,testf;
-	array val BrandsCLOutAZN,BrandsCLOutEUR,BrandsCLOutUSD,BrandsCLOutCHF,BrandsCLOutGBP;
-	record IVVc IVr;
-	row IVVc IVrw;
-	record ItemHistVc IHr;
-	integer i,mtrw,j,br;
-	record INVc INr;
-	array val SumEUR;
-	array val SumCHF;
-	array val SumUSD;
-	val TotSumUSD;
-	integer sign;
-	val rateusd,ratechf,rateeur,rategbp;
-	val t,fr,to1,to2,br1,br2;
-	string 10 curcode;
-	val totrow;
-	
-	
-	curcode = "USD";
-	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
-	rateusd = fr * to1;
-	
-	curcode = "CHF";
-	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
-	ratechf = fr * to1;
-	
-	curcode = "EUR";
-	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
-	rateeur = fr * to1;
-	
-	curcode = "CHF";
-	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
-	ratechf = fr * to1;
-	
-	curcode = "GBP";
-	GetFullCurncyRate(curcode,ed,fr,to1,to2,br1,br2);
-	rategbp = fr * to1;
-	
-	startformat(15);
+  array string 10 TmpList;
+  boolean TrHs,testf;
+  record CLInVc CLInr;
+  record CLOutVc CLOutr;
+  record CUVc CUr;
+  record DIVc DIr;
+  record INVc INr;
+  record OPVc OPr;
+  record VIVc VIr;
+  row CLInVc CLInrw;
+  row CLOutVc CLOutrw;
+  row OPVc OPrw;
+  row VIVc VIrw;
+  integer i,j,k,rwcnt,rwcnt2;
+  string 10 brand;
+  val tmpval,fr,to1,to2,br1,br2;
+  vector string 10 aBrandsObj;
+  vector val fobpaym;
+  
+  for (i=0;i<aBrands.length;i=i+1) begin
+    DIr.Code = aBrands[i];
+    readfirstmain(DIr,1,true);
+    CUr.Name = DIr.Name;
+    readfirstkey("Name",CUr,1,true);
+    aBrandsObj[CUr.VEObjects] = aBrands[i];
+  end;
+  
+  resetloop(OPr);
+  TrHs = true;
+  OPr.TransDate = sd;
+  while (loopkey("TransDate",OPr,1,TrHs)) begin
+    testf = true;
+    if (OPr.TransDate>ed) then begin TrHs = false; testf = false; end;
+    if (OPr.DoneFlag!=1) then begin testf = false; end;
+    if (testf) then begin
+      rwcnt = MatRowCnt(OPr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(OPr,i,OPrw);
+        if ((OPrw.stp==kPaymentRowTypeNormal) and (left(OPrw.VECode,3)=="FOB")) then begin
+          CUr.Code = OPrw.VECode;
+          readfirstmain(CUr,1,true);
+          if (CUr.CustCat=="STORE") then begin
+            if (OPrw.VISerNr!=-1) then begin
+              VIr.SerNr = OPrw.VISerNr;
+              ReadFirstMain(VIr,1,true);
+              rwcnt2 = matrowcnt(VIr);
+              tmpval = VIr.PayVal;
+              for (j=0;j<rwcnt2;j=j+1) begin
+                matrowget(VIr,j,VIrw);
+                if blank(VIrw.Item) then begin
+                  tmpval = tmpval - VIrw.Sum;
+                end;
+              end;
+              for (j=0;j<rwcnt2;j=j+1) begin
+                matrowget(VIr,j,VIrw);
+                if nonblank(VIrw.Item) then begin
+                  INr.Code = VIrw.Item;
+                  readfirstmain(INr,1,true);
+                  for (k=0;k<brandscnt;k=k+1) begin
+                    if(setinset(aBrands[k],INr.DispGroups))then begin
+                      fobpaym[OPrw.RecCurncy & ":" & aBrands[k]] = fobpaym[OPrw.RecCurncy & ":" & aBrands[k]] + OPrw.RecVal*VIrw.Sum/tmpval;
+                      fobpaym[OPrw.RecCurncy & ":TOTVAL"] = fobpaym[OPrw.RecCurncy & ":TOTVAL"] + OPrw.RecVal*VIrw.Sum/tmpval;
+                    end;
+                  end;
+                end;
+              end;
+            end else begin
+              fobpaym[OPrw.RecCurncy & ":TOTVAL"] = fobpaym[OPrw.RecCurncy & ":TOTVAL"] + OPrw.RecVal*VIrw.Sum/tmpval;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  resetloop(CLOutr);
+  TrHs = true;
+  CLOutr.TransDate = sd;
+	while(loopkey("TransDate",CLOutr,1,TrHs))begin
+		testf = true;
+		if (CLOutr.TransDate>ed) then begin TrHs = false; testf = false; end;
+		if (CLOutr.OKFlag==0) then begin testf = false; end;
+		if (CLOutr.Invalid==1) then begin testf = false; end;
+    if (testf) then begin
+      rwcnt = matrowcnt(CLOutr);
+      brand = "";
+      GetObjs("BRAND",CLOutr.Objects,brand);
+      for (i=0;i<rwcnt;i=i+1) begin
+        matrowget(CLOutr,i,CLOutrw);
+        if setinset("E98",CLOutrw.CorspCode) then begin
+          if nonblank(brand) then begin
+            fobpaym[CLOutr.CurncyCode & ":" & aBrandsObj[brand]] = fobpaym[CLOutr.CurncyCode & ":" & aBrandsObj[brand]] + CLOutrw.Sum;
+          end;
+          fobpaym[CLOutr.CurncyCode & ":TOTVAL"] = fobpaym[CLOutr.CurncyCode & ":TOTVAL"] + CLOutrw.Sum;
+        end;
+      end;
+    end;
+  end;
+  
+  resetloop(CLInr);
+  TrHs = true;
+  CLInr.TransDate = sd;
+	while(loopkey("TransDate",CLInr,1,TrHs))begin
+		testf = true;
+		if (CLInr.TransDate>ed) then begin TrHs = false; testf = false; end;
+		if (CLInr.OKFlag==0) then begin testf = false; end;
+		if (CLInr.Invalid==1) then begin testf = false; end;
+    if (testf) then begin
+      brand = "";
+      GetObjs("BRAND",CLInr.Objects,brand);
+      rwcnt = matrowcnt(CLInr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        matrowget(CLInr,i,CLInrw);
+        if setinset("E98",CLInrw.CorspCode) then begin
+          if nonblank(brand) then begin
+            fobpaym[CLInr.CurncyCode & ":" & aBrandsObj[brand]] = fobpaym[CLInr.CurncyCode & ":" & aBrandsObj[brand]] + CLOutrw.Sum;
+          end;
+          fobpaym[CLInr.CurncyCode & ":TOTVAL"] = fobpaym[CLInr.CurncyCode & ":TOTVAL"] - CLInrw.Sum;
+        end;
+      end;
+    end;
+  end;
+  
+  startformat(15);
 		outstring(0,0,"6.1",false);
 		outstring(0,0,"Оплата товара бутикам ювелирной Программы",false);
 	endformat;
-	
-	For(i=0;i<brandscnt;i=i+1) begin
-	  BrandsCLOutAZN[i] = 0;
-	  BrandsCLOutEUR[i] = 0;
-	  BrandsCLOutUSD[i] = 0;
-	  BrandsCLOutCHF[i] = 0;
-	  BrandsCLOutGBP[i] = 0;
-	end; 
-	
-	TrHs = true;
-	CLOutr.TransDate =sd;
-	while(loopkey("TransDate",CLOutr,1,TrHs))begin
-		testf = true;
-		if(CLOutr.TransDate>ed)then begin TrHs = false; testf = false; end;
-		if(CLOutr.OKFlag==0)then begin testf = false; end;
-		if(CLOutr.Invalid==1)then begin testf = false; end;
-		if(CLOutr.CorspCode!="76.08")then begin testf = false; end;
-	
-		if(testf)then begin
-			For(i=0;i<brandscnt;i=i+1) begin
-				if(setinset(CLOutr.Objects,aBrands[i]))then begin
-					switch(CLOutr.CurncyCode)begin
-						case"AZN":BrandsCLOutAZN[i] = BrandsCLOutAZN[i] + CLOutr.Total;
-											TotSumUSD = TotSumUSD + CLOutr.Total/rateusd;
-						case"EUR":BrandsCLOutEUR[i] = BrandsCLOutEUR[i] + CLOutr.Total;
-											TotSumUSD = TotSumUSD + CLOutr.Total*rateeur/rateusd;
-						case"USD":BrandsCLOutUSD[i] = BrandsCLOutUSD[i] + CLOutr.Total;
-											TotSumUSD = TotSumUSD + CLOutr.Total;
-						case"CHF":BrandsCLOutCHF[i] = BrandsCLOutCHF[i] + CLOutr.Total;
-											TotSumUSD = TotSumUSD + CLOutr.Total;
-						case"GBP":BrandsCLOutGBP[i] = BrandsCLOutGBP[i] + CLOutr.Total;
-											TotSumUSD = TotSumUSD + CLOutr.Total;
-					end;
-				end;
-			end; 
-		end;
-	end;
-		
-		
-		incurncy = "AZN";
-		totrow = 0;
-		For(i=0;i<brandscnt;i=i+1) begin
-			totrow = totrow + BrandsCLOutAZN[i];
-		end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(i=0;i<brandscnt;i=i+1) begin
-	  	outstring(150+i*50,0,BrandsCLOutAZN[i],false);
-	  	end;
-		endformat;
-		incurncy = "EUR";
-		totrow = 0;
-		For(i=0;i<brandscnt;i=i+1) begin
-			totrow = totrow + BrandsCLOutEUR[i];
-		end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(i=0;i<brandscnt;i=i+1) begin
-	  	outstring(150+i*50,0,BrandsCLOutEUR[i],false);
-	  	end;
-		endformat;
-		incurncy = "USD";
-		totrow = 0;
-		For(i=0;i<brandscnt;i=i+1) begin
-			totrow = totrow + BrandsCLOutUSD[i];
-		end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(i=0;i<brandscnt;i=i+1) begin
-	  	outstring(150+i*50,0,BrandsCLOutUSD[i],false);
-	  	end;
-		endformat;
-		incurncy = "CHF";
-		totrow = 0;
-		For(i=0;i<brandscnt;i=i+1) begin
-			totrow = totrow + BrandsCLOutCHF[i];
-		end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(i=0;i<brandscnt;i=i+1) begin
-	  	outstring(150+i*50,0,BrandsCLOutCHF[i],false);
-	  	end;
-		endformat;
-		incurncy = "GBP";
-		totrow = 0;
-		For(i=0;i<brandscnt;i=i+1) begin
-			totrow = totrow + BrandsCLOutGBP[i];
-		end;
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,incurncy,false);
-			outstring(0,0,totrow,false);
-			For(i=0;i<brandscnt;i=i+1) begin
-	  	outstring(150+i*50,0,BrandsCLOutGBP[i],false);
-	  	end;
-		endformat;
-		
-		
-		incurncy = "USD";
-		startformat(15);
-			outstring(0,0,"",false);
-			outstring(100,0,"Итого" & incurncy,false);
-	  	outstring(150+i*50,0,TotSumUSD,false);
-		endformat;
-	
-		
-return;
+  
+  TmpList[0] = "AZN";
+  TmpList[1] = "EUR";
+  TmpList[2] = "CHF";
+  TmpList[3] = "USD";
+  TmpList[4] = "GBP";
+  tmpval = 0;
+  for(i=0;i<TmpList.length;i=i+1) begin
+    startformat(15);
+      outstring(0,0,"",false);
+      outstring(50,0,TmpList[i],false);
+      outstring(100,0,fobpaym[TmpList[i] & ":TOTVAL"],false);
+      for(j=0;j<aBrands.length;j=j+1) begin
+        outstring(150+50*j,0,fobpaym[TmpList[i] & ":" & aBrands[j]],false);
+      end;
+      GetFullCurncyRate(TmpList[i],ed,fr,to1,to2,br1,br2);
+      if ((fr==0) or (to1==0)) then begin
+        fr = 1;
+        to1 = 1;
+      end;
+      tmpval = tmpval + fobpaym[TmpList[i] & ":TOTVAL"]/fr*to1;
+    endformat;
+  end;
+  GetFullCurncyRate(TmpList[3],ed,fr,to1,to2,br1,br2);// usd
+  tmpval = tmpval*fr/to1;
+  startformat(15);
+    outstring(0,0,"",false);
+    outstring(50,0,"Итого USD",false);
+    outstring(100,0,tmpval,false);
+  endformat;
+  
+  return;
 end;
 
 global
@@ -3818,7 +4018,7 @@ BEGIN
     mainr.AccNumber = TmpList[TLi];
     TrHs = true;
     while (LoopMain(mainr,1,TrHs)) begin
-      if ((mainr.AccNumber != TmpList[TLi]) or (mainr.TransDate > RepSpec.sEndDate)) then begin
+      if ((mainr.AccNumber!=TmpList[TLi]) or (mainr.TransDate>RepSpec.sEndDate)) then begin
         TrHs = false;	
       end;
       if (TrHs) then begin
@@ -3949,7 +4149,7 @@ begin
     startformat(15);
       outstring(0,0,"",false);
       outstring(50,0,TmpList[i],false);
-      outstring(100,0,vtot1Sum["TOTAL:" & TmpList[i]],false);
+      outstring(100,0,vtot1Sum["TOTVAL:" & TmpList[i]],false);
       for(j=0;j<aBrands.length;j=j+1) begin
         outstring(150+50*j,0,vtot1Sum[aBrands[j] & ":" & TmpList[i]],false);
       end;
@@ -3958,7 +4158,7 @@ begin
         fr = 1;
         to1 = 1;
       end;
-      total = total + vtot1Sum["TOTAL:" & TmpList[i]]/fr*to1;
+      total = total + vtot1Sum["TOTVAL:" & TmpList[i]]/fr*to1;
     endformat;
   end;
   GetFullCurncyRate(TmpList[3],ed,fr,to1,to2,br1,br2);// usd
@@ -3977,14 +4177,15 @@ global
 procedure PrintStockRetFob9New(integer brandscnt,date sd, date ed,string location,array string aBrands)
 begin
   array string 5 TmpList;
-  boolean TrHs,TrHs2;
+  boolean TrHs,TrHs2,testf;
   integer i,j,rwcnt;
-  record MainVc mainr;
-  record IVVc IVr,IV2r;
+  record CUVc CUr;
   record INVc INr;
+  record IVVc IVr,IV2r;
+  record ItemHistVc IHr;
+  record MainVc mainr;
   record RetVc Retr;
   record SHVc SHr;
-  record ItemHistVc IHr;
   row IVVc IVrw;
   val tmpval,fr,to1,to2,br1,br2;
   vector val cost;
@@ -4000,27 +4201,31 @@ begin
         IVr.SerNr = mainr.TransNr;
         if (ReadFirstMain(IVr,1,true)) then begin
           if ((left(IVr.CustCode,3)!="FOB") and (blank(location) or (IVr.Location==location))) then begin
-            rwcnt = matrowcnt(IVr);
-            for (i=0;i<rwcnt;i=i+1) begin
-              matrowget(IVr,i,IVrw);
-              if ((IVrw.stp==kInvoiceRowTypeNormal) and (IVrw.Quant<0) and nonblank(IVrw.IVForRetNr)) then begin
-                IV2r.SerNr=IVrw.IVForRetNr;
-                if (readfirstmain(IV2r,1,true)) then begin
-                  if (IV2r.InvDate<sd) then begin
-                    INr.Code = IVrw.ArtCode;
-                    readfirstmain(INr,1,true);
-                    for (j=0;j<brandscnt;j=j+1) begin
-                      if(setinset(aBrands[j],INr.DispGroups))then begin
-                        if (IVrw.FIFORowValCur!=blankval) then begin
-                          cost[aBrands[j] & ":" & IVrw.CurncyCodeCur] = cost[aBrands[j] & ":" & IVrw.CurncyCodeCur] + IVrw.FIFORowValCur;
-                          cost["TOTVAL:" & IVrw.CurncyCodeCur] = cost["TOTVAL:" & IVrw.CurncyCodeCur] + IVrw.FIFORowValCur;
-                        end else begin
-                          IHr.ArtCode = IVrw.ArtCode;
-                          IHr.FileName = "IVVc";
-                          IHr.TransNr = IVr.SerNr;
-                          if readfirstkey("FutArtFile",IHr,3,true) then begin
-                            cost[aBrands[j] & ":" & IHr.CurncyCode] = cost[aBrands[j] & ":" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
-                            cost["TOTVAL:" & IHr.CurncyCode] = cost["TOTVAL:" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
+            CUr.Code = IVr.CustCode;
+            readfirstmain(CUr,1,true);
+            if (CUr.CustCat=="STORE") then begin
+              rwcnt = matrowcnt(IVr);
+              for (i=0;i<rwcnt;i=i+1) begin
+                matrowget(IVr,i,IVrw);
+                if ((IVrw.stp==kInvoiceRowTypeNormal) and (IVrw.Quant<0) and nonblank(IVrw.IVForRetNr)) then begin
+                  IV2r.SerNr=IVrw.IVForRetNr;
+                  if (readfirstmain(IV2r,1,true)) then begin
+                    if (IV2r.InvDate<sd) then begin
+                      INr.Code = IVrw.ArtCode;
+                      readfirstmain(INr,1,true);
+                      for (j=0;j<brandscnt;j=j+1) begin
+                        if(setinset(aBrands[j],INr.DispGroups))then begin
+                          if (IVrw.FIFORowValCur!=blankval) then begin
+                            cost[aBrands[j] & ":" & IVrw.CurncyCodeCur] = cost[aBrands[j] & ":" & IVrw.CurncyCodeCur] + IVrw.FIFORowValCur;
+                            cost["TOTVAL:" & IVrw.CurncyCodeCur] = cost["TOTVAL:" & IVrw.CurncyCodeCur] + IVrw.FIFORowValCur;
+                          end else begin
+                            IHr.ArtCode = IVrw.ArtCode;
+                            IHr.FileName = "IVVc";
+                            IHr.TransNr = IVr.SerNr;
+                            if readfirstkey("FutArtFile",IHr,3,true) then begin
+                              cost[aBrands[j] & ":" & IHr.CurncyCode] = cost[aBrands[j] & ":" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
+                              cost["TOTVAL:" & IHr.CurncyCode] = cost["TOTVAL:" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
+                            end;
                           end;
                         end;
                       end;
@@ -4038,26 +4243,32 @@ begin
   Retr.TransDate = sd;
   TrHs = true;
 	while (LoopKey("TransDate",Retr,1,TrHs)) begin
-    if (Retr.TransDate>ed) then begin TrHs = false; end;
-		if (TrHs) then begin
+    testf = true;
+    if (Retr.TransDate>ed) then begin TrHs = false; testf = false; end;
+    if (Retr.OKFlag!=1) then begin testf = false; end;
+		if (testf) then begin
       if ((blank(location) or (Retr.Location==location)) and (left(Retr.CustCode,3)!="FOB")) then begin
-        if nonblank(Retr.SHNr) then begin
-          SHr.SerNr = Retr.SHNr;
-          if readfirstmain(SHr,1,true) then begin
-            if (SHr.ShipDate<sd) then begin
-              resetloop(IHr);
-              IHr.FileName = "RetVc";
-              IHr.TransNr = Retr.SerNr;
-              TrHs2 = true;
-              while (LoopKey("FNTransNr",IHr,2,TrHs2)) begin
-                if ((IHr.FileName!="RetVc") or (IHr.TransNr!=Retr.SerNr)) then begin TrHs2 = false; end;
-                if (TrHs2) then begin
-                  INr.Code = IHr.ArtCode;
-                  readfirstmain(INr,1,true);
-                  for (j=0;j<brandscnt;j=j+1) begin
-                    if(setinset(aBrands[j],INr.DispGroups))then begin
-                      cost[aBrands[j] & ":" & IHr.CurncyCode] = cost[aBrands[j] & ":" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
-                      cost["TOTVAL:" & IHr.CurncyCode] = cost["TOTVAL:" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
+        CUr.Code = Retr.CustCode;
+        readfirstmain(CUr,1,true);
+        if (CUr.CustCat=="STORE") then begin
+          if nonblank(Retr.SHNr) then begin
+            SHr.SerNr = Retr.SHNr;
+            if readfirstmain(SHr,1,true) then begin
+              if (SHr.ShipDate<sd) then begin
+                resetloop(IHr);
+                IHr.FileName = "RetVc";
+                IHr.TransNr = Retr.SerNr;
+                TrHs2 = true;
+                while (LoopKey("FNTransNr",IHr,2,TrHs2)) begin
+                  if ((IHr.FileName!="RetVc") or (IHr.TransNr!=Retr.SerNr)) then begin TrHs2 = false; end;
+                  if (TrHs2) then begin
+                    INr.Code = IHr.ArtCode;
+                    readfirstmain(INr,1,true);
+                    for (j=0;j<brandscnt;j=j+1) begin
+                      if(setinset(aBrands[j],INr.DispGroups))then begin
+                        cost[aBrands[j] & ":" & IHr.CurncyCode] = cost[aBrands[j] & ":" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
+                        cost["TOTVAL:" & IHr.CurncyCode] = cost["TOTVAL:" & IHr.CurncyCode] + IHr.TotCostPriceCurncy;
+                      end;
                     end;
                   end;
                 end;
