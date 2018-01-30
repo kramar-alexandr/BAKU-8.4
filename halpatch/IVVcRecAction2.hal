@@ -103,6 +103,51 @@ external updating procedure RoyaltyIVRemoved(record IVVc);
 external function Boolean FindSubString( string, string); //Edit----------------------Dima  27.02.2015
 external updating procedure UnOk_IVVc(var record IVVc);	//Edit----------------------Dima  24.12.2015
 
+
+global updating procedure CreateGlobalGift(record IVVc IVr)
+begin
+	record GlobalGiftVaucherVc GGVr;
+	row IVVc IVrw;
+	integer i,mtrw;
+	
+	mtrw = matrowcnt(IVr);
+	For(i=0;i<mtrw;i=i+1) begin
+	  matrowget(IVr,i,IVrw);
+	  if(IVrw.ArtCode=="GLOBALGIFTCARD")then begin
+	  	GGVr.BarCode = IVrw.SerialNr;
+	  	GGVr.Program = "FIRST";
+	  	GGVr.Bal = IVrw.Price;
+	  	GGVr.TotBalance = IVrw.Price;
+	  	GGVr.StartDate = IVr.InvDate;
+	  	GGVr.EndDate = addyear(IVr.InvDate,1);
+	  end;
+	end; 
+
+return;
+end;
+
+global updating procedure DeleteGlobalGift(record IVVc IVr)
+begin
+	record GlobalGiftVaucherVc GGVr;
+	row IVVc IVrw;
+	integer i,mtrw;
+	
+	mtrw = matrowcnt(IVr);
+	For(i=0;i<mtrw;i=i+1) begin
+	  matrowget(IVr,i,IVrw);
+	  if(IVrw.ArtCode=="GLOBALGIFTCARD")then begin
+	  	GGVr.BarCode = IVrw.SerialNr;
+	  	GGVr.Program = "FIRST";
+	  	if(readfirstkey("BarCode",GGVr,2,true))then begin
+	  		recorddelete(GGVr);
+	  	end;
+	  end;
+	end; 
+
+return;
+end;
+
+
 updating procedure AddToCustomerAccount(record IVVc IVr)
 begin
   record CUAccountSettBlock CUAccountSettb;
@@ -595,6 +640,7 @@ begin
 
   if (IVr.Invalid==0) then begin
     if (IVr.OKFlag!=0) then begin
+    	CreateGlobalGift(IVr);
       IVUpdateItemHist(IVr);
       IVUpdateCashupHist(IVr);
       IVUpdateSerialNr(IVr,false,true);
@@ -1232,6 +1278,12 @@ BEGIN
   end;
   
 	// Edit End ---------------------------------------------- Edit End
+	if ((IVr.OKFlag!=0) and (IV2r.OKFlag==0)) then begin
+		CreateGlobalGift(IVr);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 29 January 2018 17:11:48 
+	end;
+	if ((IVr.OKFlag==0) and (IV2r.OKFlag!=0)) then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 29 January 2018 17:22:53
+		DeleteGlobalGift(IVr);
+	end;
 	
   if ((IV2r.Invalid==0) and (IVr.Invalid==0)) then begin
     if (IVr.OrderNr!=-1) then begin
@@ -1250,7 +1302,7 @@ BEGIN
         UpdateRentChrFromIV(IV2r.SerNr,IVr.SerNr);
       end;
     end;
-    if ((IVr.OKFlag!=0) and (IV2r.OKFlag==0)) then begin      
+    if ((IVr.OKFlag!=0) and (IV2r.OKFlag==0)) then begin     
       if (ihef==false) then begin
         UpdateCOIV(IVr);
         IVUpdateItemHist(IVr);
