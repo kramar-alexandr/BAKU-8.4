@@ -107,6 +107,7 @@ external updating procedure UnOk_IVVc(var record IVVc);	//Edit------------------
 global updating procedure CreateGlobalGift(record IVVc IVr)
 begin
 	record GlobalGiftVaucherVc GGVr;
+	row GlobalGiftVaucherVc GGVrw;
 	row IVVc IVrw;
 	integer i,mtrw;
 	
@@ -121,6 +122,11 @@ begin
 				GGVr.TotBalance = GGVr.TotBalance + IVrw.Price;
 				GGVr.StartDate = IVr.InvDate;
 				GGVr.EndDate = addyear(IVr.InvDate,1);
+				
+				GGVrw.CompNr = currentcompany;
+				GGVrw.InvoiceNr = IVr.SerNr;
+				GGVrw.Sum = IVrw.Price;
+				matrowput(GGVr,matrowcnt(GGVr),GGVrw);
 				RECORDSTORE(GGVr,true);
 	  	end else begin
 	  		GGVr.SerNr = NextSerNr("GlobalGiftVaucherVc",CurrentDate,-1,false,"");  
@@ -130,7 +136,26 @@ begin
 				GGVr.TotBalance = IVrw.Price;
 				GGVr.StartDate = IVr.InvDate;
 				GGVr.EndDate = addyear(IVr.InvDate,1);
+				
+				GGVrw.CompNr = currentcompany;
+				GGVrw.InvoiceNr = IVr.SerNr;
+				GGVrw.Sum = IVrw.Price;
+				matrowput(GGVr,0,GGVrw);
 				RECORDSTORE(GGVr,true);
+	  	end;
+	  end;
+	  if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+	  	if(IVrw.Comment=="FIRST" and nonblank(IVrw.SerialNr))then begin 
+	  			GGVr.BarCode = IVrw.SerialNr;
+					GGVr.Program = "FIRST";
+					if(readfirstkey("BarCode",GGVr,2,true))then begin
+						GGVr.Bal = GGVr.Bal - IVrw.Sum;
+						GGVrw.CompNr = currentcompany;
+						GGVrw.InvoiceNr = IVr.SerNr;
+						GGVrw.Sum = -IVrw.Sum;
+						matrowput(GGVr,matrowcnt(GGVr),GGVrw);
+						recordstore(GGVr,true);
+					end;
 	  	end;
 	  end;
 	end; 
@@ -141,8 +166,9 @@ end;
 global updating procedure DeleteGlobalGift(record IVVc IVr)
 begin
 	record GlobalGiftVaucherVc GGVr;
+	row GlobalGiftVaucherVc GGVrw;
 	row IVVc IVrw;
-	integer i,mtrw;
+	integer i,mtrw,j,gmtrw;
 	
 	mtrw = matrowcnt(IVr);
 	For(i=0;i<mtrw;i=i+1) begin
@@ -152,12 +178,30 @@ begin
 	  	GGVr.Program = "FIRST";
 	  	if(readfirstkey("BarCode",GGVr,2,true))then begin
 	  		GGVr.Bal = GGVr.Bal - IVrw.Price;
-				GGVr.TotBalance = GGVr.TotBalance - IVrw.Price;
+				GGVr.TotBalance = GGVr.TotBalance + IVrw.Price;
 				if(GGVr.TotBalance<=0)then begin
 	  			recorddelete(GGVr);
 	  		end else begin
 	  			recordstore(GGVr,true);
 	  		end;
+	  	end;
+	  end;
+    if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+	  	if(IVrw.Comment=="FIRST" and nonblank(IVrw.SerialNr))then begin 
+	  			GGVr.BarCode = IVrw.SerialNr;
+					GGVr.Program = "FIRST";
+					if(readfirstkey("BarCode",GGVr,2,true))then begin
+						GGVr.Bal = GGVr.Bal + IVrw.Sum;
+						gmtrw = matrowcnt(GGVr);
+						For(j=0;j<gmtrw;j=j+1) begin
+	  					matrowget(GGVr,j,GGVrw);
+	  					if(GGVrw.CompNr==CurrentCompany and GGVrw.InvoiceNr==IVr.SerNr and GGVrw.Sum==IVrw.Sum)then begin
+	  						matrowdelete(GGVr,j);
+	  						gmtrw = gmtrw - 1;
+	  					end;
+						end; 
+						recordstore(GGVr,true);
+					end;
 	  	end;
 	  end;
 	end; 
