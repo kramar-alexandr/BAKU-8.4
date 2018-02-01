@@ -357,6 +357,12 @@ begin
 	For(i=0;i<rwcnt;i=i+1) begin
 		matrowget(IVp,i,IVrw);
 		if(IVrw.ArtCode=="GLOBALGIFTCARD")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 30 January 2018 14:44:12
+			
+			if(IVp.CurncyCode!="AZN")then begin
+				RecordCheckError(35117,"",i,"SerialNr");      
+				res = -1; 
+				goto L99;
+			end;
 			if(blank(IVrw.SerialNr))then begin
 				RecordCheckError(35117,"",i,"SerialNr");      
 				res = -1; 
@@ -377,6 +383,42 @@ begin
 					goto L99;
 				end;
 			end;
+		end;
+		if(IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
+			if(IVrw.Comment=="FIRST")then begin
+				if(IVrw.Comment=="FIRST" and blank(IVrw.SerialNr))then begin 
+					RecordCheckError(35117,"",i,"SerialNr");      
+					res = -1; 
+					goto L99;
+				end;
+				
+				if(IVp.CurncyCode!="AZN")then begin
+					RecordCheckError(35117,"",i,"SerialNr");      
+					res = -1; 
+					goto L99;
+				end;
+				
+				GGVr.BarCode = IVrw.SerialNr;
+				GGVr.Program = "FIRST";
+				if(readfirstkey("BarCode",GGVr,2,true))then begin
+					if(GGVr.Closed==1)then begin
+						RecordCheckError(35118," " & GGVr.BarCode,i,"SerialNr");      
+						res = -1; 
+						goto L99;
+					end;
+					if(GGVr.StartDate>IVp.InvDate or GGVr.EndDate<IVp.InvDate)then begin
+						RecordCheckError(35119,"",i,"SerialNr");      
+						res = -1; 
+						goto L99;
+					end;
+					if(IVrw.Sum>GGVr.Bal)then begin
+						RecordCheckError(35122,"",i,"SerialNr");      
+						res = -1; 
+						goto L99;
+					end;
+				end;
+			end;
+			
 		end;
 	end;
   
