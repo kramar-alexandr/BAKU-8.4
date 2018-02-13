@@ -1,0 +1,119 @@
+
+external procedure ExtractObj(string,var Integer,var string);
+
+SetLangMode(LangRussian,"RUS",0);
+
+global
+procedure	ORVcRepRn(record RcVc RepSpec)
+begin
+	Integer 			mtrw, i, j;
+	Integer				res;
+	row ORVc			ORrw;
+	vector val			diff;
+	array string 255 	atags;
+	record INVc			INr;
+	Boolean				testf, TrHs;
+	string	255			temp;
+	Integer				nb;
+	record ORVc			ORr;
+	record DIVc			DIr;
+	record ItemStatusVc ISr;
+	string 255			brand;
+	string 255			colour;
+	string 255 			size;
+	string 255			name;
+	string 255 			location;
+	string 255			unit;
+	
+	StartReportJob("Report about additional purchases");
+	Header(1,"Purchases",1);
+	EndHeader;
+	StartFormat(15);
+	OutString(0,0,"Код товара",false);
+	OutString(100,0,"Имя товара",false);
+	OutString(170,0,"Бренд",false);
+	OutString(270,0,"Размер",false);
+	OutString(340,0,"Цвет",false);
+	OutString(410,0,"Ед. измер.",false);
+	OutString(430,0,"Склад",false);
+	OutString(460,0,"Закупить",false);
+	EndFormat;
+	nb = 1;
+	TrHs = true;
+	testf = true;
+	while(loopmain(ORr,1,TrHs)) begin
+		testf = true;
+		if (nonblank(RepSpec.f1) and RepSpec.f1!=ORr.Location) then begin
+			testf = false;
+		end;
+		if (testf) then begin
+			mtrw = matrowcnt(ORr);
+			for (i = 0; i < mtrw; i = i + 1) begin
+				matrowget(ORr,i,ORrw);
+				if (nonblank(ORrw.ArtCode)) then begin
+					res = ORrw.Invd - ORrw.Shipd2;
+					if (res > 0) then begin
+						diff[ORrw.ArtCode] = diff[ORrw.ArtCode] + res;
+					end;
+				end;
+			end;
+		end;
+	end;
+	GetVectorTags(diff,atags);
+	for (i = 0; i < atags.length; i=i+1) begin
+		testf = true;
+		INr.Code = atags[i];
+		if (readfirstmain(INr,1,true)) then begin
+			if (nonblank(RepSpec.f2) and (SetInSet(RepSpec.f2,INr.DispGroups)==false)) then begin
+				testf = false;
+			end;
+			ISr.Code = INr.Code;
+			ISr.Location = ";;;";
+			if (readfirstmain(ISr,2,true)) then begin
+				if (nonblank(RepSpec.f1)) then begin
+					location = RepSpec.f1;
+				end else begin
+					location = "";
+					if (ISr.Location!=";;;") then begin
+						location = ISr.Location;
+					end;
+				end;
+				if (ISr.Instock >= diff[atags[i]]) then begin
+					testf = false;
+				end;
+			end;
+			if (testf) then begin
+				StartFormat(15);
+				OutString(0,"DblINVc",atags[i],false);
+				OutString(100,0,left(INr.Name,10),false);
+				j = 0;
+				ExtractObj(INr.DispGroups,j,temp);
+				brand = "";
+				while (nonblank(temp)) begin
+					DIr.Code = temp;
+					if (readfirstmain(DIr,1,true)) then begin
+						if (DIr.CType=="BRAND") then begin
+							brand = DIr.Name;
+						end;
+						if (DIr.CType=="SIZE") then begin
+							size = DIr.Name;
+						end;
+						if (DIr.CType=="COLOUR") then begin
+							colour = DIr.Name;
+						end;
+					end;
+					ExtractObj(INr.DispGroups,j,temp); 
+				end;
+				unit = INr.Unittext;
+				OutString(170,0,brand,false);
+				OutString(270,0,size,false);
+				OutString(340,0,colour,false);
+				OutString(410,0,unit,false);
+				OutString(430,0,location,false);
+				OutVal(460,0,diff[atags[i]] - ISr.Instock,M4Val,false);
+				EndFormat;
+			end;
+		end;
+	end;
+	EndJob;
+end;
