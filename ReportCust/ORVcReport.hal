@@ -1,12 +1,12 @@
-
 external procedure ExtractObj(string,var Integer,var string);
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
 global
 procedure	ORVcRepRn(record RcVc RepSpec)
 begin
-	Integer 			mtrw, i, j;
+	Integer 			mtrw, i, j, k;
 	Integer				res;
 	row ORVc			ORrw;
 	vector val			diff;
@@ -24,30 +24,34 @@ begin
 	string 255			name;
 	string 255 			location;
 	string 255			unit;
+	integer				qt;
 	
+	location = RepSpec.f1;
 	StartReportJob("Report about additional purchases");
 	Header(1,"Purchases",1);
 	EndHeader;
 	StartFormat(15);
 	OutString(0,0,"Код",false);
-	OutString(100,0,"Имя",false);
-	OutString(170,0,"Бренд",false);
-	OutString(270,0,"Размер",false);
-	OutString(340,0,"Цвет",false);
-	OutString(410,0,"Ед. измер.",false);
-	OutString(430,0,"Склад",false);
-	OutString(460,0,"Звкупить",false);
-	OutString(480,0,"Кол-во",false);
-	OutString(500,0,"Не отгруж.",false);
+	OutString(50,0,"Имя",false);
+	OutString(190,0,"Бренд",false);
+	OutString(240,0,"Размер",false);
+	OutString(280,0,"Цвет",false);
+	OutString(320,0,"Ед. измер.",false);
+	OutString(360,0,"Склад",false);
+	OutString(410,0,"Закупить",false);
+	OutString(430,0,"Кол-во",false);
+	OutString(450,0,"Не отгруж.",false);
 	EndFormat;
-	nb = 1;
 	TrHs = true;
 	testf = true;
 	while(loopmain(ORr,1,TrHs)) begin
 		testf = true;
-		if (nonblank(RepSpec.f1) and RepSpec.f1!=ORr.Location) then begin
+		if (nonblank(location) and SetInSet(ORr.Location,location)==false) then begin
 			testf = false;
 		end;
+		if (nonblank(RepSpec.f3) and SetInSet(ORr.OrderClass,RepSpec.f3)==false) then begin // Edit Dima ************* 2018-02-14 12:42 PM
+			testf = false;
+		end;		
 		if (testf) then begin
 			mtrw = matrowcnt(ORr);
 			for (i = 0; i < mtrw; i = i + 1) begin
@@ -68,26 +72,31 @@ begin
 		if (readfirstmain(INr,1,true)) then begin
 			if (nonblank(RepSpec.f2) and (SetInSet(RepSpec.f2,INr.DispGroups)==false)) then begin
 				testf = false;
+			end;			
+			if (blank(location)) then begin
+				location = ";;;";
 			end;
-			ISr.Code = INr.Code;
-			ISr.Location = ";;;";
-			if (readfirstmain(ISr,2,true)) then begin
-				if (nonblank(RepSpec.f1)) then begin
-					location = RepSpec.f1;
-				end else begin
-					location = "";
-					if (ISr.Location!=";;;") then begin
-						location = ISr.Location;
-					end;
+			k = 0;
+			qt = 0;
+			ExtractObjWithSeparator(",",location,true,k,temp);
+			while (nonblank(temp)) begin
+				ISr.Code = INr.Code;
+				ISr.Location = temp;
+				if (readfirstmain(ISr,2,true)) then begin
+					qt = qt + ISr.Instock;
 				end;
-				if (ISr.Instock >= diff[atags[i]]) then begin
-					testf = false;
-				end;
+				ExtractObjWithSeparator(",",location,true,k,temp);
+			end;
+			if (qt >= diff[atags[i]]) then begin
+				testf = false;
+			end;
+			if (location==";;;") then begin
+				location = "";
 			end;
 			if (testf) then begin
 				StartFormat(15);
 				OutString(0,"DblINVc",atags[i],false);
-				OutString(100,0,INr.Name,false);
+				OutString(50,0,INr.Name,false);
 				j = 0;
 				ExtractObj(INr.DispGroups,j,temp);
 				brand = "";
@@ -107,14 +116,14 @@ begin
 					ExtractObj(INr.DispGroups,j,temp); 
 				end;
 				unit = INr.Unittext;
-				OutString(170,0,brand,false);
-				OutString(270,0,size,false);
-				OutString(340,0,colour,false);
-				OutString(410,0,unit,false);
-				OutString(430,0,location,false);
-				OutVal(460,0,diff[atags[i]] - ISr.Instock,M4Val,false);
-				OutVal(480,0,ISr.Instock,M4Val,false);
-				OutVal(500,0,diff[atags[i]],M4Val,false);
+				OutString(190,0,brand,false);
+				OutString(240,0,size,false);
+				OutString(280,0,colour,false);
+				OutString(320,0,unit,false);
+				OutString(360,0,location,false);
+				OutVal(410,0,diff[atags[i]] - qt,M4Val,false);
+				OutVal(430,0,qt,M4Val,false);
+				OutVal(450,0,diff[atags[i]],M4Val,false);
 				EndFormat;
 			end;
 		end;
