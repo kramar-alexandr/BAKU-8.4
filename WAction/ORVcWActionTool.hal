@@ -66,6 +66,8 @@ forward procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
 forward procedure ORVc_GetPriceList(var record ORVc);
 forward procedure ORVc_GetPriceList2(var record ORVc,Boolean);
 forward procedure ORDUpdatePrices(var record ORVc,Boolean);
+external procedure ExtractObj(string,var Integer,var string);
+external function Integer FindMaxShipDate(record ORVc);
 
 SetLangMode(LangRussian,"RUS",0); //edited by BPI
 global
@@ -115,6 +117,7 @@ begin
   string 200 varsubset;
   record CUVc CUr;
 
+  ORr.MfrTime = FindMaxShipDate(ORr); // Edit Dima ************* 2018-02-15 02:36 PM
   chsum = false;
   chrqty = false;
   pritemf = true;
@@ -1350,4 +1353,65 @@ begin
     AcceptanceStatusFlag = ORApprovalStatus(ORr,Acptr);
   end;
   return;
+end;
+
+// Edit Dima ************* 2018-02-15 12:00 PM
+
+global
+procedure GenerateDate(var array string dates, record ORVc ORr, var integer ManTime) 
+begin
+	Integer 	 	mtrw, j, k;
+	Integer 		max_time;
+	row ORVc 		ORrw;
+	record	CUVc	CUr;
+	string 255		temp;
+	record INVc		INr;
+	record DIVc		DIr;
+	date 			calc_date;
+	date 			init_date;
+	Integer			days;
+
+	max_time = 0;
+	init_date = ORr.OrdDate;
+	mtrw = matrowcnt(ORr);
+	for (j = 0; j < mtrw; j = j + 1) begin
+		matrowget(ORr,j,ORrw);
+		INr.Code = ORrw.ArtCode;
+		if (readfirstmain(INr,1,true)) begin
+			k = 0;
+			ExtractObj(INr.DispGroups,k,temp);
+			while (nonblank(temp)) begin
+				DIr.Code = temp;
+				if (readfirstmain(DIr,1,true)) then begin
+					if (DIr.CType=="BRAND") then begin
+						CUr.Name = DIr.Name;
+						if (readfirstkey("Name",CUr,1,true)) then begin
+							logtext(0, CUr.Code);
+							if (CUr.PlanShipDays > max_time) then begin
+								max_time = CUr.PlanShipDays;
+							end;
+						end;
+					end; 
+				end;
+				ExtractObj(INr.DispGroups,k,temp);
+			end;
+		end;
+	end;
+	ManTime = max_time;
+	if (ORr.MfrTimeAdj!=0) then begin
+		max_time = ORr.MfrTimeAdj;
+	end;
+	calc_date = init_date;
+	days = ORr.ReqEnquiryTime+ORr.PrepaymentTime+ORr.ShipTimeReadlinesTime+max_time+20;
+	calc_date = AddDay(calc_date, days);
+	dates[0] = DateToString(calc_date, "DD.MM.YYYY");
+	calc_date = init_date;
+	days = ORr.ReqEnquiryTime+ORr.PrepaymentTime+ORr.ShipTimeReadlinesTime+max_time+10;
+	calc_date = AddDay(calc_date, days);
+	dates[1] = DateToString(calc_date, "DD.MM.YYYY");
+	calc_date = init_date;
+	days = ORr.ReqEnquiryTime+ORr.PrepaymentTime+ORr.ShipTimeReadlinesTime+max_time+5;
+	calc_date = AddDay(calc_date, days);
+	dates[2] = DateToString(calc_date, "DD.MM.YYYY");
+	return;
 end;
