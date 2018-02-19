@@ -393,8 +393,8 @@ begin
 	string 255	last_color;
 	string 255 	last_model;
 	
-	last_color = "CL0000";
-	last_model = "ML0000";
+	last_color = "CL00000";
+	last_model = "ML00000";
 	while (TestEOF()==false) begin
 		SN = ImportField;
 		SN1 = ImportField;
@@ -425,6 +425,7 @@ begin
 		if (readfirstmain(INr,1,true)==false) then begin
 			RecordNew(INr);
 		end;
+		INr.Code = SN;
 		INr.Name = DESC;
 		if (blank(INr.Name)) then begin
 			INr.Name = "BLANK NAME";
@@ -439,9 +440,10 @@ begin
 		INrw.Text = Discontinued & "," & Lock & "," & FA & "," & Bulk;
 		matrowput(INr,1,INrw);
 		INr.Unittext = UnitOfMeasure;
-		INr.Conversion1 = StringToVal(QtyInUnit,M45Val);
+		if(nonblank(QtyInUnit))then begin
+			INr.Conversion1 = StringToVal(QtyInUnit,M45Val);
+		end;
 		INr.AlternativeCode = PN;
-		INr.Code = SN;
 		INr.DispGroups = "GOODS";
 		if (nonblank(Colour)) then begin
 			TrHs = true;
@@ -454,19 +456,24 @@ begin
 				if (DIr.CType=="COLOUR" and TrHs) then begin
 					TrHs = false;
 					Found = true;
+					INr.DispGroups = INr.DispGroups & "," & DIr.Code;
 				end;
 			end;
 			ResetLoop(DIr);
 			if (Found==false) then begin
-				RecordNew(DIr);
-				DIr.Name = Colour;
 				NextM4Number(last_color,last_color);
+				
+				while(readfirstmain(DIr,1,true)==true)begin
+					NextM4Number(last_color,last_color);
+					DIr.Code = last_color;
+				end;
+				RecordNew(DIr);
 				DIr.Code = last_color;
+				DIr.Name = Colour;
 				DIr.CType = "COLOUR";
-				logtext(0, DIr.Code & " " & DIr.CType);
 				RecordStore(DIr,true);
+				INr.DispGroups = INr.DispGroups & "," & DIr.Code;
 			end;
-			INr.DispGroups = INr.DispGroups & "," & DIr.Code;
 		end;
 		if (nonblank(Model)) then begin
 			DIr.Name = Model;
@@ -479,22 +486,27 @@ begin
 				if (DIr.CType=="MODEL" and TrHs) then begin
 					TrHs = false;
 					Found = true;
+					INr.DispGroups = INr.DispGroups & "," & DIr.Code;
 				end;
 			end;
 			ResetLoop(DIr);
 			if (Found==false) then begin
-				RecordNew(DIr);
-				DIr.Name = Model;
 				NextM4Number(last_model,last_model);
+				
+				while(readfirstmain(DIr,1,true)==true)begin
+					NextM4Number(last_model,last_model);
+					DIr.Code = last_model;
+				end;
+				RecordNew(DIr);
 				DIr.Code = last_model;
+				DIr.Name = Model;				
 				DIr.CType = "MODEL";
-				logtext(0, DIr.Code & " " & DIr.CType);
 				RecordStore(DIr,true);
+				INr.DispGroups = INr.DispGroups & "," & DIr.Code;
 			end;
-			INr.DispGroups = INr.DispGroups & "," & DIr.Code;
 		end;
 		if (nonblank(MfrNo)) then begin
-			DIr.Name = MfrNo;
+			/*DIr.Name = MfrNo;
 			Found = false;
 			TrHs = true;
 			while (loopkey("Name",DIr,1,TrHs)) begin
@@ -514,34 +526,22 @@ begin
 				DIr.CType = "BRAND";
 				logtext(0, DIr.Code & " " & DIr.CType);
 				RecordStore(DIr,true);
-			end;
-			INr.DispGroups = INr.DispGroups & "," & DIr.Code;
+			end;*/
+			INr.DispGroups = INr.DispGroups & "," & MfrNo;
 		end;
 		if (nonblank(Category)) then begin
-			DIr.Name = Category;
-			Found = false;
-			TrHs = true;
-			while (loopkey("Name",DIr,1,TrHs)) begin
-				if (DIr.Name!=Category) then begin
-					TrHs = false;
-				end;
-				if (DIr.CType=="CAT" and TrHs) then begin
-					TrHs = false;
-					Found = true;
-				end;
-			end;
-			ResetLoop(DIr);
-			if (Found==false) then begin
+			DIr.Code = Category;
+			if(readfirstmain(DIr,1,true)==false)then begin
 				RecordNew(DIr);
 				DIr.Name = Category;
 				DIr.Code = Category;
 				DIr.CType = "CAT";
-				logtext(0, DIr.Code & " " & DIr.CType);
 				RecordStore(DIr,true);
 			end;
 			INr.DispGroups = INr.DispGroups & "," & DIr.Code;
 		end;
 		if (nonblank(INr.Code)) then begin
+			logtext(0,INr.Code & " | " & INr.Name & " | " & INr.DispGroups);
 			RecordStore(INr,true);
 		end;
 		if (NextImportLine(true)) then begin end;
