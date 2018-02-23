@@ -1,4 +1,6 @@
 //server-only
+SetLangMode(LangRussian,"RUS",0);
+
 global procedure ReserveCheckRn(record RcVc RepSpec)
 begin
 	record ORVc ORr;
@@ -8,10 +10,20 @@ begin
 	vector val resqty;
 	record INVc INr;
 	record ItemStatusVc ISr;
+	vector string 100 altcode;
 	
 	ORr.Reserved = 1;
 	
-	startreportnoheaderjob("ReserveCheckRn");
+	startreportnoheaderjob("Резервы");
+	
+	startformat(15);
+		outstring(0,0,"Товар",false);
+		outstring(100,0,"Резерв",false);
+		outstring(150,0,"Заказ",false);
+		outstring(175,0,"Стр.",false);
+		outstring(200,0,"Код производителя",false);
+	endformat;
+	
 	TrHs = true;
 	while(loopkey("Reserved",ORr,1,TrHs))begin
 		testf = true;
@@ -26,10 +38,20 @@ begin
 					if(ORrw.Quant>0)then begin
 						if(ORrw.Quant>ORrw.Shipd2)then begin
 							resqty[ORrw.ArtCode] = resqty[ORrw.ArtCode] + (ORrw.Quant-ORrw.Shipd2);
+							if(blank(altcode[ORrw.ArtCode]))then begin
+								altcode[ORrw.ArtCode] = "_";
+								INr.Code = ORrw.ArtCode;
+								if(readfirstmain(INr,1,true))then begin
+									altcode[ORrw.ArtCode] = INr.AlternativeCode;
+								end;
+							end;
+							
 							startformat(15);
-								outstring(0,0,ORrw.ArtCode,false);
+								outstring(0,"DblINVc",ORrw.ArtCode,false);
 								outstring(100,0,ORrw.Quant-ORrw.Shipd2,false);
-								outstring(150,0,ORr.SerNr,false);
+								outstring(150,"DblORVc",ORr.SerNr,false);
+								outstring(175,0,i+1,false);
+								outstring(200,0,altcode[ORrw.ArtCode],false);
 							endformat;
 						end;
 					end;
@@ -42,12 +64,13 @@ begin
 	
 	Gray_Divider(0,1);
 	
+	INr.Code = "";
 	while(loopmain(INr,1,true))begin
 		ISr.Code = INr.Code;
 		ISr.Location = ";;;";
 		readfirstmain(ISr,2,true);
 		if(ISr.RsrvQty!=0 or resqty[INr.Code]!=0)then begin
-			if(ISr.RsrvQty!=resqty[INr.Code])then begin
+			if(ISr.RsrvQty!=resqty[INr.Code] or ISr.RsrvQty>ISr.OrddOut)then begin
 				startformat(15);
 					outstring(0,0,INr.Code,false);
 					outstring(100,0,ISr.RsrvQty,false);
