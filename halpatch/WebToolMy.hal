@@ -3,7 +3,6 @@ external procedure MySendAsyncWebRequest(string,string,boolean,string,string,str
 external function string 255 StrReplace(string,string,string);// Edit ************************** Tuesday, 3 October 2017 17:25:37
 external procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var string);
 external procedure MessageBoxToUser(string,integer,string,string);
-external procedure GetAreaFromFile(Area,string);
 
 global function string 255 imgStrReplace(string instr)
 begin
@@ -396,40 +395,16 @@ begin
 return;
 end; //Edit***************************Sasha2,15:18 27.04.2017 }
 
-procedure BreakIntoBase64Lines(Area img,var area tmpimg)
-begin
-  longint i,l,x;
-  integer colwidth;
-  string 255 line;
-  
-  SetAreaZeroSize(tmpimg);
-  i=0;
-  l = GetAreaLength(img);
-  while (i<l) begin
-    x = l-i;
-    if (x>80) then begin
-      colwidth = 80;
-    end else begin
-      colwidth = x;
-    end;
-    line = GetStringFromArea(img,i,colwidth);
-    AddTextToArea(line & chr(10),tmpimg);
-    i = i+colwidth;
-  end;
-  return;
-end;
-
 webpublic global updating procedure WebCreateORVcPDFCallback()
 begin
-  area replyarea,tmparea,tmparea2;
+  area replyarea;
   json js;
   integer company;
   LongInt ordsernr;
-  string 255 user,path,type,filename,fullpath,tmpfile;
+  string 255 user,path,type,filename,fullpath;
   record ORVc ORr;
   
   webgetpostdata(replyarea);
-  MilliSleep(2000);
   js = ParseJSONArea(replyarea);
   company = StringToInt(JSONGet(js,"compnr"));
   ordsernr = StringToLongInt(JSONGet(js,"ordsernr"));
@@ -440,38 +415,17 @@ begin
   fullpath = path & "\\\\" & filename;
 	fullpath = StrReplace(fullpath,"\\\\","/");
 	fullpath = "pdf_files/" & filename;
-	logtext(0,fullpath);
-  if (FileExists(fullpath) and (company!=0) and (ordsernr!=-1)) then begin
-    
-    // dances whith BOOBEN!!!
-		logtext(0,FileSize(fullpath));
-    AddFileToArea(fullpath,tmparea,false);
-		logtext(0,getarealength(tmparea));
-    tmpfile = "tmp/2-" & filename;
-    CreateFile(tmpfile);
-    CloseFile;
-    WriteAreaToFile(tmparea,tmpfile,0);
-    setareazerosize(tmparea);
-    GetAreaFromFile(tmparea,tmpfile);
-    Delete_File(tmpfile);
-    tmpfile = "tmp/" & filename;
-    BreakIntoBase64Lines(tmparea,tmparea2);
-    setareazerosize(tmparea);
-    AreaBase64Decode(tmparea2,tmparea);
-    CreateFile(tmpfile);
-    CloseFile;
-    WriteAreaToFile(tmparea,tmpfile,0);
-
+	if (FileExists(fullpath) and (company!=0) and (ordsernr!=-1)) then begin
     ORr.SerNr = ordsernr;
     setcompany(company,false);
     if (readfirstmain(ORr,1,true)) then begin
-      RecordLinkFile(tmpfile,0,ORr,company);
+      RecordLinkFile(fullpath,0,ORr,company);
       logtext(0,"[CreateORVcPDF] : File - \"" & fullpath & "\" was attached to OR " & ordsernr & " in company " & company);
       //if (nonblank(user) and nonblank(type)) then begin
       //  AllClientsRemoteAsync.MessageBoxToUser(user,company,type,ordsernr);
       //end;
       //MilliSleep(2000);
-      //Delete_File(fullpath);
+      Delete_File(fullpath);
     end;
   end;
   
