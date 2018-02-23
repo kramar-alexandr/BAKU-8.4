@@ -1,0 +1,65 @@
+//server-only
+global procedure ReserveCheckRn(record RcVc RepSpec)
+begin
+	record ORVc ORr;
+	row ORVc ORrw;
+	boolean TrHs,testf;
+	integer  mtrw,i;
+	vector val resqty;
+	record INVc INr;
+	record ItemStatusVc ISr;
+	
+	ORr.Reserved = 1;
+	
+	startreportnoheaderjob("ReserveCheckRn");
+	TrHs = true;
+	while(loopkey("Reserved",ORr,1,TrHs))begin
+		testf = true;
+		if(ORr.Reserved==0)then begin TrHs = false; testf = false; end;
+		if(ORr.Closed>0)then begin testf = false; end;
+		
+		if(testf)then begin
+			mtrw = matrowcnt(ORr);
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(ORr,i,ORrw);
+				if(nonblank(ORrw.ArtCode))then begin
+					if(ORrw.Quant>0)then begin
+						if(ORrw.Quant>ORrw.Shipd2)then begin
+							resqty[ORrw.ArtCode] = resqty[ORrw.ArtCode] + (ORrw.Quant-ORrw.Shipd2);
+							startformat(15);
+								outstring(0,0,ORrw.ArtCode,false);
+								outstring(100,0,ORrw.Quant-ORrw.Shipd2,false);
+								outstring(150,0,ORr.SerNr,false);
+							endformat;
+						end;
+					end;
+				end;	  
+			end; 
+		
+		end;
+	
+	end;
+	
+	Gray_Divider(0,1);
+	
+	while(loopmain(INr,1,true))begin
+		ISr.Code = INr.Code;
+		ISr.Location = ";;;";
+		readfirstmain(ISr,2,true);
+		if(ISr.RsrvQty!=0 or resqty[INr.Code]!=0)then begin
+			if(ISr.RsrvQty!=resqty[INr.Code])then begin
+				startformat(15);
+					outstring(0,0,INr.Code,false);
+					outstring(100,0,ISr.RsrvQty,false);
+					outstring(150,0,resqty[INr.Code],false);
+					outstring(200,0,ISr.RsrvQty - resqty[INr.Code],false);
+				endformat;
+			end;
+		end;
+	end;
+	
+	
+	endjob;
+	
+return;
+end;
