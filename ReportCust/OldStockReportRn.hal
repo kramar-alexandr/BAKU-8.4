@@ -1,0 +1,196 @@
+//server-only
+external procedure YcToStr(Integer,var string);
+external procedure FindNLAccBal(string,string,string,Integer,Date,Date,Integer,Integer,Boolean,string,Integer,string,string,var val);
+external procedure GetObjs(string,string,var string);
+external function val cur2cur(String,String,Date,Val);
+external function val cur2b1(String,Date,Val);
+
+SetLangMode(LangRussian,"RUS",0);
+
+
+
+global
+procedure OldStockReportRn(record RcVc RepSpec)
+BEGIN
+	record INVc INr;
+	record ItemHistVc IHr;// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 01 03 2018 y. о 14:57:34
+	vector string 200 vbrands;
+	vector val vbrandsum,vbrandstock1jan,vbrandstock_mye;
+	vector val vturncy,vturnlasty,vturncmonth;
+	array string 200 abrands;
+	record DIVc DIr;
+	boolean testf,TrHs,foundf,TrHs1,testf1;
+	integer i;
+	string 50 curbrand;
+	date lys,lye,cys,cye,mys,mye;
+	record IVVc IVr;
+	row IVVc IVrw;
+	val turno;
+	
+	
+	lys = stringtodate("1/1/" & getyear(currentdate)-1);
+	lye = stringtodate("31/12/" & getyear(currentdate)-1);
+	cys = stringtodate("1/1/" & getyear(currentdate));
+	cye = currentdate;
+	mys = stringtodate("1/" & getmonth(RepSpec.d1) & "/" & getyear(RepSpec.d1));
+	mye = stringtodate("31/" & getmonth(RepSpec.d1) & "/" & getyear(RepSpec.d1));
+	
+	DIr.CType = "BRAND";
+	TrHs = true;
+	While(loopkey("CType",DIr,1,TrHs))begin
+		testf = true;
+		if(DIr.CType!="BRAND")then begin TrHs = false; testf = false; end;
+		if(nonblank(RepSpec.f2) and !setinset(DIr.Code,RepSpec.f2))then begin testf = false; end;
+		
+		if(testf)then begin
+			abrands[abrands.length] = DIr.Code;
+			vbrands[DIr.Code] = DIr.Name;
+		end;
+	end;
+	
+	StartReportNoHeaderJob("Отчет по старому складу");
+		
+		startformat(15);
+			outstring(80,0,lys,false);
+		endformat;
+		startformat(15);
+			outstring(80,0,lye,false);
+		endformat;
+		startformat(15);
+			outstring(80,0,cys,false);
+		endformat;
+		startformat(15);
+			outstring(80,0,cye,false);
+		endformat;
+		startformat(15);
+			outstring(80,0,mys,false);
+		endformat;
+		startformat(15);
+			outstring(80,0,mye,false);
+		endformat;
+		
+		if(nonblank(RepSpec.f1))then begin
+			startformat(15);
+				outstring(0,0,"По складу:",false);
+				outstring(80,0,RepSpec.f1,false);
+			endformat;
+		end else begin
+			startformat(15);
+				outstring(0,0,"По складу:",false);
+				outstring(80,0,"По всем",false);
+			endformat;
+		end;
+		
+		gray_divider(0,1);
+		
+		
+		StartFormat(15);
+			OutString(0,0,"Brand name",False);
+			OutString(50,0,"Turnover(" & lys & ":" & lye & ")",False);
+			OutString(100,0,"Turnover(" & cys & ":" & cye & ")",False);
+			OutString(150,0,"Turnover(" & mys & ":" & mye & ")",False);
+			OutString(200,0,"Net stock on " & cys,False);
+			OutString(250,0,"Net stock on " & mye,False);
+			OutString(300,0,"Net stock on " & mye & " 0-360",False);
+			OutString(350,0,"Net stock on " & mye & " 366-730",False);
+			OutString(400,0,"Net stock on " & mye & ">730",False);
+		endformat;
+		
+		INr.Code = "";
+		TrHs = true;
+		testf = true;
+		while(loopmain(INr,1,TrHs))begin
+			testf = true;
+			foundf = false;
+			curbrand = "";
+			for(i=0;i<abrands.length;i=i+1)begin
+				if(setinset(abrands[i],INr.DispGroups))then begin 
+					foundf = true; 
+					curbrand = abrands[i];
+				end;
+				
+			end;
+			testf = foundf;
+			if(setinset("30",INr.DispGroups))then begin testf = false; end;
+			if(setinset("31",INr.DispGroups))then begin testf = false; end;
+			if(setinset("32",INr.DispGroups))then begin testf = false; end;
+			if(setinset("33",INr.DispGroups))then begin testf = false; end;
+			if(setinset("34",INr.DispGroups))then begin testf = false; end;
+			if(setinset("35",INr.DispGroups))then begin testf = false; end;
+			if(INr.ConsgType!=0) then begin testf = false; end;
+			if(INr.ItemType!=1) then begin testf = false; end;
+			
+			
+			if(testf)then begin
+				vbrandsum[curbrand] = vbrandsum[curbrand] +1;
+				IHr.ArtCode = INr.Code;
+				TrHs1 = true;
+				while(loopkey("ArtCode",IHr,1,TrHs1))begin
+					testf1 = true;
+					if(IHr.ArtCode!=INr.Code)then begin TrHs1 = false; testf1 = false; end;
+					if(IHr.TransDate>cye)then begin TrHs1 = false; testf1 = false; end;
+					
+					
+					if(IHr.FileName=="IVVc")then begin
+						if(dateinrange(IHr.TransDate,lys,lye) or dateinrange(IHr.TransDate,cys,cye) or dateinrange(IHr.TransDate,mys,mye))then begin
+							IVr.SerNr = IHr.TransNr;
+							if(readfirstmain(IVr,1,true))then begin
+								if(matrowcnt(IVr)>IHr.Row)then begin
+									matrowget(IVr,IHr.Row,IVrw);
+									
+									turno = blankval;
+									if(IVr.CurncyCode=="AZN")then begin
+										turno = IVrw.Sum;
+									end else begin
+										turno = IVrw.Sum / IVr.FrRate * IVr.ToRateB1;
+									end;
+									if(IVr.InvType==kInvoiceTypeCredit)then begin
+										turno = -turno;
+									end;
+									
+									if(dateinrange(IHr.TransDate,lys,lye))then begin
+										vturnlasty[curbrand] = vturnlasty[curbrand] + turno;
+									end;
+									if(dateinrange(IHr.TransDate,cys,cye))then begin
+										vturncy[curbrand] = vturncy[curbrand] + turno;
+									end;
+									if(dateinrange(IHr.TransDate,mys,mye))then begin
+										vturncmonth[curbrand] = vturncmonth[curbrand] + turno;
+									end;
+									
+								end;
+							end;
+					
+						end;
+					end;
+					
+					if(IHr.StockAffectf>0)then begin
+					
+					end else begin
+					
+					end;
+				
+				end;
+				resetloop(IHr);
+				
+			end;
+		end;
+		
+		for(i=0;i<abrands.length;i=i+1)begin
+		
+			StartFormat(15);
+				outstring(0,0,vbrands[abrands[i]],false);
+				OutString(50,0,vturnlasty[abrands[i]],False);
+				OutString(100,0,vturncy[abrands[i]],False);
+				OutString(150,0,vturncmonth[abrands[i]],False);
+				OutString(200,0,"Net stock on " & cys,False);
+				OutString(250,0,"Net stock on " & mye,False);
+				OutString(300,0,"Net stock on " & mye & " 0-360",False);
+				OutString(350,0,"Net stock on " & mye & " 366-730",False);
+				OutString(400,0,"Net stock on " & mye & ">730",False);
+			endformat;
+		end;
+	EndJob;
+
+	RETURN;
+END;
