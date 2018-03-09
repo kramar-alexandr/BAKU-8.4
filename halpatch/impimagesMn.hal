@@ -6180,3 +6180,147 @@ begin
 	
 return;
 end;
+
+
+global //Edit***************************Sasha2,10:38 19.06.2017 {
+updating procedure FixFourSeasonsItemsPriceMn(record RcVc RepSpec)
+begin
+	record INVc INr,oldINr;
+	record ItemHistVc IHr;
+	record PUVc PUr,PU2r;
+	row PUVc PUrw,PU2rw;
+	integer i,j,mtrw,cbrw;
+  boolean changef,testf,TrHs;
+  val cost;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  integer curcomp,arcnt;
+  date bldate;
+  vector val itemprice,inprice;
+  vector string 25 curcode;
+  array string 100 artcodes; 
+  vector boolean vart;
+  vector date vartdate,moddate;
+	
+	
+	blockload(Compb);
+	cbrw = matrowcnt(Compb);
+	curcomp = currentcompany;
+	
+	startreportnoheaderjob("FixFourSeasonsItemsPriceMn");
+	
+	PUr.SerNr = -1;
+	while(loopmain(PUr,1,true))begin
+		mtrw = matrowcnt(PUr);
+		logtext(0,"PU " & PUr.SerNr);
+		For(i=0;i<mtrw;i=i+1) begin
+	  	matrowget(PUr,i,PUrw);
+	  	INr.Code = PUrw.ArtCode;
+	  	logtext(0,"PU item" & INr.Code);
+	  	if(ReadFirstMain(INr,1,true))then begin
+	  		if(INr.LastPriceChange==PUr.TransDate)then begin
+	  			
+	  			if(vart[INr.Code]==false)then begin
+	  				vart[INr.Code] = true;
+	  				artcodes[arcnt] = INr.Code;
+	  				arcnt = arcnt + 1;
+	  			end;
+	  			if(vartdate[INr.Code]<PUr.TransDate)then begin
+	  				vartdate[INr.Code] = PUr.TransDate;
+	  				inprice[INr.Code] = PUrw.UPrice;
+	  				curcode[INr.Code] = INr.LastPurchCurncyCode;
+	  			end;
+	  			
+					/*For(j=0;j<cbrw;j=j+1) begin
+						if(CompanyIsJWLikeCompany(j) and j!=27)then begin
+							if(setcompany(j,false))then begin
+								IHr.ArtCode = PUrw.ArtCode;
+								IHr.TransDate = PUr.TransDate;
+								TrHs = true;
+								logtext(0,"Company " & j);
+								while(loopbackkey("ArtCode",IHr,2,TrHs))begin
+									testf = true;
+									if(IHr.ArtCode!=PUrw.ArtCode)then begin TrHs = false; testf = false; end;
+									if(IHr.FileName!="PUVc")then begin testf = false; end;
+									if(IHr.TransDate<moddate)then begin testf = false; TrHs = false; end;
+									
+									if(testf)then begin
+										logtext(0,"IHr " & IHr.TransDate & " " & IHr.FileName);
+										PU2r.SerNr = IHr.TransNr;
+										if(readfirstmain(PU2r,1,true))then begin
+											matrowget(PU2r,IHr.Row,PU2rw);
+											if(curcode==PU2r.CurncyCode)then begin
+												itemprice = PU2rw.UPrice;
+												moddate = PUr.TransDate;
+											end;
+										end;
+										TrHs = false;
+									end;
+									
+								end;
+								resetloop(IHr);
+							end;
+						end;
+						resetcompany(curcomp);
+					end; */
+				end;
+				/*StartFormat(15);
+					outstring(0,0,INr.Code,false);
+					outstring(50,0,PUrw.UPrice,false);
+					outstring(100,0,itemprice,false);
+					outstring(150,0,curcode,false);								
+				endformat;*/
+				//logtext(0,INr.Code & " " & PUrw.UPrice & " " & itemprice & " " & curcode);
+	  	end;
+		end; 
+	end;
+	
+	
+	For(j=0;j<cbrw;j=j+1) begin
+		if(CompanyIsJWLikeCompany(j) and j!=27)then begin
+			if(setcompany(j,false))then begin
+				For(i=0;i<arcnt;i=i+1) begin				
+					IHr.ArtCode = artcodes[i];
+					IHr.TransDate = vartdate[artcodes[i]];
+					TrHs = true;
+					logtext(0,"Company " & j);
+					while(loopbackkey("ArtCode",IHr,2,TrHs))begin
+						testf = true;
+						if(IHr.ArtCode!=artcodes[i])then begin TrHs = false; testf = false; end;
+						if(IHr.FileName!="PUVc")then begin testf = false; end;
+						if(IHr.TransDate<moddate[artcodes[i]])then begin testf = false; TrHs = false; end;
+					
+						if(testf)then begin
+							logtext(0,"IHr " & IHr.TransDate & " " & IHr.FileName);
+							PU2r.SerNr = IHr.TransNr;
+							if(readfirstmain(PU2r,1,true))then begin
+								matrowget(PU2r,IHr.Row,PU2rw);
+								if(curcode[artcodes[i]]==PU2r.CurncyCode)then begin
+									itemprice[artcodes[i]] = PU2rw.UPrice;
+									moddate[artcodes[i]] = PUr.TransDate;
+								end;
+							end;
+							TrHs = false;
+						end;
+					
+					end;
+					resetloop(IHr);
+				end; 
+			end;
+		end;
+		resetcompany(curcomp);
+	end; 
+	
+	For(i=0;i<arcnt;i=i+1) begin	
+		StartFormat(15);
+			outstring(0,0,artcodes[i],false);
+			outstring(50,0,inprice[artcodes[i]],false);
+			outstring(100,0,itemprice[artcodes[i]],false);
+			outstring(150,0,curcode[artcodes[i]],false);								
+		endformat;
+	end;
+	
+	endjob;
+	
+return;
+end; //Edit***************************Sasha2,10:38 19.06.2017 }
