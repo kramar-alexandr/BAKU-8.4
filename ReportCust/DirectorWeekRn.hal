@@ -844,282 +844,7 @@ begin
 			end;
 		end;
 	end;
-	ResetLoop(mainr);
-	mainr.AccNumber = "53";
-	mainr.TransDate = RepSpec.sStartDate;
-	TrHs = true;
-	while (LoopMain(mainr,2,TrHs)) begin
-		if ((mainr.AccNumber != "53") or (mainr.TransDate > RepSpec.sEndDate))  then begin
-			TrHs = false;
-		end;
-		if (TrHs) then begin
-			TRr.Number = mainr.TransNr;
-			TRr.IntYc = mainr.IntYc;
-			if (ReadFirstMain(TRr,2,true)) then begin
-				if (mainr.TransDate == TRr.TransDate) then begin
-					rwcnt = MatRowCnt(TRr);
-          switch (TRr.IntYc) begin
-            case IVYc:
-              IVr.SerNr = TRr.Number;
-              if (ReadFirstMain(IVr,1,true)) then begin
-                f = true;
-              end else begin
-                f = false;
-              end;
-            case IPYc:
-              IPr.SerNr = TRr.Number;
-              if (ReadFirstMain(IPr,1,true)) then begin
-                f = true;
-              end else begin
-                f = false;
-              end;
-            case CLInYc:
-              CLInr.SerNr = TRr.Number;
-              if (ReadFirstMain(CLInr,1,true)) then begin
-                f = true;
-              end else begin
-                f = false;
-              end;
-            case CLOutYc:
-              CLOutr.SerNr = TRr.Number;
-              if (ReadFirstMain(CLOutr,1,true)) then begin
-                f = true;
-              end else begin
-                f = false;
-              end;
-          end;
-					for (i=0;i<rwcnt;i=i+1) begin
-						MatRowGet(TRr,i,TRrw);
-						done = false;
-						if ((TRrw.AccNumber == "53") and (TRrw.ovst <> 1) and SetInSet(RepSpec.ObjStr,TRrw.Objects)) then begin
-							switch (TRr.IntYc) begin
-								case IVYc:
-									if (f) then begin
-										DWTRrw.Comment = "СЧ/КЛ." & IVr.SerNr;
-										DWTRrw.ExtraComment = TRr.Comment;
-									end;
-								case IPYc:
-									if (f) then begin
-										DWTRrw.Comment = "ПЛ/КЛ." & IPr.SerNr;
-										DWTRrw.ExtraComment = TRr.Comment;
-									end;
-								case CLInYc:
-									if (f) then begin
-										DWTRrw.Comment = "ПКО." & CLInr.SerNr;
-										rwcnt2 = MatRowCnt(CLInr);
-										for (k=0;k<rwcnt2;k=k+1) begin
-											MatRowGet(CLInr,k,CLInrw);
-											if nonblank(CLInrw.Comment) and (CLInrw.Comment!="") and (((CLInrw.Sum == AbsoluteVal(TRrw.CurDebVal)) or (CLInrw.Sum == AbsoluteVal(TRrw.CurCredVal))) and ((nonblank(CLInrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLInrw.Objects,TRrw.Objects)) or (blank(CLInrw.Objects)))) then begin
-												DWTRrw.ExtraComment = CLInrw.Comment;
-                        CLInrw.Comment = "";
-                        matrowput(CLInr,k,CLInrw);
-                        k = rwcnt2;
-											end;
-										end;
-										if blank(DWTRrw.ExtraComment) then begin
-											DWTRrw.ExtraComment = CLInr.CorspComment;
-										end;
-									end;
-								case CLOutYc:
-									if (f) then begin
-										DWTRrw.Comment = "РКО." & CLOutr.SerNr;
-										rwcnt2 = MatRowCnt(CLOutr);
-										for (k=0;k<rwcnt2;k=k+1) begin
-											MatRowGet(CLOutr,k,CLOutrw);
-                    	if nonblank(CLOutrw.Comment) and (CLOutrw.Comment!="") and (((AbsoluteVal(CLOutrw.Sum) == AbsoluteVal(TRrw.CurCredVal)) or (AbsoluteVal(CLOutrw.Sum) == AbsoluteVal(TRrw.CurDebVal))) and ((nonblank(CLOutrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLOutrw.Objects,TRrw.Objects)) or (blank(CLOutrw.Objects)))) then begin
-												DWTRrw.ExtraComment = CLOutrw.Comment;
-                        CLOutrw.Comment = "";
-                        matrowput(CLOutr,k,CLOutrw);
-                        k = rwcnt2;
-											end;
-										end;
-										if blank(DWTRrw.ExtraComment) then begin
-											DWTRrw.ExtraComment = CLOutr.CorspComment;
-										end;
-									end;
-								otherwise
-									YcToStr(TRr.IntYc,tempStr);
-									DWTRrw.Comment = tempStr & "." & TRr.Number;
-									DWTRrw.ExtraComment = TRr.Comment;
-							end;
-							DWTRrw.ReconDate = mainr.TransDate;
-							DWTRrw.Curncy = TRrw.Curncy;				//валюта
-							DWTRrw.MyVal16 = TRrw.CurDebVal;		//в столбики Поступления AZN 
-							DWTRrw.MyVal17 = TRrw.CurCredVal;		//в столбики Расходы AZN 
-							DWTRrw.DebVal = TRrw.DebVal;        //в столбики Поступления AZN осн
-							DWTRrw.CredVal = TRrw.CredVal;      //в столбики Расходы AZN осн
-              if ((TRr.IntYc == IVYc) and (TRrw.CredVal <> 0)) then begin
-								DWTRrw.MyVal16 = - TRrw.CurCredVal;
-								DWTRrw.MyVal17 = - TRrw.CurDebVal;
-								DWTRrw.DebVal = - TRrw.CredVal;
-								DWTRrw.CredVal = - TRrw.DebVal;
-							end;
-              
-              corspdebval = blankval;
-							corspcredval = blankval;
-							testf = CorspTRTest(TRr,Accr50,i,corspdebval,corspcredval);
-							if testf then begin
-								if(TRrw.CredVal!=0)then begin
-									DWTRrw.MyVal18 = -TRrw.CurCredVal;
-									DWTRrw.MyVal2 = -TRrw.CredVal;
-								end else begin
-									DWTRrw.MyVal18 = TRrw.CurDebVal;
-									DWTRrw.MyVal2 = TRrw.DebVal;
-								end;
-								DWTRrw.TFromFileName = "53";
-								DWTRrw.MyVal16 = blankval;
-								DWTRrw.DebVal = blankval;
-								DWTRrw.MyVal17 = blankval;
-								DWTRrw.CredVal = blankval;
-							end;
-              corspdebval = blankval;
-							corspcredval = blankval;
-							testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval);
-							if testf then begin
-								if(TRrw.CredVal!=0)then begin
-									DWTRrw.MyVal18 = -TRrw.CurCredVal;
-									DWTRrw.MyVal2 = -TRrw.CredVal;
-								end else begin
-									DWTRrw.MyVal18 = TRrw.CurDebVal;
-									DWTRrw.MyVal2 = TRrw.DebVal;
-								end;
-								DWTRrw.TFromFileName = "53";
-								DWTRrw.MyVal16 = blankval;
-								DWTRrw.DebVal = blankval;
-								DWTRrw.MyVal17 = blankval;
-								DWTRrw.CredVal = blankval;
-							end;
-              corspdebval = blankval;
-							corspcredval = blankval;
-              testf = CorspTRTest(TRr,Accr52,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
-							if testf then begin
-								if(TRrw.CredVal!=0)then begin
-									DWTRrw.MyVal18 = -TRrw.CurCredVal;
-									DWTRrw.MyVal2 = -TRrw.CredVal;
-								end else begin
-									DWTRrw.MyVal18 = TRrw.CurDebVal;
-									DWTRrw.MyVal2 = TRrw.DebVal;
-								end;
-								DWTRrw.TFromFileName = "53";
-                DWTRrw.MyVal16 = blankval;
-								DWTRrw.DebVal = blankval;
-								DWTRrw.MyVal17 = blankval;
-								DWTRrw.CredVal = blankval;
-							end;
-              corspdebval = blankval;
-							corspcredval = blankval;
-							testf = CorspTRTest(TRr,Accr53,i,corspdebval,corspcredval);
-							if (testf and (corspdebval==TRrw.CredVal or corspcredval==TRrw.DebVal) and (TRr.IntYc != IVYc) and (TRr.IntYc != IPYc)) then begin
-								store = "";
-								GetObjs("STORE",TRrw.Objects,store);
-								if nonblank(store) then begin
-									for (k=0;k<rwcnt;k=k+1) begin
-										MatRowGet(TRr,k,TR2rw);
-										if (TR2rw.AccNumber == "53") and (TR2rw.ovst <> 1) then begin 
-											if ((TR2rw.CredVal == TRrw.DebVal) and (TR2rw.DebVal == TRrw.CredVal)) then begin
-												store2 = "";
-												GetObjs("STORE",TR2rw.Objects,store2);
-												if (store == store2) then begin
-													if (TRrw.CredVal!=0) then begin
-														DWTRrw.MyVal18 = -TRrw.CredVal;
-														DWTRrw.MyVal2 = -TRrw.CredVal;
-													end else begin
-														DWTRrw.MyVal18 = TRrw.DebVal;
-														DWTRrw.MyVal2 = TRrw.DebVal;
-													end;
-													DWTRrw.TFromFileName = "53";
-													DWTRrw.MyVal16 = blankval;
-													DWTRrw.DebVal = blankval;
-													DWTRrw.MyVal17 = blankval;
-													DWTRrw.CredVal = blankval;
-												end else begin
-													if (TRrw.DebVal!=0) then begin
-														TRrw.CredVal = -TRrw.DebVal;
-														TRrw.DebVal = blankval;
-														TRrw.CurCredVal = -TRrw.DebVal;
-														TRrw.CurDebVal = blankval;
-													end;
-													DWTRrw.MyVal16 = TRrw.DebVal;
-													DWTRrw.MyVal17 = TRrw.CredVal;
-													DWTRrw.DebVal = TRrw.DebVal;
-													DWTRrw.CredVal = TRrw.CredVal;
-												end;
-											end else begin
-												if i != k then begin
-													if ((TR2rw.CredVal == TRrw.DebVal) or (TR2rw.DebVal == TRrw.CredVal)) and (TR2rw.Objects == TRrw.Objects) then begin
-														testf = CorspTRTest(TRr,Accr8403,k,corspdebval,corspcredval);
-														if testf then begin
-															if (TRrw.CredVal!=0) then begin
-																DWTRrw.MyVal18 = -TRrw.CurCredVal;
-																DWTRrw.MyVal2 = -TRrw.CredVal;
-															end else begin
-																DWTRrw.MyVal18 = TRrw.CurDebVal;
-																DWTRrw.MyVal2 = TRrw.DebVal;
-															end;
-															DWTRrw.TFromFileName = "53";
-															DWTRrw.MyVal16 = blankval;
-															DWTRrw.DebVal = blankval;
-															DWTRrw.MyVal17 = blankval;
-															DWTRrw.CredVal = blankval;
-														end;
-													end;
-												end;
-											end;
-										end;
-									end;
-								end;
-							end;
-              corspdebval = blankval;
-							corspcredval = blankval;
-              testf = CorspTRTest(TRr,Accr8403,i,corspdebval,corspcredval);
-							if testf then begin
-								if(TRrw.CredVal!=0)then begin
-									DWTRrw.MyVal18 = -TRrw.CurCredVal;
-									DWTRrw.MyVal2 = -TRrw.CredVal;
-								end else begin
-									DWTRrw.MyVal18 = TRrw.CurDebVal;
-									DWTRrw.MyVal2 = TRrw.DebVal;
-								end;
-								DWTRrw.TFromFileName = "53";
-								DWTRrw.MyVal3 = - corspdebval + corspcredval;
-								DWTRrw.MyVal16 = blankval;
-								DWTRrw.DebVal = blankval;
-								DWTRrw.MyVal17 = blankval;
-								DWTRrw.CredVal = blankval;
-                v["kursovaya53"] = v["kursovaya53"] - corspdebval + corspcredval;
-							end;
-              
-              if (!done) then begin
-								if ((RepSpec.ArtMode == 1) and (TRr.IntYc == IVYc) and nonblank(TRrw.DebVal)) then begin
-									MatRowPut(DWTR2r,l,DWTRrw);
-									l = l + 1;
-								end else begin
-									MatRowPut(DWTRr,j,DWTRrw);
-									j = j + 1;
-								end;
-							end;
-              DWTRrw.ReconDate = "";
-							DWTRrw.Curncy = "";
-							DWTRrw.CurDebVal = blankval;
-							DWTRrw.CurCredVal = blankval;
-							DWTRrw.DebVal = blankval;
-							DWTRrw.CredVal = blankval;
-							DWTRrw.MyVal16 = blankval;
-							DWTRrw.MyVal17 = blankval;
-							DWTRrw.MyVal18 = blankval;
-              DWTRrw.MyVal2 = blankval;
-              DWTRrw.MyVal3 = blankval;
-							DWTRrw.Comment = "";
-							DWTRrw.ExtraComment = "";
-              DWTRrw.TFromFileName = "";
-              
-						end;
-					end;
-				end;
-			end;
-		end;
-	end;
-  
+	
   ResetLoop(mainr);
   mainr.AccNumber = "52";
 	mainr.TransDate = RepSpec.sStartDate;
@@ -1594,7 +1319,283 @@ begin
 			end;
 		end;
 	end;
-  
+  if (RepSpec.sStartDate>=StringToDate("1/1/2018")) then begin
+    ResetLoop(mainr);
+    mainr.AccNumber = "53";
+    mainr.TransDate = RepSpec.sStartDate;
+    TrHs = true;
+    while (LoopMain(mainr,2,TrHs)) begin
+      if ((mainr.AccNumber != "53") or (mainr.TransDate > RepSpec.sEndDate))  then begin
+        TrHs = false;
+      end;
+      if (TrHs) then begin
+        TRr.Number = mainr.TransNr;
+        TRr.IntYc = mainr.IntYc;
+        if (ReadFirstMain(TRr,2,true)) then begin
+          if (mainr.TransDate == TRr.TransDate) then begin
+            rwcnt = MatRowCnt(TRr);
+            switch (TRr.IntYc) begin
+              case IVYc:
+                IVr.SerNr = TRr.Number;
+                if (ReadFirstMain(IVr,1,true)) then begin
+                  f = true;
+                end else begin
+                  f = false;
+                end;
+              case IPYc:
+                IPr.SerNr = TRr.Number;
+                if (ReadFirstMain(IPr,1,true)) then begin
+                  f = true;
+                end else begin
+                  f = false;
+                end;
+              case CLInYc:
+                CLInr.SerNr = TRr.Number;
+                if (ReadFirstMain(CLInr,1,true)) then begin
+                  f = true;
+                end else begin
+                  f = false;
+                end;
+              case CLOutYc:
+                CLOutr.SerNr = TRr.Number;
+                if (ReadFirstMain(CLOutr,1,true)) then begin
+                  f = true;
+                end else begin
+                  f = false;
+                end;
+            end;
+            for (i=0;i<rwcnt;i=i+1) begin
+              MatRowGet(TRr,i,TRrw);
+              done = false;
+              if ((TRrw.AccNumber == "53") and (TRrw.ovst <> 1) and SetInSet(RepSpec.ObjStr,TRrw.Objects)) then begin
+                switch (TRr.IntYc) begin
+                  case IVYc:
+                    if (f) then begin
+                      DWTRrw.Comment = "СЧ/КЛ." & IVr.SerNr;
+                      DWTRrw.ExtraComment = TRr.Comment;
+                    end;
+                  case IPYc:
+                    if (f) then begin
+                      DWTRrw.Comment = "ПЛ/КЛ." & IPr.SerNr;
+                      DWTRrw.ExtraComment = TRr.Comment;
+                    end;
+                  case CLInYc:
+                    if (f) then begin
+                      DWTRrw.Comment = "ПКО." & CLInr.SerNr;
+                      rwcnt2 = MatRowCnt(CLInr);
+                      for (k=0;k<rwcnt2;k=k+1) begin
+                        MatRowGet(CLInr,k,CLInrw);
+                        if nonblank(CLInrw.Comment) and (CLInrw.Comment!="") and (((CLInrw.Sum == AbsoluteVal(TRrw.CurDebVal)) or (CLInrw.Sum == AbsoluteVal(TRrw.CurCredVal))) and ((nonblank(CLInrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLInrw.Objects,TRrw.Objects)) or (blank(CLInrw.Objects)))) then begin
+                          DWTRrw.ExtraComment = CLInrw.Comment;
+                          CLInrw.Comment = "";
+                          matrowput(CLInr,k,CLInrw);
+                          k = rwcnt2;
+                        end;
+                      end;
+                      if blank(DWTRrw.ExtraComment) then begin
+                        DWTRrw.ExtraComment = CLInr.CorspComment;
+                      end;
+                    end;
+                  case CLOutYc:
+                    if (f) then begin
+                      DWTRrw.Comment = "РКО." & CLOutr.SerNr;
+                      rwcnt2 = MatRowCnt(CLOutr);
+                      for (k=0;k<rwcnt2;k=k+1) begin
+                        MatRowGet(CLOutr,k,CLOutrw);
+                        if nonblank(CLOutrw.Comment) and (CLOutrw.Comment!="") and (((AbsoluteVal(CLOutrw.Sum) == AbsoluteVal(TRrw.CurCredVal)) or (AbsoluteVal(CLOutrw.Sum) == AbsoluteVal(TRrw.CurDebVal))) and ((nonblank(CLOutrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLOutrw.Objects,TRrw.Objects)) or (blank(CLOutrw.Objects)))) then begin
+                          DWTRrw.ExtraComment = CLOutrw.Comment;
+                          CLOutrw.Comment = "";
+                          matrowput(CLOutr,k,CLOutrw);
+                          k = rwcnt2;
+                        end;
+                      end;
+                      if blank(DWTRrw.ExtraComment) then begin
+                        DWTRrw.ExtraComment = CLOutr.CorspComment;
+                      end;
+                    end;
+                  otherwise
+                    YcToStr(TRr.IntYc,tempStr);
+                    DWTRrw.Comment = tempStr & "." & TRr.Number;
+                    DWTRrw.ExtraComment = TRr.Comment;
+                end;
+                DWTRrw.ReconDate = mainr.TransDate;
+                DWTRrw.Curncy = TRrw.Curncy;				//валюта
+                DWTRrw.MyVal16 = TRrw.CurDebVal;		//в столбики Поступления AZN 
+                DWTRrw.MyVal17 = TRrw.CurCredVal;		//в столбики Расходы AZN 
+                DWTRrw.DebVal = TRrw.DebVal;        //в столбики Поступления AZN осн
+                DWTRrw.CredVal = TRrw.CredVal;      //в столбики Расходы AZN осн
+                if ((TRr.IntYc == IVYc) and (TRrw.CredVal <> 0)) then begin
+                  DWTRrw.MyVal16 = - TRrw.CurCredVal;
+                  DWTRrw.MyVal17 = - TRrw.CurDebVal;
+                  DWTRrw.DebVal = - TRrw.CredVal;
+                  DWTRrw.CredVal = - TRrw.DebVal;
+                end;
+                
+                corspdebval = blankval;
+                corspcredval = blankval;
+                testf = CorspTRTest(TRr,Accr50,i,corspdebval,corspcredval);
+                if testf then begin
+                  if(TRrw.CredVal!=0)then begin
+                    DWTRrw.MyVal18 = -TRrw.CurCredVal;
+                    DWTRrw.MyVal2 = -TRrw.CredVal;
+                  end else begin
+                    DWTRrw.MyVal18 = TRrw.CurDebVal;
+                    DWTRrw.MyVal2 = TRrw.DebVal;
+                  end;
+                  DWTRrw.TFromFileName = "53";
+                  DWTRrw.MyVal16 = blankval;
+                  DWTRrw.DebVal = blankval;
+                  DWTRrw.MyVal17 = blankval;
+                  DWTRrw.CredVal = blankval;
+                end;
+                corspdebval = blankval;
+                corspcredval = blankval;
+                testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval);
+                if testf then begin
+                  if(TRrw.CredVal!=0)then begin
+                    DWTRrw.MyVal18 = -TRrw.CurCredVal;
+                    DWTRrw.MyVal2 = -TRrw.CredVal;
+                  end else begin
+                    DWTRrw.MyVal18 = TRrw.CurDebVal;
+                    DWTRrw.MyVal2 = TRrw.DebVal;
+                  end;
+                  DWTRrw.TFromFileName = "53";
+                  DWTRrw.MyVal16 = blankval;
+                  DWTRrw.DebVal = blankval;
+                  DWTRrw.MyVal17 = blankval;
+                  DWTRrw.CredVal = blankval;
+                end;
+                corspdebval = blankval;
+                corspcredval = blankval;
+                testf = CorspTRTest(TRr,Accr52,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+                if testf then begin
+                  if(TRrw.CredVal!=0)then begin
+                    DWTRrw.MyVal18 = -TRrw.CurCredVal;
+                    DWTRrw.MyVal2 = -TRrw.CredVal;
+                  end else begin
+                    DWTRrw.MyVal18 = TRrw.CurDebVal;
+                    DWTRrw.MyVal2 = TRrw.DebVal;
+                  end;
+                  DWTRrw.TFromFileName = "53";
+                  DWTRrw.MyVal16 = blankval;
+                  DWTRrw.DebVal = blankval;
+                  DWTRrw.MyVal17 = blankval;
+                  DWTRrw.CredVal = blankval;
+                end;
+                corspdebval = blankval;
+                corspcredval = blankval;
+                testf = CorspTRTest(TRr,Accr53,i,corspdebval,corspcredval);
+                if (testf and (corspdebval==TRrw.CredVal or corspcredval==TRrw.DebVal) and (TRr.IntYc != IVYc) and (TRr.IntYc != IPYc)) then begin
+                  store = "";
+                  GetObjs("STORE",TRrw.Objects,store);
+                  if nonblank(store) then begin
+                    for (k=0;k<rwcnt;k=k+1) begin
+                      MatRowGet(TRr,k,TR2rw);
+                      if (TR2rw.AccNumber == "53") and (TR2rw.ovst <> 1) then begin 
+                        if ((TR2rw.CredVal == TRrw.DebVal) and (TR2rw.DebVal == TRrw.CredVal)) then begin
+                          store2 = "";
+                          GetObjs("STORE",TR2rw.Objects,store2);
+                          if (store == store2) then begin
+                            if (TRrw.CredVal!=0) then begin
+                              DWTRrw.MyVal18 = -TRrw.CredVal;
+                              DWTRrw.MyVal2 = -TRrw.CredVal;
+                            end else begin
+                              DWTRrw.MyVal18 = TRrw.DebVal;
+                              DWTRrw.MyVal2 = TRrw.DebVal;
+                            end;
+                            DWTRrw.TFromFileName = "53";
+                            DWTRrw.MyVal16 = blankval;
+                            DWTRrw.DebVal = blankval;
+                            DWTRrw.MyVal17 = blankval;
+                            DWTRrw.CredVal = blankval;
+                          end else begin
+                            if (TRrw.DebVal!=0) then begin
+                              TRrw.CredVal = -TRrw.DebVal;
+                              TRrw.DebVal = blankval;
+                              TRrw.CurCredVal = -TRrw.DebVal;
+                              TRrw.CurDebVal = blankval;
+                            end;
+                            DWTRrw.MyVal16 = TRrw.DebVal;
+                            DWTRrw.MyVal17 = TRrw.CredVal;
+                            DWTRrw.DebVal = TRrw.DebVal;
+                            DWTRrw.CredVal = TRrw.CredVal;
+                          end;
+                        end else begin
+                          if i != k then begin
+                            if ((TR2rw.CredVal == TRrw.DebVal) or (TR2rw.DebVal == TRrw.CredVal)) and (TR2rw.Objects == TRrw.Objects) then begin
+                              testf = CorspTRTest(TRr,Accr8403,k,corspdebval,corspcredval);
+                              if testf then begin
+                                if (TRrw.CredVal!=0) then begin
+                                  DWTRrw.MyVal18 = -TRrw.CurCredVal;
+                                  DWTRrw.MyVal2 = -TRrw.CredVal;
+                                end else begin
+                                  DWTRrw.MyVal18 = TRrw.CurDebVal;
+                                  DWTRrw.MyVal2 = TRrw.DebVal;
+                                end;
+                                DWTRrw.TFromFileName = "53";
+                                DWTRrw.MyVal16 = blankval;
+                                DWTRrw.DebVal = blankval;
+                                DWTRrw.MyVal17 = blankval;
+                                DWTRrw.CredVal = blankval;
+                              end;
+                            end;
+                          end;
+                        end;
+                      end;
+                    end;
+                  end;
+                end;
+                corspdebval = blankval;
+                corspcredval = blankval;
+                testf = CorspTRTest(TRr,Accr8403,i,corspdebval,corspcredval);
+                if testf then begin
+                  if(TRrw.CredVal!=0)then begin
+                    DWTRrw.MyVal18 = -TRrw.CurCredVal;
+                    DWTRrw.MyVal2 = -TRrw.CredVal;
+                  end else begin
+                    DWTRrw.MyVal18 = TRrw.CurDebVal;
+                    DWTRrw.MyVal2 = TRrw.DebVal;
+                  end;
+                  DWTRrw.TFromFileName = "53";
+                  DWTRrw.MyVal3 = - corspdebval + corspcredval;
+                  DWTRrw.MyVal16 = blankval;
+                  DWTRrw.DebVal = blankval;
+                  DWTRrw.MyVal17 = blankval;
+                  DWTRrw.CredVal = blankval;
+                  v["kursovaya53"] = v["kursovaya53"] - corspdebval + corspcredval;
+                end;
+                
+                if (!done) then begin
+                  if ((RepSpec.ArtMode == 1) and (TRr.IntYc == IVYc) and nonblank(TRrw.DebVal)) then begin
+                    MatRowPut(DWTR2r,l,DWTRrw);
+                    l = l + 1;
+                  end else begin
+                    MatRowPut(DWTRr,j,DWTRrw);
+                    j = j + 1;
+                  end;
+                end;
+                DWTRrw.ReconDate = "";
+                DWTRrw.Curncy = "";
+                DWTRrw.CurDebVal = blankval;
+                DWTRrw.CurCredVal = blankval;
+                DWTRrw.DebVal = blankval;
+                DWTRrw.CredVal = blankval;
+                DWTRrw.MyVal16 = blankval;
+                DWTRrw.MyVal17 = blankval;
+                DWTRrw.MyVal18 = blankval;
+                DWTRrw.MyVal2 = blankval;
+                DWTRrw.MyVal3 = blankval;
+                DWTRrw.Comment = "";
+                DWTRrw.ExtraComment = "";
+                DWTRrw.TFromFileName = "";
+                
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
   
 	rwcnt = MatRowCnt(DWTRr);
 	for (i=0;i<rwcnt;i=i+1) begin
@@ -1875,18 +1876,6 @@ begin
     tabprintf[23] = false;
     tabprintf[24] = false;
     tabprintf[35] = false;
-  end;
-  
-  if ((RepSpec.sStartDate<StringToDate("1/1/2018")) or (cretivef)) then begin
-    tabprintf[9] = false;
-    tabprintf[10] = false;
-    tabprintf[11] = false;
-    tabprintf[20] = false;
-    tabprintf[21] = false;
-    tabprintf[22] = false;
-    tabprintf[32] = false;
-    tabprintf[33] = false;
-    tabprintf[34] = false;
   end;
   j = 0;
   for (i=1;i<=37;i=i+1) begin
@@ -3673,12 +3662,7 @@ begin
 		StartFormat(15);
 		EndFormat;
 		// Табл. 2,3
-    if ((RepSpec.sStartDate>=StringToDate("1/1/2018")) and (!cretivef)) then begin
-      v["Base53Deb"] = 0;
-      v["Base53Cred"] = 0;
-      v["Base53Conv"] = 0;
-    end;
-		Black_Divider(tab[2],tab[6]);
+    Black_Divider(tab[2],tab[6]);
 		Black_Divider(tab[8],tab[13]);
     Black_Divider(tab[15],tab[19]);
     if ((RepSpec.sStartDate>=StringToDate("1/1/2018")) and (!cretivef)) then begin
