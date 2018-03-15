@@ -6196,12 +6196,13 @@ begin
   row CompaniesBlock Comprw;
   integer curcomp,arcnt;
   date bldate;
-  vector val itemprice,inprice;
+  vector val itemprice,inprice,inpriceazn;
   vector string 25 curcode;
   array string 100 artcodes; 
   vector boolean vart;
   vector date vartdate,moddate;
-	
+	record RcVc RepSpec1;// Edit ************************** Thursday, 21 February 2013 09:43:50
+  record PLDefVc PLDr;// Edit ************************** Thursday, 21 February 2013 09:45:29
 	
 	blockload(Compb);
 	cbrw = matrowcnt(Compb);
@@ -6209,70 +6210,34 @@ begin
 	
 	startreportnoheaderjob("FixFourSeasonsItemsPriceMn");
 	
-	PUr.SerNr = -1;
+	PUr.SerNr = 37;
 	while(loopmain(PUr,1,true))begin
-		mtrw = matrowcnt(PUr);
-		logtext(0,"PU " & PUr.SerNr);
-		For(i=0;i<mtrw;i=i+1) begin
-	  	matrowget(PUr,i,PUrw);
-	  	INr.Code = PUrw.ArtCode;
-	  	logtext(0,"PU item" & INr.Code);
-	  	if(ReadFirstMain(INr,1,true))then begin
-	  		if(INr.LastPriceChange==PUr.TransDate)then begin
-	  			
-	  			if(vart[INr.Code]==false)then begin
-	  				vart[INr.Code] = true;
-	  				artcodes[arcnt] = INr.Code;
-	  				arcnt = arcnt + 1;
-	  			end;
-	  			if(vartdate[INr.Code]<PUr.TransDate)then begin
-	  				vartdate[INr.Code] = PUr.TransDate;
-	  				inprice[INr.Code] = PUrw.UPrice;
-	  				curcode[INr.Code] = INr.LastPurchCurncyCode;
-	  			end;
-	  			
-					/*For(j=0;j<cbrw;j=j+1) begin
-						if(CompanyIsJWLikeCompany(j) and j!=27)then begin
-							if(setcompany(j,false))then begin
-								IHr.ArtCode = PUrw.ArtCode;
-								IHr.TransDate = PUr.TransDate;
-								TrHs = true;
-								logtext(0,"Company " & j);
-								while(loopbackkey("ArtCode",IHr,2,TrHs))begin
-									testf = true;
-									if(IHr.ArtCode!=PUrw.ArtCode)then begin TrHs = false; testf = false; end;
-									if(IHr.FileName!="PUVc")then begin testf = false; end;
-									if(IHr.TransDate<moddate)then begin testf = false; TrHs = false; end;
-									
-									if(testf)then begin
-										logtext(0,"IHr " & IHr.TransDate & " " & IHr.FileName);
-										PU2r.SerNr = IHr.TransNr;
-										if(readfirstmain(PU2r,1,true))then begin
-											matrowget(PU2r,IHr.Row,PU2rw);
-											if(curcode==PU2r.CurncyCode)then begin
-												itemprice = PU2rw.UPrice;
-												moddate = PUr.TransDate;
-											end;
-										end;
-										TrHs = false;
-									end;
-									
-								end;
-								resetloop(IHr);
-							end;
+		testf = true;
+		
+		if(testf)then begin
+			mtrw = matrowcnt(PUr);
+			logtext(0,"PU " & PUr.SerNr);
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(PUr,i,PUrw);
+				INr.Code = PUrw.ArtCode;
+				logtext(0,"PU item" & INr.Code);
+				if(ReadFirstMain(INr,1,true))then begin
+					if(INr.LastPriceChange==stringtodate("9/11/2017"))then begin
+					
+						if(vart[INr.Code]==false)then begin
+							vart[INr.Code] = true;
+							artcodes[arcnt] = INr.Code;
+							arcnt = arcnt + 1;
 						end;
-						resetcompany(curcomp);
-					end; */
+						if(vartdate[INr.Code]<PUr.TransDate)then begin
+							vartdate[INr.Code] = stringtodate("9/11/2017");
+							inprice[INr.Code] = PUrw.UPrice;
+							curcode[INr.Code] = INr.LastPurchCurncyCode;
+						end;
+					end;
 				end;
-				/*StartFormat(15);
-					outstring(0,0,INr.Code,false);
-					outstring(50,0,PUrw.UPrice,false);
-					outstring(100,0,itemprice,false);
-					outstring(150,0,curcode,false);								
-				endformat;*/
-				//logtext(0,INr.Code & " " & PUrw.UPrice & " " & itemprice & " " & curcode);
-	  	end;
-		end; 
+			end; 
+		end;
 	end;
 	
 	
@@ -6297,6 +6262,7 @@ begin
 								matrowget(PU2r,IHr.Row,PU2rw);
 								if(curcode[artcodes[i]]==PU2r.CurncyCode)then begin
 									itemprice[artcodes[i]] = PU2rw.UPrice;
+									inpriceazn[artcodes[i]] = PU2rw.CostPrice;
 									moddate[artcodes[i]] = PUr.TransDate;
 								end;
 							end;
@@ -6312,6 +6278,20 @@ begin
 	end; 
 	
 	For(i=0;i<arcnt;i=i+1) begin	
+		INr.Code = artcodes[i];
+		if(readfirstmain(INr,1,true))then begin
+			INr.LastPurchPrice2 = itemprice[artcodes[i]];
+			INr.InPrice = inpriceazn[artcodes[i]];
+			INr.LastPriceChange = currentdate;
+			recordstore(INr,true);
+			PLDr.Code="";
+			While(loopmain(PLDr,1,true))begin
+				RepSpec1.f1 = PLDr.Code;
+				RepSpec1.f2 = INr.Code;
+				CalcPriceListsMn(RepSpec1);
+			end;
+			resetloop(PLDr);
+		end;
 		StartFormat(15);
 			outstring(0,0,artcodes[i],false);
 			outstring(50,0,inprice[artcodes[i]],false);
