@@ -5,6 +5,7 @@ external procedure GetObjs(string,string,var string);
 external function val cur2cur(String,String,Date,Val);
 external function val cur2b1(String,Date,Val);
 external function LongInt DateDiff(Date,Date);
+external function val AbsoluteVal(val);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -29,6 +30,7 @@ BEGIN
 	record IVVc IVr;
 	row IVVc IVrw;
 	val turno,totuot;
+	val totvturnlasty,totvturncy,totvturncmonth,totvbrandstock1jan,totvbrandstock_mye,totvmye0360,totvmye360720,totvmye720;
 	
 	if(blankdate(RepSpec.d1))then begin
 		RepSpec.d1 = currentdate;
@@ -78,20 +80,29 @@ BEGIN
 		if(testf)then begin
 			abrands[abrands.length] = DIr.Code;
 			vbrands[DIr.Code] = DIr.Name;
+			
+			abrands[abrands.length] = DIr.Code & "_CONS";
+			vbrands[DIr.Code & "_CONS"] = DIr.Name & " Consignation";
+			
 		end;
 	end;
+	abrands[abrands.length] = "BLANK";
+	vbrands["BLANK"] = "No brand";
 	
-	StartReportNoHeaderJob("Отчет по старому складу");
+	abrands[abrands.length] = "BLANK_CONS";
+	vbrands["BLANK_CONS"] = "No brand - Consignation";
+	
+	StartReportNoHeaderJob("Old Stock Report");
 		
 		if(nonblank(RepSpec.f1))then begin
 			startformat(15);
-				outstring(0,0,"По складу:",false);
+				outstring(0,0,"Location:",false);
 				outstring(80,0,RepSpec.f1,false);
 			endformat;
 		end else begin
 			startformat(15);
-				outstring(0,0,"По складу:",false);
-				outstring(80,0,"По всем",false);
+				outstring(0,0,"Location:",false);
+				outstring(80,0,"All",false);
 			endformat;
 		end;
 		
@@ -106,7 +117,7 @@ BEGIN
 			OutString(200,0,"Net stock on " & cys,False);
 			OutString(250,0,"Net stock on " & mye,False);
 			OutString(300,0,"Net stock on " & mye & " 0-360",False);
-			OutString(350,0,"Net stock on " & mye & " 366-730",False);
+			OutString(350,0,"Net stock on " & mye & " 360-730",False);
 			OutString(400,0,"Net stock on " & mye & ">730",False);
 		endformat;
 		
@@ -124,6 +135,10 @@ BEGIN
 				end;
 				
 			end;
+			if(blank(RepSpec.f2) and blank(curbrand))then begin
+				foundf = true; 
+				curbrand = "BLANK";
+			end;
 			testf = foundf;
 			if(setinset("30",INr.DispGroups))then begin testf = false; end;
 			if(setinset("31",INr.DispGroups))then begin testf = false; end;
@@ -131,7 +146,7 @@ BEGIN
 			if(setinset("33",INr.DispGroups))then begin testf = false; end;
 			if(setinset("34",INr.DispGroups))then begin testf = false; end;
 			if(setinset("35",INr.DispGroups))then begin testf = false; end;
-			if(INr.ConsgType!=0) then begin testf = false; end;
+			if(INr.ConsgType!=0) then begin curbrand = curbrand & "_CONS"; end;
 			if(INr.ItemType!=1) then begin testf = false; end;
 			
 			mye0360 = blankval;
@@ -159,11 +174,14 @@ BEGIN
 									
 										turno = blankval;
 										if(IVr.CurncyCode=="AZN")then begin
-											turno = IVrw.Sum;
+											turno = IVrw.Sum/AbsoluteVal(IVrw.Quant)*AbsoluteVal(IHr.Qty);
 										end else begin
-											turno = IVrw.Sum / IVr.FrRate * IVr.ToRateB1;
+											turno = IVrw.Sum/AbsoluteVal(IVrw.Quant)*AbsoluteVal(IHr.Qty) / IVr.FrRate * IVr.ToRateB1;
 										end;
 										if(IVr.InvType==kInvoiceTypeCredit)then begin
+											turno = -turno;
+										end;
+										if(IHr.Invalid>0)then begin
 											turno = -turno;
 										end;
 									
@@ -172,6 +190,12 @@ BEGIN
 										end;
 										if(dateinrange(IHr.TransDate,cys,cye))then begin
 											vturncy[curbrand] = vturncy[curbrand] + turno;
+											/*if(currentuser=="SA")then begin
+												startformat(15);
+													outstring(0,0,IHr.ArtCode,false);
+													outstring(100,0,turno,false);
+												endformat;
+											end;*/
 										end;
 										if(dateinrange(IHr.TransDate,mys,mye))then begin
 											vturncmonth[curbrand] = vturncmonth[curbrand] + turno;
@@ -208,34 +232,7 @@ BEGIN
 								end;
 								if(IHr.TransDate<mye)then begin
 									vbrandstock_mye[curbrand] = vbrandstock_mye[curbrand] - IHr.TotCostPrice;
-									
 									totuot = totuot + IHr.TotCostPrice;
-									
-									/*if(mye720<=0 and mye360720<=0 and mye0360==0)then begin
-										mye720 = mye720 - IHr.TotCostPrice;
-									end;
-									
-									if(mye0360>0 and mye360720==0 and mye720==0)then begin
-										mye0360 = mye0360 - IHr.TotCostPrice;
-									end;
-									if(mye360720>0 and mye720==0)then begin
-										mye360720 = mye360720 - IHr.TotCostPrice;
-										if(mye360720<0)then begin
-											mye0360 = mye0360 + mye360720;
-											mye360720 = 0;
-										end;
-									end;
-									if(mye720>0)then begin
-										mye720 = mye720 - IHr.TotCostPrice;
-										if(mye720<0)then begin
-											if(mye360720>-mye720)then begin
-												mye360720 = mye360720 + mye720;
-												mye720 = 0;
-											end;
-										end;
-									end;*/
-
-								
 								end;
 							end;
 						end;
@@ -273,14 +270,7 @@ BEGIN
 				vmye0360[curbrand] = vmye0360[curbrand] + mye0360;
 				vmye360720[curbrand] = vmye360720[curbrand] + mye360720;
 				vmye720[curbrand] = vmye720[curbrand] + mye720;
-				resetloop(IHr);
-				/*StartFormat(15);
-					outstring(0,0,INr.Code,false);
-					outstring(100,0,mye0360,false);
-					outstring(150,0,mye360720,false);
-					outstring(200,0,mye720,false);
-				endformat;*/
-				
+				resetloop(IHr);				
 			end;
 		end;
 		
@@ -303,13 +293,36 @@ BEGIN
 					OutVal(300,0,vmye0360[abrands[i]],m4val,False);
 					OutVal(350,0,vmye360720[abrands[i]],m4val,False);
 					OutVal(400,0,vmye720[abrands[i]],m4val,False);
+					
+					totvturnlasty = totvturnlasty + vturnlasty[abrands[i]];
+					totvturncy = totvturncy + vturncy[abrands[i]];
+					totvturncmonth = totvturncmonth + vturncmonth[abrands[i]];
+					totvbrandstock1jan = totvbrandstock1jan + vbrandstock1jan[abrands[i]];
+					totvbrandstock_mye = totvbrandstock_mye + vbrandstock_mye[abrands[i]];
+					totvmye0360 = totvmye0360 + vmye0360[abrands[i]];
+					totvmye360720 = totvmye360720 + vmye360720[abrands[i]];
+					totvmye720 = totvmye720 + vmye720[abrands[i]];
+					
 					if(left(currentuser,2)=="SA")then begin
 						OutVal(450,0,vbrandstock_mye[abrands[i]] - vmye0360[abrands[i]] - vmye360720[abrands[i]] - vmye720[abrands[i]],m4val,False);
 					end;
 				endformat;
 			end;
 		end;
-	EndJob;
+		
+		black_divider(0,1);
+		
+		StartFormat(15);
+			outstring(0,0,"TOTAL",false);
+			OutVal(50,0,totvturnlasty,m4val,False);
+			OutVal(100,0,totvturncy,m4val,False);
+			OutVal(150,0,totvturncmonth,m4val,False);
+			OutVal(200,0,totvbrandstock1jan,m4val,False);
+			OutVal(250,0,totvbrandstock_mye,m4val,False);
+			OutVal(300,0,totvmye0360,m4val,False);
+			OutVal(350,0,totvmye360720,m4val,False);
+			OutVal(400,0,totvmye720,m4val,False);		
+		EndJob;
 
 	RETURN;
 END;
