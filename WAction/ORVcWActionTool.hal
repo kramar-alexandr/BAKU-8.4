@@ -116,7 +116,9 @@ begin
   string 60 sz,msk,mskrep;
   string 200 varsubset;
   record CUVc CUr;
-
+  record DIVc DIr;
+  integer pos;
+  
   ORr.MfrTime = FindMaxShipDate(ORr); // Edit Dima ************* 2018-02-15 02:36 PM
   chsum = false;
   chrqty = false;
@@ -201,6 +203,25 @@ begin
     if (nonblank(ORr.CustVATCode)) then begin
       ORrw.VATCode = ORr.CustVATCode;
     end;
+    //Edit-------------------Vitalii 16:48 20.03.2018
+    if (currentcompany==28) then begin
+      pos = 0;
+      ExtractObj(INr.DispGroups,pos,tstr);
+      While(nonblank(tstr)) begin
+        DIr.Code = tstr;
+        if(readfirstmain(DIr,1,true))then begin
+          if(DIr.CType=="BRAND")then begin
+            ORrw.IDManufacturer = DIr.Code;
+            CUr.Name = DIr.Name;
+            if (readfirstkey("Name",CUr,1,true)) then begin
+              ORrw.MfrTimeRow = CUr.PlanShipDays;
+            end;
+          end;
+        end;
+        ExtractObj(INr.DispGroups,pos,tstr);
+      end;
+    end;
+    
     if (calcprice) then begin
       MatRowPut(ORr,rownr,ORrw);
       temp = -1;
@@ -1358,60 +1379,58 @@ end;
 // Edit Dima ************* 2018-02-15 12:00 PM
 
 global
-procedure GenerateDate(var array string dates, record ORVc ORr, var integer ManTime) 
+procedure GenerateDate(var array string dates,record ORVc ORr,var integer ManTime) 
 begin
-	Integer 	 	mtrw, j, k;
-	Integer 		max_time;
-	row ORVc 		ORrw;
-	record	CUVc	CUr;
-	string 255		temp;
-	record INVc		INr;
-	record DIVc		DIr;
-	date 			calc_date;
-	date 			init_date;
-	Integer			days;
+	integer mtrw,i,pos;
+	integer maxTime,itemTime;
+	row ORVc ORrw;
+	record CUVc CUr;
+	string 255 tstr;
+	record INVc INr;
+	record DIVc DIr;
+	integer days;
 
-	max_time = 0;
-	init_date = ORr.OrdDate;
+  maxTime = 0;
 	mtrw = matrowcnt(ORr);
-	for (j = 0; j < mtrw; j = j + 1) begin
-		matrowget(ORr,j,ORrw);
+	for (i=0;i<mtrw;i=i+1) begin
+		matrowget(ORr,i,ORrw);
 		INr.Code = ORrw.ArtCode;
-		if (readfirstmain(INr,1,true)) begin
-			k = 0;
-			ExtractObj(INr.DispGroups,k,temp);
-			while (nonblank(temp)) begin
-				DIr.Code = temp;
-				if (readfirstmain(DIr,1,true)) then begin
-					if (DIr.CType=="BRAND") then begin
-						CUr.Name = DIr.Name;
-						if (readfirstkey("Name",CUr,1,true)) then begin
-							logtext(0, CUr.Code);
-							if (CUr.PlanShipDays > max_time) then begin
-								max_time = CUr.PlanShipDays;
-							end;
-						end;
-					end; 
-				end;
-				ExtractObj(INr.DispGroups,k,temp);
-			end;
-		end;
+    if (ORrw.MfrTimeAdjRow!=0) then begin
+      itemTime = ORrw.MfrTimeAdjRow;
+    end else begin
+      if (ORrw.MfrTimeRow!=0) then begin
+        itemTime = ORrw.MfrTimeRow;
+      end;
+    end;
+    if (itemTime==0) then begin
+      if (readfirstmain(INr,1,true)) begin
+        pos = 0;
+        ExtractObj(INr.DispGroups,pos,tstr);
+        while (nonblank(tstr)) begin
+          DIr.Code = tstr;
+          if (readfirstmain(DIr,1,true)) then begin
+            if (DIr.CType=="BRAND") then begin
+              CUr.Name = DIr.Name;
+              if (readfirstkey("Name",CUr,1,true)) then begin
+                itemTime = CUr.PlanShipDays;
+              end;
+            end; 
+          end;
+          ExtractObj(INr.DispGroups,pos,tstr);
+        end;
+      end;
+    end;
+    if (itemTime>maxTime) then begin
+      maxTime = itemTime;
+    end;
 	end;
-	ManTime = max_time;
-	if (ORr.MfrTimeAdj!=0) then begin
-		max_time = ORr.MfrTimeAdj;
-	end;
-	calc_date = init_date;
-	days = ORr.ReqEnquiryTime+ORr.PrepaymentTime+ORr.ShipTimeReadlinesTime+max_time+20;
-	calc_date = AddDay(calc_date, days);
-	dates[0] = DateToString(calc_date, "DD.MM.YYYY");
-	calc_date = init_date;
-	days = ORr.ReqEnquiryTime+ORr.PrepaymentTime+ORr.ShipTimeReadlinesTime+max_time+10;
-	calc_date = AddDay(calc_date, days);
-	dates[1] = DateToString(calc_date, "DD.MM.YYYY");
-	calc_date = init_date;
-	days = ORr.ReqEnquiryTime+ORr.PrepaymentTime+ORr.ShipTimeReadlinesTime+max_time+5;
-	calc_date = AddDay(calc_date, days);
-	dates[2] = DateToString(calc_date, "DD.MM.YYYY");
+	ManTime = maxTime;
+	// if (ORr.MfrTimeAdj!=0) then begin
+	// 	maxTime = ORr.MfrTimeAdj;
+	// end;
+  days = ORr.ReqEnquiryTime + ORr.PrepaymentTime + ORr.ShipTimeReadlinesTime + maxTime;
+	dates[0] = DateToString(AddDay(ORr.OrdDate,days + 20),"DD/MM/YYYY");
+	dates[1] = DateToString(AddDay(ORr.OrdDate,days + 10),"DD/MM/YYYY");
+	dates[2] = DateToString(AddDay(ORr.OrdDate,days + 5),"DD/MM/YYYY");
 	return;
 end;
