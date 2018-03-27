@@ -1533,6 +1533,50 @@ begin
   return;
 end;
 
+function Boolean ORDClassIDManufacturerEFAfter(Integer wn,Integer rownr,Boolean changedf)
+begin  
+  record ORVc ORr;
+  record DIVc DIr;
+  record CUVc CUr;
+  row ORVc ORrw;
+  boolean TrHs,testf;
+  
+  if (changedf) and (rownr>=0) then begin  
+    GetWindowRecord(wn,ORr);
+    MatRowGet(ORr,rownr,ORrw);
+    
+    DIr.Code = ORrw.IDManufacturer;
+    readfirstmain(DIr,1,true);
+    ORrw.IDManufacturerName = DIr.Name;
+    CUr.Name = DIr.Name;
+    //Edit-------------------Vitalii 11:20 27.03.2018
+    TrHs = true;
+    while(loopkey("Name",CUr,1,TrHs))begin
+      testf = true;
+      if(CUr.Name!=DIr.Name)then begin TrHs = true; testf = false; end;
+      //if(CUr.Code>"0009999" or CUr.Code<"0000001")then begin testf = false; end;
+      if ((CUr.VECat=="IDEA") and (currentcompany!=28))then begin testf = false; end;
+      if ((CUr.VECat!="IDEA") and (currentcompany==28))then begin testf = false; end;
+
+      if(testf)then begin
+        TrHs = false;
+        ORrw.MfrTimeRow = CUr.PlanShipDays;
+      end;
+    end;
+    resetloop(CUr);
+    /*if (readfirstkey("Name",CUr,1,true)) then begin
+      ORrw.MfrTimeRow = CUr.PlanShipDays;
+    end;*/
+    ORrw.ReqEnquiryTimeRow = 7;
+    ORrw.PrepaymentTimeRow = 4;
+    ORrw.ShipTimeReadinessRow = 19;
+    MatRowPut(ORr,rownr,ORrw);
+    PutWindowRecord(wn,ORr);
+  end;
+  ORDClassIDManufacturerEFAfter = true;
+  return;
+end;
+
 global
 function Boolean ORDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
 BEGIN
@@ -1588,6 +1632,7 @@ BEGIN
     case "IDDesPayProc": res = ORDClassIDDesPayProcEFAfter(wn,changed);
     case "Sum4": res = ORDClassSum4EFAfter(wn,changed);
     case "MfrTimeAdjRow": res = ORDClassMfrTimeAdjRowEFAfter(wn,rownr,changed);
+    case "IDManufacturer": res = ORDClassIDManufacturerEFAfter(wn,rownr,changed);
   end;
   ORDClassAfterEditField = res;
   RETURN;
@@ -2219,4 +2264,24 @@ begin
   end;
   
   ORDClassOpenRecord = res;
+end;
+
+global function ManufacturerRnDsm()
+begin
+	integer wn;
+  record RcVc RepSpec;
+  record ORVc ORr;
+  
+  wn = curwindow;
+  if (WindowState(wn)==Rs_normal) then begin
+    deselectwindow(wn,false);
+    getwindowrecord(wn,ORr);
+    RepSpec.Media = mtScreen;
+    RepSpec.f1 = ORr.SerNr;
+    RepSpec.repname = "ManufacturerRn";
+    RunReport(RepSpec,0);
+  end else begin
+    MessageBox(1356,"");
+  end;
+  return;
 end;
