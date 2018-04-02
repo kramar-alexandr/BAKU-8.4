@@ -1312,3 +1312,104 @@ begin
   RecordAction_rlPULOK = res;
   return;
 end;
+
+global
+procedure IdeaIPbyOR(longint ordnr,boolean printf,array integer tab,var val tot, string curcode)
+begin
+  record IVVc IVr;
+  record ORVc ORr;
+  record IPrsVc IPrsr;
+  record IPVc IPr;
+  row IPVc IPrw;
+  boolean TrHs,TrHs2,testf,printedf;
+  integer cnt,rwcnt,i;
+  val v,fr,to1,to2,br1,br2;
+  string 5 tstr;
+  
+  printedf = false;
+  cnt = 0;
+  ORr.SerNr = ordnr;
+  readfirstmain(ORr,1,true);
+  IVr.OrderNr = ORr.SerNr;
+  TrHs = true;
+  while (LoopKey("OrderNr",IVr,1,TrHs)) begin
+    if (IVr.OrderNr<>ORr.SerNr) then begin TrHs = false; end;      
+    if (TrHs) then begin
+      if (IVr.Invalid==0) then begin
+        IPrsr.IVNr = IVr.SerNr;
+        TrHs2 = true;
+        while (LoopKey("IVKey",IPrsr,1,TrHs2)) begin
+          if (IPrsr.IVNr<>IVr.SerNr) then begin TrHs2 = false; end;
+          if (TrHs2) then begin
+            if (IPrsr.TransType==kIPrsTransTypeReceipt) then begin
+              IPr.SerNr = IPrsr.TransNr;
+              if (ReadFirstMain(IPr,1,true)) then begin
+                if (IPr.RejectedFlag==0) then begin
+                  rwcnt = MatRowCnt(IPr);
+                  for (i=0;i<rwcnt;i=i+1) begin
+                    MatRowGet(IPr,i,IPrw);
+                    testf = true;
+                    if (IPrw.ovst!=0) then begin testf = false; end;
+                    if (IPrw.InvoiceNr!=IVr.SerNr) then begin testf = false; end;
+                    switch (IPrw.stp) begin
+                      case 5:
+                      case 7: testf = false;
+                      otherwise
+                        if (IPrw.PayDate!=IPrsr.CustDate) then begin testf = false; end;
+                    end;                               
+                    if (testf) then begin
+                      if (printf) then begin
+                        if (cnt!=0) then begin
+                          Gray_Divider(0,1);
+                        end;
+                        startformat(15);
+                          outstring(tab[1],0,cnt + 1,false);
+                          outstring(tab[2],0,IPrw.PayDate,false);
+                          v = 0;
+                          CurValToOtherCur(IPrw.PayDate,IPrw.BankCurncy,IPrw.BankVal,"EUR",v,DefaultCurRoundOff);
+                          outstring(tab[3],0,v,false);
+                          tot = tot + v;
+                          tstr = "EUR";
+                          GetFullCurncyRate(tstr,IPrw.PayDate,fr,to1,to2,br1,br2);
+                          outstring(tab[4],0,to1,false);
+                          v = to1;
+                          tstr = "USD";
+                          GetFullCurncyRate(tstr,IPrw.PayDate,fr,to1,to2,br1,br2);
+                          outstring(tab[5],0,v/to1,false);
+                          v = 0;
+                          CurValToOtherCur(IPrw.PayDate,IPrw.BankCurncy,IPrw.BankVal,"AZN",v,DefaultCurRoundOff);
+                          outstring(tab[6],0,v,false);
+                        endformat;
+                      end;
+                      if nonblank(curcode) then begin
+                        logtext(0,IPrw.BankCurncy & " - " & curcode);
+                        if (IPrw.BankCurncy==curcode) then begin
+                          if (printedf) then begin
+                            Gray_Divider(0,1);
+                          end else begin
+                            printedf = true;
+                          end;
+                          startformat(15);
+                            OutStringID(tab[1],"DblIPVcID",IPr.SerNr,false,IPr.SerNr);
+                            outstring(tab[2],0,IPrw.PayDate,false);
+                            outstring(tab[3],0,IPrw.BankVal,false);
+                            outstringID(tab[4],"DblIDPrintCheck","Print Check",false,ordnr);
+                          endformat;
+                        end;
+                      end;
+                      cnt = cnt + 1;
+                    end;
+                  end;
+                end;
+              end;
+            end;
+          end;
+        end;
+        
+        
+      end;
+    end;
+  end;
+  
+  return;
+end;
