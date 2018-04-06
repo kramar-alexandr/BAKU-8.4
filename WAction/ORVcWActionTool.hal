@@ -68,6 +68,7 @@ forward procedure ORVc_GetPriceList2(var record ORVc,Boolean);
 forward procedure ORDUpdatePrices(var record ORVc,Boolean);
 external procedure ExtractObj(string,var Integer,var string);
 external function Integer FindMaxShipDate(record ORVc);
+external procedure GetLCPrices(val,string,var string, var string);
 
 SetLangMode(LangRussian,"RUS",0); //edited by BPI
 global
@@ -1138,6 +1139,11 @@ BEGIN
   record BirthdayRebateBlock BRb;// Edit ************************** Tuesday, 16 May 2017 12:56:00
   date startdate,enddate;
   date birthmin,birth,mirthmax;
+  boolean TrHs;//Edit-------------------Vitalii 14:24 06.04.2018
+  record LoyaltyCardVc LoyaltyCardr;
+  record RebVc Reb2r;
+  string 5 PLCode,RebCode;
+  val rebold,rebnew;
   // Edit Start ---------------------------------------------- Edit Start
 	//Tuesday, 16 May 2017 13:05:05
 	
@@ -1206,6 +1212,9 @@ BEGIN
     ORp.CustCat = CUr.CustCat;
     ORp.PayDeal = CUr.PayDeal;
     ORp.CurncyCode = CUr.CurncyCode;
+    if (currentcompany==28) then begin //Edit-------------------Vitalii 14:25 06.04.2018
+      ORp.CurncyCode = "EUR";
+    end;
     ORp.BankCode = CUr.AccOperator;
     ORp.Objects = AddObjectToObjectList(ORp.Objects,CUr.Objects);
     SetSalesMan(tstr,CUr.SalesMan);
@@ -1306,6 +1315,58 @@ BEGIN
     end;
     if (oldpricelist!=ORp.PriceList or oldvatcode!=ORp.CustVATCode or oldcurrency!=ORp.CurncyCode) then begin
       ORDUpdatePrices(ORp,false);
+    end;
+    
+    if (currentcompany==28) then begin //Edit-------------------Vitalii 14:25 06.04.2018
+      LoyaltyCardr.CustCode = CUr.Code;
+      TrHs = true;
+      while(loopkey("ActCustCode",LoyaltyCardr,1,TrHs))begin
+        if(LoyaltyCardr.CustCode!=CUr.Code)then begin TrHs = false; end;
+      
+        if (TrHs) then begin
+          if (LoyaltyCardr.LCMLevel!="CASACOIN") then begin
+            TrHs = false;
+            ORp.IDDiscCard = LoyaltyCardr.SerNr;
+            
+            GetLCPrices(LoyaltyCardr.PointsBalance,LoyaltyCardr.LCMLevel,PLCode,RebCode);
+            
+            if(blank(RebCode))then begin
+              CUr.Code = ORp.CustCode;
+              if(readfirstmain(CUr,1,true))then begin
+                RebCode = CUr.RebCode;
+              end;
+            end;
+            if (nonblank(PLCode) and (ORp.PriceList<>PLCode)) then begin 
+              ORp.PriceList = PLCode;
+            end;
+            if(nonblank(ORp.RebCode))then begin
+              Rebr.Code = ORp.RebCode;
+              readfirstmain(Rebr,1,true);
+              rebold = Rebr.vra0;
+            end;
+            if(nonblank(RebCode))then begin
+              Reb2r.Code = RebCode;
+              readfirstmain(Reb2r,1,true);
+              rebnew = Reb2r.vra0;
+            end;
+            
+            if (nonblank(RebCode) and (blank(ORp.RebCode))) then begin
+              ORp.RebCode = RebCode;
+            end;
+            if (nonblank(RebCode) and (ORp.RebCode<>RebCode)) then begin 
+              if(rebold<rebnew)then begin
+                ORp.RebCode = RebCode;
+              end;
+            end;
+            if (MatRowCnt(ORp)>0) then begin
+              ORDUpdatePrices(ORp,false);
+            end;  
+            
+            
+            
+          end;
+        end;
+      end;
     end;
   end;
   AddPerceptionTaxesRows_ORVc(ORp);
@@ -1522,9 +1583,25 @@ begin
 end;
 
 global
-procedure MyTestButton()
-begin
+function Boolean PasteIDDiscCardInOrder(var record ORVc ORp,string loycardcode,string efstr,var string warning,var string errstr)
+BEGIN
+  string 50 oldcustcode;
+  record LoyaltyCardVc LoyaltyCardr;
+  boolean res;
   
-  //messagebox(0,"MyTestButton");
+  warning = "";
+  errstr = "";
+  res = true;
+  oldcustcode = ORp.CustCode;
+  LoyaltyCardr.SerNr = loycardcode;
+  if(readfirstmain(LoyaltyCardr,1,true))then begin
+    ORp.CustCode = LoyaltyCardr.CustCode;
+    res = PasteCustInOrder(ORp,ORp.CustCode,oldcustcode,warning,errstr);
+  end else begin
+    errstr = USetStr(35134);
+    res = false;
+  end;
+  
+  PasteIDDiscCardInOrder = res;
   return;
 end;

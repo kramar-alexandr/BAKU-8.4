@@ -67,6 +67,9 @@ external function Boolean OpenContactRecord(string,string);
 remote procedure PasteIDManufacturerInORrow(var row ORVc);
 remote function integer IDCountORPayments(longint,string,var string,var string);
 remote procedure IDCreateCheck(string,string,string,string);
+remote function Boolean PasteIDDiscCardInOrder(var record ORVc,string,string,var string,var string);//Edit-------------------Vitalii 15:25 06.04.2018
+remote procedure CreateORVcContract(record ORVc,string);
+remote procedure CreateORVcAmendment(record ORVc,string,integer);
 
 procedure ORSumup_TaxTemplate(var record ORVc ORp)
 begin
@@ -486,17 +489,19 @@ begin
     ORp.BaseSum4 = MulRateToBase1(ORp.CurncyCode,ORp.Sum4,ORp.FrRate,ORp.ToRateB1,ORp.ToRateB2,ORp.BaseRate1,ORp.BaseRate2,DefaultCurRoundOff);
   end;  
   ORp.SumIncCom = ORp.Sum4 + ORp.Commision;
-  RecalcORSubtotal(ORp);
-  
-  ORp.IDSum4Proc = 100;//Edit-------------------Vitalii 14:26 22.03.2018
-  if (ORp.IDPrepayPaid==1) then begin
-    ORp.IDPrepayProc = ORp.IDSum4Proc*ORp.IDPrepay/ORp.Sum4;
-  end else begin
-    ORp.IDPrepay = ORp.Sum4/ORp.IDSum4Proc*ORp.IDPrepayProc;
+  RecalcORSubtotal(ORp);  
+  if (currentcompany==28) then begin
+    ORp.IDSum4Proc = 100;//Edit-------------------Vitalii 14:26 22.03.2018
+    if (ORp.IDPrepayPaid==1) then begin
+      ORp.IDPrepayProc = ORp.IDSum4Proc*ORp.IDPrepay/ORp.Sum4;
+    end else begin
+      ORp.IDPrepay = ORp.Sum4/ORp.IDSum4Proc*ORp.IDPrepayProc;
+    end;
+    ORp.IDBalPay = ORp.Sum4 - ORp.IDPrepay;
+    ORp.IDBalPayProc = ORp.IDSum4Proc - ORp.IDPrepayProc;
+    ORp.IDDesPay = ORp.Sum4*ORp.IDDesPayProc/ORp.IDSum4Proc;
+    ORp.IDDiscount = (ORp.IDTotalCost - ORp.Sum4)/ORp.IDTotalCost*100;
   end;
-  ORp.IDBalPay = ORp.Sum4 - ORp.IDPrepay;
-  ORp.IDBalPayProc = ORp.IDSum4Proc - ORp.IDPrepayProc;
-  ORp.IDDesPay = ORp.Sum4*ORp.IDDesPayProc/ORp.IDSum4Proc;
 LORSumup:;  
   RETURN;
 END;
@@ -1396,6 +1401,40 @@ begin
 end;
 
 //Edit-------------------Vitalii 15:22 16.03.2018
+
+procedure IDPasteDescs(var record ORVc ORr)
+begin
+  vector string 50 azdigits;
+  val in,tmpin;
+  string 255 out;
+  
+  azdigits["0"] = "sıfır";
+  azdigits["1"] = "bir";
+  azdigits["2"] = "iki";
+  azdigits["3"] = "üç";
+  azdigits["4"] = "dörd";
+  azdigits["5"] = "beş";
+  azdigits["6"] = "altı";
+  azdigits["7"] = "yeddi";
+  azdigits["8"] = "səkkiz";
+  azdigits["9"] = "doqquz";
+  azdigits["10"] = "on";
+  azdigits["20"] = "iyirmi";
+  azdigits["30"] = "otuz";
+  azdigits["40"] = "qırx";
+  azdigits["50"] = "əlli";
+  azdigits["60"] = "altmış";
+  azdigits["70"] = "yetmiş";
+  azdigits["80"] = "səksən";
+  azdigits["90"] = "doqsan";
+  azdigits["100"] = "yüz";
+  azdigits["1000"] = "min";
+  azdigits["and"] = "və";
+  
+  
+
+end;
+
 function Boolean ORDClassIDPrepayEFAfter(Integer wn,Integer changed)
 begin
   record ORVc ORr;
@@ -1557,6 +1596,29 @@ begin
   return;
 end;
 
+function Boolean ORDClassIDDiscCardEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  record ORVc ORr;
+  string 255 warning,errstr;
+ 
+  GetWindowRecord(wn,ORr);    
+  if (changedf!=0) then begin
+    if (PasteIDDiscCardInOrder(ORr,ORr.IDDiscCard,WindEFstr(wn),warning,errstr)) then begin
+      if (nonblank(warning)) then begin
+        MessageBox(0,warning);
+      end;
+      if (nonblank(errstr)) then begin
+        MessageBox(0,errstr);
+      end;
+      PutWindowRecord(wn,ORr);
+    end else begin
+      Beep;
+    end;
+  end;
+  ORDClassIDDiscCardEFAfter = true;
+  return;
+end;
+
 global
 function Boolean ORDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
 BEGIN
@@ -1613,6 +1675,7 @@ BEGIN
     case "Sum4": res = ORDClassSum4EFAfter(wn,changed);
     case "MfrTimeAdjRow": res = ORDClassMfrTimeAdjRowEFAfter(wn,rownr,changed);
     case "IDManufacturer": res = ORDClassIDManufacturerEFAfter(wn,rownr,changed);
+    case "IDDiscCard": res = ORDClassIDDiscCardEFAfter(wn,fn,rownr,changed);
   end;
   ORDClassAfterEditField = res;
   RETURN;
@@ -2289,7 +2352,7 @@ end;
 
 
 global
-procedure IDPaymentCheckAZN()
+procedure IDPaymentCheckAZNBtnClick()
 begin
   record ORVc ORr;
   record RcVc RepSpec;
@@ -2320,7 +2383,7 @@ begin
 end;
 
 global
-procedure IDPaymentCheckUSD()
+procedure IDPaymentCheckUSDBtnClick()
 begin
   record ORVc ORr;
   record RcVc RepSpec;
@@ -2344,6 +2407,133 @@ begin
     end;
   end else begin
     MessageBox(1356,"");
+  end;
+  
+  return;
+end;
+
+global
+procedure IDContractAmendmentBtnClick()
+begin
+  record ORVc ORr;
+  record RcVc RepSpec;
+  integer wn
+
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  if (nonblank(ORr.RefStr)) then begin
+    openwindow("IDContractAmendmentWClass",1,wn,"","",RepSpec);
+  end else begin
+    messagebox(35131,"");
+  end;
+  
+  return;
+end;
+
+global
+procedure IDSaleContractBtnClick()
+begin
+  record ORVc ORr;
+  integer wn;
+  
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  if (nonblank(ORr.RefStr)) then begin
+    messagebox(35130,ORr.RefStr);
+  end else begin
+    CreateORVcContract(ORr,currentuser);
+  end;
+  
+  return;
+end;
+
+global
+procedure IDContractAmendment1BtnClick()
+begin
+  record ORVc ORr;
+  integer wn;
+  
+  wn = MotherWindow(CurWindow);
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  if (nonblank(ORr.RefStr)) then begin
+    CreateORVcAmendment(ORr,currentuser,1);
+  end else begin
+    messagebox(35131,"");
+  end;
+  
+  return;
+end;
+
+global
+procedure IDContractAmendment2BtnClick()
+begin
+  record ORVc ORr;
+  integer wn;
+  
+  wn = MotherWindow(CurWindow);
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  if (nonblank(ORr.RefStr)) then begin
+    CreateORVcAmendment(ORr,currentuser,2);
+  end else begin
+    messagebox(35131,"");
+  end;
+  
+  return;
+end;
+
+global
+procedure IDContractAmendment3BtnClick()
+begin
+  record ORVc ORr;
+  integer wn;
+  
+  wn = MotherWindow(CurWindow);
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  if (nonblank(ORr.RefStr)) then begin
+    CreateORVcAmendment(ORr,currentuser,3);
+  end else begin
+    messagebox(35131,"");
+  end;
+  
+  return;
+end;
+
+global
+procedure IDContractAmendment4BtnClick()
+begin
+  record ORVc ORr;
+  integer wn;
+  
+  wn = MotherWindow(CurWindow);
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  if (nonblank(ORr.RefStr)) then begin
+    CreateORVcAmendment(ORr,currentuser,4);
+  end else begin
+    messagebox(35131,"");
+  end;
+  
+  return;
+end;
+
+global
+procedure IDContractAmendment5BtnClick()
+begin
+  record ORVc ORr;
+  integer wn;
+  
+  wn = MotherWindow(CurWindow);
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  if (nonblank(ORr.RefStr)) then begin
+    CreateORVcAmendment(ORr,currentuser,5);
+  end else begin
+    messagebox(35131,"");
   end;
   
   return;
