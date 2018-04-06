@@ -1,6 +1,8 @@
 remote function Integer CreateQualConFromPU(record PUVc,Integer,var record QualConVc,Integer);
 external function string 40 SerialNrSClassSpecPName(string);
 remote updating procedure OkAllStockMovementsPUr(record RcVc);
+remote procedure RetPUSumUp(var record RetPUVc);
+
 
 global
 function Boolean PUVcStockTypeEFActiveTest(Integer wn,Integer wnst,Integer rownr)
@@ -282,4 +284,101 @@ begin
     MessageBox(22064,"");
   end;
   return;
+end;
+
+global updating procedure CreateNoterToERptPUDsm()
+begin
+	integer wn,i,mtrw,rwcnt,j;
+	record RetPUVc RetPUr;
+	row RetPUVc RetPUrw;
+	record NotepadVc Noter,newNoter;
+	integer notenr;
+	record SerBalVc SBr;
+	string 100 tstr;
+	boolean serialfoundf,TrHs,testf;
+  record RLinkVc RLr;
+  boolean notercreate,skip;
+	
+	wn = curwindow;
+	getwindowrecord(wn,RetPUr);
+	
+	recordnew(newNoter);
+	newNoter.SerNr = NextSerNr("NotepadVc",CurrentDate,-1,false,"");
+	newNoter.Classification = "DEL";
+	if (RecordStore(newNoter,false)) then begin
+		CreateRecordLink(RetPUr,CurrentCompany,newNoter,CurrentCompany); 
+		CreateRecordLink(newNoter,CurrentCompany,RetPUr,CurrentCompany);   
+		notenr = 1;
+		while (ReadRecordLink(RetPUr,notenr,newNoter,RLr)) begin
+			notenr = notenr + 1;
+		end;
+		if (ReadRecordLink(RetPUr,notenr-1,newNoter,RLr)) then begin
+			RLr.Comment = "Delete List";
+			if (RecordStore(RLr,true)) then begin  end;
+		end;
+		OpenWindow("NotepadDClass",1,wn,"","",newNoter);
+	end else begin
+		messagebox(0,"Error store note");
+	end;
+
+return;
+end;
+
+
+global updating procedure DeleteItemsFromRetPUDsm()
+begin
+	integer wn,i,mtrw,rwcnt,j;
+	record RetPUVc RetPUr;
+	row RetPUVc RetPUrw;
+	record NotepadVc Noter,newNoter;
+	integer notenr;
+	record SerBalVc SBr;
+	string 100 tstr;
+	boolean serialfoundf,TrHs,testf;
+  record RLinkVc RLr;
+  boolean notercreate,skip;
+  vector boolean vartcode;
+	
+	recordnew(newNoter);
+	
+	notercreate = false;
+	
+	wn = curwindow;
+	if(windowstate(wn)==0)then begin
+		getwindowrecord(wn,RetPUr);
+		if(RetPUr.OKFlag>0)then begin
+			mtrw = matrowcnt(RetPUr);
+			notenr = 1;
+			while (ReadRecordLink(RetPUr,notenr,Noter,RLr)) begin
+				if ("DEL"==Noter.Classification) then begin
+			
+					rwcnt = LineTextCnt(Noter);
+					for (i=0;i<rwcnt;i=i+1) begin
+						tstr = LineTextGet(Noter,i);
+						if(nonblank(tstr))then begin
+							vartcode[tstr] = true;
+						end;
+					end;  
+				end;
+				notenr = notenr + 1;
+			end;
+	
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(RetPUr,i,RetPUrw);
+				if(vartcode[RetPUrw.ArtCode]==false)then begin
+					matrowdelete(RetPUr,i);
+					i=i-1;
+					mtrw = mtrw - 1;
+				end;
+			end; 
+			RetPUSumUp(RetPUr);
+			putwindowrecord(wn,RetPUr);
+		end else begin
+			messagebox(0,"Запись должна быть разокеена");
+		end;
+	end else begin
+		messagebox(0,"Сначала сохраните запись");
+	end;
+	
+return;
 end;
