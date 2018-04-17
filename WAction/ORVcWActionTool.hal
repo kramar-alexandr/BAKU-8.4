@@ -711,7 +711,7 @@ BEGIN
   for (i=0;i<rwcnt;i=i+1) begin
     MatRowGet(ORp,i,ORrw);
     if (ORrw.stp!=kInvoiceRowTypeStructuredItemComponent) then begin
-    if (nonblank(ORrw.ArtCode)) then begin
+    if (nonblank(ORrw.ArtCode)) or (currentcompany==28 and blank(ORrw.ArtCode)) then begin
       location = ORrw.Location;
       if (blank(location)) then begin
         location = ORp.Location;
@@ -727,13 +727,16 @@ BEGIN
         price,tstr,vrebate,vatcode,baseprice,
         salesacc,ORp.ExportFlag,calcprice,ORp.OrdDate,blankt,ORp.CustCode,true,dummyf,ORp.PayDeal,tax2code,tax2prc,ORp.Region,location,taxtemplatecode)) then 
       begin
-        ORrw.Price = price;
-        ORrw.vRebate = vrebate;
-        if (INr.ItemType==kItemTypeStructured and blank(ORp.PriceList)) then begin
-          ORrw.BasePrice = blankval;
-        end else begin
-          ORrw.BasePrice = baseprice;
+        //Edit-------------------Vitalii 16:37 17.04.2018
+        if ((blank(ORrw.ArtCode)) and (price!=blankval) and (currentcompany==28)) or (nonblank(ORrw.ArtCode)) then begin
+          ORrw.Price = price;
+          if (INr.ItemType==kItemTypeStructured and blank(ORp.PriceList)) then begin
+            ORrw.BasePrice = blankval;
+          end else begin
+            ORrw.BasePrice = baseprice;
+          end;
         end;
+        ORrw.vRebate = vrebate;
         ORrw.VATCode = vatcode;
         if (nonblank(ORp.CustVATCode)) then begin
           ORrw.VATCode = ORp.CustVATCode;
@@ -1318,11 +1321,8 @@ BEGIN
         end;
       end;
     end;
-    if (oldpricelist!=ORp.PriceList or oldvatcode!=ORp.CustVATCode or oldcurrency!=ORp.CurncyCode) then begin
-      ORDUpdatePrices(ORp,false);
-    end;
-    
     if (currentcompany==28) then begin //Edit-------------------Vitalii 14:25 06.04.2018
+      ORp.IDDiscCard = "";
       LoyaltyCardr.CustCode = CUr.Code;
       TrHs = true;
       while(loopkey("ActCustCode",LoyaltyCardr,1,TrHs))begin
@@ -1366,20 +1366,14 @@ BEGIN
             if ((ORp.IDDiscount==0) or (ORp.IDDiscount==blankval)) then begin
               ORp.IDDiscount = rebnew;
             end;
-            if (MatRowCnt(ORp)>0) then begin
-              ORDUpdatePrices(ORp,false);
-            end;  
-            
-            
-            
           end;
         end;
       end;
     end;
-  end;
-  if (MatRowCnt(ORp)>0) then begin
-    //ORDchsum(ORp,rownr);
-    ORSumup(ORp);
+    if (oldpricelist!=ORp.PriceList or oldvatcode!=ORp.CustVATCode or oldcurrency!=ORp.CurncyCode) then begin
+      ORDUpdatePrices(ORp,false);
+    end;
+    
   end;
   AddPerceptionTaxesRows_ORVc(ORp);
   ORVc_PasteInvCountry(ORp,"");
