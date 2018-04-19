@@ -3135,3 +3135,72 @@ begin
   SendAsyncWebRequest("127.0.0.1",1071,-1,false,"POST","/pdf/check","application/json","",requestarea,"",20);
   return;
 end;
+
+global
+function longint IDCreateIPfromORwhithAdvanceIV(record ORVc ORr, var record IVVc IVp)
+begin
+  longint res;
+  record IVVc IVr;
+  record IPrsVc IPrsr;
+  row IVVc IVrw;
+  boolean TrHs,TrHs2,IVpaidf,IVfoundf,correctIVfoundf;
+  integer i,rwcnt;
+  
+  res = 0;
+  IVr.OrderNr = ORr.SerNr;
+  TrHs = true;
+  IVfoundf = false;
+  while (LoopKey("OrderNr",IVr,1,TrHs)) begin
+    if (IVr.OrderNr<>ORr.SerNr) then begin TrHs = false; end;      
+    if (TrHs) then begin
+      IVfoundf = true;
+      if (IVr.Invalid==0) then begin
+        if (IVr.OKFlag==0) then begin
+          res = 35136;// unoked iv
+        end else begin
+          rwcnt = matrowcnt(IVr);
+          correctIVfoundf = false;
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(IVr,i,IVrw);
+            if (IVrw.stp==kInvoiceRowTypeNormal) then begin
+              i = rwcnt;
+              correctIVfoundf = true;
+            end;
+          end;
+          if (correctIVfoundf) then begin
+            IPrsr.IVNr = IVr.SerNr;
+            IVpaidf = false;
+            TrHs2 = true;
+            while (LoopKey("IVKey",IPrsr,1,TrHs2)) begin
+              if (IPrsr.IVNr<>IVr.SerNr) then begin TrHs2 = false; end;
+              if (TrHs2) then begin
+                RecordCopy(IVp,IVr);
+                if (IPrsr.TransType==kIPrsTransTypeReceipt) then begin
+                  IVpaidf = true;
+                  TrHs2 = false;
+                  RecordClear(IVp);
+                end;
+              end;
+            end;
+            if !(IVpaidf) then begin
+              res = -1;
+              TrHs = false;
+            end else begin
+              res = 35137;// iv paid
+            end;
+          end;
+        end;
+      end;
+    end;
+  end;
+  if (res==0) then begin
+    if !(correctIVfoundf) then begin
+      res = 35138;// iv not found
+    end;
+    if !(IVfoundf) then begin
+      res = 35135;// iv not found
+    end;
+  end;
+  IDCreateIPfromORwhithAdvanceIV = res;
+  return;
+end;
