@@ -161,6 +161,9 @@ begin
       ORrw.RvrsVATCode = INr.RvrsVATCode;
     end;
     ORrw.VATCode = vatcode;
+    if blank(ORrw.VATCode) then begin
+      ORrw.VATCode = "0%O";
+    end;
     ORrw.BasePrice = baseprice;
     ORrw.SalesAcc = salesacc;
     ORrw.ArtCode = INr.Code;
@@ -244,6 +247,7 @@ begin
       ORrw.ShipTimeReadinessRow = 19;
       matrowget(INr,0,INrw);
       ORrw.Spec2 = INrw.Text;
+      ORrw.IDAltCode = INr.AlternativeCode;
     end;
     
     if (calcprice) then begin
@@ -420,6 +424,14 @@ BEGIN
     if (nonblank(ORrw.ArtCode)) then begin
       MessageBox(1120,ORrw.ArtCode);
     end;
+  end;
+  if ((blank(ORrw.ArtCode)) and (currentcompany==28)) then begin
+    if blank(ORrw.VATCode) then begin
+      ORrw.VATCode = "0%O";
+      MatRowPut(ORr,rownr,ORrw);
+    end;
+    chsum = ORDchrsum(ORr,rownr);
+    ORDchsum(ORr,rownr);
   end;
   RETURN;
 END;
@@ -706,7 +718,7 @@ BEGIN
   for (i=0;i<rwcnt;i=i+1) begin
     MatRowGet(ORp,i,ORrw);
     if (ORrw.stp!=kInvoiceRowTypeStructuredItemComponent) then begin
-    if (nonblank(ORrw.ArtCode)) then begin
+    if (nonblank(ORrw.ArtCode)) or (currentcompany==28 and blank(ORrw.ArtCode)) then begin
       location = ORrw.Location;
       if (blank(location)) then begin
         location = ORp.Location;
@@ -722,16 +734,22 @@ BEGIN
         price,tstr,vrebate,vatcode,baseprice,
         salesacc,ORp.ExportFlag,calcprice,ORp.OrdDate,blankt,ORp.CustCode,true,dummyf,ORp.PayDeal,tax2code,tax2prc,ORp.Region,location,taxtemplatecode)) then 
       begin
-        ORrw.Price = price;
-        ORrw.vRebate = vrebate;
-        if (INr.ItemType==kItemTypeStructured and blank(ORp.PriceList)) then begin
-          ORrw.BasePrice = blankval;
-        end else begin
-          ORrw.BasePrice = baseprice;
+        //Edit-------------------Vitalii 16:37 17.04.2018
+        if ((blank(ORrw.ArtCode)) and (price!=blankval) and (currentcompany==28)) or (nonblank(ORrw.ArtCode)) then begin
+          ORrw.Price = price;
+          if (INr.ItemType==kItemTypeStructured and blank(ORp.PriceList)) then begin
+            ORrw.BasePrice = blankval;
+          end else begin
+            ORrw.BasePrice = baseprice;
+          end;
         end;
+        ORrw.vRebate = vrebate;
         ORrw.VATCode = vatcode;
         if (nonblank(ORp.CustVATCode)) then begin
           ORrw.VATCode = ORp.CustVATCode;
+        end;
+        if blank(ORrw.VATCode) then begin
+          ORrw.VATCode = "0%O";
         end;
         ORrw.SalesAcc = salesacc;
         ORrw.ArtCode = INr.Code;
@@ -955,6 +973,9 @@ BEGIN
     for (i=0;i<rwcnt;i=i+1) begin
       MatRowGet(ORp,i,ORrw);
       ORrw.VATCode = vatcode;
+      if blank(ORrw.VATCode) then begin
+        ORrw.VATCode = "0%O";
+      end;
       MatRowPut(ORp,i,ORrw);
       if (ORDchrsum(ORp,i)) then begin
         ORDchsum(ORp,i);
@@ -1211,6 +1232,9 @@ BEGIN
     ORp.ExportFlag = CUr.ExportFlag;
     ORp.CustCat = CUr.CustCat;
     ORp.PayDeal = CUr.PayDeal;
+    if blank(ORp.PayDeal) and (currentcompany==28) then begin
+      ORp.PayDeal = "P5";
+    end;
     ORp.CurncyCode = CUr.CurncyCode;
     if (currentcompany==28) then begin //Edit-------------------Vitalii 14:25 06.04.2018
       ORp.CurncyCode = "EUR";
@@ -1237,6 +1261,9 @@ BEGIN
       ORp.RebCode = CCatr.RebCode;
     end;
     ORp.CustVATCode = CUr.VATCode;
+    if blank(ORp.CustVATCode) and (currentcompany==28) then begin
+      ORp.CustVATCode = "0%O";
+    end;
     if (CUr.TaxTemplateCode!=ORp.CustTaxTemplateCode) then begin
       ORVc_FillupTaxTemplate(ORp);
       ORp.CustTaxTemplateCode = CUr.TaxTemplateCode;
@@ -1313,11 +1340,8 @@ BEGIN
         end;
       end;
     end;
-    if (oldpricelist!=ORp.PriceList or oldvatcode!=ORp.CustVATCode or oldcurrency!=ORp.CurncyCode) then begin
-      ORDUpdatePrices(ORp,false);
-    end;
-    
     if (currentcompany==28) then begin //Edit-------------------Vitalii 14:25 06.04.2018
+      ORp.IDDiscCard = "";
       LoyaltyCardr.CustCode = CUr.Code;
       TrHs = true;
       while(loopkey("ActCustCode",LoyaltyCardr,1,TrHs))begin
@@ -1358,16 +1382,17 @@ BEGIN
                 ORp.RebCode = RebCode;
               end;
             end;
-            if (MatRowCnt(ORp)>0) then begin
-              ORDUpdatePrices(ORp,false);
-            end;  
-            
-            
-            
+            if ((ORp.IDDiscount==0) or (ORp.IDDiscount==blankval)) then begin
+              ORp.IDDiscount = rebnew;
+            end;
           end;
         end;
       end;
     end;
+    if (oldpricelist!=ORp.PriceList or oldvatcode!=ORp.CustVATCode or oldcurrency!=ORp.CurncyCode) then begin
+      ORDUpdatePrices(ORp,false);
+    end;
+    
   end;
   AddPerceptionTaxesRows_ORVc(ORp);
   ORVc_PasteInvCountry(ORp,"");
@@ -1411,6 +1436,7 @@ procedure ORVc_PastePrice(var record ORVc ORp,Integer rownr,var Boolean chsum)
 begin
   row ORVc ORrw;
   record INVc INr;
+  record RebVc Rebr;
   
   MatRowGet(ORp,rownr,ORrw);
   if (ORrw.stp==kInvoiceRowTypeNormal or ORrw.stp==kInvoiceRowTypeStructuredItemComponent) then begin
@@ -1422,6 +1448,16 @@ begin
       if (nonblank(INr.RvrsVATCode)) then begin
         ORPasteRvrsVATCode(ORp,false);
         ORSumup(ORp);      
+      end;
+    end else begin
+      if (currentcompany==28) and nonblank(ORp.RebCode) then begin
+        Rebr.Code = ORp.RebCode;
+        readfirstmain(Rebr,1,true);
+        matrowget(ORp,rownr,ORrw);
+        ORrw.vRebate = Rebr.vra0;
+        MatRowPut(ORp,rownr,ORrw);
+        chsum = ORDchrsum(ORp,rownr);
+        ORSumup(ORp);
       end;
     end;
   end else begin
