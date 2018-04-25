@@ -9,6 +9,8 @@ external function Boolean DateLocked(Date,string);
 external function Boolean ObjIncluded(string,string);
 external procedure ExtractObj(string,var Integer,var string);
 external function string 60 RemoveObjectFromObjectList(string,string);// Edit ************************** Friday, 14 November 2014 09:35:09
+external function string 60 AddObjectToObjectList(string,string);
+external procedure GetObjs(string,string,var string);
 
 procedure Add3Objs(var string objstr,string nobjstr,string accnumber,Boolean checkf)
 BEGIN
@@ -141,5 +143,57 @@ BEGIN
     end;
   end;
 LAddObjTRMn:;  
+  RETURN;
+END;
+
+global
+updating procedure AddObjIVIPMn(record RcVc RepSpec)
+BEGIN
+  record IVVc IVr;
+  record IPVc IPr;
+  row IPVc IPrw;
+  integer i,rwcnt;
+  boolean TrHs,putf;
+  string 50 store;
+  
+  TrHs = true;
+  resetloop(IVr);
+  IVr.TransDate = RepSpec.sStartDate;
+  while (loopkey("TransDate",IVr,1,TrHs)) begin
+    if (IVr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
+    if (TrHs) then begin
+      store = "";
+      GetObjs("STORE",IVr.Objects,store);
+      if (blank(store)) then begin
+        IVr.Objects = AddObjectToObjectList(IVr.Objects,RepSpec.f1);
+        logtext(0,IVr.SerNr & " - " & IVr.Objects);
+        RecordStore(IVr,true);
+      end;
+    end;
+  end;
+  TrHs = true;
+  resetloop(IPr);
+  IPr.TransDate = RepSpec.sStartDate;
+  while (LoopKey("TransDate",IPr,1,TrHs)) begin
+    if (IPr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
+    if (TrHs) then begin
+      rwcnt = MatRowCnt(IPr);
+      putf = false;
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(IPr,i,IPrw);
+        store = "";
+        GetObjs("STORE",IPrw.Objects,store);
+        if (blank(store)) then begin
+          IPrw.Objects = AddObjectToObjectList(IPrw.Objects,RepSpec.f1);
+          MatRowPut(IPr,i,IPrw);
+          logtext(0,IPr.SerNr & " " & i  & " - " & IPrw.Objects);
+          putf = true;
+        end;
+      end;
+      if (putf) then begin
+        RecordStore(IPr,true);
+      end;
+    end;
+  end;
   RETURN;
 END;
