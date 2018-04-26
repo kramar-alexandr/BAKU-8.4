@@ -151,47 +151,82 @@ updating procedure AddObjIVIPMn(record RcVc RepSpec)
 BEGIN
   record IVVc IVr;
   record IPVc IPr;
+  row IVVc IVrw;
   row IPVc IPrw;
-  integer i,rwcnt;
+  integer i,rwcnt,j,rwcnt2,curcomp;
   boolean TrHs,putf;
   string 50 store;
+  record CompaniesBlock CBb;
   
-  TrHs = true;
-  resetloop(IVr);
-  IVr.TransDate = RepSpec.sStartDate;
-  while (loopkey("TransDate",IVr,1,TrHs)) begin
-    if (IVr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
-    if (TrHs) then begin
-      store = "";
-      GetObjs("STORE",IVr.Objects,store);
-      if (blank(store)) then begin
-        IVr.Objects = AddObjectToObjectList(IVr.Objects,RepSpec.f1);
-        RecordStore(IVr,true);
-      end;
-    end;
-  end;
-  TrHs = true;
-  resetloop(IPr);
-  IPr.TransDate = RepSpec.sStartDate;
-  while (LoopKey("TransDate",IPr,1,TrHs)) begin
-    if (IPr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
-    if (TrHs) then begin
-      rwcnt = MatRowCnt(IPr);
-      putf = false;
-      for (i=0;i<rwcnt;i=i+1) begin
-        MatRowGet(IPr,i,IPrw);
-        store = "";
-        GetObjs("STORE",IPrw.Objects,store);
-        if (blank(store)) then begin
-          IPrw.Objects = AddObjectToObjectList(IPrw.Objects,RepSpec.f1);
-          MatRowPut(IPr,i,IPrw);
-          putf = true;
+  if (RepSpec.f1=="FESTIVAL") then begin
+    curcomp = currentcompany;
+    blockload(CBb);
+    rwcnt2 = matrowcnt(CBb);
+    For(j=0;j<rwcnt2;j=j+1) begin
+      if (SetCompany(j+1,false)) then begin
+        TrHs = true;
+        resetloop(IVr);
+        IVr.TransDate = RepSpec.sStartDate;
+        while (loopkey("TransDate",IVr,1,TrHs)) begin
+          if (IVr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
+          if ((TrHs) and (IVr.UsedBirthRebateH==1)) then begin
+            rwcnt = MatRowCnt(IVr);
+            putf = false;
+            for (i=0;i<rwcnt;i=i+1) begin
+              MatRowGet(IVr,i,IVrw);
+              if (IVrw.UsedBirthRebate==1) then begin
+                IVrw.Objects = AddObjectToObjectList(IVrw.Objects,RepSpec.f1);
+                MatRowPut(IVr,i,IVrw);
+                putf = true;
+              end;
+              if (putf) then begin
+                RecordStore(IVr,true);
+              end;
+            end;
+          end;
         end;
       end;
-      if (putf) then begin
-        RecordStore(IPr,true);
+    end;
+    ResetCompany(curcomp);
+  end else begin
+    TrHs = true;
+    resetloop(IVr);
+    IVr.TransDate = RepSpec.sStartDate;
+    while (loopkey("TransDate",IVr,1,TrHs)) begin
+      if (IVr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
+      if (TrHs) then begin
+        store = "";
+        GetObjs("STORE",IVr.Objects,store);
+        if (blank(store)) then begin
+          IVr.Objects = AddObjectToObjectList(IVr.Objects,RepSpec.f1);
+          RecordStore(IVr,true);
+        end;
+      end;
+    end;
+    TrHs = true;
+    resetloop(IPr);
+    IPr.TransDate = RepSpec.sStartDate;
+    while (LoopKey("TransDate",IPr,1,TrHs)) begin
+      if (IPr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
+      if (TrHs) then begin
+        rwcnt = MatRowCnt(IPr);
+        putf = false;
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(IPr,i,IPrw);
+          store = "";
+          GetObjs("STORE",IPrw.Objects,store);
+          if (blank(store)) then begin
+            IPrw.Objects = AddObjectToObjectList(IPrw.Objects,RepSpec.f1);
+            MatRowPut(IPr,i,IPrw);
+            putf = true;
+          end;
+        end;
+        if (putf) then begin
+          RecordStore(IPr,true);
+        end;
       end;
     end;
   end;
+  
   RETURN;
 END;
