@@ -1,0 +1,91 @@
+//server-only
+SetLangMode(LangRussian,"RUS",0);
+
+global 
+procedure GiftedGSUseRn(record RcVc RepSpec)
+begin
+  array integer tab;
+  record CompaniesBlock Compb;
+  record GCSVc GCSr;
+  record IVVc IVr,tIVr;
+  row CompaniesBlock Comprw;
+  row IVVc IVrw,tIVrw;
+  integer rwcnt,rwcnt2,comprwcnt,i,j,compi,oldcomp,step;
+  boolean TrHs,testf,giftf;
+  
+  step = 60;
+  tab[0] = 0;
+  tab[1] = tab[0] + step;
+  tab[2] = tab[1] + step;
+  tab[3] = tab[2] + step;
+  tab[4] = tab[3] + step;
+  tab[5] = tab[4] + step;
+  tab[6] = tab[5] + step;
+  tab[7] = tab[6] + step;
+  oldcomp = CurrentCompany;  
+  BlockLoad(Compb);
+  comprwcnt = MatRowCnt(Compb);
+  StartReportNoHeaderJob("Использование подаренных ПС");
+    StartFormat(15);
+      OutString(tab[0],0,"Компания",false);
+      OutString(tab[1],0,"Сч.ф. использ.",false);
+      OutString(tab[2],0,"Дата",false);
+      OutString(tab[3],0,"Клиент",false);
+      OutString(tab[4],0,"Сумма",false);
+      OutString(tab[5],0,"Валюта",false);
+      OutString(tab[6],0,"Номер ПС",false);
+      OutString(tab[7],0,"Сч.ф. покупки",false);
+    EndFormat;
+    Black_Divider(0,1);
+    for (compi=0;compi<comprwcnt;compi=compi+1) begin
+      MatRowGet(Compb,compi,Comprw);
+      if (SetCompanyCode(Comprw.CompCode,false)) then begin
+        resetloop(IVr);
+        IVr.InvDate = RepSpec.sStartDate;
+        TrHs = true;
+        while (loopkey("InvDate",IVr,1,TrHs)) begin
+          testf = true;
+          if (IVr.InvDate>RepSpec.sEndDate) then begin TrHs = false; testf = false; end;
+          if (IVr.OKFlag==0) then begin testf = false; end;
+          if (IVr.Invalid==1) then begin testf = false; end;
+          if (IVr.InvType==kInvoiceTypeCredit) then begin testf = false; end;
+          if (testf) then begin
+            rwcnt = matrowcnt(IVr);
+            for (i=0;i<rwcnt;i=i+1) begin
+              matrowget(IVr,i,IVrw);
+              if (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) then begin
+                GCSr.SerNr = IVrw.GCNr;
+                readfirstmain(GCSr,1,true);
+                tIVr.SerNr = GCSr.InvSerNr;
+                readfirstmain(tIVr,1,true);
+                rwcnt2 = matrowcnt(tIVr);
+                giftf = false;
+                for (j=0;j<rwcnt2;j=j+1) begin
+                  matrowget(tIVr,j,tIVrw);
+                  if (((tIVrw.PayMode=="G") or (tIVrw.PayMode=="GS")) and (tIVrw.stp==kInvoiceRowTypeCreditCardPayment)) then begin
+                    giftf = true;
+                    j = rwcnt2;
+                  end;
+                end;
+                if (giftf) then begin
+                  StartFormat(15);
+                    OutString(tab[0],0,Comprw.CompCode,false);
+                    OutString(tab[1],0,IVr.SerNr,false);
+                    OutString(tab[2],0,IVr.InvDate,false);
+                    OutString(tab[3],0,IVr.CustCode,false);
+                    OutString(tab[4],0,IVr.Sum4,false);
+                    OutString(tab[5],0,IVr.CurncyCode,false);
+                    OutString(tab[6],0,tIVr.SerNr,false);
+                    OutString(tab[7],0,GCSr.SerNr,false);
+                  EndFormat;
+                end;
+              end;
+            end;
+          end;
+        end;
+      end;
+    end;
+  
+  EndJob;
+  return;
+end;
