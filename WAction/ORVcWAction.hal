@@ -1,3 +1,5 @@
+SetLangMode(LangRussian,"RUS",0);
+
 external function LongInt DateDiff(Date,Date);
 external procedure AutomatedSalesOrderly(string);
 external procedure CalcVATBaseVAT2(record SMVc,Integer,Integer,Integer,Boolean,var val,var val);
@@ -73,6 +75,8 @@ remote procedure CreateORVcAmendment(record ORVc,string,integer);
 remote procedure IDPasteDescs(var record ORVc);
 remote function longint IDCreateIPfromORwhithAdvanceIV(record ORVc,var record IVVc);
 remote function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean);//Edit-------------------Vitalii 17:23 12.04.2018
+external function string 60 AddObjectToObjectList(string,string);
+remote function Boolean SDVc_PasteArtCode(var record SDVc,Integer,Integer,var string,var string);
 
 procedure ORSumup_TaxTemplate(var record ORVc ORp)
 begin
@@ -2548,7 +2552,7 @@ begin
     end;
   end;
   if (artblankf) then begin
-    messagebox(35138,"");
+    messagebox(35139,"");
   end else begin
     mess = IDCreateIPfromORwhithAdvanceIV(ORr,IVr);
     if (mess>0) then begin
@@ -2558,10 +2562,107 @@ begin
       IPrw.InvoiceNr = IVr.SerNr;
       MatRowPut(IPr,0,IPrw);
       PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
-      MatRowGet(IPr,0,IPrw);
       IPr.MachineName = IVr.MachineName;
       nwn = OpenWindow("IPDClass",1,0,"","",IPr);
     end;
   end;
+  return;
+end;
+
+global
+procedure IDForStockTransactionBtnClick()
+begin
+  record RcVc RepSpec;
+  integer wn
+
+  wn = CurWindow;
+  openwindow("IDForStockTransactionWClass",1,wn,"","",RepSpec);
+  
+  return;
+end;
+
+procedure IDCreateSDFromOR(record ORVc ORp, string comment, string obj)
+begin
+  record SDVc SDr;
+  record LocationVc Locr;
+  row ORVc ORrw; 
+  row SDVc SDrw;
+  integer nwn,rwcnt,i;
+  boolean artblankf;
+  string 255 tstr;
+  
+  rwcnt = MatRowCnt(ORp);
+  artblankf = false;
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(ORp,i,ORrw);
+    if blank(ORrw.ArtCode) then begin
+      artblankf = true;
+      i = rwcnt;
+    end;
+  end;
+  if (artblankf) then begin
+    messagebox(35141,"");
+  end else begin
+    RecordNew(SDr);
+    SDr.Location = ORp.Location;
+    if nonblank(SDr.Location) then begin
+      Locr.Code = SDr.Location;
+      ReadFirstMain(Locr,1,true);
+      SDr.Objects = AddObjectToObjectList(SDr.Objects,Locr.Objects);
+    end;
+    SDr.Objects = AddObjectToObjectList(SDr.Objects,obj);
+    SDr.Comment = comment;
+    SDr.RefStr = ORp.CustOrdNr;
+    for (i=0;i<rwcnt;i=i+1) begin
+      MatRowGet(ORp,i,ORrw);
+      ClearRow(SDr,SDrw,1);
+      SDrw.ArtCode = ORrw.ArtCode;
+      SDrw.SerialNr = ORrw.SerialNr;
+      SDrw.Qty = ORrw.Quant;
+      MatRowPut(SDr,i,SDrw);
+      SDVc_PasteArtCode(SDr,i,1,tstr,tstr);
+    end;
+    nwn = OpenWindow("SDDClass",1,0,"","",SDr);
+  end;
+  return;
+end;
+
+global
+procedure IDCustGiftBtnClick()
+begin
+  record ORVc ORr;
+  integer wn; 
+  
+  wn = MotherWindow(CurWindow);
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  IDCreateSDFromOR(ORr,"Подарки клиентам","E125");
+  return;
+end;
+
+global
+procedure IDStockLossesClick()
+begin
+  record ORVc ORr;
+  integer wn;
+  
+  wn = MotherWindow(CurWindow);
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  IDCreateSDFromOR(ORr,"Складские потери","E127");
+  return;
+end;
+
+global
+procedure IDShopLossesClick()
+begin
+  record ORVc ORr;
+  integer wn;
+  
+  wn = MotherWindow(CurWindow);
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,ORr);
+  IDCreateSDFromOR(ORr,"Потери в салоне","E1271");
+  CloseWindow(CurWindow);
   return;
 end;
