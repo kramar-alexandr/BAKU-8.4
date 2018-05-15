@@ -1,0 +1,237 @@
+external updating procedure SDUpdateStock(record SDVc,Boolean);
+external updating procedure SDUpdateItemHist(record SDVc);
+external updating procedure SDUpdateSerialNr(record SDVc,Boolean,Boolean);
+external procedure AutomatedSalesOrderly(string);
+external procedure SetIntORFlags(record IntORVc);
+external procedure GetPRInvSep(string,var Integer,var Integer);
+external procedure CalcSum(val,val,val,val,var val,Integer);
+external procedure CalcInCurtoTBIV(var record TBIVVc);
+external function Integer GetItemTypeGroup(string,var string);
+
+updating procedure SDCreateTBIV(record SDVc SDp,Integer rownr,Boolean setinvd,Integer UseDiscount,Boolean negf)
+begin
+  record TBIVVc oldTBIVr;
+  record TBIVVc TBIVr;
+  record PRVc PRr;
+  record INVc INr;
+  row SDVc sdrp;
+  string 20 prcode;
+  string 255 tstr;
+  Integer i,j;
+  Date blankd;
+  val t;
+  
+  MatRowGet(SDp,rownr,sdrp);
+  prcode = sdrp.PRCodeRow;
+  if (blank(prcode)) then begin prcode = SDp.PRCode; end;
+  if (blank(prcode)) then begin goto LSDCreateTBIV; end;
+  if (negf) then begin
+    oldTBIVr.PRCode = prcode;
+    oldTBIVr.oVc = 7;
+    oldTBIVr.SerNr = SDp.SerNr;
+    oldTBIVr.Row = rownr;
+    oldTBIVr.ArtCode = sdrp.ArtCode;
+    oldTBIVr.EMCode = "";
+    oldTBIVr.ChildNr = -1;
+    if (ReadFirstMain(oldTBIVr,0,true)) then begin
+      RecordDelete(oldTBIVr);
+    end;
+    goto LSDCreateTBIV;
+  end;
+  PRr.Code = prcode;
+  if (ReadFirstMain(PRr,1,true)) then begin end;
+  TBIVr.oVc = 7;
+  TBIVr.SerNr = SDp.SerNr;
+  TBIVr.Row = rownr;
+  TBIVr.TransDate = SDp.TransDate;
+  TBIVr.Discount = blankval;
+  TBIVr.EMCode = "";
+  TBIVr.PRCode = prcode;
+  TBIVr.PRName = PRr.Name;
+  TBIVr.Comment = SDp.Comment;
+  TBIVr.ArtCode = sdrp.ArtCode;
+  TBIVr.ItemType = GetItemTypeGroup(TBIVr.ArtCode,tstr);
+  TBIVr.INGroup = tstr;
+  if (TBIVr.ItemType==0) then begin TBIVr.ItemType = 5; end;
+  TBIVr.Objects = sdrp.Objects;
+  if ((PRr.Objects!=TBIVr.Objects) or (blank(TBIVr.Objects))) then begin
+    if (nonblank(TBIVr.Objects) and (nonblank(PRr.Objects))) then begin
+      TBIVr.Objects = TBIVr.Objects & ",";
+    end;
+    TBIVr.Objects = TBIVr.Objects & PRr.Objects;
+  end;
+  TBIVr.Qty = sdrp.Qty;
+  TBIVr.Comment = SDp.Comment;
+  GetPRInvSep(prcode,i,j);
+  TBIVr.InvSeparately = i;
+  TBIVr.InvQty = sdrp.Qty;
+  TBIVr.Invoice = -1;
+  TBIVr.InvDate = blankd;
+  if (setinvd) then begin TBIVr.Invoice = -2; end;
+  TBIVr.InvAfter = blankd;
+  TBIVr.CurncyCode = PRr.CurncyCode;  
+  TBIVr.Price = sdrp.BasePrice;
+  CalcSum(TBIVr.InvQty,TBIVr.Price,0,TBIVr.Discount,t,UseDiscount);
+  TBIVr.Sum = t;
+  TBIVr.GP = blankval;
+  if (ReadFirstMain(INr,1,true)) then begin end;
+  if (INr.ItemType==2) then begin
+    TBIVr.CostPrice = INr.InPrice;
+  end else begin
+    TBIVr.CostPrice = sdrp.FIFO;
+  end;  
+  TBIVr.GP = TBIVr.CostPrice*TBIVr.Qty;
+  TBIVr.GP = TBIVr.Sum - TBIVr.GP;
+  CalcInCurtoTBIV(TBIVr);
+  RecordCopy(oldTBIVr,TBIVr);
+  if (ReadFirstMain(oldTBIVr,0,true)==false) then begin
+    if (RecordInsert(TBIVr,false)) then begin end;
+  end;
+LSDCreateTBIV:;
+  RETURN;
+END;
+
+updating procedure SDOK(record SDVc SDp,Boolean negf)
+begin
+  row SDVc SDrw;
+  Integer i,rwcnt;
+  record GeneralOptionBlock GenOptRec;
+
+  if (SDp.OKFlag==0) then begin
+    goto LSDOK;
+  end;
+  BlockLoad(GenOptRec);
+  rwcnt = MatRowCnt(SDp);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(SDp,i,SDrw);
+    if (SDrw.Qty!=0) then begin
+      SDCreateTBIV(SDp,i,false,GenOptRec.UseDiscount,negf);
+    end;
+  end;
+LSDOK:;
+  RETURN;
+END;
+
+updating procedure UpdateIntOrderFromSD(record SDVc SDp,record SDVc SD2p,Boolean sh2only)
+begin
+  record IntORVc oldIntORr;
+  record IntORVc IntORr;
+  record IntORSettingBlock IORSb;
+  Integer i,rwcnt;
+  Integer orw,orcnt;
+  row IntORVc IntORrw;
+  row SDVc SDrw;
+  Boolean treatedf;
+  
+  treatedf = false;
+  if (SDp.CostAcc!="NIL") then begin
+    IntORr.SerNr = SDp.IntORNo;
+  end else begin
+    IntORr.SerNr = SD2p.IntORNo;
+  end;
+  if (ReadFirstMain(IntORr,1,true)) then begin
+    RecordCopy(oldIntORr,IntORr);
+    orcnt = MatRowCnt(IntORr);
+    if (SD2p.CostAcc!="NIL") then begin
+      rwcnt = MatRowCnt(SD2p);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(SD2p,i,SDrw);
+        if (SDrw.IntORRow!=-1) then begin
+          orw = SDrw.IntORRow;
+          if (orw<orcnt) then begin
+            MatRowGet(IntORr,orw,IntORrw);
+            if (sh2only==false) then begin
+              IntORrw.Shipd1 = IntORrw.Shipd1 - SDrw.Qty;
+            end;
+            if (SD2p.OKFlag!=0) then begin
+              IntORrw.Shipd2 = IntORrw.Shipd2 - SDrw.Qty;
+            end;
+            if (IntORrw.Shipd1==0) then begin
+              IntORrw.Shipd1 = blankval;
+            end;
+            if (IntORrw.Shipd2==0) then begin
+              IntORrw.Shipd2 = blankval;
+            end;
+            if (IntORrw.Shipd1!=0 or IntORrw.Shipd1!=0) then begin
+              treatedf = true;
+            end;
+            MatRowPut(IntORr,orw,IntORrw);
+          end;
+        end;
+      end;
+    end;
+    if (SDp.CostAcc!="NIL") then begin
+      rwcnt = MatRowCnt(SDp);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(SDp,i,SDrw);
+        if (SDrw.IntORRow!=-1) then begin
+          orw = SDrw.IntORRow;
+          if (orw<orcnt) then begin
+            MatRowGet(IntORr,orw,IntORrw);
+            if (sh2only==false) then begin
+              IntORrw.Shipd1 = IntORrw.Shipd1 + SDrw.Qty;
+              treatedf = true;
+            end;
+            if (SDp.OKFlag!=0) then begin
+              IntORrw.Shipd2 = IntORrw.Shipd2 + SDrw.Qty;
+              if (IntORrw.Shipd2==0) then begin
+                IntORrw.Shipd2 = blankval;
+              end else begin
+                treatedf = true;
+              end;
+            end;
+            if (IntORrw.Shipd1==0) then begin
+              IntORrw.Shipd1 = blankval;
+            end;
+            if (IntORrw.Shipd1!=0 or IntORrw.Shipd1!=0) then begin
+              treatedf = true;
+            end;
+            MatRowPut(IntORr,orw,IntORrw);
+          end;
+        end;
+      end;
+    end;
+    SetIntORFlags(IntORr);
+    if (treatedf) then begin
+      BlockLoad(IORSb);
+      if (IORSb.AutoCloseIntOR!=0) then begin
+        IntORr.Closed = 1;
+      end;
+    end;
+    if (RecordUpdate(oldIntORr,IntORr,false)==0) then begin end;
+  end;
+  RETURN;
+END;
+
+global
+updating function LongInt SDVcRecordSaveAfter(var record SDVc SDr,record SDVc SD2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record SDVc NilSDr;
+  record UserVc Userr;
+  record ORVc ORr;
+
+  Userr.Code = SDr.Sign;
+  ReadFirstMain(Userr,1,true);
+  SDr.SalesGroup = Userr.SalesGroup;  
+  if (SDr.OKFlag!=0) then begin
+    SDUpdateStock(SDr,false);
+    SDUpdateItemHist(SDr);
+    SDUpdateSerialNr(SDr,false,true);
+    SDOK(SDr,false);
+    AutomatedSalesOrderly("HasIntegratedNL");
+  end;  
+  if (SDr.IntORNo!=-1) then begin
+    NilSDr.CostAcc = "NIL";
+    UpdateIntOrderFromSD(SDr,NilSDr,false);
+  end;
+  if (nonblank(SDr.RefStr)) then begin
+    ORr.CustOrdNr = SDr.RefStr;
+    if (readfirstkey("CustOrdNr",ORr,1,true)) then begin
+      CreateRecordLink(SDr,CurrentCompany,ORr,CurrentCompany);
+      CreateRecordLink(ORr,CurrentCompany,SDr,CurrentCompany);
+    end;
+  end;
+  SDVcRecordSaveAfter = res;
+  RETURN;
+END;
