@@ -439,36 +439,48 @@ webpublic
 global procedure WebLoadStockTakeVc()
 begin
 	record StockTakeVc STr;
+  record ItemStatusVc ISr;
   row StockTakeVc STrw;
   integer i,mtrw,total,comp;
   string 5 nl,delim;
   string 255 param;
+  val instock;
   
   if (LoggedInTest()) then begin
     comp = StringToInt(WebGetArg("comp"));
     SetCompanyCode(comp,false);
     logtext(0,"WebLoadStockTakeVc - " & currentuser);
     nl = chr(13) & chr(10);
-    delim = ",";
+    delim = ";;;";
     param = WebGetArg("param");
     if nonblank (param) then begin
       STr.SerNr = param;
       if readfirstmain(STr,1,true) then begin
-        if (STr.OKFlag==0) then begin
-        	if(blank("") or ""==currentuser)then begin
+        //if (STr.OKFlag==0) then begin
+        	if(blank("") or ""==currentuser)then begin // "" was STr.SalesMan
 						total = 0;
 						mtrw = matrowcnt(STr);
 						for (i=0;i<mtrw;i=i+1) begin
 							MatRowGet(STr,i,STrw);
+              ISr.Code = STrw.ArtCode;
+              ISr.Location = ";;;";
+              if(nonblank(STr.Location))then begin
+                ISr.Location = STr.Location;
+              end;
+              instock = 0;
+              if(readfirstmain(ISr,2,true))then begin
+                instock = ISr.Instock;
+              end;
+              WebOutString(STrw.ArtCode & delim & STrw.Spec & delim & instock & delim & STrw.Qty & nl);
 							total = total + STrw.Qty;
 						end;
-						WebOutString(STr.Location & nl & total);
+						WebOutString(STr.Location & delim & STr.OKFlag);
           end else begin
           	WebOutString("wrongsm");
           end;
-        end else begin
+        /*end else begin
           WebOutString("oked");
-        end;
+        end;*/
       end else begin
         WebOutString("noindb");
       end;
@@ -514,15 +526,19 @@ end;
 webpublic
 global updating procedure WebFindItemST()
 begin
-  record StockTakeVc STr;
+  record StockTakeVc STr,oldSTr;
   record INVc INr;
+  record ItemStatusVc ISr;
   row StockTakeVc STrw;
   string 5 nl,delim;
   string 255 artcode;
-  integer qty,i,rwcnt,total;
+  integer qty,i,rwcnt,total,comp;
   boolean foundf;
+  val instock;
   
   nl = chr(13) & chr(10);
+  comp = StringToInt(WebGetArg("comp"));
+  SetCompanyCode(comp,false);
   artcode = FindItem(WebGetArg("p2"));
   if (nonblank(artcode)) then begin
     qty = StringToInt(WebGetArg("p3"));
@@ -530,39 +546,89 @@ begin
     readfirstmain(INr,1,true);
     STr.SerNr = WebGetArg("p1");
     if(readfirstmain(STr,1,true))then begin
-			rwcnt = matrowcnt(STr);
-			foundf = false;
-			for (i=0;i<rwcnt;i=i+1) begin
-				MatRowGet(STr,i,STrw);
-				if (STrw.ArtCode==artcode) then begin
-					STrw.Qty = STrw.Qty + qty;
-					qty = STrw.Qty;
-					matrowput(STr,i,STrw);
-					foundf = true;
-					i = rwcnt;
-				end;
-			end;
-			if (!foundf) then begin
-				STrw.ArtCode = artcode;
-				STrw.Spec = INr.Name;
-				STrw.Qty = qty;
-				STrw.Position = STr.Position;// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 9 January 2018 19:05:32
-				matrowinsert(STr,rwcnt,STrw);
-			end;
-			if(blank(""))then begin
-				//"" = currentuser;
-			end;
-			recordstore(STr,true);
-			total = 0;
-			rwcnt = matrowcnt(STr);
-			for (i=0;i<rwcnt;i=i+1) begin
-				MatRowGet(STr,i,STrw);
-				total = total + STrw.Qty;
-			end;
-			WebOutString(artcode & nl & INr.Name & nl & qty & nl & total);
+      RecordCopy(oldSTr,STr);
+      if (STr.OKFlag!=0)then begin
+        WebOutString("oked");
+      end else begin
+        rwcnt = matrowcnt(STr);
+        foundf = false;
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(STr,i,STrw);
+          if (STrw.ArtCode==artcode) then begin
+            STrw.Qty = STrw.Qty + qty;
+            qty = STrw.Qty;
+            matrowput(STr,i,STrw);
+            foundf = true;
+            i = rwcnt;
+          end;
+        end;
+        if (!foundf) then begin
+          STrw.ArtCode = artcode;
+          STrw.Spec = INr.Name;
+          STrw.Qty = qty;
+          STrw.Position = STr.Position;// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 9 January 2018 19:05:32
+          matrowinsert(STr,rwcnt,STrw);
+        end;
+        if(blank(""))then begin
+          //"" = currentuser;
+        end;
+        RecordUpdate(oldSTr,STr,true);
+        total = 0;
+        rwcnt = matrowcnt(STr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(STr,i,STrw);
+          total = total + STrw.Qty;
+        end;
+        ISr.Code = artcode;
+        ISr.Location = ";;;";
+        if(nonblank(STr.Location))then begin
+          ISr.Location = STr.Location;
+        end;
+        instock = 0;
+        if(readfirstmain(ISr,2,true))then begin
+          instock = ISr.Instock;
+        end;
+        WebOutString(artcode & nl & INr.Name & nl & instock & nl & qty & nl & total);
+      end;
     end else begin
       WebOutString("nostvcn");
     end;
+  end;
+  return;
+end;
+
+webpublic
+global updating procedure WebChangeStockTakeVc()
+begin
+  record StockTakeVc STr,oldSTr;
+  integer comp;
+  boolean f;
+  integer i;
+  
+  i = 2;
+  comp = StringToInt(WebGetArg("comp"));
+  SetCompanyCode(comp,false);
+  STr.SerNr = WebGetArg("p1");
+  f = (WebGetArg("p2")=="1");
+  if(readfirstmain(STr,1,true))then begin
+    RecordCopy(oldSTr,STr);
+    if (STr.OKFlag==0) and (f) then begin
+      STr.OKFlag = 1;
+      i = 1;
+    end;
+    if (STr.OKFlag!=0) and (!f) then begin
+      STr.OKFlag = 0;
+      i = 0;
+    end;
+    if (RecordUpdate(oldSTr,STr,true)==0) then begin
+      if (i==1) then begin
+        logtext(0,"WebChangeStockTakeVc " & STr.SerNr & " oked by " & currentuser); 
+      end;
+      if (i==0) then begin
+        logtext(0,"WebChangeStockTakeVc " & STr.SerNr & " unoked by " & currentuser); 
+      end;
+    end;
+    WebOutString(STr.OKFlag);
   end;
   return;
 end;
