@@ -6383,7 +6383,7 @@ return;
 end; //Edit***************************Sasha2,10:38 19.06.2017 }
 
 global
-updating procedure CreateTRCurDifMn(record RcVc RepSpec)
+updating procedure 	CreateTRCurDifMn(record RcVc RepSpec)
 begin
   record BaseCurBlock bcur;
   record CurncyCodeVc CCr;
@@ -6400,9 +6400,15 @@ begin
   date prevdate,td;
   string 100 t;
   string 10 crn;
+  date todate;
   
-  RepSpec.sStartDate = StringToDate("1/1/1900");
-  RepSpec.sEndDate = StringToDate("31/8/2014");
+  RepSpec.sStartDate = StringToDate("1/1/2000");
+  mainr.AccNumber = "50";
+	mainr.TransDate = RepSpec.sStartDate;
+	readfirstmain(mainr,1,true);
+	messagebox(0,mainr.TransDate);
+	RepSpec.sStartDate = mainr.TransDate;
+  RepSpec.sEndDate = currentdate;//StringToDate("31/8/2014");
   BlockLoad(bcur); //bcur.BaseCur1
   curcount = 0;
   TrHs = true;
@@ -6413,70 +6419,71 @@ begin
 		end;
 	end;
   
-  mainr.AccNumber = "50";
-	mainr.TransDate = RepSpec.sStartDate;
-	TrHs = true;
-	while (LoopMain(mainr,2,TrHs)) begin
-		if ((mainr.AccNumber!="50") or (mainr.TransDate>RepSpec.sEndDate))  then begin
-			TrHs = false;
-		end;
-		if (TrHs) then begin
-    	TRr.Number = mainr.TransNr;
-			TRr.IntYc = mainr.IntYc;
-			if (ReadFirstMain(TRr,2,true)) then begin
-				if (mainr.TransDate == TRr.TransDate) then begin
-          if (TRr.IntYc==200) then begin
-            corrTRNum = TRr.Number;
-          end else begin
-            rwcnt = MatRowCnt(TRr);
-            for (i=0;i<rwcnt;i=i+1) begin
-              MatRowGet(TRr,i,TRrw);
-              if ((TRrw.AccNumber == "50") and (TRrw.ovst <> 1) and (TRrw.Curncy!=bcur.BaseCur1)) then begin
-                saldo[TRrw.Curncy & ":Deb"] = saldo[TRrw.Curncy & ":Deb"] + TRrw.CurDebVal;
-                baseturn[TRrw.Curncy & ":Deb"] = baseturn[TRrw.Curncy & ":Deb"] + TRrw.DebVal;
-                saldo[TRrw.Curncy & ":Cred"] = saldo[TRrw.Curncy & ":Cred"] + TRrw.CurCredVal;
-                baseturn[TRrw.Curncy & ":Cred"] = baseturn[TRrw.Curncy & ":Cred"] + TRrw.CredVal;
-              end;
-            end;
-            if (nonblankdate(prevdate) and (TRr.TransDate!=prevdate)) then begin
-              for (CLi=0;Cli<CurencyList.length;CLi=CLi+1) begin
-                rate[CurencyList[CLi]] = 1;
-                crn = CurencyList[CLi];
-                td = TRr.TransDate;
-                fr = 0; to1 = 0; to2 = 0; b1 = 0; b2 = 0;
-                GetFullCurncyRate(crn,td,fr,to1,to2,b1,b2);
-                rate[CurencyList[CLi]] = to1/fr;
-                if rate[CurencyList[CLi]]==blankval then begin rate[CurencyList[CLi]]=0; end;
-                if prevrate[CurencyList[CLi]]==blankval then begin prevrate[CurencyList[CLi]]=0; end;
-                
-                t = CurencyList[CLi] & ":Deb";
-                if saldo[t]==blankval then begin saldo[t]=0; end;
-                if prevsaldo[t]==blankval then begin prevsaldo[t]=0; end;
-                if baseturn[t]==blankval then begin baseturn[t]=0; end;
-                corr[t] = saldo[t]*rate[CurencyList[CLi]] - (prevsaldo[t]*prevrate[CurencyList[CLi]] + baseturn[t]);
-                logtext(0,t & ";" & TRr.TransDate & ";;" & rate[CurencyList[CLi]] & ";" & baseturn[t] & ";;" & saldo[t] & ";;;" & corr[t] & ";=" & saldo[t] & "*" & rate[CurencyList[CLi]] & "-("& prevsaldo[t] & "*" & prevrate[CurencyList[CLi]] & "+" & baseturn[t] & ")");
-                prevsaldo[t] = saldo[t];
-                baseturn[t] = 0;
-                
-                t = CurencyList[CLi] & ":Cred";
-                if saldo[t]==blankval then begin saldo[t]=0; end;
-                if prevsaldo[t]==blankval then begin prevsaldo[t]=0; end;
-                if baseturn[t]==blankval then begin baseturn[t]=0; end;
-                corr[t] = saldo[t]*rate[CurencyList[CLi]] - (prevsaldo[t]*prevrate[CurencyList[CLi]] + baseturn[t]);
-                logtext(0,t & ";" & TRr.TransDate & ";;" & rate[CurencyList[CLi]] & ";" & baseturn[t] & ";;" & saldo[t] & ";;;" & corr[t] & ";=" & saldo[t] & "*" & rate[CurencyList[CLi]] & "-("& prevsaldo[t] & "*" & prevrate[CurencyList[CLi]] & "+" & baseturn[t] & ")");
-                prevsaldo[t] = saldo[t];
-                baseturn[t] = 0;
-                
-                prevrate[CurencyList[CLi]] = rate[CurencyList[CLi]];
-              end;
-            end;
-            prevdate = TRr.TransDate;
-          end;
-        end;
-      end;
-      
-    end;
+  todate = RepSpec.sStartDate;
+  if(blankdate(todate))then begin
+  	todate = StringToDate("1/1/2012");
   end;
+  
+  while(todate<RepSpec.sEndDate)begin
+  	resetloop(mainr);
+  	mainr.AccNumber = "50";
+		mainr.TransDate = todate;
+		TrHs = true;
+		while (LoopMain(mainr,2,TrHs)) begin
+			if ((mainr.AccNumber!="50") or (mainr.TransDate!=todate))  then begin
+				TrHs = false;
+			end;
+			if (TrHs) then begin
+				TRr.Number = mainr.TransNr;
+				TRr.IntYc = mainr.IntYc;
+				if (ReadFirstMain(TRr,2,true)) then begin
+					if (mainr.TransDate == TRr.TransDate) then begin
+						if (TRr.IntYc==200) then begin
+							corrTRNum = TRr.Number;
+						end else begin
+							rwcnt = MatRowCnt(TRr);
+							for (i=0;i<rwcnt;i=i+1) begin
+								MatRowGet(TRr,i,TRrw);
+								if(TRrw.stp==1)then begin
+									if ((TRrw.AccNumber == "50") and (TRrw.ovst <> 1) and (TRrw.Curncy!=bcur.BaseCur1)) then begin
+										saldo[TRrw.Curncy & ":Deb"] = saldo[TRrw.Curncy & ":Deb"] + TRrw.CurDebVal;
+										baseturn[TRrw.Curncy & ":Deb"] = baseturn[TRrw.Curncy & ":Deb"] + TRrw.DebVal;
+										saldo[TRrw.Curncy & ":Cred"] = saldo[TRrw.Curncy & ":Cred"] + TRrw.CurCredVal;
+										baseturn[TRrw.Curncy & ":Cred"] = baseturn[TRrw.Curncy & ":Cred"] + TRrw.CredVal;
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+		
+		for (CLi=0;Cli<CurencyList.length;CLi=CLi+1) begin
+			rate[CurencyList[CLi]] = 1;
+			crn = CurencyList[CLi];
+			td = todate;
+			fr = 0; to1 = 0; to2 = 0; b1 = 0; b2 = 0;
+			GetFullCurncyRate(crn,td,fr,to1,to2,b1,b2);
+			rate[CurencyList[CLi]] = to1/fr;
+			
+			t = CurencyList[CLi] & ":Deb";
+			corr[t] = saldo[t]*rate[CurencyList[CLi]] - baseturn[t];
+			logtext(0,t & ";" & todate & ";;" & rate[CurencyList[CLi]] & ";" & baseturn[t] & ";;" & saldo[t] & ";;;" & corr[t] & ";=" & saldo[t] & "*" & rate[CurencyList[CLi]] & "-("& prevsaldo[t] & "*" & prevrate[CurencyList[CLi]] & "+" & baseturn[t] & ")");
+			baseturn[t] = baseturn[t] + corr[t];
+		
+			t = CurencyList[CLi] & ":Cred";
+			corr[t] = saldo[t]*rate[CurencyList[CLi]] - baseturn[t];
+			logtext(0,t & ";" & todate & ";;" & rate[CurencyList[CLi]] & ";" & baseturn[t] & ";;" & saldo[t] & ";;;" & corr[t] & ";=" & saldo[t] & "*" & rate[CurencyList[CLi]] & "-("& prevsaldo[t] & "*" & prevrate[CurencyList[CLi]] & "+" & baseturn[t] & ")");
+			baseturn[t] = baseturn[t] + corr[t];
+		
+		end;
+	
+  	
+  	todate = addday(todate,1);
+  end;
+  
+  
   
 
   
