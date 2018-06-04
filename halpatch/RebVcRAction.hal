@@ -1,4 +1,7 @@
 //server-only
+
+SetLangMode(LangRussian,"RUS",0);
+
 global
 function LongInt RebVcRecordDefaults(var record RebVc Rebr,record RebVc Reb2r,LongInt stat,LongInt long4)
 BEGIN
@@ -29,11 +32,15 @@ BEGIN
   Integer insertmode;
   record RebVc locRebr;
   row RebVc Rebrw; //Edit***************************Sasha2,13:36 23.12.2015
-  Integer rwcnt,i; //Edit***************************Sasha2,13:36 23.12.2015
+  Integer rwcnt,i,cnt,j; //Edit***************************Sasha2,13:36 23.12.2015
   record INVc INr; //Edit***************************Sasha2,13:37 23.12.2015
   Boolean foundf; //Edit***************************Sasha2,14:15 23.12.2015
-  vector longint doublrow;
+  vector LongInt doublrow;
+  array string 255 MyRebRecord,MyToDate,MyFromDate;
+  array val MyRebRecordVra;
+  boolean testf;
   
+
   res = 0;
   insertmode = 1;
   if blank(Rebr.Code) then begin
@@ -142,24 +149,52 @@ BEGIN
   end; //Edit***************************Sasha2,14:09 23.12.2015 }
   // Edit Start ---------------------------------------------- Edit Start
 	//Tuesday, 27 March 2018 14:58:51
-	
   if(Rebr.Code=="0%")then begin
   	if(nonblankdate(Rebr.FromDate)) and (nonblankdate(Rebr.ToDate))then begin
   		locRebr.Code = "";
+		cnt = 0;
   		while(loopmain(locRebr,1,true))begin
   			if(locRebr.Code!=Rebr.Code and Rebr.FromDate==locRebr.FromDate and Rebr.ToDate==locRebr.ToDate)then begin
   				rwcnt = MatRowCnt(locRebr);
   				For(i=0;i<rwcnt;i=i+1) begin
 	  				matrowdelete(locRebr,0);
-					end; 
-					rwcnt = MatRowCnt(Rebr);
-					For(i=0;i<rwcnt;i=i+1) begin
-	  				MatRowGet(Rebr,i,Rebrw);
-	  				MatRowPut(locRebr,i,Rebrw);
-					end; 
+				end; 
+				rwcnt = MatRowCnt(Rebr);
+				For(i=0;i<rwcnt;i=i+1) begin
+				MatRowGet(Rebr,i,Rebrw);
+				MatRowPut(locRebr,i,Rebrw);
+				end; 
   				recordstore(locRebr,true);
+			end else begin
+				if(locRebr.Code!=Rebr.Code)then begin
+					MyRebRecord[cnt] = locRebr.Code;
+					MyRebRecordVra[cnt] = locRebr.vra0;
+					MyFromDate[cnt] = locRebr.FromDate;
+					MyToDate[cnt] = locRebr.FromDate;
+					cnt = cnt + 1;
+					logtext(0,cnt);
+				end;
   			end;
   		end;
+		ResetLoop(locRebr);
+		for(i=0;i<cnt;i=i+1)begin
+			if((Rebr.FromDate<StringToDate(MyFromDate[i]) and StringToDate(MyFromDate[i])<Rebr.ToDate) or (Rebr.FromDate<StringToDate(MyToDate[i]) and StringToDate(MyToDate[i])<Rebr.ToDate))then begin
+				MessageBox(35146,MyRebRecord[i] & " " & MyFromDate[i] & " - "& MyToDate[i] & ". Не будет создано");
+			end else begin
+				RecordNew(locRebr);
+				locRebr.Code = MyRebRecord[i];
+				locRebr.FromDate = Rebr.FromDate;
+				locRebr.ToDate = Rebr.ToDate;
+				locRebr.vra0 = MyRebRecordVra[i];
+				locRebr.Replaces = MyRebRecord[i];
+				rwcnt = MatRowCnt(Rebr);
+				for(j=0;j<rwcnt;j=j+1) begin
+					MatRowGet(Rebr,j,Rebrw);
+					MatRowPut(locRebr,j,Rebrw);
+				end; 
+				recordstore(locRebr,true);
+			end;
+		end;
   	end;
   end;
   

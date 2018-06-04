@@ -94,6 +94,35 @@ begin
 return;
 end;
 
+global
+function boolean GiftVoucherTotalCheck(string barcode, LongInt BankValSum)
+begin
+	boolean res,TrHs;
+	record GCVc GCr;
+	record GCRVc GCRr;
+	record IPVc IPr;
+	row IPVc IPrw;
+	LongInt AmmountTotal,GiftVoucherBal,rwcnt,i;
+	
+	res = false;
+	GCr.BarCode = barcode;
+	if(ReadFirstKey("BarCode",GCr,1,true))then begin
+		TrHs = true;
+		AmmountTotal = 0;
+		while(loopkey("BarCode",GCRr,1,TrHs)) begin
+			if(GCRr.BarCode!=barcode)then begin TrHs = false; end;
+			if(TrHs)then begin
+				AmmountTotal = AmmountTotal + GCRr.Amount;
+			end;
+		end;
+		GiftVoucherBal = GCr.Amount - AmmountTotal;
+		if(BankValSum<=GiftVoucherBal)then begin res = true; end;
+	end;	
+	
+	GiftVoucherTotalCheck = res;
+	
+return;
+end;
 
 global
 updating function LongInt IPVcRecordCheck(var record IPVc IPp,record IPVc IP2p,LongInt stat,LongInt long4)
@@ -111,12 +140,14 @@ BEGIN
   record CUVc CUr;
   record ORVc ORp;
   record IPVc lIPr;
-  record CheckVc Checkr;  
+  record CheckVc Checkr; 
+  record GCVc GCr;
+  record GCRVc GCRr;
   row IPVc IPrw,IP2rw;
-  LongInt oldnr,dummyl,error,errorrow;
+  LongInt oldnr,dummyl,error,errorrow,BankValSum;
   Integer i,j,rwcnt,cashres;
   val amount,temp;
-  Boolean testf,gentrans,transf,check,unokf,ivfound;
+  Boolean testf,gentrans,transf,check,unokf,ivfound,TrHs;
   Integer cht,gchk;
   string 255 tstr,pmobjstr,errstr,wrofacc;
   Integer nrofprepay;
@@ -260,7 +291,12 @@ L12:;
   end;
   if (GiftVoucherCheck(IPp.GiftVoucher)==false and nonblank(IPp.GiftVoucher))then begin
 		res = -1;
-		messagebox(0,"Карты не существует");
+		RecordCheckError(35144,"",-1,"GiftVoucher");
+		goto LIPVcRecordCheck;
+  end;
+  if (GiftVoucherCheck(IPp.GiftVoucher) and nonblank(IPp.GiftVoucher) and IPp.PayMode!="GS")then begin
+		res = -1;
+		RecordCheckError(35145,"",-1,"PayMode");
 		goto LIPVcRecordCheck;
   end;
   if (POSBalanceExistsAfterThis(IPp.TransDate,IPp.RegTime,IPp.MachineName,IPp.DrawerCode)) then begin
@@ -298,10 +334,31 @@ L12:;
   for (i=0; i<rwcnt;i=i+1) begin
     MatRowGet(IPp,i,IPrw);
 	if(nonblank(IPp.GiftVoucher) and IPrw.BankCurncy!=BCb.BaseCur1)then begin
-		MessageBox(0,"Валюта банка должна быть: " & BCb.BaseCur1);
+		RecordCheckError(35142,BCb.BaseCur1,i,"BankCurncy");      
 		res = -1; 
 		goto LIPVcRecordCheck;
 	end;
+  end;
+  if(nonblank(IPp.GiftVoucher))then begin
+	  BankValSum = 0;
+	  for (i=0; i<rwcnt;i=i+1) begin
+		MatRowGet(IPp,i,IPrw);
+		if(nonblank(IPrw.BankVal))then begin BankValSum = BankValSum + IPrw.BankVal; end;
+	  end;
+	  if(IPp.OKFlag==1) then begin
+			if (stat==updatemode) then begin
+			  if (IP2p.OKFlag==0) then begin 
+				  if(GiftVoucherTotalCheck(IPp.GiftVoucher,BankValSum)==false)then begin
+					RecordCheckError(35143,"",-1,"GiftVoucher");
+					res = -1; 
+					goto LIPVcRecordCheck;
+				  end;
+			  end;
+			end;
+	  end;
+  end;
+  for (i=0; i<rwcnt;i=i+1) begin
+    MatRowGet(IPp,i,IPrw);
     if ((IPrw.stp==1) or (IPrw.stp==5) or (IPrw.stp==6) or (IPrw.stp==7)) begin
         if (IPrw.ovst==0) then begin
           if (blank(IPrw.RecVal)) then begin
