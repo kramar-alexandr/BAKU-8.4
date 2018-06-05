@@ -38,7 +38,8 @@ BEGIN
   vector LongInt doublrow;
   array string 255 MyRebRecord,MyToDate,MyFromDate;
   array val MyRebRecordVra;
-  boolean testf;
+  boolean testf,TrHs;
+  string 255 noCreate,Created;
   
 
   res = 0;
@@ -166,34 +167,73 @@ BEGIN
 				end; 
   				recordstore(locRebr,true);
 			end else begin
-				if(locRebr.Code!=Rebr.Code)then begin
-					MyRebRecord[cnt] = locRebr.Code;
-					MyRebRecordVra[cnt] = locRebr.vra0;
-					MyFromDate[cnt] = locRebr.FromDate;
-					MyToDate[cnt] = locRebr.FromDate;
-					cnt = cnt + 1;
-					logtext(0,cnt);
+				if(locRebr.Code!=Rebr.Code and nonblank(locRebr.FromDate) and nonblank(locRebr.ToDate))then begin
+					testf = true;
+					if(cnt>0)then begin
+						if(locRebr.Code==MyRebRecord[cnt-1])then begin testf = false; end;
+					end;
+					if(testf)then begin
+						MyRebRecord[cnt] = locRebr.Code;
+						//logtext(0,MyRebRecord[cnt]);
+						cnt = cnt + 1;
+					end;
 				end;
   			end;
   		end;
 		ResetLoop(locRebr);
 		for(i=0;i<cnt;i=i+1)begin
-			if((Rebr.FromDate<StringToDate(MyFromDate[i]) and StringToDate(MyFromDate[i])<Rebr.ToDate) or (Rebr.FromDate<StringToDate(MyToDate[i]) and StringToDate(MyToDate[i])<Rebr.ToDate))then begin
-				MessageBox(35146,MyRebRecord[i] & " " & MyFromDate[i] & " - "& MyToDate[i] & ". Не будет создано");
-			end else begin
+			locRebr.Code = MyRebRecord[i];
+			TrHs = true;
+			testf = true;
+			while(loopmain(locRebr,1,TrHs)) begin
+				if(locRebr.Code!=MyRebRecord[i])then begin TrHs = false; end;
+				if(TrHs)then begin
+					if(nonblank(locRebr.FromDate) and nonblank(locRebr.ToDate))then begin
+						if(DateInRange(Rebr.ToDate,locRebr.FromDate,locRebr.ToDate) and testf)then begin 
+								testf = false;
+								TrHs = false;
+								noCreate = noCreate & locRebr.Code & ": " & locRebr.FromDate & " - " & locRebr.ToDate & ";";
+						end;
+						if(DateInRange(Rebr.FromDate,locRebr.FromDate,locRebr.ToDate) and testf)then begin 
+								testf = false;
+								TrHs = false;
+								noCreate = noCreate & locRebr.Code & ": " & locRebr.FromDate & " - " & locRebr.ToDate & ";";
+						end;
+						if(DateInRange(locRebr.ToDate,Rebr.FromDate,Rebr.ToDate) and testf)then begin 
+								testf = false;
+								TrHs = false;
+								noCreate = noCreate & locRebr.Code & ": " & locRebr.FromDate & " - " & locRebr.ToDate & ";";
+						end;
+						if(DateInRange(locRebr.FromDate,Rebr.FromDate,Rebr.ToDate) and testf)then begin 
+								testf = false;
+								TrHs = false;
+								noCreate = noCreate & locRebr.Code & ": " & locRebr.FromDate & " - " & locRebr.ToDate & ";";
+						end;
+					end;
+				end;
+			end;
+			ResetLoop(locRebr);
+			if(testf)then begin
 				RecordNew(locRebr);
 				locRebr.Code = MyRebRecord[i];
 				locRebr.FromDate = Rebr.FromDate;
-				locRebr.ToDate = Rebr.ToDate;
-				locRebr.vra0 = MyRebRecordVra[i];
-				locRebr.Replaces = MyRebRecord[i];
-				rwcnt = MatRowCnt(Rebr);
-				for(j=0;j<rwcnt;j=j+1) begin
-					MatRowGet(Rebr,j,Rebrw);
-					MatRowPut(locRebr,j,Rebrw);
-				end; 
-				recordstore(locRebr,true);
+				if(readFirstMain(locRebr,2,true)==false)then begin
+					locRebr.Code = MyRebRecord[i];
+					locRebr.FromDate = Rebr.FromDate;
+					locRebr.ToDate = Rebr.ToDate;
+					locRebr.Replaces = MyRebRecord[i];
+					rwcnt = MatRowCnt(Rebr);
+					for(j=0;j<rwcnt;j=j+1) begin
+						MatRowGet(Rebr,j,Rebrw);
+						MatRowPut(locRebr,j,Rebrw);
+					end; 
+					recordstore(locRebr,true);
+					//logtext(0,MyRebRecord[i] & "Created");
+				end;
 			end;
+		end;
+		if(nonblank(noCreate))then begin
+			MessageBox(35146,left(noCreate,50) & ". Не будет создано!");
 		end;
   	end;
   end;
