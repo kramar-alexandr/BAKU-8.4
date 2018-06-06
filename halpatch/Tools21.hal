@@ -649,6 +649,8 @@ BEGIN
   record INVc INr;
   record IPrsVc IPrsr;
   record MainStockBlock MSb;
+  record PDVc PDr;
+
   
   res = TestArgEInvoiceStatus(IVp);
   if (res!=0) then begin
@@ -713,8 +715,16 @@ BEGIN
         case kInvoiceRowTypeGiftVoucherPayment:
           ivsum = ivsum - IVrw.Sum;
         case kInvoiceRowTypeCashPayment:
-        	CurValToOtherCur(IVp.TransDate,IVrw.CurncyCode,IVrw.Sum,IVp.CurncyCode,rowsum,DefaultCurRoundOff);
-          ivsum = ivsum - rowsum + IVp.RetnValue;	//Edit-------------------------------------------------Dima  27.01.2016
+			PDr.Code = IVp.PayDeal;
+			CurValToOtherCur(IVp.TransDate,IVrw.CurncyCode,IVrw.Sum,IVp.CurncyCode,rowsum,DefaultCurRoundOff);
+			if (ReadFirstMain(PDr,1,true)) then begin//Edit_-_-_-_-_-_-_-_-Anton 14:58 06.06.2018
+				if (PDr.PDType==kInvoiceTypeNormal or PDr.PDType==kInvoiceTypeCredit) then begin
+					ivsum = ivsum - IVrw.Sum;
+				end else begin
+					ivsum = ivsum - rowsum + IVp.RetnValue;
+				end;					
+			end;
+          //ivsum = ivsum - rowsum + IVp.RetnValue;	//Edit-------------------------------------------------Dima  27.01.2016
           //ivsum = ivsum - IVrw.Sum;
         case kInvoiceRowTypeLoyaltyPointsPayment:
           ivsum = ivsum - IVrw.Sum;
@@ -729,7 +739,6 @@ BEGIN
     if (IVp.InvType==kInvoiceTypeCredit or IVp.InvType==kInvoiceTypeCreditSpecialSales) then begin ivsum = -ivsum; end;
     ARr.InvoiceNr = IVp.SerNr;
     if (ReadFirstMain(ARr,1,true)) then begin
-    	logtext(0,"ivsum " & ivsum);
       if (ARr.RVal!=ivsum) then begin
         res = 22059;
         goto LIsUnOKAllowed_IVVc;
