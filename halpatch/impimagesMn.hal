@@ -47,6 +47,7 @@ external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var
 external updating procedure CreateLoyalActivity(record LoyaltyCardVc,string);// Edit ************************** BPI Ukraine - KramarAlexandr - Thursday, 4 January 2018 14:02:12
 external function string 255 NormalizeSetString(string);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 3 April 2018 12:00:28
 external updating procedure UpdatePlanned(string,string,string,LongInt,Date,val,Integer,val,val,Boolean);
+external updating procedure CalcPriceListsMn(record RcVc);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -4566,6 +4567,86 @@ LAggregateDataToJWMn:;
 
 return;
 end; //Edit***************************Sasha2,14:28 19.02.2016 }
+
+
+
+global //Edit_-_-_-_-_-_-_-_-Anton 11:28 07.06.2018
+updating procedure CheckCurencyINVcMn(record RcVc RepSpec)
+begin
+	record INVc INr;
+	record PUVc PUr;
+	record ItemStatusVc ISr;
+	row PUVc PUrw;
+	LongInt rwcnt,i,oldcomp,cnt,j;
+	record CompaniesBlock Cb;
+	row CompaniesBlock Comprw;
+	vector string 255 CheckProdCurencyV;
+	array string 255 CheckProdCurencyAr;
+	boolean TrHs;
+	record PLDefVc PLDr;
+	
+	PUr.SerNr = 0;
+	cnt = 0;
+	while(LoopMain(PUr,1,true)) begin
+		if(PUr.PONr==-1 and PUr.CurncyCode!="AZN")then begin
+			rwcnt = MatRowCnt(PUr);
+			for(i=0;i<rwcnt;i=i+1)begin
+				MatRowGet(PUr,i,PUrw);
+				INr.Code = PUrw.ArtCode;
+				if(ReadFirstMain(INr,1,true))then begin
+					if(PUr.CurncyCode!=INr.LastPurchCurncyCode)then begin
+						if(INr.LastPurchCurncyCode=="AZN" and INr.InPrice!=INr.LastPurchPrice2)then begin
+							logtext(0," PUSerNr> " & PUr.SerNr & " Code> " & INr.Code & " PUVc> " & PUr.CurncyCode & " INVc> " & INr.LastPurchCurncyCode);
+							CheckProdCurencyV[INr.Code] = PUr.CurncyCode;
+							CheckProdCurencyAr[cnt] = INr.Code;
+							cnt = cnt + 1; 
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	oldcomp = currentcompany;
+	ResetLoop(PUr);
+	for(i=1;i<26;i=i+1)begin
+		if(SetCompany(i,false))then begin
+			for(j=0;j<cnt;j=j+1)begin
+				ISr.Code = CheckProdCurencyAr[j];
+				TrHs = true;
+				while(loopmain(ISr,1,TrHs)) begin
+					if(ISr.Code!=CheckProdCurencyAr[j])then begin TrHs = false; end;
+					if(ISr.Location!=";;;" and TrHs)then begin 
+						logtext(0," CompNr> " & i &" Code> " & ISr.Code & " ourCode> " & CheckProdCurencyAr[j] & " Location> " & ISr.Location & " instock> " & ISr.Instock);
+					end;
+				end;
+				ResetLoop(ISr);
+			end;
+		end;
+	end;
+	ResetCompany(oldcomp);
+	for(j=0;j<cnt;j=j+1)begin
+		ISr.Code = CheckProdCurencyAr[j];
+		TrHs = true;
+		PLDr.Code="";
+		INr.Code = ISr.Code;
+		if(ReadFirstMain(INr,1,true))then begin
+			INr.LastPurchCurncyCode = CheckProdCurencyV[INr.Code];
+			RecordStore(INr,true);
+			logtext(0," CompNr> " & i &" Code> " & ISr.Code & " Location> " & ISr.Location & " instock> " & ISr.Instock & "Updated");
+			While(loopmain(PLDr,1,true))begin
+				if(PLDr.Code!="RRP")then begin
+					RepSpec.f1 = PLDr.Code;
+					RepSpec.f2 = ISr.Code;
+					CalcPriceListsMn(RepSpec);
+				end;
+			end;
+		end;
+		ResetLoop(PLDr);
+	end;
+	
+return;
+end;
+
 
 
 global //Edit***************************Sasha2,15:52 23.03.2016 {
