@@ -25,7 +25,18 @@ begin
   boolean fillobjf;
   vector boolean CurInArr,ObjInArr;
   
+  TRr.Number = 9999999;
+  TRr.IntYc = serviceIntYc;
+  TrHs = true;
+  while (LoopBackKey("Number",TRr,2,TrHs)) begin
+    if (TRr.IntYc==serviceIntYc) then begin
+      TrHs = false;
+      corrTRrNum = TRr.Number;
+    end;
+  end;
+  resetloop(TRr);
   if (ObjectList.length==0) then begin fillobjf = true; end;
+  resetloop(mainr);
   mainr.AccNumber = accnum;
   mainr.TransDate = "1/1/1900";
   TrHs = true;
@@ -39,9 +50,6 @@ begin
         TRr.IntYc = mainr.IntYc;
         if (ReadFirstMain(TRr,2,true)) then begin
           if (mainr.TransDate == TRr.TransDate) then begin
-            if (TRr.IntYc==serviceIntYc) and (corrTRrNum<TRr.Number) then begin
-              corrTRrNum = TRr.Number;
-            end;
             rwcnt = MatRowCnt(TRr);
             for (i=0;i<rwcnt;i=i+1) begin
               MatRowGet(TRr,i,TRrw);
@@ -163,19 +171,36 @@ begin
   if (blankdate(RepSpec.d1)) then begin
     RepSpec.d1 = CurrentDate;
   end;
+  RepSpec.ObjStr = UpperCase(RepSpec.ObjStr);
   
   for (ai=0;ai<accnumber.length;ai=ai+1) begin
     comment = USetStr(35148) & " " & accnumber[ai];
-    corrTRr.TransDate = RepSpec.d1;
+    if nonblank(RepSpec.ObjStr) then begin
+      comment = comment & " " & RepSpec.ObjStr;
+    end;
+    resetloop(corrTRr);
+    corrTRr.Comment = comment;
+    corrTRr.IntYc = serviceIntYc;
     resetloop(corrTRr);
     TrHs = true;
-    while(loopmain(corrTRr,1,TrHs)) begin
-      if (corrTRr.IntYc==serviceIntYc) and (corrTRr.Comment==comment) then begin
+    while(loopkey("Comment",corrTRr,1,TrHs)) begin
+      if (corrTRr.IntYc!=serviceIntYc) then begin TrHs = false; end;
+      if (corrTRr.Comment!=comment) then begin TrHs = false; end;
+      if (TrHs) and (corrTRr.TransDate==RepSpec.d1) then begin
         DeleteTransaction(corrTRr.Number,corrTRr.IntYc);
         stepback(corrTRr);
       end;
     end;
+  end;
+  for (ai=0;ai<accnumber.length;ai=ai+1) begin
+    comment = USetStr(35148) & " " & accnumber[ai];
+    if nonblank(RepSpec.ObjStr) then begin
+      comment = comment & " " & RepSpec.ObjStr;
+    end;
     RecordClear(corrTRr);
+    ClearArray(tmp1);
+    ClearArray(tmp2);
+    corrTRrNum = -1;
     CountEndSaldoInBase(accnumber[ai],RepSpec.d1,saldo,"",serviceIntYc,corrTRrNum,tmp1,tmp2);
     if (corrTRrNum<0) then begin
       corrTRrNum = 0;
@@ -200,7 +225,6 @@ begin
               corrTRr.TransDate = RepSpec.d1;
               corrTRr.IntYc = serviceIntYc;
               corrTRr.Number = corrTRrNum;
-              corrTRrNum = corrTRrNum + 1;
               corrTRr.Comment = comment;
               corrTRr.RegDate = CurrentDate;
               corrTRr.RegTime = CurrentTime;
@@ -285,30 +309,48 @@ begin
     accnumber[ai] = "59/1"; ai = ai + 1;
     accnumber[ai] = "59/2"; ai = ai + 1;
   end;
-  if (blankdate(RepSpec.d1)) then begin
-    RepSpec.d1 = CurrentDate;
-  end;
-  if nonblank(RepSpec.ObjStr) then begin
-    ObjectList[0] = RepSpec.ObjStr;
-  end;
-  
+  RepSpec.ObjStr = UpperCase(RepSpec.ObjStr);
   for (ai=0;ai<accnumber.length;ai=ai+1) begin
     comment = USetStr(35147) & " " & accnumber[ai];
-    corrTRr.TransDate = RepSpec.sStartDate;
+    if nonblank(RepSpec.ObjStr) then begin
+      comment = comment & " " & RepSpec.ObjStr;
+    end;
+    corrTRr.Comment = comment;
+    corrTRr.IntYc = serviceIntYc;
     resetloop(corrTRr);
     TrHs = true;
-    while(loopmain(corrTRr,1,TrHs)) begin
-      if (corrTRr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
-      if TrHs and (corrTRr.IntYc==serviceIntYc) and (corrTRr.Comment==comment) then begin
+    while(loopkey("Comment",corrTRr,1,TrHs)) begin
+      if (corrTRr.IntYc!=serviceIntYc) then begin TrHs = false; end;
+      if (corrTRr.Comment!=comment) then begin TrHs = false; end;
+      if (TrHs) and (corrTRr.TransDate>=RepSpec.sStartDate) and (corrTRr.TransDate<=RepSpec.sEndDate) then begin
         DeleteTransaction(corrTRr.Number,corrTRr.IntYc);
         stepback(corrTRr);
       end;
     end;
-    RecordClear(corrTRr);
-    TrHs = true;
+  end;
+  
+  for (ai=0;ai<accnumber.length;ai=ai+1) begin
+    comment = USetStr(35147) & " " & accnumber[ai];
+    if nonblank(RepSpec.ObjStr) then begin
+      comment = comment & " " & RepSpec.ObjStr;
+    end;
     
     curdate = RepSpec.sStartDate;
+    ClearArray(CurencyList);
+    ClearArray(ObjectList);
+    if nonblank(RepSpec.ObjStr) then begin
+      ObjectList[0] = RepSpec.ObjStr;
+    end;
     CountEndSaldoInBase(accnumber[ai],curdate,saldo,"",serviceIntYc,corrTRrNum,CurencyList,ObjectList);
+    for (CLi=0;Cli<CurencyList.length;CLi=CLi+1) begin
+      CurInArr[CurencyList[CLi]] = true;
+    end;
+    CLi = CurencyList.length;
+    for (OLi=0;OLi<ObjectList.length;OLi=OLi+1) begin
+      ObjInArr[ObjectList[OLi]] = true;
+      logtext(0,ObjectList[OLi]);
+    end;
+    OLi = ObjectList.length;
     if (corrTRrNum<0) then begin
       corrTRrNum = 0;
     end;
@@ -319,6 +361,7 @@ begin
       mainr.AccNumber = accnumber[ai];
       mainr.TransDate = curdate;
       TrHs = true;
+      logtext(0,accnumber[ai] & " - " & curdate);
       while (LoopMain(mainr,2,TrHs)) begin
         if ((mainr.AccNumber!=accnumber[ai]) or (mainr.TransDate!=curdate)) then begin
           TrHs = false;
@@ -337,6 +380,7 @@ begin
                     GetObjs("STORE",TRrw.Objects,objstore);
                     if (!ObjInArr[objstore]) then begin
                       ObjectList[OLi] = objstore;
+                      logtext(0,objstore);
                       ObjInArr[ObjectList[OLi]] = true;
                       OLi = OLi + 1;
                     end;
