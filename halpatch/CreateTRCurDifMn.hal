@@ -292,193 +292,195 @@ begin
     ObjectList[0] = RepSpec.ObjStr;
   end;
   
-  comment = USetStr(35147) & " " & accnumber[ai];
-  corrTRr.TransDate = RepSpec.sStartDate;
-  resetloop(corrTRr);
-  TrHs = true;
-  while(loopmain(corrTRr,1,TrHs)) begin
-    if (corrTRr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
-    if TrHs and (corrTRr.IntYc==serviceIntYc) and (corrTRr.Comment==comment) then begin
-      DeleteTransaction(corrTRr.Number,corrTRr.IntYc);
-      stepback(corrTRr);
-    end;
-  end;
-  RecordClear(corrTRr);
-  TrHs = true;
-  
-  curdate = RepSpec.sStartDate;
-  CountEndSaldoInBase(accnumber[ai],curdate,saldo,"",serviceIntYc,corrTRrNum,CurencyList,ObjectList);
-  if (corrTRrNum<0) then begin
-    corrTRrNum = 0;
-  end;
-  corrTRrNum = corrTRrNum + 1;
-	curdate = AddDay(curdate,1);
-  while (curdate<=RepSpec.sEndDate) begin
-    resetloop(mainr);
-    mainr.AccNumber = accnumber[ai];
-    mainr.TransDate = curdate;
+  for (ai=0;ai<accnumber.length;ai=ai+1) begin
+    comment = USetStr(35147) & " " & accnumber[ai];
+    corrTRr.TransDate = RepSpec.sStartDate;
+    resetloop(corrTRr);
     TrHs = true;
-    while (LoopMain(mainr,2,TrHs)) begin
-      if ((mainr.AccNumber!=accnumber[ai]) or (mainr.TransDate!=curdate)) then begin
-        TrHs = false;
-      end;
-      if (TrHs) then begin
-        if (mainr.FileName=="TRVc") then begin
-          TRr.Number = mainr.TransNr;
-          TRr.IntYc = mainr.IntYc;
-          if (ReadFirstMain(TRr,2,true)) then begin
-            if (mainr.TransDate == TRr.TransDate) then begin
-              rwcnt = MatRowCnt(TRr);
-              for (i=0;i<rwcnt;i=i+1) begin
-                MatRowGet(TRr,i,TRrw);
-                if ((TRrw.AccNumber == accnumber[ai]) and (TRrw.ovst <> 1) and (TRrw.stp==1) and (TRrw.Curncy!=bcur.BaseCur1)) then begin
-                  objstore= "";
-                  GetObjs("STORE",TRrw.Objects,objstore);
-                  if (!ObjInArr[objstore]) then begin
-                    ObjectList[OLi] = objstore;
-                    ObjInArr[ObjectList[OLi]] = true;
-                    OLi = OLi + 1;
-                  end;
-                  if (!CurInArr[TRrw.Curncy]) then begin
-                    CurencyList[CLi] = TRrw.Curncy;
-                    CurInArr[CurencyList[CLi]] = true;
-                    CLi = CLi + 1;
-                  end;
-                  t = accnumber[ai] & ":" & TRrw.Curncy & ":" & objstore;
-                  saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
-                  saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
-                end;
-              end;
-            end;
-          end;
-        end;
-        if (mainr.FileName=="FBVc") then begin
-          FBr.SerNr = mainr.TransNr;
-          if (ReadFirstMain(FBr,1,true)) then begin
-            if (mainr.TransDate==FBr.TransDate) then begin
-              rwcnt = MatRowCnt(FBr);
-              objstore= "";
-              GetObjs("STORE",FBr.Objects,objstore);
-              if (!ObjInArr[objstore]) then begin
-                ObjectList[OLi] = objstore;
-                ObjInArr[ObjectList[OLi]] = true;
-                OLi = OLi + 1;
-              end;
-              for (i=0;i<rwcnt;i=i+1) begin
-                MatRowGet(FBr,i,FBrw);
-                if ((FBrw.AccNumber == accnumber[ai]) and (FBrw.CurncyCode!=bcur.BaseCur1)) then begin
-                  if (!CurInArr[FBrw.CurncyCode]) then begin
-                    CurencyList[CLi] = FBrw.CurncyCode;
-                    CurInArr[CurencyList[CLi]] = true;
-                    CLi = CLi + 1;
-                  end;
-                  t = accnumber[ai] & ":" & FBrw.CurncyCode & ":" & objstore;
-                  saldo[t] = saldo[t] + FBrw.DebVal - FBrw.CredVal;
-                  saldo[t & ":incur"] = saldo[t & ":incur"] + FBrw.CurDebVal - FBrw.CurCredVal;
-                end;
-              end;
-            end;
-          end;
-        end;
+    while(loopmain(corrTRr,1,TrHs)) begin
+      if (corrTRr.TransDate>RepSpec.sEndDate) then begin TrHs = false; end;
+      if TrHs and (corrTRr.IntYc==serviceIntYc) and (corrTRr.Comment==comment) then begin
+        DeleteTransaction(corrTRr.Number,corrTRr.IntYc);
+        stepback(corrTRr);
       end;
     end;
-    for (CLi=0;Cli<CurencyList.length;CLi=CLi+1) begin
-      rate[CurencyList[CLi]] = 1;
-      crn = CurencyList[CLi];
-      td = curdate;
-      fr = 0; to1 = 0; to2 = 0; b1 = 0; b2 = 0;
-      GetFullCurncyRate(crn,td,fr,to1,to2,b1,b2);
-      rate[CurencyList[CLi]] = to1/fr;
-      if (rate[CurencyList[CLi]]==0) then begin
-        rate[CurencyList[CLi]] = 1;
-      end;
-      for (OLi=0;OLi<ObjectList.length;OLi=OLi+1) begin
-        t = CurencyList[CLi] & ":" & ObjectList[OLi];
-        corr[t] = saldo[accnumber[ai] & ":" & t & ":incur"]*rate[CurencyList[CLi]] - saldo[accnumber[ai] & ":" & t];
-        if (corr[t]!=0) then begin
-          COList[COi] = t;
-          COi = COi +1;
-        end;
-      end;
+    RecordClear(corrTRr);
+    TrHs = true;
+    
+    curdate = RepSpec.sStartDate;
+    CountEndSaldoInBase(accnumber[ai],curdate,saldo,"",serviceIntYc,corrTRrNum,CurencyList,ObjectList);
+    if (corrTRrNum<0) then begin
+      corrTRrNum = 0;
     end;
-    if (COi>0) then begin
-      RecordClear(corrTRr);
-      RecordNew(corrTRr);
-      corrTRr.TransDate = curdate;
-      corrTRr.IntYc = serviceIntYc;
-      corrTRr.Number = corrTRrNum;
-      corrTRrNum = corrTRrNum + 1;
-      corrTRr.Comment = comment;
-      corrTRr.RegDate = CurrentDate;
-      corrTRr.RegTime = CurrentTime;
-      for (i=0;i<COi;i=i+1) begin
-        if (corr[COList[i]]!=blankval) and (corr[COList[i]]!=0) then begin
-          crn = "";
-          objstore = "";
-          pos = 0;
-          ExtractObjWithSeparator(":",COList[i],true,pos,crn);
-          ExtractObjWithSeparator(":",COList[i],true,pos,objstore);
-          
-          ClearRow(corrTRr,corrTRrw,1);
-          rownr = MatRowCnt(corrTRr);
-          corrTRrw.AccNumber = accnumber[ai];
-          MatRowInsert(corrTRr,rownr,corrTRrw);
-          TRVc_PasteAccNumber(corrTRr,1,rownr,true);
-          MatRowGet(corrTRr,rownr,corrTRrw);
-          corrTRrw.Curncy = crn;
-          corrTRrw.Objects = objstore;
-          if (corr[COList[i]]>0) then begin
-            corrTRrw.DebVal = corr[COList[i]];
-            corrTRrw.CurDebVal = 0;
-          end else begin
-            corrTRrw.CredVal = -corr[COList[i]];
-            corrTRrw.CurCredVal = 0;
-          end;
-          MatRowPut(corrTRr,rownr,corrTRrw);
-          
-          ClearRow(corrTRr,corrTRrw,1);
-          rownr = MatRowCnt(corrTRr);
-          corrTRrw.AccNumber = "84/03";
-          MatRowInsert(corrTRr,rownr,corrTRrw);
-          TRVc_PasteAccNumber(corrTRr,1,rownr,true);
-          MatRowGet(corrTRr,rownr,corrTRrw);
-          corrTRrw.Curncy = bcur.BaseCur1;
-          corrTRrw.Objects = objstore;
-          if (corr[COList[i]]>0) then begin
-            corrTRrw.CredVal = round(corr[COList[i]],SetRoundModeD(2));
-            corrTRrw.CurCredVal = corrTRrw.CredVal;
-          end else begin
-            corrTRrw.DebVal = -corr[COList[i]];
-            corrTRrw.CurDebVal = corrTRrw.DebVal;
-          end;
-          MatRowPut(corrTRr,rownr,corrTRrw);
-        end;
-      end;
-      TRSumup(corrTRr,tmpval);
-      RecordInsert(corrTRr,true);
-      rwcnt = MatRowCnt(corrTRr);
-      for (i=0;i<rwcnt;i=i+1) begin
-        MatRowGet(corrTRr,i,corrTRrw);
-        if ((corrTRrw.AccNumber == accnumber[ai]) and (corrTRrw.ovst <> 1) and (corrTRrw.stp==1)) then begin
-          objstore= "";
-          GetObjs("STORE",corrTRrw.Objects,objstore);
-          if (!ObjInArr[objstore]) then begin
-            ObjectList[OLi] = objstore;
-            ObjInArr[ObjectList[OLi]] = true;
-            OLi = OLi + 1;
-          end;
-          if (!CurInArr[corrTRrw.Curncy]) then begin
-            CurencyList[CLi] = corrTRrw.Curncy;
-            CurInArr[CurencyList[CLi]] = true;
-            CLi = CLi + 1;
-          end;
-          saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore] = saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore] + corrTRrw.DebVal - corrTRrw.CredVal;
-          saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore & ":incur"] = saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore & ":incur"] + corrTRrw.CurDebVal - corrTRrw.CurCredVal;
-        end;
-      end;
-      COi = 0;
-    end;
+    corrTRrNum = corrTRrNum + 1;
     curdate = AddDay(curdate,1);
+    while (curdate<=RepSpec.sEndDate) begin
+      resetloop(mainr);
+      mainr.AccNumber = accnumber[ai];
+      mainr.TransDate = curdate;
+      TrHs = true;
+      while (LoopMain(mainr,2,TrHs)) begin
+        if ((mainr.AccNumber!=accnumber[ai]) or (mainr.TransDate!=curdate)) then begin
+          TrHs = false;
+        end;
+        if (TrHs) then begin
+          if (mainr.FileName=="TRVc") then begin
+            TRr.Number = mainr.TransNr;
+            TRr.IntYc = mainr.IntYc;
+            if (ReadFirstMain(TRr,2,true)) then begin
+              if (mainr.TransDate == TRr.TransDate) then begin
+                rwcnt = MatRowCnt(TRr);
+                for (i=0;i<rwcnt;i=i+1) begin
+                  MatRowGet(TRr,i,TRrw);
+                  if ((TRrw.AccNumber == accnumber[ai]) and (TRrw.ovst <> 1) and (TRrw.stp==1) and (TRrw.Curncy!=bcur.BaseCur1)) then begin
+                    objstore= "";
+                    GetObjs("STORE",TRrw.Objects,objstore);
+                    if (!ObjInArr[objstore]) then begin
+                      ObjectList[OLi] = objstore;
+                      ObjInArr[ObjectList[OLi]] = true;
+                      OLi = OLi + 1;
+                    end;
+                    if (!CurInArr[TRrw.Curncy]) then begin
+                      CurencyList[CLi] = TRrw.Curncy;
+                      CurInArr[CurencyList[CLi]] = true;
+                      CLi = CLi + 1;
+                    end;
+                    t = accnumber[ai] & ":" & TRrw.Curncy & ":" & objstore;
+                    saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
+                    saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
+                  end;
+                end;
+              end;
+            end;
+          end;
+          if (mainr.FileName=="FBVc") then begin
+            FBr.SerNr = mainr.TransNr;
+            if (ReadFirstMain(FBr,1,true)) then begin
+              if (mainr.TransDate==FBr.TransDate) then begin
+                rwcnt = MatRowCnt(FBr);
+                objstore= "";
+                GetObjs("STORE",FBr.Objects,objstore);
+                if (!ObjInArr[objstore]) then begin
+                  ObjectList[OLi] = objstore;
+                  ObjInArr[ObjectList[OLi]] = true;
+                  OLi = OLi + 1;
+                end;
+                for (i=0;i<rwcnt;i=i+1) begin
+                  MatRowGet(FBr,i,FBrw);
+                  if ((FBrw.AccNumber == accnumber[ai]) and (FBrw.CurncyCode!=bcur.BaseCur1)) then begin
+                    if (!CurInArr[FBrw.CurncyCode]) then begin
+                      CurencyList[CLi] = FBrw.CurncyCode;
+                      CurInArr[CurencyList[CLi]] = true;
+                      CLi = CLi + 1;
+                    end;
+                    t = accnumber[ai] & ":" & FBrw.CurncyCode & ":" & objstore;
+                    saldo[t] = saldo[t] + FBrw.DebVal - FBrw.CredVal;
+                    saldo[t & ":incur"] = saldo[t & ":incur"] + FBrw.CurDebVal - FBrw.CurCredVal;
+                  end;
+                end;
+              end;
+            end;
+          end;
+        end;
+      end;
+      for (CLi=0;Cli<CurencyList.length;CLi=CLi+1) begin
+        rate[CurencyList[CLi]] = 1;
+        crn = CurencyList[CLi];
+        td = curdate;
+        fr = 0; to1 = 0; to2 = 0; b1 = 0; b2 = 0;
+        GetFullCurncyRate(crn,td,fr,to1,to2,b1,b2);
+        rate[CurencyList[CLi]] = to1/fr;
+        if (rate[CurencyList[CLi]]==0) then begin
+          rate[CurencyList[CLi]] = 1;
+        end;
+        for (OLi=0;OLi<ObjectList.length;OLi=OLi+1) begin
+          t = CurencyList[CLi] & ":" & ObjectList[OLi];
+          corr[t] = saldo[accnumber[ai] & ":" & t & ":incur"]*rate[CurencyList[CLi]] - saldo[accnumber[ai] & ":" & t];
+          if (corr[t]!=0) then begin
+            COList[COi] = t;
+            COi = COi +1;
+          end;
+        end;
+      end;
+      if (COi>0) then begin
+        RecordClear(corrTRr);
+        RecordNew(corrTRr);
+        corrTRr.TransDate = curdate;
+        corrTRr.IntYc = serviceIntYc;
+        corrTRr.Number = corrTRrNum;
+        corrTRrNum = corrTRrNum + 1;
+        corrTRr.Comment = comment;
+        corrTRr.RegDate = CurrentDate;
+        corrTRr.RegTime = CurrentTime;
+        for (i=0;i<COi;i=i+1) begin
+          if (corr[COList[i]]!=blankval) and (corr[COList[i]]!=0) then begin
+            crn = "";
+            objstore = "";
+            pos = 0;
+            ExtractObjWithSeparator(":",COList[i],true,pos,crn);
+            ExtractObjWithSeparator(":",COList[i],true,pos,objstore);
+            
+            ClearRow(corrTRr,corrTRrw,1);
+            rownr = MatRowCnt(corrTRr);
+            corrTRrw.AccNumber = accnumber[ai];
+            MatRowInsert(corrTRr,rownr,corrTRrw);
+            TRVc_PasteAccNumber(corrTRr,1,rownr,true);
+            MatRowGet(corrTRr,rownr,corrTRrw);
+            corrTRrw.Curncy = crn;
+            corrTRrw.Objects = objstore;
+            if (corr[COList[i]]>0) then begin
+              corrTRrw.DebVal = corr[COList[i]];
+              corrTRrw.CurDebVal = 0;
+            end else begin
+              corrTRrw.CredVal = -corr[COList[i]];
+              corrTRrw.CurCredVal = 0;
+            end;
+            MatRowPut(corrTRr,rownr,corrTRrw);
+            
+            ClearRow(corrTRr,corrTRrw,1);
+            rownr = MatRowCnt(corrTRr);
+            corrTRrw.AccNumber = "84/03";
+            MatRowInsert(corrTRr,rownr,corrTRrw);
+            TRVc_PasteAccNumber(corrTRr,1,rownr,true);
+            MatRowGet(corrTRr,rownr,corrTRrw);
+            corrTRrw.Curncy = bcur.BaseCur1;
+            corrTRrw.Objects = objstore;
+            if (corr[COList[i]]>0) then begin
+              corrTRrw.CredVal = round(corr[COList[i]],SetRoundModeD(2));
+              corrTRrw.CurCredVal = corrTRrw.CredVal;
+            end else begin
+              corrTRrw.DebVal = -corr[COList[i]];
+              corrTRrw.CurDebVal = corrTRrw.DebVal;
+            end;
+            MatRowPut(corrTRr,rownr,corrTRrw);
+          end;
+        end;
+        TRSumup(corrTRr,tmpval);
+        RecordInsert(corrTRr,true);
+        rwcnt = MatRowCnt(corrTRr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(corrTRr,i,corrTRrw);
+          if ((corrTRrw.AccNumber == accnumber[ai]) and (corrTRrw.ovst <> 1) and (corrTRrw.stp==1)) then begin
+            objstore= "";
+            GetObjs("STORE",corrTRrw.Objects,objstore);
+            if (!ObjInArr[objstore]) then begin
+              ObjectList[OLi] = objstore;
+              ObjInArr[ObjectList[OLi]] = true;
+              OLi = OLi + 1;
+            end;
+            if (!CurInArr[corrTRrw.Curncy]) then begin
+              CurencyList[CLi] = corrTRrw.Curncy;
+              CurInArr[CurencyList[CLi]] = true;
+              CLi = CLi + 1;
+            end;
+            saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore] = saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore] + corrTRrw.DebVal - corrTRrw.CredVal;
+            saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore & ":incur"] = saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore & ":incur"] + corrTRrw.CurDebVal - corrTRrw.CurCredVal;
+          end;
+        end;
+        COi = 0;
+      end;
+      curdate = AddDay(curdate,1);
+    end;
   end;
   
   return;
