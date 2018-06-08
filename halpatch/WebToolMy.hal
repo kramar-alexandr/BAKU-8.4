@@ -5,6 +5,7 @@ external procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var st
 external procedure MessageBoxToUser(string,integer,string,string);
 external function Boolean LoggedInTest();
 external procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var string);
+external procedure ExtractObj(string,var Integer,var string);
 
 global function string 255 imgStrReplace(string instr)
 begin
@@ -543,62 +544,62 @@ begin
   artcode = WebGetArg("p2");
   if (nonblank(artcode)) then begin
     artcode = FindItem(WebGetArg("p2"));
-  end;
-  if (nonblank(artcode)) then begin
-    qty = StringToInt(WebGetArg("p3"));
-    INr.Code = artcode;
-    readfirstmain(INr,1,true);
-    STr.SerNr = WebGetArg("p1");
-    if(readfirstmain(STr,1,true))then begin
-      RecordCopy(oldSTr,STr);
-      if (STr.OKFlag!=0)then begin
-        WebOutString("oked");
-        tstr = "oked";
-      end else begin
-        rwcnt = matrowcnt(STr);
-        foundf = false;
-        for (i=0;i<rwcnt;i=i+1) begin
-          MatRowGet(STr,i,STrw);
-          if (STrw.ArtCode==artcode) then begin
-            STrw.Qty = STrw.Qty + qty;
-            qty = STrw.Qty;
-            matrowput(STr,i,STrw);
-            foundf = true;
-            i = rwcnt;
+    if (nonblank(artcode)) then begin
+      qty = StringToInt(WebGetArg("p3"));
+      INr.Code = artcode;
+      readfirstmain(INr,1,true);
+      STr.SerNr = WebGetArg("p1");
+      if(readfirstmain(STr,1,true))then begin
+        RecordCopy(oldSTr,STr);
+        if (STr.OKFlag!=0)then begin
+          WebOutString("oked");
+          tstr = "oked";
+        end else begin
+          rwcnt = matrowcnt(STr);
+          foundf = false;
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(STr,i,STrw);
+            if (STrw.ArtCode==artcode) then begin
+              STrw.Qty = STrw.Qty + qty;
+              qty = STrw.Qty;
+              matrowput(STr,i,STrw);
+              foundf = true;
+              i = rwcnt;
+            end;
           end;
+          if (!foundf) then begin
+            STrw.ArtCode = artcode;
+            STrw.Spec = INr.Name;
+            STrw.Qty = qty;
+            STrw.Position = STr.Position;// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 9 January 2018 19:05:32
+            matrowinsert(STr,rwcnt,STrw);
+          end;
+          if(blank(""))then begin
+            //"" = currentuser;
+          end;
+          RecordUpdate(oldSTr,STr,true);
+          total = 0;
+          rwcnt = matrowcnt(STr);
+          for (i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(STr,i,STrw);
+            total = total + STrw.Qty;
+          end;
+          ISr.Code = artcode;
+          ISr.Location = ";;;";
+          if(nonblank(STr.Location))then begin
+            ISr.Location = STr.Location;
+          end;
+          instock = 0;
+          if(readfirstmain(ISr,2,true))then begin
+            instock = ISr.Instock;
+          end;
+          WebOutString(artcode & nl & INr.Name & nl & instock & nl & qty & nl & total);
+          tstr = artcode & " ins=" & instock & " qty=" & qty;
         end;
-        if (!foundf) then begin
-          STrw.ArtCode = artcode;
-          STrw.Spec = INr.Name;
-          STrw.Qty = qty;
-          STrw.Position = STr.Position;// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 9 January 2018 19:05:32
-          matrowinsert(STr,rwcnt,STrw);
-        end;
-        if(blank(""))then begin
-          //"" = currentuser;
-        end;
-        RecordUpdate(oldSTr,STr,true);
-        total = 0;
-        rwcnt = matrowcnt(STr);
-        for (i=0;i<rwcnt;i=i+1) begin
-          MatRowGet(STr,i,STrw);
-          total = total + STrw.Qty;
-        end;
-        ISr.Code = artcode;
-        ISr.Location = ";;;";
-        if(nonblank(STr.Location))then begin
-          ISr.Location = STr.Location;
-        end;
-        instock = 0;
-        if(readfirstmain(ISr,2,true))then begin
-          instock = ISr.Instock;
-        end;
-        WebOutString(artcode & nl & INr.Name & nl & instock & nl & qty & nl & total);
-        tstr = artcode & " ins=" & instock & " qty=" & qty;
+      end else begin
+        WebOutString("nostvcn");
+        tstr = "nostvcn";
       end;
-    end else begin
-      WebOutString("nostvcn");
-      tstr = "nostvcn";
     end;
   end else begin
     WebOutString("blankartcode");
@@ -613,34 +614,83 @@ webpublic
 global
 updating procedure WebChangeStockTakeVc()
 begin
-  record StockTakeVc STr,oldSTr;
-  integer comp;
   boolean f;
-  integer i;
+  integer comp,flagint,i,mtrw,pos;
+  record StockTakeVc STr,oldSTr;
+  row StockTakeVc STrw,STrw1,STrw2;
+  string 100 artcode,artcode1,artcode2;
+  string 255 tstr;
   
-  i = 2;
   comp = StringToInt(WebGetArg("comp"));
   SetCompanyCode(comp,false);
-  STr.SerNr = WebGetArg("p1");
-  f = (WebGetArg("p2")=="1");
-  if(readfirstmain(STr,1,true))then begin
-    RecordCopy(oldSTr,STr);
-    if (STr.OKFlag==0) and (f) then begin
-      STr.OKFlag = 1;
-      i = 1;
-    end;
-    if (STr.OKFlag!=0) and (!f) then begin
-      STr.OKFlag = 0;
-      i = 0;
-    end;
-    if (RecordUpdate(oldSTr,STr,true)==0) then begin
-      if (i==1) then begin
-        logtext(0,"[DEBUG]WebChangeStockTakeVc " & STr.SerNr & " oked by " & currentuser & " in company " & comp); 
+  if blank(WebGetArg("p3")) then begin
+    flagint = 2;
+    STr.SerNr = WebGetArg("p1");
+    f = (WebGetArg("p2")=="1");
+    if(readfirstmain(STr,1,true))then begin
+      RecordCopy(oldSTr,STr);
+      if (STr.OKFlag==0) and (f) then begin
+        STr.OKFlag = 1;
+        flagint = 1;
       end;
-      if (i==0) then begin
-        logtext(0,"[DEBUG]WebChangeStockTakeVc " & STr.SerNr & " unoked by " & currentuser & " in company " & comp); 
+      if (STr.OKFlag!=0) and (!f) then begin
+        STr.OKFlag = 0;
+        flagint = 0;
       end;
-      WebOutString(STr.OKFlag);
+      if (RecordUpdate(oldSTr,STr,true)==0) then begin
+        if (flagint==1) then begin
+          logtext(0,"[DEBUG]WebChangeStockTakeVc - " & STr.SerNr & " oked by " & currentuser & " in company " & comp); 
+        end;
+        if (flagint==0) then begin
+          logtext(0,"[DEBUG]WebChangeStockTakeVc - " & STr.SerNr & " unoked by " & currentuser & " in company " & comp); 
+        end;
+        WebOutString(STr.OKFlag);
+      end;
+    end;
+  end else begin
+    STr.SerNr = WebGetArg("p1");
+    if(readfirstmain(STr,1,true))then begin
+      RecordCopy(oldSTr,STr);
+      if (STr.OKFlag==0) then begin
+        f = false;
+        pos = 0;
+        tstr = WebGetArg("p3");
+        ExtractObj(tstr,pos,artcode1);
+        ExtractObj(tstr,pos,artcode);
+        ExtractObj(tstr,pos,artcode2);
+        if (artcode1=="null") then begin
+          MatRowDelete(STr,0);
+          f = true;
+        end;
+        if (artcode2=="null") then begin
+          MatRowDelete(STr,MatRowCnt(STr)-1);
+          f = true;
+        end;
+        if (!f) then begin
+          mtrw = MatRowCnt(STr);
+          for (i=1;i<mtrw-1;i=i+1) begin
+            MatRowGet(STr,i-1,STrw1);
+            MatRowGet(STr,i,STrw);
+            MatRowGet(STr,i+1,STrw2);
+            if (STrw1.ArtCode==artcode1) and (STrw.ArtCode==artcode) and (STrw2.ArtCode==artcode2) then begin
+              MatRowDelete(STr,i);
+              i = mtrw;
+              f = true;
+            end;
+          end;
+        end;
+        if (f) then begin
+        logtext(0,111);
+          if (RecordUpdate(oldSTr,STr,true)==0) then begin
+            logtext(0,"[DEBUG]WebChangeStockTakeVc - row with artcode=" & artcode & " in st=" & STr.SerNr & " deleted by " & currentuser & " in company " & comp); 
+            WebOutString("deleted");
+          end;
+        end;
+      end else begin
+        WebOutString("oked");
+      end;
+    end else begin
+      WebOutString("nostvcn");
     end;
   end;
   return;
@@ -664,3 +714,5 @@ begin
   end;
   return;
 end;
+
+
