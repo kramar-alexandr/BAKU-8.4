@@ -40,6 +40,8 @@ external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,va
 external function Boolean TransInFiscal(Date);
 external function Boolean GetAccName(string,var string,Integer);
 external procedure TRSumup(var record TRVc,var val); //Edit***************************Sasha2,10:59 13.05.2015
+external function Integer InString2(string,string);
+
 
 
 procedure ARFindPaydAmount(record IPrsVc IPrsp,Integer noordered,var val ar,var val arbase)
@@ -240,13 +242,15 @@ BEGIN
   val fr,to1,to2,br1,br2;
   val t,v;
   Date bd;
-  val brd,brd2;
+  val brd,brd2,PRCNT;
   val bookedwithcurrate,bookedwithcurrate2;
-  Boolean rgdc1,rgdc2;
-  integer h; //Edit***************************Sasha2,16:22 16.07.2015
+  Boolean rgdc1,rgdc2,testf;
+  integer h,i,rwcnt; //Edit***************************Sasha2,16:22 16.07.2015
   vector val SameAccVal; //Edit***************************Sasha2,12:34 03.04.2015
   val comisTotSum,comisrs;
 	record ComissPrcBlock CPb;// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 07 06 2018 y. î 12:42:59
+	record ComissArrBlock CABb;
+	row ComissArrBlock CABrw;
 
   BlockLoad(CPb);// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 07 06 2018 y. î 15:03:19
 
@@ -434,9 +438,22 @@ BEGIN
                               
                               
                               
-			if(CPb.Enable==1 and nonblank(CPb.CorrAcc))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 07 06 2018 y. î 12:46:21
+			if(CPb.Enable==1 and nonblank(CPb.CorrAcc) and left(IPrw.CustCode,3)!="FOB")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 07 06 2018 y. î 12:46:21
 				if(PMrw.AccNr=="50" or PMrw.AccNr=="51")then begin
-					comisrs = round(booked/100*CPb.Percent,SetRoundModeD(2));
+					BlockLoad(CABb);
+					rwcnt = MatRowCnt(CABb);
+					testf = false;
+					for(i=0;i<rwcnt;i=i+1)begin
+						MatRowGet(CABb,i,CABrw);
+						if(SetInSet(CABrw.Obj,otxt))then begin
+							PRCNT = CABrw.PercentRow;
+							testf = true;
+						end;
+					end;
+					if(!testf)then begin
+						PRCNT = CPb.Percent;
+					end;
+					comisrs = round(booked/100*PRCNT,SetRoundModeD(2));
 					AddEuroCurncyNomARTrRow(gTRp,accstr,otxt,"",tstr,comisrs,comisrs,accf,dc1,comisTotSum,
                               "AZN",blankval,blankval,blankval,blankval,blankval,
                               comisrs,blankval,"",-1,0,blankval,bd,insrow,NegativeAmountsf,taccnumber,"","");

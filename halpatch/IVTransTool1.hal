@@ -34,6 +34,7 @@ external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,va
 external procedure MulVATIV(string,val,var val,var val,Integer,Integer);
 external procedure GetVATCodeSalesVatAcc(string,var string);
 external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);// Edit ************************** Tuesday, 29 September 2015 13:45:45
+external function Integer InString2(string,string);
 
 
 procedure FindIPCurncyRate(LongInt prepnr,var val from,var val to1,var Date tdp)// we need BankCurncy in ARPayView and ARPayHistView
@@ -509,19 +510,21 @@ END;
 
 function Integer IVVc_CASHRow(record TRVc gTRp,record AccBlock ARAccRec,record IVVc IVp,row IVVc IVrw,string cuobj,Boolean dc1,Boolean dc2,var val TotSum)
 BEGIN
-  Integer errstrno;
+  Integer errstrno,i,rwcnt;
   string 255 tstr,lcuobj,taccnumber;
   row PMBlock PMrw;
-  val rs,ors;
+  val rs,ors,PRCNT;
   val rs2,ors2;
   val rategain,rategain2,rd,rd2;
   val rateloss,rateloss2;
   record BaseCurBlock bascur;
-  Boolean accf;
+  Boolean accf,testf;
   val paymentV; // edited by BPI
 	string 200 cuobj1;// Edit ************************** Friday, 20 October 2017 17:40:42
 	val comisTotSum,comisrs;
 	record ComissPrcBlock CPb;// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 07 06 2018 y. î 12:42:59
+	record ComissArrBlock CABb;
+	row ComissArrBlock CABrw;
 
 	cuobj1 = cuobj;// Edit ************************** Friday, 20 October 2017 17:27:05
 	
@@ -597,10 +600,22 @@ BEGIN
 */	
 // Edit Start ---------------------------------------------- Edit Start
 	//04, 07 06 2018 y. î 12:46:33
-	
-		if(CPb.Enable==1 and nonblank(CPb.CorrAcc))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 07 06 2018 y. î 12:46:21
+		if(CPb.Enable==1 and nonblank(CPb.CorrAcc) and left(IVp.CustCode,3)!="FOB")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 07 06 2018 y. î 12:46:21
 			if(PMrw.AccNr=="50" or PMrw.AccNr=="51")then begin
-				comisrs = round(rs/100*CPb.Percent,SetRoundModeD(2));
+				BlockLoad(CABb);
+				rwcnt = MatRowCnt(CABb);
+				testf = false;
+				for(i=0;i<rwcnt;i=i+1)begin
+					MatRowGet(CABb,i,CABrw);
+					if(SetInSet(CABrw.Obj,cuobj1))then begin
+						PRCNT = CABrw.PercentRow;
+						testf = true;
+					end;
+				end;
+				if(!testf)then begin
+					PRCNT = CPb.Percent;
+				end;
+				comisrs = round(rs/100*PRCNT,SetRoundModeD(2));
 				AddEuroCurncyTrRow(gTRp,PMrw.AccNr,cuobj1,"","Comission " & tstr,comisrs,false,dc2,comisTotSum,
 													 "AZN",blankval,blankval,blankval,blankval,
 													 blankval,comisrs,blankval,-1,IVp.InvType==kInvoiceTypeCredit or IVp.InvType==kInvoiceTypeCreditSpecialSales,"");// Edit ************************** Friday, 20 October 2017 17:41:27
