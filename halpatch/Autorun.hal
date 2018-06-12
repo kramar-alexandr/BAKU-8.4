@@ -108,18 +108,29 @@ begin
 record CUVc CUr;
 record RebTableBlock RTb;
 row RebTableBlock RTrw;
+record NewRebTableBlock NRTb;
+row NewRebTableBlock NRTrw;
 boolean testf,TrHs,done;
-integer mtrw,i;
+integer mtrw,nmtrw,i;
 record RebVc Rebr,Reb2r;
+date limdate;
+string 20 oldrebcode;
+
+limdate.year = 2015;
+limdate.day = 1;
+limdate.month = 1;
 
 	blockload(RTb);
+	blockload(NRTb);
 	mtrw = matrowcnt(RTb);
+	nmtrw = matrowcnt(NRTb);
 	
 	if(mtrw>0)then begin
 		Trhs = true;
 		CUr.Code = "";
 		CUr.EmployeeType = 1;
 		while(loopkey("EmployeeActCode",CUr,2,TrHs))begin
+			oldrebcode = CUr.RebCode;
 			done = false;
 			testf = true;
 			
@@ -127,33 +138,82 @@ record RebVc Rebr,Reb2r;
 			if(blank(CUr.DateCreated))then begin testf = false; end;
 			
 			if(testf)then begin
-				for(i=0;i<mtrw;i=i+1)begin
-					matrowget(RTb,i,RTrw);
-					if(datediff(currentdate,CUr.DateCreated)>=RTrw.Days)then begin
-            if(nonblank(CUr.RebCode))then begin
-              Rebr.Code = CUr.RebCode;
-              if(readfirstmain(Rebr,1,true))then begin
-                Reb2r.Code = RTrw.RebCode;
-                if(readfirstmain(Reb2r,1,true))then begin
-                  if(Reb2r.vra0>Rebr.vra0)then begin
-                    CUr.RebCode = RTrw.RebCode;
-                    done = true;
-                  end;
-                end;
-              end else begin
-                if(CUr.RebCode!=RTrw.RebCode)then begin
-                  CUr.RebCode = RTrw.RebCode;
-                  done = true;
-                end;
-              end;
-            end else begin
-              if(CUr.RebCode!=RTrw.RebCode)then begin
-                CUr.RebCode = RTrw.RebCode;
-                done = true;
-              end;
+				if(CUr.DateCreated<limdate)then begin
+					for(i=0;i<mtrw;i=i+1)begin
+						matrowget(RTb,i,RTrw);
+						if(datediff(currentdate,CUr.DateCreated)>=RTrw.Days)then begin
+							CUr.RebCode = RTrw.RebCode;
+							/*if(nonblank(CUr.RebCode))then begin
+								Rebr.Code = CUr.RebCode;
+								if(readfirstmain(Rebr,1,true))then begin
+									Reb2r.Code = RTrw.RebCode;
+									if(readfirstmain(Reb2r,1,true))then begin
+										if(Reb2r.vra0>Rebr.vra0)then begin
+											CUr.RebCode = RTrw.RebCode;
+											done = true;
+										end;
+									end;
+								end else begin
+									if(CUr.RebCode!=RTrw.RebCode)then begin
+										CUr.RebCode = RTrw.RebCode;
+										done = true;
+									end;
+								end;
+							end else begin
+								if(CUr.RebCode!=RTrw.RebCode)then begin
+									CUr.RebCode = RTrw.RebCode;
+									done = true;
+								end;
+							end;*/
+							if(CUr.RebCode!=oldrebcode)then begin
+								done = true;
+							end;
 						end;
 					end;
+				end else begin
+					for(i=0;i<nmtrw;i=i+1)begin
+						matrowget(NRTb,i,NRTrw);
+						if(datediff(currentdate,CUr.DateCreated)>=NRTrw.Days)then begin
+							CUr.RebCode = NRTrw.RebCode;
+							/*if(nonblank(CUr.RebCode))then begin
+								Rebr.Code = CUr.RebCode;
+								if(readfirstmain(Rebr,1,true))then begin
+									Reb2r.Code = RTrw.RebCode;
+									if(readfirstmain(Reb2r,1,true))then begin
+										if(Reb2r.vra0>Rebr.vra0)then begin
+											CUr.RebCode = RTrw.RebCode;
+											done = true;
+										end;
+									end;
+								end else begin
+									if(CUr.RebCode!=RTrw.RebCode)then begin
+										CUr.RebCode = RTrw.RebCode;
+										done = true;
+									end;
+								end;
+							end else begin
+								if(CUr.RebCode!=RTrw.RebCode)then begin
+									CUr.RebCode = RTrw.RebCode;
+									done = true;
+								end;
+							end;*/
+						end;
+					end;
+					if(CUr.RebCode!=oldrebcode)then begin
+						done = true;
+					end;
 				end;
+			end;
+			if(blank(CUr.PLCode))then begin
+				CUr.PLCode = "RRP";
+				done = true;
+			end;
+			if(blank(CUr.CurncyCode))then begin
+				CUr.CurncyCode = "AZN";
+				done = true;
+			end;
+			if(blank(CUr.Classification))then begin
+				CUr.Classification = "IDEMPLOYEE";
 			end;
 			if(done)then begin
 				recordstore(CUr,true);
