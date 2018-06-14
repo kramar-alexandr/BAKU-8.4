@@ -1,0 +1,182 @@
+//server-only
+external procedure YcToStr(Integer,var string);
+external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
+
+SetLangMode(LangRussian,"RUS",0);
+
+global
+procedure TRVcRn(record RcVc RepSpec)
+begin
+  record mainVc mainr;
+  record TRVc TRr;
+  record FBVc FBr;
+  row TRVc TRrw;
+  row FBVc FBrw;
+  boolean TrHs;
+  array integer tab;
+  val fr,to1,to2,b1,b2;
+  date td;
+  string 20 crn,tstr;
+  integer i,rwcnt;
+  array val tot;
+  
+  RepSpec.ObjStr = UpperCase(RepSpec.ObjStr);
+  if nonblank(RepSpec.f1) then begin
+    tab[0] = 0;
+    tab[1] = tab[0] + 50;
+    tab[2] = tab[1] + 70;
+    tab[3] = tab[2] + 50;
+    tab[4] = tab[3] + 50;
+    tab[5] = tab[4] + 50;
+    tab[6] = tab[5] + 50;
+    tab[7] = tab[6] + 50;
+    tab[8] = tab[7] + 50;
+    
+    StartReportNoHeaderJob("Отчет по записям операций");
+    StartFormat(15);
+      OutString(tab[0],0,"Дата",false);
+      OutString(tab[1],0,"Номер",false);
+      OutString(tab[2],0,"Валюта",false);
+      OutString(tab[3],0,"Дт в вал",false);
+      OutString(tab[4],0,"Дт в осн",false);
+      OutString(tab[5],0,"Дт по курсу",false);
+      OutString(tab[6],0,"Кт в вал",false);
+      OutString(tab[7],0,"Кт в осн",false);
+      OutString(tab[8],0,"Кт по курсу",false);
+    EndFormat;
+    Black_Divider(0,1);
+    resetloop(mainr);
+    mainr.AccNumber = RepSpec.f1;
+    mainr.TransDate = RepSpec.sStartDate;
+    TrHs = true;
+    while (LoopMain(mainr,2,TrHs)) begin
+      if ((mainr.AccNumber!=RepSpec.f1) or (mainr.TransDate>RepSpec.sEndDate)) then begin
+        TrHs = false;
+      end;
+      if (TrHs) then begin
+        if (mainr.FileName=="TRVc") then begin
+          TRr.Number = mainr.TransNr;
+          TRr.IntYc = mainr.IntYc;
+          if (ReadFirstMain(TRr,2,true)) then begin
+            if (mainr.TransDate == TRr.TransDate) then begin
+              rwcnt = MatRowCnt(TRr);
+              for (i=0;i<rwcnt;i=i+1) begin
+                MatRowGet(TRr,i,TRrw);
+                if ((TRrw.AccNumber == RepSpec.f1) and (TRrw.ovst <> 1) and (TRrw.stp==1) and ((TRrw.Curncy==RepSpec.CurncyCode) or blank(RepSpec.CurncyCode)) and ((setinset(RepSpec.ObjStr,TRrw.Objects)) or blank(RepSpec.ObjStr))) then begin
+                  StartFormat(15);
+                    OutString(tab[0],0,mainr.TransDate,false);
+                    tstr = "";
+                    YcToStr(TRr.IntYc,tstr);
+                    switch (TRr.IntYc) begin
+                      case IVYc:
+                        OutStringID(tab[1],"DblIVVc",tstr & "." & TRr.Number,false,TRr.Number);
+                      case IPYc:
+                        OutStringID(tab[1],"DblIPVcID",tstr & "." & TRr.Number,false,TRr.Number);
+                      case CLInYc:
+                        OutStringID(tab[1],"DblCLInID",tstr & "." & TRr.Number,false,TRr.Number);
+                      case CLOutYc:
+                        OutStringID(tab[1],"DblCLOutID",tstr & "." & TRr.Number,false,TRr.Number);
+                      otherwise
+                        OutStringID(tab[1],"DblTrans",tstr & "." & TRr.Number,false,CurrentCompany);
+                    end;
+                    OutString(tab[2],0,TRrw.Curncy,false);
+                    if (td!=mainr.TransDate) then begin
+                      crn = TRrw.Curncy;
+                      td = mainr.TransDate;
+                      fr = 0; to1 = 0; to2 = 0; b1 = 0; b2 = 0;
+                      GetFullCurncyRate(crn,td,fr,to1,to2,b1,b2);
+                      if to1==0 then begin to1 = 1; end;
+                      if fr==0 then begin fr = 1; end;
+                    end;
+                    OutString(tab[3],0,TRrw.CurDebVal,false);
+                    tot[0] = tot[0] + TRrw.CurDebVal;
+                    OutString(tab[4],0,TRrw.DebVal,false);
+                    tot[1] = tot[1] + TRrw.DebVal;
+                    if TRrw.CurDebVal==0 then begin
+                      OutString(tab[5],0,"",false);
+                    end else begin
+                      OutString(tab[5],0,TRrw.CurDebVal*to1/fr,false);
+                      tot[2] = tot[2] + TRrw.CurDebVal*to1/fr;
+                    end;
+                    OutString(tab[6],0,TRrw.CurCredVal,false);
+                    tot[3] = tot[3] + TRrw.CurCredVal;
+                    OutString(tab[7],0,TRrw.CredVal,false);
+                    tot[5] = tot[4] + TRrw.CredVal;
+                    if TRrw.CurCredVal==0 then begin
+                      OutString(tab[5],0,"",false);
+                    end else begin
+                      OutString(tab[8],0,TRrw.CurCredVal*to1/fr,false);
+                      tot[5] = tot[5] + TRrw.CurCredVal*to1/fr;
+                    end;
+                  EndFormat;
+                end;
+              end;
+            end;
+          end;
+        end;
+        if (mainr.FileName=="FBVc") then begin
+          FBr.SerNr = mainr.TransNr;
+          if (ReadFirstMain(FBr,1,true)) then begin
+            if (mainr.TransDate==FBr.TransDate) and ((setinset(RepSpec.ObjStr,FBr.Objects)) or blank(RepSpec.ObjStr)) then begin
+              rwcnt = MatRowCnt(FBr);
+              MatRowGet(FBr,i,FBrw);
+              if (FBrw.AccNumber == RepSpec.f1) and ((FBrw.CurncyCode==RepSpec.CurncyCode) or blank(RepSpec.CurncyCode)) then begin
+                StartFormat(15);
+                  OutString(tab[0],0,mainr.TransDate,false);
+                  OutStringID(tab[1],"DblFBVc"," " & FBr.SerNr & " ",false,FBr.SerNr);
+                  OutString(tab[2],0,FBrw.CurncyCode,false);
+                  if (td!=mainr.TransDate) then begin
+                    crn = FBrw.CurncyCode;
+                    td = mainr.TransDate;
+                    fr = 0; to1 = 0; to2 = 0; b1 = 0; b2 = 0;
+                    GetFullCurncyRate(crn,td,fr,to1,to2,b1,b2);
+                    if to1==0 then begin to1 = 1; end;
+                    if fr==0 then begin fr = 1; end;
+                  end;
+                  OutString(tab[3],0,FBrw.CurDebVal,false);
+                  tot[0] = tot[0] + FBrw.CurDebVal;
+                  OutString(tab[4],0,FBrw.DebVal,false);
+                  tot[1] = tot[1] + FBrw.DebVal;
+                  if FBrw.CurDebVal==0 then begin
+                    OutString(tab[5],0,"",false);
+                  end else begin
+                    OutString(tab[8],0,FBrw.CurDebVal*to1/fr,false);
+                    tot[2] = tot[2] + FBrw.CurDebVal*to1/fr;
+                  end;
+                  OutString(tab[6],0,FBrw.CurCredVal,false);
+                  tot[3] = tot[3] + FBrw.CurCredVal;
+                  OutString(tab[7],0,FBrw.CredVal,false);
+                  tot[4] = tot[4] + FBrw.CredVal;
+                  if FBrw.CurCredVal==0 then begin
+                    OutString(tab[5],0,"",false);
+                  end else begin
+                    OutString(tab[8],0,FBrw.CurCredVal*to1/fr,false);
+                    tot[5] = tot[5] + FBrw.CurCredVal*to1/fr;
+                  end;
+                EndFormat;
+              end;
+            end;
+          end;
+        end;
+      end;
+      
+    end;
+    if nonblank(RepSpec.CurncyCode) then begin
+      Black_Divider(0,1);
+      StartFormat(15);
+        OutString(tab[0],0,"",false);
+        OutString(tab[1],0,"Итого",false);
+        OutString(tab[2],0,"",false);
+        OutString(tab[3],0,tot[0],false);
+        OutString(tab[4],0,tot[1],false);
+        OutString(tab[5],0,tot[2],false);
+        OutString(tab[6],0,tot[3],false);
+        OutString(tab[7],0,tot[4],false);
+        OutString(tab[5],0,tot[5],false);
+      EndFormat;
+    end;
+    EndJob;
+  end;
+  
+	return;
+end;
