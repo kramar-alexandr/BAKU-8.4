@@ -10,6 +10,7 @@ external function Boolean TRVc_PasteAccNumber(var record TRVc,Integer,Integer,Bo
 external function roundmode SetRoundModeD(Integer);
 external procedure TRSumup(var record TRVc,var val);
 external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external procedure ExtractObjectsByType(string ,string,var array string,var integer);
 
 procedure CountEndSaldoInBase(string accnum, date enddate, var vector val saldo, string curtoskip, integer serviceIntYc, var longint corrTRrNum, var array string CurencyList, var array string ObjectList)
 begin
@@ -19,8 +20,9 @@ begin
   record TRVc TRr;
   row TRVc TRrw;
   row FBVc FBrw;
-  integer i,rwcnt,CLi,OLi;
+  integer i,rwcnt,CLi,OLi,oscnt,j;
   string 20 objstore;
+  array string 20 objstores;
   string 255 t;
   boolean fillobjf;
   vector boolean CurInArr,ObjInArr;
@@ -54,32 +56,33 @@ begin
             for (i=0;i<rwcnt;i=i+1) begin
               MatRowGet(TRr,i,TRrw);
               if ((TRrw.AccNumber == accnum) and (TRrw.ovst <> 1) and (TRrw.stp==1) and (TRrw.Curncy!=curtoskip)) then begin
-                objstore= "";
-                GetObjs("STORE",TRrw.Objects,objstore);
-                if (fillobjf) then begin
-                  if (!ObjInArr[objstore]) then begin
-                    ObjectList[OLi] = objstore;
-                    ObjInArr[ObjectList[OLi]] = true;
-                    OLi = OLi + 1;
-                  end;
-                  if (!CurInArr[TRrw.Curncy]) then begin
-                    CurencyList[CLi] = TRrw.Curncy;
-                    CurInArr[CurencyList[CLi]] = true;
-                    CLi = CLi + 1;
-                  end;
-                  t = accnum & ":" & TRrw.Curncy & ":" & objstore;
-                  saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
-                  saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
-                end else begin
-                  if (objstore==ObjectList[0]) then begin
+                ExtractObjectsByType(TRrw.Objects,"STORE",objstores,oscnt);
+                for (j=0;j<oscnt;j=j+1) begin
+                  if (fillobjf) then begin
+                    if (!ObjInArr[objstores[j]]) then begin
+                      ObjectList[OLi] = objstores[j];
+                      ObjInArr[ObjectList[OLi]] = true;
+                      OLi = OLi + 1;
+                    end;
                     if (!CurInArr[TRrw.Curncy]) then begin
                       CurencyList[CLi] = TRrw.Curncy;
                       CurInArr[CurencyList[CLi]] = true;
                       CLi = CLi + 1;
                     end;
-                    t = accnum & ":" & TRrw.Curncy & ":" & objstore;
+                    t = accnum & ":" & TRrw.Curncy & ":" & objstores[j];
                     saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
                     saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
+                  end else begin
+                    if (objstores[j]==ObjectList[0]) then begin
+                      if (!CurInArr[TRrw.Curncy]) then begin
+                        CurencyList[CLi] = TRrw.Curncy;
+                        CurInArr[CurencyList[CLi]] = true;
+                        CLi = CLi + 1;
+                      end;
+                      t = accnum & ":" & TRrw.Curncy & ":" & objstores[j];
+                      saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
+                      saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
+                    end;
                   end;
                 end;
               end;
@@ -283,7 +286,7 @@ begin
   record TRVc TRr,corrTRr;
   row TRVc TRrw,corrTRrw;
   row FBVc FBrw;
-  integer i,rwcnt,CLi,OLi,rownr,serviceIntYc,COi,pos,ai;
+  integer i,rwcnt,CLi,OLi,rownr,serviceIntYc,COi,pos,ai,oscnt,j;
   val fr,to1,to2,b1,b2,tmpval;
   vector val rate,saldo,corr;
   vector boolean ObjInArr,CurInArr;
@@ -293,7 +296,8 @@ begin
   boolean TrHs;
   date curdate,td;
   string 100 t,comment;
-  string 20 crn,objstore,tstr;
+  string 20 crn,tstr,objstore;
+  array string 20 objstores;
   array string 5 accnumber;
   longint corrTRrNum;
   
@@ -350,7 +354,6 @@ begin
     CLi = CurencyList.length;
     for (OLi=0;OLi<ObjectList.length;OLi=OLi+1) begin
       ObjInArr[ObjectList[OLi]] = true;
-      logtext(0,ObjectList[OLi]);
     end;
     OLi = ObjectList.length;
     if (corrTRrNum<0) then begin
@@ -363,7 +366,6 @@ begin
       mainr.AccNumber = accnumber[ai];
       mainr.TransDate = curdate;
       TrHs = true;
-      logtext(0,accnumber[ai] & " - " & curdate);
       while (LoopMain(mainr,2,TrHs)) begin
         if ((mainr.AccNumber!=accnumber[ai]) or (mainr.TransDate!=curdate)) then begin
           TrHs = false;
@@ -378,22 +380,22 @@ begin
                 for (i=0;i<rwcnt;i=i+1) begin
                   MatRowGet(TRr,i,TRrw);
                   if ((TRrw.AccNumber == accnumber[ai]) and (TRrw.ovst <> 1) and (TRrw.stp==1) and (TRrw.Curncy!=bcur.BaseCur1)) then begin
-                    objstore= "";
-                    GetObjs("STORE",TRrw.Objects,objstore);
-                    if (!ObjInArr[objstore]) then begin
-                      ObjectList[OLi] = objstore;
-                      logtext(0,objstore);
-                      ObjInArr[ObjectList[OLi]] = true;
-                      OLi = OLi + 1;
-                    end;
                     if (!CurInArr[TRrw.Curncy]) then begin
                       CurencyList[CLi] = TRrw.Curncy;
                       CurInArr[CurencyList[CLi]] = true;
                       CLi = CLi + 1;
                     end;
-                    t = accnumber[ai] & ":" & TRrw.Curncy & ":" & objstore;
-                    saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
-                    saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
+                    ExtractObjectsByType(TRrw.Objects,"STORE",objstores,oscnt);
+                    for (j=0;j<oscnt;j=j+1) begin
+                      if (!ObjInArr[objstores[j]]) then begin
+                        ObjectList[OLi] = objstores[j];
+                        ObjInArr[ObjectList[OLi]] = true;
+                        OLi = OLi + 1;
+                      end;
+                      t = accnumber[ai] & ":" & TRrw.Curncy & ":" & objstores[j];
+                      saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
+                      saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
+                    end;
                   end;
                 end;
               end;
