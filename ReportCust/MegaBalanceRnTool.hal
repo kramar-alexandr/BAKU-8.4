@@ -1144,7 +1144,7 @@ begin
 	val t,fr,to1,to2,br1,br2;
 	record INVc INr;
 	record DIVc DIr;
-	integer pmi,pmmtrw,k;
+	integer pmi,pmmtrw,k,n,d;
 	val servprc,prepaymentval,TOTUSD,totrow,Sum4;
 	vector val servcash,servterm,servcashfob;
 	record ORVc ORr;
@@ -1154,6 +1154,9 @@ begin
 	record ARPayHistVc ARPayr;
 	array string 20 brandarray;
 	integer brcnt;
+	vector integer vObj;
+	LongInt MyPercent;
+	record ObjVc Objr;
 	
 	startformat(15);
 		outstring(0,0,"4",false);
@@ -1327,15 +1330,15 @@ begin
 			
 			For(pmi=0;pmi<pmmtrw;pmi=pmi+1) begin
 				matrowget(PMb,pmi,PMrw);
-	  		if(PMrw.Code==IPr.PayMode)then begin
-	  			if(PMrw.AccNr!="50" and PMrw.AccNr!="51")then begin
-	  				testf = false;
-	  				pmi = pmmtrw;
-	  			end;
-	  			pmi = pmmtrw;
-	  		end;
+				if(PMrw.Code==IPr.PayMode)then begin
+					if(PMrw.AccNr!="50" and PMrw.AccNr!="51")then begin
+						testf = false;
+						pmi = pmmtrw;
+					end;
+					pmi = pmmtrw;
+				end;
 			end; 
-			
+			logtext(0,testf & "Enter!");
 			if(testf)then begin
 				rwcnt = matrowcnt(IPr);
 				For(i=0;i<rwcnt;i=i+1) begin
@@ -1383,24 +1386,24 @@ begin
 									aBrandPercent[k] = aBrandPercent[k]/IVr.Sum4;
 								end;
                 
-                addedf = false;
+								addedf = false;
 								if(left(IVr.CustCode,3)=="FOB")then begin
-                  CUr.Code = IVr.CustCode;
-                  readfirstmain(CUr,1,true);
-                  if (CUr.CustCat=="STORE") then begin
-                    addedf = true;
-                    For(j=0;j<brandscnt;j=j+1) begin
-                      switch(IPrw.BankCurncy)begin
-                        case "EUR":aBrandsCashEURFOB[j] = aBrandsCashEURFOB[j] + IPrw.BankVal * aBrandPercent[j];	
-                        case "AZN":aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IPrw.BankVal * aBrandPercent[j];
-                        case "USD":aBrandsCashUSDFOB[j] = aBrandsCashUSDFOB[j] + IPrw.BankVal * aBrandPercent[j];
-                        case "GBP":aBrandsCashGBPFOB[j] = aBrandsCashGBPFOB[j] + IPrw.BankVal * aBrandPercent[j];
-                        case "CHF":aBrandsCashCHFFOB[j] = aBrandsCashCHFFOB[j] + IPrw.BankVal * aBrandPercent[j];
-                      end;
-                    end;
-                  end;
-								end;
-                if (!addedf) then begin
+								  CUr.Code = IVr.CustCode;
+								  readfirstmain(CUr,1,true);
+								  if (CUr.CustCat=="STORE") then begin
+									addedf = true;
+									For(j=0;j<brandscnt;j=j+1) begin
+									  switch(IPrw.BankCurncy)begin
+										case "EUR":aBrandsCashEURFOB[j] = aBrandsCashEURFOB[j] + IPrw.BankVal * aBrandPercent[j];	
+										case "AZN":aBrandsCashAZNFOB[j] = aBrandsCashAZNFOB[j] + IPrw.BankVal * aBrandPercent[j];
+										case "USD":aBrandsCashUSDFOB[j] = aBrandsCashUSDFOB[j] + IPrw.BankVal * aBrandPercent[j];
+										case "GBP":aBrandsCashGBPFOB[j] = aBrandsCashGBPFOB[j] + IPrw.BankVal * aBrandPercent[j];
+										case "CHF":aBrandsCashCHFFOB[j] = aBrandsCashCHFFOB[j] + IPrw.BankVal * aBrandPercent[j];
+									  end;
+									end;
+								  end;
+												end;
+								if (!addedf) then begin
 									if(PMrw.AccNr=="50")then begin
 										For(j=0;j<brandscnt;j=j+1) begin
 											if(dateinrange(IVr.InvDate,sd,ed))then begin
@@ -1495,40 +1498,68 @@ begin
 							*/
 							brcnt = 0;
 							ExtractObjectsByType(IPrw.Objects,"BRAND",brandarray,brcnt);
-							if(brcnt>0)then begin
+							/*if(brcnt>0)then begin
 								if(Sum4<IPrw.RecVal)then begin
 									
 								end;
-							end;
+							end;*/
 							
 							if(Sum4==0)then begin
-								servitem = true;
-								servprc = 1;
+								d = 0;
+								for(k=0;k<brandscnt;k=k+1) begin
+									for(n=0;n<brcnt;n=n+1) begin
+										if(SetInSet(brandarray[n],aBrands[k]))then begin
+											vObj[aBrands[k]] = 1;
+											logtext(0,aBrands[k] & " : " & brandarray[n]);
+											d = d + 1;
+										end else begin
+											Objr.Code = brandarray[n];
+											if(ReadFirstMain(Objr,1,true))then begin
+												if(SetInSet(Objr.Comment,aBrands[k]))then begin
+													vObj[aBrands[k]] = 1;
+													logtext(0,aBrands[k] & " : " & Objr.Comment);
+													d = d + 1;
+												end;
+											end;
+										end;
+									end;
+								end;
+								if(d!=0)then begin
+									MyPercent = 1 / d;
+									for(k=0;k<brandscnt;k=k+1) begin
+										if(vObj[aBrands[k]]==1)then begin
+											aBrandPercent[k] = aBrandPercent[k] + MyPercent;
+										end;
+									end;
+								end else begin
+									servitem = true;
+									servprc = 1;
+								end;
 							end;
 							servcash[IPrw.BankCurncy] = servcash[IPrw.BankCurncy] +  IPrw.BankVal*servprc;
 							if(left(IPrw.CustCode,3)!="FOB")then begin
-                if(PMrw.AccNr=="50")then begin
-                  if(true)then begin
-                    For(j=0;j<brandscnt;j=j+1) begin
-                      switch(IPrw.BankCurncy)begin
-                        case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IPrw.BankVal * aBrandPercent[j];	
-                        case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IPrw.BankVal * aBrandPercent[j];
-                        case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IPrw.BankVal * aBrandPercent[j];
-                        case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IPrw.BankVal * aBrandPercent[j];
-                        case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IPrw.BankVal * aBrandPercent[j];
-                      end;
-                    end;
-                  end else begin
-                    servcash[IPrw.BankCurncy] = servcash[IPrw.BankCurncy] +  IPrw.BankVal;
-                  end;
-                end else begin
-                  For(j=0;j<brandscnt;j=j+1) begin
-                    switch(IPrw.BankCurncy)begin
-                      case "AZN":aBrandsCCAZN[j] = aBrandsCCAZN[j] + IPrw.BankVal * aBrandPercent[j];
-                      case "USD":aBrandsCCUSD[j] = aBrandsCCUSD[j] + IPrw.BankVal * aBrandPercent[j];
-                    end;
-                  end;
-                end;
+								if(PMrw.AccNr=="50")then begin
+								  if(true)then begin
+									For(j=0;j<brandscnt;j=j+1) begin
+									  switch(IPrw.BankCurncy)begin
+										case "EUR":aBrandsCashEUR[j] = aBrandsCashEUR[j] + IPrw.BankVal * aBrandPercent[j];	
+										case "AZN":aBrandsCashAZN[j] = aBrandsCashAZN[j] + IPrw.BankVal * aBrandPercent[j];
+										case "USD":aBrandsCashUSD[j] = aBrandsCashUSD[j] + IPrw.BankVal * aBrandPercent[j];
+										case "GBP":aBrandsCashGBP[j] = aBrandsCashGBP[j] + IPrw.BankVal * aBrandPercent[j];
+										case "CHF":aBrandsCashCHF[j] = aBrandsCashCHF[j] + IPrw.BankVal * aBrandPercent[j];
+									  end;
+									end;
+								  end else begin
+									servcash[IPrw.BankCurncy] = servcash[IPrw.BankCurncy] +  IPrw.BankVal;
+								  end;
+								end else begin
+								  For(j=0;j<brandscnt;j=j+1) begin
+									switch(IPrw.BankCurncy)begin
+									  case "AZN":aBrandsCCAZN[j] = aBrandsCCAZN[j] + IPrw.BankVal * aBrandPercent[j];
+									  case "USD":aBrandsCCUSD[j] = aBrandsCCUSD[j] + IPrw.BankVal * aBrandPercent[j];
+									end;
+								  end;
+								end;
 							end else begin
 								For(j=0;j<brandscnt;j=j+1) begin
 									switch(IPrw.BankCurncy)begin
