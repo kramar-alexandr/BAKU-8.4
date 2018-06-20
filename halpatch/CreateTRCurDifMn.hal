@@ -11,8 +11,9 @@ external function roundmode SetRoundModeD(Integer);
 external procedure TRSumup(var record TRVc,var val);
 external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
 external procedure ExtractObjectsByType(string ,string,var array string,var integer);
+external function Integer TypeOfCurncy(var string,var Integer);
 
-procedure CountEndSaldoInBase(string accnum, date enddate, var vector val saldo, string curtoskip, integer serviceIntYc, var longint corrTRrNum, var array string CurencyList, var array string ObjectList)
+procedure CountEndSaldoInBase(string accnum, date enddate, var vector val saldo, integer serviceIntYc, var longint corrTRrNum, var array string CurencyList, var array string ObjectList)
 begin
   boolean TrHs;
   record FBVc FBr;
@@ -20,12 +21,13 @@ begin
   record TRVc TRr;
   row TRVc TRrw;
   row FBVc FBrw;
-  integer i,rwcnt,CLi,OLi,oscnt,j;
-  string 20 objstore;
+  integer i,rwcnt,CLi,OLi,oscnt,j,oldstyle;
+  string 20 objstore,crn;
   array string 20 objstores;
   string 255 t;
   boolean fillobjf;
   vector boolean CurInArr,ObjInArr;
+  val diff;
   
   TRr.Number = 9999999;
   TRr.IntYc = serviceIntYc;
@@ -55,7 +57,7 @@ begin
             rwcnt = MatRowCnt(TRr);
             for (i=0;i<rwcnt;i=i+1) begin
               MatRowGet(TRr,i,TRrw);
-              if ((TRrw.AccNumber == accnum) and (TRrw.ovst <> 1) and (TRrw.stp==1) and (TRrw.Curncy!=curtoskip)) then begin
+              if ((TRrw.AccNumber == accnum) and (TRrw.ovst <> 1) and (TRrw.stp==1)) then begin
                 ExtractObjectsByType(TRrw.Objects,"STORE",objstores,oscnt);
                 for (j=0;j<oscnt;j=j+1) begin
                   if (fillobjf) then begin
@@ -64,12 +66,15 @@ begin
                       ObjInArr[ObjectList[OLi]] = true;
                       OLi = OLi + 1;
                     end;
+                    if (blank(TRrw.Curncy)) then begin
+                      TRrw.Curncy = "BLANK";
+                    end;
                     if (!CurInArr[TRrw.Curncy]) then begin
                       CurencyList[CLi] = TRrw.Curncy;
                       CurInArr[CurencyList[CLi]] = true;
                       CLi = CLi + 1;
                     end;
-                    t = accnum & ":" & TRrw.Curncy & ":" & objstores[j];
+                    t = accnum & ":" & objstores[j];
                     saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
                     saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
                   end else begin
@@ -81,7 +86,19 @@ begin
                       end;
                       t = accnum & ":" & TRrw.Curncy & ":" & objstores[j];
                       saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
-                      saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
+                      crn = TRrw.Curncy;
+                      if (TRrw.Curncy=="BLANK") then begin
+                        crn = "";
+                      end;
+                      switch (TypeOfCurncy(crn,oldstyle)) begin
+                        case 0:
+                          diff = TRrw.CurDebVal - TRrw.CurCredVal;
+                        case 1:
+                          diff = TRrw.DebVal - TRrw.CredVal;
+                        case 2:
+                          diff = TRrw.DebVal2 - TRrw.CredVal2;
+                      end;
+                      saldo[t & ":incur"] = saldo[t & ":incur"] + diff;
                     end;
                   end;
                 end;
@@ -107,30 +124,60 @@ begin
                 end;
                 for (i=0;i<rwcnt;i=i+1) begin
                   MatRowGet(FBr,i,FBrw);
+                  if (blank(FBrw.CurncyCode)) then begin
+                    FBrw.CurncyCode = "BLANK";
+                  end;
                   if (!CurInArr[FBrw.CurncyCode]) then begin
                     CurencyList[CLi] = FBrw.CurncyCode;
                     CurInArr[CurencyList[CLi]] = true;
                     CLi = CLi + 1;
                   end;
-                  if ((FBrw.AccNumber == accnum) and (FBrw.CurncyCode!=curtoskip)) then begin
+                  if (FBrw.AccNumber == accnum) then begin
                     t = accnum & ":" & FBrw.CurncyCode & ":" & objstore;
                     saldo[t] = saldo[t] + FBrw.DebVal - FBrw.CredVal;
-                    saldo[t & ":incur"] = saldo[t & ":incur"] + FBrw.CurDebVal - FBrw.CurCredVal;
+                    crn = FBrw.CurncyCode;
+                    if (FBrw.CurncyCode=="BLANK") then begin
+                      crn = "";
+                    end;
+                    switch (TypeOfCurncy(crn,oldstyle)) begin
+                      case 0:
+                        diff = FBrw.CurDebVal - FBrw.CurCredVal;
+                      case 1:
+                        diff = FBrw.DebVal - FBrw.CredVal;
+                      case 2:
+                        diff = FBrw.Deb2Val - FBrw.Cred2Val;
+                    end;
+                    saldo[t & ":incur"] = saldo[t & ":incur"] + diff;
                   end;
                 end;
               end else begin
                 if (objstore==ObjectList[0]) then begin
                   for (i=0;i<rwcnt;i=i+1) begin
                     MatRowGet(FBr,i,FBrw);
+                    if (blank(FBrw.CurncyCode)) then begin
+                      FBrw.CurncyCode = "BLANK";
+                    end;
                     if (!CurInArr[FBrw.CurncyCode]) then begin
                       CurencyList[CLi] = FBrw.CurncyCode;
                       CurInArr[CurencyList[CLi]] = true;
                       CLi = CLi + 1;
                     end;
-                    if ((FBrw.AccNumber == accnum) and (FBrw.CurncyCode!=curtoskip)) then begin
+                    if (FBrw.AccNumber == accnum) then begin
                       t = accnum & ":" & FBrw.CurncyCode & ":" & objstore;
                       saldo[t] = saldo[t] + FBrw.DebVal - FBrw.CredVal;
-                      saldo[t & ":incur"] = saldo[t & ":incur"] + FBrw.CurDebVal - FBrw.CurCredVal;
+                      crn = FBrw.CurncyCode;
+                      if (FBrw.CurncyCode=="BLANK") then begin
+                        crn = "";
+                      end;
+                      switch (TypeOfCurncy(crn,oldstyle)) begin
+                        case 0:
+                          diff = FBrw.CurDebVal - FBrw.CurCredVal;
+                        case 1:
+                          diff = FBrw.DebVal - FBrw.CredVal;
+                        case 2:
+                          diff = FBrw.Deb2Val - FBrw.Cred2Val;
+                      end;
+                      saldo[t & ":incur"] = saldo[t & ":incur"] + diff;
                     end;
                   end;
                 end;
@@ -206,7 +253,7 @@ begin
     ClearArray(tmp1);
     ClearArray(tmp2);
     corrTRrNum = -1;
-    CountEndSaldoInBase(accnumber[ai],RepSpec.d1,saldo,"",serviceIntYc,corrTRrNum,tmp1,tmp2);
+    CountEndSaldoInBase(accnumber[ai],RepSpec.d1,saldo,serviceIntYc,corrTRrNum,tmp1,tmp2);
     if (corrTRrNum<0) then begin
       corrTRrNum = 0;
     end;
@@ -222,6 +269,14 @@ begin
         ExtractObjWithSeparator(":",tags[i],true,pos,crn);
         ExtractObjWithSeparator(":",tags[i],true,pos,objstore);
         ExtractObjWithSeparator(":",tags[i],true,pos,tstr);
+        if (crn=="BLANK") then begin
+          crn = "";
+        end;
+          logtext(0,tags[i]);
+          logtext(0,crn);
+          logtext(0,objstore);
+          logtext(0,tstr);
+          logtext(0,"-----------------");
         if ((objstore==RepSpec.ObjStr) or blank(RepSpec.ObjStr)) and (tstr!="incur") then begin
           t = accnumber[ai] & ":" & crn & ":" & objstore;
           if ((saldo[t]!=blankval) and (saldo[t]!=0)) or ((saldo[t & ":incur"]!=blankval) and (saldo[t & ":incur"]!=0)) then begin
@@ -286,7 +341,7 @@ begin
   record TRVc TRr,corrTRr;
   row TRVc TRrw,corrTRrw;
   row FBVc FBrw;
-  integer i,rwcnt,CLi,OLi,rownr,serviceIntYc,COi,pos,ai,oscnt,j;
+  integer i,rwcnt,CLi,OLi,rownr,serviceIntYc,COi,pos,ai,oscnt,j,oldstyle;
   val fr,to1,to2,b1,b2,tmpval;
   vector val rate,saldo,corr;
   vector boolean ObjInArr,CurInArr;
@@ -347,8 +402,11 @@ begin
     if nonblank(RepSpec.ObjStr) then begin
       ObjectList[0] = RepSpec.ObjStr;
     end;
-    CountEndSaldoInBase(accnumber[ai],curdate,saldo,"",serviceIntYc,corrTRrNum,CurencyList,ObjectList);
+    CountEndSaldoInBase(accnumber[ai],curdate,saldo,serviceIntYc,corrTRrNum,CurencyList,ObjectList);
     for (CLi=0;Cli<CurencyList.length;CLi=CLi+1) begin
+      if (CurencyList[CLi]=="BLANK") then begin
+        CurencyList[CLi] = "";
+      end;
       CurInArr[CurencyList[CLi]] = true;
     end;
     CLi = CurencyList.length;
@@ -394,7 +452,16 @@ begin
                       end;
                       t = accnumber[ai] & ":" & TRrw.Curncy & ":" & objstores[j];
                       saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
-                      saldo[t & ":incur"] = saldo[t & ":incur"] + TRrw.CurDebVal - TRrw.CurCredVal;
+                      crn = TRrw.Curncy;
+                      switch (TypeOfCurncy(crn,oldstyle)) begin
+                        case 0:
+                          tmpval = TRrw.CurDebVal - TRrw.CurCredVal;
+                        case 1:
+                          tmpval = TRrw.DebVal - TRrw.CredVal;
+                        case 2:
+                          tmpval = TRrw.DebVal2 - TRrw.CredVal2;
+                      end;
+                      saldo[t & ":incur"] = saldo[t & ":incur"] + tmpval;
                     end;
                   end;
                 end;
@@ -424,7 +491,16 @@ begin
                       end;
                       t = accnumber[ai] & ":" & FBrw.CurncyCode & ":" & objstore;
                       saldo[t] = saldo[t] + FBrw.DebVal - FBrw.CredVal;
-                      saldo[t & ":incur"] = saldo[t & ":incur"] + FBrw.CurDebVal - FBrw.CurCredVal;
+                      crn = FBrw.CurncyCode;
+                      switch (TypeOfCurncy(crn,oldstyle)) begin
+                        case 0:
+                          tmpval = FBrw.CurDebVal - FBrw.CurCredVal;
+                        case 1:
+                          tmpval = FBrw.DebVal - FBrw.CredVal;
+                        case 2:
+                          tmpval = FBrw.Deb2Val - FBrw.Cred2Val;
+                      end;
+                      saldo[t & ":incur"] = saldo[t & ":incur"] + tmpval;
                     end;
                   end;
                 end;
@@ -524,7 +600,16 @@ begin
               CLi = CLi + 1;
             end;
             saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore] = saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore] + corrTRrw.DebVal - corrTRrw.CredVal;
-            saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore & ":incur"] = saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore & ":incur"] + corrTRrw.CurDebVal - corrTRrw.CurCredVal;
+            crn = corrTRrw.Curncy;
+            switch (TypeOfCurncy(crn,oldstyle)) begin
+              case 0:
+                tmpval = corrTRrw.CurDebVal - corrTRrw.CurCredVal;
+              case 1:
+                tmpval = corrTRrw.DebVal - corrTRrw.CredVal;
+              case 2:
+                tmpval = corrTRrw.DebVal2 - corrTRrw.CredVal2;
+            end;
+            saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore & ":incur"] = saldo[accnumber[ai] & ":" & corrTRrw.Curncy & ":" & objstore & ":incur"] + tmpval;
           end;
         end;
         COi = 0;
@@ -543,10 +628,32 @@ begin
   record TRVc TRr;
   integer serviceIntYc;
   
-  
-  /*record CompaniesBlock Compb;
+  record CompaniesBlock Compb;
   record INVc INr;
   integer oldcompany,i,rwcnt;
+  
+  record PMBlock PMb;
+  row PMBlock PMrw;
+  vector boolean PMoutf;
+  integer j,rwcnt2;
+  
+  /*oldcompany = CurrentCompany;
+  BlockLoad(Compb);
+  rwcnt = MatRowCnt(Compb); 
+	for (i=0;i<rwcnt;i=i+1) begin
+    SetCompany(i+1,false);
+    BlockLoad(PMb);
+    rwcnt2 = MatRowCnt(PMb); 
+    for (j=0;j<rwcnt2;j=j+1) begin
+      MatRowGet(PMb,j,PMrw);
+      if (!PMoutf[PMrw.Code]) then begin
+        PMoutf[PMrw.Code] = true;
+        logtext(0,PMrw.Code);
+      end;
+    end;
+  end;
+	
+	ResetCompany(oldcompany);
   
   oldcompany = CurrentCompany;
   BlockLoad(Compb);

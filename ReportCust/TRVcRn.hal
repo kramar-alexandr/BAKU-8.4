@@ -3,6 +3,7 @@ external procedure YcToStr(Integer,var string);
 external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
 external procedure ExtractObjectsByType(string ,string,var array string,var integer);
 external function roundmode SetRoundModeD(Integer);
+external function Integer TypeOfCurncy(var string,var Integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -17,10 +18,12 @@ begin
   val fr,to1,to2,b1,b2;
   date td;
   string 20 crn,tstr,objstr;
-  integer i,rwcnt,cli;
+  integer i,rwcnt,cli,oldstyle;
   vector boolean CurInList;
+  record BaseCurBlock bcur;
   
   if nonblank(RepSpec.f1) then begin
+    BlockLoad(bcur);
     cli = 0;
     objstr = UpperCase(RepSpec.ObjStr);
     if (printf) then begin
@@ -34,6 +37,12 @@ begin
         OutString(tab[6],0,"Љт в вал",false);
         OutString(tab[7],0,"Љт в осн",false);
         OutString(tab[8],0,"Љт по курсу",false);
+        if (RepSpec.CurncyCode==bcur.BaseCur1) then begin
+          if (tab[9]==0) then begin
+            tab[9] = tab[8] + 50;
+          end;
+          OutString(tab[9],0,"Ќеравенство в вал и в осн",false);
+        end;
       EndFormat;
       Black_Divider(0,1);
     end;
@@ -95,6 +104,14 @@ begin
                       end else begin
                         OutString(tab[8],0,TRrw.CurCredVal*to1/fr,false);
                       end;
+                      if (RepSpec.CurncyCode==bcur.BaseCur1) then begin
+                        if (TRrw.DebVal!=TRrw.CurDebVal) then begin
+                          OutString(tab[9],0,"„т",false);
+                        end;
+                        if (TRrw.CredVal!=TRrw.CurCredVal) then begin
+                          OutString(tab[9],0,"Љт",false);
+                        end;
+                      end;
                     EndFormat;
                   end;
                   if !CurInList[TRrw.Curncy] then begin
@@ -102,12 +119,26 @@ begin
                     CurList[cli] = TRrw.Curncy;
                     cli = cli + 1;
                   end;
-                  tot[extrastr & TRrw.Curncy & ":curdeb"] = tot[extrastr & TRrw.Curncy & ":curdeb"] + TRrw.CurDebVal;
+                  crn = TRrw.Curncy;
+                  switch (TypeOfCurncy(crn,oldstyle)) begin
+                    case 0:
+                      tot[extrastr & TRrw.Curncy & ":curdeb"] = tot[extrastr & TRrw.Curncy & ":curdeb"] + TRrw.CurDebVal;
+                      tot[extrastr & TRrw.Curncy & ":debrate"] = tot[extrastr & TRrw.Curncy & ":debrate"] + TRrw.CurDebVal*to1/fr;
+                      tot[extrastr & TRrw.Curncy & ":curcred"] = tot[extrastr & TRrw.Curncy & ":curcred"] + TRrw.CurCredVal;
+                      tot[extrastr & TRrw.Curncy & ":credrate"] = tot[extrastr & TRrw.Curncy & ":credrate"] + TRrw.CurCredVal*to1/fr;
+                    case 1:
+                      tot[extrastr & TRrw.Curncy & ":curdeb"] = tot[extrastr & TRrw.Curncy & ":curdeb"] + TRrw.DebVal;
+                      tot[extrastr & TRrw.Curncy & ":debrate"] = tot[extrastr & TRrw.Curncy & ":debrate"] + TRrw.DebVal*to1/fr;
+                      tot[extrastr & TRrw.Curncy & ":curcred"] = tot[extrastr & TRrw.Curncy & ":curcred"] + TRrw.CredVal;
+                      tot[extrastr & TRrw.Curncy & ":credrate"] = tot[extrastr & TRrw.Curncy & ":credrate"] + TRrw.CredVal*to1/fr;
+                    case 2:
+                      tot[extrastr & TRrw.Curncy & ":curdeb"] = tot[extrastr & TRrw.Curncy & ":curdeb"] + TRrw.DebVal2;
+                      tot[extrastr & TRrw.Curncy & ":debrate"] = tot[extrastr & TRrw.Curncy & ":debrate"] + TRrw.DebVal2*to1/fr;
+                      tot[extrastr & TRrw.Curncy & ":curcred"] = tot[extrastr & TRrw.Curncy & ":curcred"] + TRrw.CredVal2;
+                      tot[extrastr & TRrw.Curncy & ":credrate"] = tot[extrastr & TRrw.Curncy & ":credrate"] + TRrw.CredVal2*to1/fr;
+                  end;
                   tot[extrastr & TRrw.Curncy & ":deb"] = tot[extrastr & TRrw.Curncy & ":deb"] + TRrw.DebVal;
-                  tot[extrastr & TRrw.Curncy & ":debrate"] = tot[extrastr & TRrw.Curncy & ":debrate"] + TRrw.CurDebVal*to1/fr;
-                  tot[extrastr & TRrw.Curncy & ":curcred"] = tot[extrastr & TRrw.Curncy & ":curcred"] + TRrw.CurCredVal;
                   tot[extrastr & TRrw.Curncy & ":cred"] = tot[extrastr & TRrw.Curncy & ":cred"] + TRrw.CredVal;
-                  tot[extrastr & TRrw.Curncy & ":credrate"] = tot[extrastr & TRrw.Curncy & ":credrate"] + TRrw.CurCredVal*to1/fr;
                 end;
               end;
             end;
@@ -148,6 +179,14 @@ begin
                       end else begin
                         OutString(tab[8],0,FBrw.CurCredVal*to1/fr,false);
                       end;
+                      if (RepSpec.CurncyCode==bcur.BaseCur1) then begin
+                        if (FBrw.DebVal!=FBrw.CurDebVal) then begin
+                          OutString(tab[9],0,"„т",false);
+                        end;
+                        if (FBrw.CredVal!=FBrw.CurCredVal) then begin
+                          OutString(tab[9],0,"Љт",false);
+                        end;
+                      end;
                     EndFormat;
                   end;
                   if !CurInList[FBrw.CurncyCode] then begin
@@ -155,12 +194,26 @@ begin
                     CurList[cli] = FBrw.CurncyCode;
                     cli = cli + 1;
                   end;
-                  tot[extrastr & FBrw.CurncyCode & ":curdeb"] = tot[extrastr & FBrw.CurncyCode & ":curdeb"] + FBrw.CurDebVal;
+                  crn = FBrw.CurncyCode;
+                  switch (TypeOfCurncy(crn,oldstyle)) begin
+                    case 0:
+                      tot[extrastr & FBrw.CurncyCode & ":curdeb"] = tot[extrastr & FBrw.CurncyCode & ":curdeb"] + FBrw.CurDebVal;
+                      tot[extrastr & FBrw.CurncyCode & ":debrate"] = tot[extrastr & FBrw.CurncyCode & ":debrate"] + FBrw.CurDebVal*to1/fr;
+                      tot[extrastr & FBrw.CurncyCode & ":curcred"] = tot[extrastr & FBrw.CurncyCode & ":curcred"] + FBrw.CurCredVal;
+                      tot[extrastr & FBrw.CurncyCode & ":credrate"] = tot[extrastr & FBrw.CurncyCode & ":credrate"] + FBrw.CurCredVal*to1/fr;
+                    case 1:
+                      tot[extrastr & FBrw.CurncyCode & ":curdeb"] = tot[extrastr & FBrw.CurncyCode & ":curdeb"] + FBrw.DebVal;
+                      tot[extrastr & FBrw.CurncyCode & ":debrate"] = tot[extrastr & FBrw.CurncyCode & ":debrate"] + FBrw.DebVal*to1/fr;
+                      tot[extrastr & FBrw.CurncyCode & ":curcred"] = tot[extrastr & FBrw.CurncyCode & ":curcred"] + FBrw.CredVal;
+                      tot[extrastr & FBrw.CurncyCode & ":credrate"] = tot[extrastr & FBrw.CurncyCode & ":credrate"] + FBrw.CredVal*to1/fr;
+                    case 2:
+                      tot[extrastr & FBrw.CurncyCode & ":curdeb"] = tot[extrastr & FBrw.CurncyCode & ":curdeb"] + FBrw.Deb2Val;
+                      tot[extrastr & FBrw.CurncyCode & ":debrate"] = tot[extrastr & FBrw.CurncyCode & ":debrate"] + FBrw.Deb2Val*to1/fr;
+                      tot[extrastr & FBrw.CurncyCode & ":curcred"] = tot[extrastr & FBrw.CurncyCode & ":curcred"] + FBrw.Cred2Val;
+                      tot[extrastr & FBrw.CurncyCode & ":credrate"] = tot[extrastr & FBrw.CurncyCode & ":credrate"] + FBrw.Cred2Val*to1/fr;
+                  end;
                   tot[extrastr & FBrw.CurncyCode & ":deb"] = tot[extrastr & FBrw.CurncyCode & ":deb"] + FBrw.DebVal;
-                  tot[extrastr & FBrw.CurncyCode & ":debrate"] = tot[extrastr & FBrw.CurncyCode & ":debrate"] + FBrw.CurDebVal*to1/fr;
-                  tot[extrastr & FBrw.CurncyCode & ":curcred"] = tot[extrastr & FBrw.CurncyCode & ":curcred"] + FBrw.CurCredVal;
                   tot[extrastr & FBrw.CurncyCode & ":cred"] = tot[extrastr & FBrw.CurncyCode & ":cred"] + FBrw.CredVal;
-                  tot[extrastr & FBrw.CurncyCode & ":credrate"] = tot[extrastr & FBrw.CurncyCode & ":credrate"] + FBrw.CurCredVal*to1/fr;
                 end;
               end;
             end;
@@ -259,7 +312,7 @@ begin
   vector val total;
   array integer tab;
   array string 20 CurrencyList,ObjectList;
-  integer i,j,k,l,rwcnt,rwcnt2,scnt,oscnt,curcomp,compnr;
+  integer i,j,k,l,rwcnt,rwcnt2,scnt,oscnt,curcomp,compnr,oldstyle;
   val totdeb,totcred,cur,base,rate;
   string 100 extrastr;
   record CompaniesBlock CBb;
@@ -346,9 +399,6 @@ begin
                   for (j=0;j<rwcnt2;j=j+1) begin
                     MatRowGet(TRr,j,TRrw);
                     if ((TRrw.AccNumber==mainr.AccNumber) and (TRrw.ovst<>1) and (TRrw.stp==1)) then begin
-                      if blank(TRrw.Curncy) then begin
-                        //TRrw.Curncy = bcur.BaseCur1;
-                      end;
                       if !CurInList[TRrw.Curncy] then begin
                         CurInList[TRrw.Curncy] = true;
                         CurrencyList[ccnt] = TRrw.Curncy;
@@ -362,9 +412,22 @@ begin
                           ocnt = ocnt + 1;
                         end;
                         extrastr = i+1 & ":" & stores[k] & ":" & mainr.AccNumber & ":" & TRrw.Curncy;
-                        total[extrastr & ":curdeb"] = total[extrastr & ":curdeb"] + TRrw.CurDebVal;
+                        crn = TRrw.Curncy;
+                        if blank(crn) then begin
+                          logtext(0,TRr.IntYc & " " & TRr.Number);
+                        end;
+                        switch (TypeOfCurncy(crn,oldstyle)) begin
+                          case 0:
+                            total[extrastr & ":curdeb"] = total[extrastr & ":curdeb"] + TRrw.CurDebVal;
+                            total[extrastr & ":curcred"] = total[extrastr & ":curcred"] + TRrw.CurCredVal;
+                          case 1:
+                            total[extrastr & ":curdeb"] = total[extrastr & ":curdeb"] + TRrw.DebVal;
+                            total[extrastr & ":curcred"] = total[extrastr & ":curcred"] + TRrw.CredVal;
+                          case 2:
+                            total[extrastr & ":curdeb"] = total[extrastr & ":curdeb"] + TRrw.DebVal2;
+                            total[extrastr & ":curcred"] = total[extrastr & ":curcred"] + TRrw.CredVal2;
+                        end;
                         total[extrastr & ":deb"] = total[extrastr & ":deb"] + TRrw.DebVal;
-                        total[extrastr & ":curcred"] = total[extrastr & ":curcred"] + TRrw.CurCredVal;
                         total[extrastr & ":cred"] = total[extrastr & ":cred"] + TRrw.CredVal;
                         if     (total[extrastr & ":curdeb"]!=0)
                            or (total[extrastr & ":deb"]!=0)
@@ -390,9 +453,6 @@ begin
                     for (j=0;j<rwcnt2;j=j+1) begin
                       MatRowGet(FBr,j,FBrw);
                       if (FBrw.AccNumber==mainr.AccNumber) then begin
-                        if blank(FBrw.CurncyCode) then begin
-                          //FBrw.CurncyCode = bcur.BaseCur1;
-                        end;
                         if !CurInList[FBrw.CurncyCode] then begin
                           CurInList[FBrw.CurncyCode] = true;
                           CurrencyList[ccnt] = FBrw.CurncyCode;
@@ -404,9 +464,22 @@ begin
                           ocnt = ocnt + 1;
                         end;
                         extrastr = i+1 & ":" & stores[0] & ":" & mainr.AccNumber & ":" & FBrw.CurncyCode;
-                        total[extrastr & ":curdeb"] = total[extrastr & ":curdeb"] + FBrw.CurDebVal;
+                        crn = FBrw.CurncyCode;
+                        if blank(crn) then begin
+                          logtext(0,"FB " & FBr.SerNr & " " & j);
+                        end;
+                        switch (TypeOfCurncy(crn,oldstyle)) begin
+                          case 0:
+                            total[extrastr & ":curdeb"] = total[extrastr & ":curdeb"] + FBrw.CurDebVal;
+                            total[extrastr & ":curcred"] = total[extrastr & ":curcred"] + FBrw.CurCredVal;
+                          case 1:
+                            total[extrastr & ":curdeb"] = total[extrastr & ":curdeb"] + FBrw.DebVal;
+                            total[extrastr & ":curcred"] = total[extrastr & ":curcred"] + FBrw.CredVal;
+                          case 2:
+                            total[extrastr & ":curdeb"] = total[extrastr & ":curdeb"] + FBrw.Deb2Val;
+                            total[extrastr & ":curcred"] = total[extrastr & ":curcred"] + FBrw.Cred2Val;
+                        end;
                         total[extrastr & ":deb"] = total[extrastr & ":deb"] + FBrw.DebVal;
-                        total[extrastr & ":curcred"] = total[extrastr & ":curcred"] + FBrw.CurCredVal;
                         total[extrastr & ":cred"] = total[extrastr & ":cred"] + FBrw.CredVal;
                         if     (total[extrastr & ":curdeb"]!=0)
                            or (total[extrastr & ":deb"]!=0)
@@ -440,7 +513,6 @@ begin
             
             printf = false;
             for (l=0;l<ccnt;l=l+1) begin
-            logtext(0,CurrencyList[l]);
               if NonBlankTotal[extrastr & CurrencyList[l]] then begin
                 printf = true;
               end;
