@@ -204,6 +204,8 @@ begin
   record MainStockBlock MSb;
   record AccBlock ARAccb;
   record POSettingBlock POSetb;
+  LongInt newnr;
+  record SRBlock SRb;
   
   BlockLoad(ARAccb);
   BlockLoad(MSb);
@@ -212,6 +214,14 @@ begin
     POr.SetZeroPUQuant = 1;
   end;
   POr.SerNr = -1;
+  if (currentcompany==28) then begin
+    BlockLoad(SRb);
+    if (POr.SerNr<=0) then begin
+      newnr = GetCurUserLastNr("POVc");
+      if (newnr==-1) then begin newnr = SRb.LastPONr; end;
+      POr.SerNr = NextSerNr("POVc",POr.TransDate,newnr,false,"");
+    end;
+  end;
   POr.TransDate = CurrentDate;
   POr.OKFlag = 0;
   POr.ExportFlag = 0;
@@ -569,10 +579,16 @@ global
 updating function LongInt POVcRecordRemove(var record POVc POr,record POVc PO2r,LongInt stat,LongInt long4)
 begin
   LongInt res;
-
+  record POShipmDataVc POSDr;
   UpdatePOOut(POr,false,false);
   UpdatePRPO(POr,false);
   UpdateStockResFromPO(POr,true);
+  if (currentcompany!=28) then begin
+    POSDr.POSerNr = POr.SerNr;
+    if (readfirstmain(POSDr,1,true)) then begin
+      RecordDelete(POSDr);
+    end;
+  end;
   POVcRecordRemove = res; 
   return;
 end;
@@ -1600,7 +1616,7 @@ begin
 	record PUVc PUr;
 	
 	res = 0;
-	if(currentcompany!=9 and currentcompany!=10)then begin
+	if(currentcompany!=9 and currentcompany!=10 and currentcompany!=28)then begin
 		IHr.ArtCode = ArtCode;
 		IHr.FileName = "PUVc";
 		if(readfirstkey("FNArtCode",IHr,2,false))then begin
@@ -1784,13 +1800,15 @@ begin
       end;
     end;  
   end;
-  if (CheckPDExists(POr.PayDeal)==false) then begin
-    if (disperrf) then begin
-      RecordCheckError(1256,"",-1,"PayDeal");      
-    end;
-    res = 1256;
-    goto LPOVcRecordCheck;        
-  end; 
+  if (currentcompany!=28) then begin
+    if (CheckPDExists(POr.PayDeal)==false) then begin
+      if (disperrf) then begin
+        RecordCheckError(1256,"",-1,"PayDeal");      
+      end;
+      res = 1256;
+      goto LPOVcRecordCheck;        
+    end; 
+  end;
   switch (PayTermType(POr.PayDeal)) begin
     case kInvoiceTypeCredit:
       RecordCheckError(1227,POr.PayDeal,-1,"PayDeal");      
@@ -1809,13 +1827,15 @@ begin
     res = i; 
     goto LPOVcRecordCheck;
   end;  
-  VEr.Code = POr.VECode;
-  if (ReadFirstMain(VEr,1,true)==false) then begin
-    if (disperrf) then begin
-      RecordCheckError(1205,"",-1,"VECode");      
+  if (currentcompany!=28) then begin
+    VEr.Code = POr.VECode;
+    if (ReadFirstMain(VEr,1,true)==false) then begin
+      if (disperrf) then begin
+        RecordCheckError(1205,"",-1,"VECode");      
+      end;
+      res = 1205; 
+      goto LPOVcRecordCheck;
     end;
-    res = 1205; 
-    goto LPOVcRecordCheck;
   end;
   if (VEr.blockedFlag!=0) then begin
     if (disperrf) then begin
