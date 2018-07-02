@@ -16,7 +16,7 @@ global
 procedure SKURn(record RcVc RepSpec)
 BEGIN
 	record INVc INr;
-	array string 200 abrands, aLocation;
+	array string 200 abrands, aLocation,abrandsname;
 	record DIVc DIr;
 	record CompaniesBlock CBb;
 	boolean testf,TrHs,foundf,TrHs1,testf1;
@@ -25,22 +25,65 @@ BEGIN
 	row IVVc IVrw;
 	record ItemStatusVc ISr;
 	vector LongInt vBrandLocProdInStock, vBrandProd;
+	vector boolean vBrandf,vBrandItem,vBrandItemInStock;
 	
 	
 	StartReportNoHeaderJob("עקוע SKU");
 	
 		oldcomp = CurrentCompany;
-		logtext(0,"ent");
 		brndcnt = 0;
 		blockload(CBb);
 		compcnt = matrowcnt(CBb);
 		for(comp=0;comp<compcnt;comp=comp+1)begin
-			logtext(0,"ent1");
-			SetCompany(comp,false);
+			if(comp==0)then begin
+				abrands[brndcnt] = "SW";
+				abrandsname[brndcnt] = "SWAROWSKI";
+				brndcnt = brndcnt + 1;
+			end;
+			SetCompany(comp+1,false);
+			DIr.CType = "BRAND";
+			testf = true;
+			while(LoopKey("CType",DIr,1,testf))begin
+				testf = true;
+				if(DIr.CType!="BRAND")then begin testf = false; end;
+				if(testf)then begin
+					if(vBrandf[DIr.Code]==false)then begin
+						abrands[brndcnt] = DIr.Code;
+						abrandsname[brndcnt] = DIR.Name;
+						brndcnt = brndcnt + 1;
+						vBrandf[DIr.Code] = true;
+					end;
+				end;
+			end;
+			resetloop(DIr);
+			
+			resetloop(INr);
 			INr.Code = "";
 			while(LoopMain(INr,1,true))begin
-				logtext(0,"ent2");
-				DIr.CType = "BRAND";
+				if(comp==0)then begin
+					INr.DispGroups = "SW";
+				end;
+				For(i=0;i<brndcnt;i=i+1) begin
+	  			if(setinset(abrands[i],INr.DispGroups))then begin
+	  				if(vBrandItem[INr.Code & ";" & abrands[i]]==false)then begin
+							vBrandProd[abrands[i]] = vBrandProd[abrands[i]] + 1;
+							vBrandItem[INr.Code & ";" & abrands[i]] = true;
+	  				end;
+	  				if(vBrandItemInStock[INr.Code & ";" & abrands[i]]==false)then begin
+	  					ISr.Code = INr.Code;
+	  					ISr.Location = ";;;";
+	  					if(readfirstmain(ISr,2,true))then begin
+	  						if(ISr.Instock>0)then begin
+	  							vBrandLocProdInStock[abrands[i]] = vBrandLocProdInStock[abrands[i]] + 1;
+	  							vBrandItemInStock[INr.Code & ";" & abrands[i]] = true;
+	  						end;
+	  					end;
+	  					
+	  				end;
+	  			end;
+				end; 
+				
+				/*DIr.CType = "BRAND";
 				while(LoopKey("CType",DIr,1,true))begin
 					logtext(0,"ent3");
 					testf = true;
@@ -58,7 +101,7 @@ BEGIN
 							end;
 						end;
 					end;
-				end;
+				end;*/
 			end;
 		end;
 		ResetCompany(oldcomp);
@@ -70,9 +113,9 @@ BEGIN
 		endformat;
 		for(i=0;i<brndcnt;i=i+1)begin
 			StartFormat(15);
-				OutString(0,0,abrands[i],False);
+				OutString(0,0,abrandsname[i],False);
 				OutString(50,0,vBrandProd[abrands[i]],False);
-				//OutString(100,0,vBrandLocProdInStock[aLocation[lccnt] & abrands[i] & comp],False);
+				OutString(100,0,vBrandLocProdInStock[abrands[i]],False);
 			endformat;
 		end;
 	endjob;
