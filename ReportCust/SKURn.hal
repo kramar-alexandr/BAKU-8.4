@@ -1,0 +1,80 @@
+//server-only
+external procedure YcToStr(Integer,var string);
+external procedure FindNLAccBal(string,string,string,Integer,Date,Date,Integer,Integer,Boolean,string,Integer,string,string,var val);
+external procedure GetObjs(string,string,var string);
+external function val cur2cur(String,String,Date,Val);
+external function val cur2b1(String,Date,Val);
+external function LongInt DateDiff(Date,Date);
+external function val AbsoluteVal(val);
+remote function val ItemInStock(var record INVc,string);
+
+SetLangMode(LangRussian,"RUS",0);
+
+
+
+global
+procedure SKURn(record RcVc RepSpec)
+BEGIN
+	record INVc INr;
+	array string 200 abrands, aLocation;
+	record DIVc DIr;
+	record CompaniesBlock CBb;
+	boolean testf,TrHs,foundf,TrHs1,testf1;
+	integer i, oldcomp, compcnt, comp, brndcnt, lccnt, j;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record ItemStatusVc ISr;
+	vector LongInt vBrandLocProdInStock, vBrandProd;
+	
+	
+	StartReportNoHeaderJob("Отчет SKU");
+	
+		oldcomp = CurrentCompany;
+		logtext(0,"ent");
+		brndcnt = 0;
+		blockload(CBb);
+		compcnt = matrowcnt(CBb);
+		for(comp=0;comp<compcnt;comp=comp+1)begin
+			logtext(0,"ent1");
+			SetCompany(comp,false);
+			INr.Code = "";
+			while(LoopMain(INr,1,true))begin
+				logtext(0,"ent2");
+				DIr.CType = "BRAND";
+				while(LoopKey("CType",DIr,1,true))begin
+					logtext(0,"ent3");
+					testf = true;
+					if(DIr.CType!="BRAND")then begin testf = false; end;
+					if(testf)then begin
+						if(setinset(DIr.Name,INr.DispGroups))then begin
+							logtext(0,"ent4");
+							if(blank(vBrandProd[DIr.Name]))then begin
+								logtext(0,"ent5");
+								vBrandProd[DIr.Name] = 1;
+								abrands[brndcnt] = DIr.Name;
+								brndcnt = brndcnt + 1;
+							end else begin
+								vBrandProd[DIr.Name] = vBrandProd[DIr.Name] + 1;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+		ResetCompany(oldcomp);
+
+		StartFormat(15);
+			OutString(0,0,"Бренд",False);
+			OutString(50,0,"Количество наименований тов.",False);
+			OutString(300,0,"В наличии",False);
+		endformat;
+		for(i=0;i<brndcnt;i=i+1)begin
+			StartFormat(15);
+				OutString(0,0,abrands[i],False);
+				OutString(50,0,vBrandProd[abrands[i]],False);
+				//OutString(100,0,vBrandLocProdInStock[aLocation[lccnt] & abrands[i] & comp],False);
+			endformat;
+		end;
+	endjob;
+	RETURN;
+END;
