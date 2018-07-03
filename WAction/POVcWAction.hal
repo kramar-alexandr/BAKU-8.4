@@ -51,6 +51,7 @@ external function Boolean UserCanChangePendingRecord(Integer);
 external function Boolean OpenContactRecord(string,string);
 external procedure ExtractObj(string,var Integer,var string);// Edit ************************** Thursday, 14 November 2013 13:36:52
 remote updating procedure CreateLoyaltyCardRemote(record CUVc,var record LoyaltyCardVc);// Edit ************************** Tuesday, 1 April 2014 16:05:50
+remote procedure IDPasteORinPO(var record POVc);
 
 global
 updating procedure DropSHFromPODsm()
@@ -1864,6 +1865,92 @@ PasteColour = true;
 return;
 end;
 
+function Boolean PODClassIDPrepayEFAfter(Integer wn,Integer changed)
+begin
+  record POVc POr;
+  
+  if (changed!=0) then begin
+    GetWindowRecord(wn,POr);
+    
+    POr.IDPrepayProc = 100*POr.IDPrepay/POr.Sum4;
+    POr.IDBalPay = POr.Sum4 - POr.IDPrepay;
+    POr.IDBalPayProc = 100 - POr.IDPrepayProc;
+    
+    PutWindowRecord(wn,POr);
+  end;
+  PODClassIDPrepayEFAfter = true;
+end;
+
+function Boolean PODClassIDPrepayProcEFAfter(Integer wn,Integer changed)
+begin
+  record POVc POr;
+  
+  if (changed!=0) then begin
+    GetWindowRecord(wn,POr);
+    
+    POr.IDPrepay = POr.Sum4/100*POr.IDPrepayProc;
+    POr.IDBalPay = POr.Sum4 - POr.IDPrepay;
+    POr.IDBalPayProc = 100 - POr.IDPrepayProc;
+    
+    PutWindowRecord(wn,POr);
+  end;
+  PODClassIDPrepayProcEFAfter = true;
+end;
+
+function Boolean PODClassIDBalPayEFAfter(Integer wn,Integer changed)
+begin
+  record POVc POr;
+  
+  if (changed!=0) then begin
+    GetWindowRecord(wn,POr);
+    
+    POr.IDBalPayProc = 100*POr.IDBalPay/POr.Sum4;
+    POr.IDPrepayProc = 100 - POr.IDBalPayProc;
+    POr.IDPrepay = POr.Sum4 - POr.IDBalPay;
+    
+    PutWindowRecord(wn,POr);    
+  end;
+  PODClassIDBalPayEFAfter = true;
+end;
+
+function Boolean PODClassIDBalPayProcEFAfter(Integer wn,Integer changed)
+begin
+  record POVc POr;
+  
+  if (changed!=0) then begin
+    GetWindowRecord(wn,POr);
+    
+    POr.IDBalPay = POr.Sum4/100*POr.IDBalPayProc;
+    POr.IDPrepay = POr.Sum4 - POr.IDBalPay;
+    POr.IDPrepayProc = 100 - POr.IDBalPayProc;
+    
+    PutWindowRecord(wn,POr);    
+  end;
+  PODClassIDBalPayProcEFAfter = true;
+end;
+
+function Boolean PODClassSum4EFAfter(Integer wn,Integer changed)
+begin
+  record POVc POr;
+  
+  if (changed!=0) then begin
+    if (currentcompany==28) then begin
+      GetWindowRecord(wn,POr);
+      
+      if (POr.IDPrepayPaid==1) then begin
+        POr.IDPrepayProc = 100*POr.IDPrepay/POr.Sum4;
+      end else begin
+        POr.IDPrepay = POr.Sum4/100*POr.IDPrepayProc;
+      end;
+      POr.IDBalPay = POr.Sum4 - POr.IDPrepay;
+      POr.IDBalPayProc = 100 - POr.IDPrepayProc;
+      
+      PutWindowRecord(wn,POr);
+    end;
+  end;
+  PODClassSum4EFAfter = true;
+end;
+
 function boolean PasteArtCode(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
 begin
 record POVc POr;
@@ -1939,6 +2026,11 @@ BEGIN
     case "Size": res = PasteSize(wn,fieldname,fn,rownr,changed);
     case "Colour": res = PasteColour(wn,fieldname,fn,rownr,changed);
     case "ArtCode": res = PasteArtCode(wn,fieldname,fn,rownr,changed);  //End----------------------Dima  19.05.2015
+    case "IDPrepay": res = PODClassIDPrepayEFAfter(wn,changed);//Edit-------------------Vitalii 15:17 22.03.2018
+    case "IDPrepayProc": res = PODClassIDPrepayProcEFAfter(wn,changed);
+    case "IDBalPay": res = PODClassIDBalPayEFAfter(wn,changed);
+    case "IDBalPayProc": res = PODClassIDBalPayProcEFAfter(wn,changed);
+    case "Sum4": res = PODClassSum4EFAfter(wn,changed);
   end;
   PODClassAfterEditField = res;
   RETURN;
@@ -2771,4 +2863,25 @@ begin
   end;
 
 return;
+end;
+
+
+global
+procedure IDAppendPRBtnClick()
+begin
+  record POVc POr;
+  integer wn
+  
+  wn = curwindow;
+  deselectwindow(wn,false);
+  getwindowrecord(wn,POr);
+  
+  if nonblank(POr.IDRefPRNum) then begin
+    IDPasteORinPO(POr);
+    putwindowrecord(wn,POr);
+  end else begin
+    MessageBox(35149,"");
+  end;
+  
+  return;
 end;
