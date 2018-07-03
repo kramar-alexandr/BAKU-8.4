@@ -211,9 +211,10 @@ begin
 	area ames;
 	string 5 nextline;
 	record CoinEANCodeVc CEANr;
+	record LocationVc Locr;
 	
 	BlockLoad(CoinSb);
-	if (CoinSb.ClientCode<=0 or len(CoinSb.ClientCode)!=4) then begin
+	if (StringToInt(RepSpec.f1)<=0 or len(RepSpec.f1)!=4) then begin
 	  LogText(0,"Check sstoreID in CoinSettingsBlock");
     goto LGruppoCoinSalesMn;
   end;
@@ -228,13 +229,13 @@ begin
 		transdate = CurrentDate;
 	end;
 	transdateStr = 	DateToString(transdate,"YYYYMMDD");
-	filename = "PSL" & "10000" & CoinSb.ClientCode & "_" & transdateStr & ".TXT";
+	filename = "PSL" & "10000" & RepSpec.f1 & "_" & transdateStr & ".TXT";
 	CreateFile(path & filename);
 	CloseFile;
 	
 	nextline = chr(13) & chr(10);
 	vendtran = "VENDTRAN";
-	sstoreID = CoinSb.ClientCode;
+	sstoreID = RepSpec.f1;
 	operatorID = "0001"; //IVr.SalesMan field is longer then 4 chars. so we fill it with "0001" always.
 	terminalID = "01"; //POS-terminal number
 	typeOfRegistration = "LL"; //first char for ArtCode, second for price
@@ -252,6 +253,10 @@ begin
 		testf = true;
 		if (IVr.InvDate>transdate) then begin TrHs = false; testf = false; end;
 		if ( SetInSet2(IVr.Location,CoinSb.Locations)==false) then begin testf = false; end;
+		Locr.Code = IVr.Location;
+		if(readfirstmain(Locr,1,true))then begin
+			if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
+		end;
 		if (testf) then begin
 			if(IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales)then begin sign=-1; end;
 			for(i=0;i<MatRowCnt(IVr);i=i+1) begin
@@ -413,6 +418,7 @@ global //Edit***************************Sasha2,12:57 22.03.2016 {
 updating procedure GruppoCoinManageGoodsMn(record RcVc RepSpec)
 begin
   record RetPUVc RetPUr;
+  record LocationVc Locr;
   record StockMovVc StockMovr;
   record CoinSettingsBlock CoinSb;
   record CoinEANCodeVc CoinEANCoder;
@@ -432,8 +438,8 @@ begin
     if(CoinSb.LastMNDate==currentdate)then begin
     	goto LGruppoCoinManageGoods;
     end;
-    
-    sstoreID = CoinSb.ClientCode;
+	sstoreID = StringToInt(Repspec.f1);
+    //sstoreID = CoinSb.ClientCode;
     if (sstoreID<=0 or len(sstoreID)!=4) then begin
       LogText(0,"Check sstoreID in CoinSettingsBlock");
       goto LGruppoCoinManageGoods;
@@ -459,6 +465,10 @@ begin
 		  foundf = false;
   		if (RetPUr.OKFlag==0) then begin testf = false; end;
   		if (RetPUr.SentCoin==0 or NonBlank(RetPUr.FileNameCoin) or Blank(RetPUr.TransBillCoin)) then begin testf = false; end;
+		Locr.Code = RetPUr.Location;
+		if(readfirstmain(Locr,1,true))then begin
+			if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
+		end;
   		if (testf) then begin
   		  CoinPackListHistr.TransportBill = RetPUr.TransBillCoin;
   		  testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
@@ -508,6 +518,10 @@ begin
   		testf = true;
   		if (StockMovr.OKFlag==0) then begin testf = false; end;
   		if (StockMovr.SentCoin==0 or NonBlank(StockMovr.FileNameCoin) or Blank(StockMovr.TransBillCoin)) then begin testf = false; end;
+		Locr.Code = StockMovr.FrLocation;
+		if(readfirstmain(Locr,1,true))then begin
+			if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
+		end;
   		if (testf) then begin
   		  CoinPackListHistr.TransportBill = StockMovr.TransBillCoin;
   		  testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
@@ -534,6 +548,8 @@ begin
                 rowdata = rowdata & "0151";
               case 2:
                 rowdata = rowdata & "0105";
+			  case 3:
+                rowdata = rowdata & "0351";
             end;
             
   				  intValue = StockMovrw.Quant;
@@ -1887,12 +1903,24 @@ global //Edit-------------------Vitalii 17:25 05.07.2016
 updating procedure GruppoCoinParseAndReplaceOutputFiles() 
 begin
   record RcVc RepSpec;
+  record CoinSettingsBlock CoinSb;
+  Integer i;
+  string 255 tstr;
   
   RECORDNEW(RepSpec);
-  GruppoCoinManageGoodsMn(RepSpec);
-  GruppoCoinSalesMn(RepSpec);
-  //GruppoCoinStockCountMn(RepSpec);// Edit ************************** Friday, 20 October 2017 11:19:47
-  GruppoCoinMissingEANSMn(RepSpec);//Edit-------------------Vitalii 15:39 20.07.2016
+  i = 0;
+  ExtractObj(CoinSb.ClientCodeStr,i,tstr);
+  while(nonblank(tstr)) begin
+	if(nonblank(tstr))then begin
+	  RepSpec.f1 = tstr;
+	  GruppoCoinManageGoodsMn(RepSpec);
+	  GruppoCoinSalesMn(RepSpec);
+	  //GruppoCoinStockCountMn(RepSpec);// Edit ************************** Friday, 20 October 2017 11:19:47
+	  GruppoCoinMissingEANSMn(RepSpec);//Edit-------------------Vitalii 15:39 20.07.2016
+	  ExtractObj(CoinSb.ClientCodeStr,i,tstr);
+	end;
+  end;
+  
   
 LGruppoCoinParseAndReplaceOutputFiles:;
   
