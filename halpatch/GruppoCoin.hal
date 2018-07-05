@@ -432,9 +432,9 @@ begin
   boolean TrHs,testf,foundf;
   LongInt count;
   string 5 nextline;
-    
+    logtext(0,"1");
     BlockLoad(CoinSb);
-    
+		logtext(0,Repspec.f1);
     if(CoinSb.LastMNDate==currentdate)then begin
     	goto LGruppoCoinManageGoods;
     end;
@@ -449,7 +449,6 @@ begin
       LogText(0,"Check upload directory in CoinSettingsBlock");
       goto LGruppoCoinManageGoods;
     end;
-    
     datestring = DateToString(CurrentDate,"YYYYMMDD");
     filename = "PAD" & "10000" & sstoreID & "_" & datestring & ".TXT";
   	//CreateFile(path & filename);
@@ -480,12 +479,10 @@ begin
   				if (Blank(RetPUrw.ArtCode) or Blank(RetPUrw.BarCode)) then begin testf = false; end;
   				if (testf) then begin
   				  CoinEANCoder.EANNumber = RetPUrw.BarCode;
-  				  //testf = ReadFirstKey("EANNumber",CoinEANCoder,1,true);
   				end;
   				if (testf) then begin
             if (foundf==false) then begin
   				    foundf = true;
-  				    //Header
   	          AddTextToArea("**INIT**MERCTRAN" & datestring & sstoreID & nextline, ames);
   				  end;
   				  rowdata = "MERCTRAN" & sstoreID & datestring & "0303";
@@ -518,10 +515,10 @@ begin
   		testf = true;
   		if (StockMovr.OKFlag==0) then begin testf = false; end;
   		if (StockMovr.SentCoin==0 or NonBlank(StockMovr.FileNameCoin) or Blank(StockMovr.TransBillCoin)) then begin testf = false; end;
-		Locr.Code = StockMovr.FrLocation;
-		if(readfirstmain(Locr,1,true))then begin
-			if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
-		end;
+			Locr.Code = StockMovr.FrLocation;
+			if(readfirstmain(Locr,1,true))then begin
+				if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
+			end;
   		if (testf) then begin
   		  CoinPackListHistr.TransportBill = StockMovr.TransBillCoin;
   		  testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
@@ -533,7 +530,7 @@ begin
   				if (Blank(StockMovrw.ArtCode) or Blank(StockMovrw.BarCode)) then begin testf = false; end;
           if (testf) then begin
   				  CoinEANCoder.EANNumber = StockMovrw.BarCode;
-  				  //testf = ReadFirstKey("EANNumber",CoinEANCoder,1,true);
+  				  testf = ReadFirstKey("EANNumber",CoinEANCoder,1,true);
   				end;
   				if (testf) then begin
   				  if (foundf==false) then begin
@@ -548,7 +545,7 @@ begin
                 rowdata = rowdata & "0151";
               case 2:
                 rowdata = rowdata & "0105";
-			  case 3:
+							case 3:
                 rowdata = rowdata & "0351";
             end;
             
@@ -718,35 +715,46 @@ global //Edit***************************Sasha2,12:11 29.06.2016
 updating procedure GruppoCoinManualMn(record RcVc RepSpec) 
 begin
 date sd,ed;
-
-	sd = RepSpec.sStartDate;
-	ed = RepSpec.sEndDate;
-  if (RepSpec.flags[1]==1) then begin
-  	
-  	if(nonblank(RepSpec.d1))then begin
-			GruppoCoinSalesMn(RepSpec);
-    end else begin
-    	RepSpec.d1 = sd;
-    	while(RepSpec.d1<=ed) begin
-				if(nonblankdate(RepSpec.d1))then begin
+record CoinSettingsBlock CoinSb;
+Integer i;
+ string 255 tstr;
+	i = 0;
+	BlockLoad(CoinSb);
+  ExtractObj(CoinSb.ClientCodeStr,i,tstr);
+  while(nonblank(tstr)) begin
+		if(nonblank(tstr))then begin
+			RepSpec.f1 = tstr;
+			sd = RepSpec.sStartDate;
+			ed = RepSpec.sEndDate;
+			if (RepSpec.flags[1]==1) then begin
+				
+				if(nonblank(RepSpec.d1))then begin
 					GruppoCoinSalesMn(RepSpec);
+				end else begin
+					RepSpec.d1 = sd;
+					while(RepSpec.d1<=ed) begin
+						if(nonblankdate(RepSpec.d1))then begin
+							GruppoCoinSalesMn(RepSpec);
+						end;
+						RepSpec.d1 = addday(RepSpec.d1,1);
+					end;
 				end;
-				RepSpec.d1 = addday(RepSpec.d1,1);
 			end;
-    end;
-  end;
-  millisleep(200);
-  if (RepSpec.flags[2]==1) then begin
-    GruppoCoinStockCountMn(RepSpec);
-  end;
-  millisleep(200);
-  if (RepSpec.flags[3]==1) then begin
-    GruppoCoinManageGoodsMn(RepSpec);
-  end;
-  millisleep(200);
-  if (RepSpec.flags[4]==1) then begin
-    GruppoCoinMissingEANSMn(RepSpec);
-  end;
+			millisleep(200);
+			if (RepSpec.flags[2]==1) then begin
+				GruppoCoinStockCountMn(RepSpec);
+			end;
+			millisleep(200);
+			if (RepSpec.flags[3]==1) then begin
+				GruppoCoinManageGoodsMn(RepSpec);
+			end;
+			millisleep(200);
+			if (RepSpec.flags[4]==1) then begin
+				GruppoCoinMissingEANSMn(RepSpec);
+			end;
+			ExtractObj(CoinSb.ClientCodeStr,i,tstr);
+		end;
+	end;
 
   return;
 end;
@@ -1909,16 +1917,17 @@ begin
   
   RECORDNEW(RepSpec);
   i = 0;
+	BlockLoad(CoinSb);
   ExtractObj(CoinSb.ClientCodeStr,i,tstr);
   while(nonblank(tstr)) begin
-	if(nonblank(tstr))then begin
-	  RepSpec.f1 = tstr;
-	  GruppoCoinManageGoodsMn(RepSpec);
-	  GruppoCoinSalesMn(RepSpec);
-	  //GruppoCoinStockCountMn(RepSpec);// Edit ************************** Friday, 20 October 2017 11:19:47
-	  GruppoCoinMissingEANSMn(RepSpec);//Edit-------------------Vitalii 15:39 20.07.2016
-	  ExtractObj(CoinSb.ClientCodeStr,i,tstr);
-	end;
+		if(nonblank(tstr))then begin
+			RepSpec.f1 = tstr;
+			GruppoCoinManageGoodsMn(RepSpec);
+			GruppoCoinSalesMn(RepSpec);
+			//GruppoCoinStockCountMn(RepSpec);// Edit ************************** Friday, 20 October 2017 11:19:47
+			GruppoCoinMissingEANSMn(RepSpec);//Edit-------------------Vitalii 15:39 20.07.2016
+			ExtractObj(CoinSb.ClientCodeStr,i,tstr);
+		end;
   end;
   
   
