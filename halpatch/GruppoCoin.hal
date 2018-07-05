@@ -432,13 +432,14 @@ begin
   boolean TrHs,testf,foundf;
   LongInt count;
   string 5 nextline;
-    logtext(0,"1");
+  record LocationVc  ToLocr;
+
     BlockLoad(CoinSb);
-		logtext(0,Repspec.f1);
-    if(CoinSb.LastMNDate==currentdate)then begin
+
+    if(CoinSb.LastMNDate==currentdate and RepSpec.flags[19]==0)then begin
     	goto LGruppoCoinManageGoods;
     end;
-	sstoreID = StringToInt(Repspec.f1);
+		sstoreID = StringToInt(Repspec.f1);
     //sstoreID = CoinSb.ClientCode;
     if (sstoreID<=0 or len(sstoreID)!=4) then begin
       LogText(0,"Check sstoreID in CoinSettingsBlock");
@@ -514,11 +515,16 @@ begin
       foundf = false;
   		testf = true;
   		if (StockMovr.OKFlag==0) then begin testf = false; end;
-  		if (StockMovr.SentCoin==0 or NonBlank(StockMovr.FileNameCoin) or Blank(StockMovr.TransBillCoin)) then begin testf = false; end;
+  		if(StockMovr.TypeCoin==3 and blank(StockMovr.TransBillCoin))then begin
+  			StockMovr.TransBillCoin = StockMovr.SerNr;
+  		end;
+
+  		if (StockMovr.SentCoin==0 /*or NonBlank(StockMovr.FileNameCoin)*/ or Blank(StockMovr.TransBillCoin)) then begin testf = false; end;
 			Locr.Code = StockMovr.FrLocation;
 			if(readfirstmain(Locr,1,true))then begin
 				if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
 			end;
+
   		if (testf) then begin
   		  CoinPackListHistr.TransportBill = StockMovr.TransBillCoin;
   		  testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
@@ -550,9 +556,18 @@ begin
             end;
             
   				  intValue = StockMovrw.Quant;
-  				  rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
+  				  if(StockMovr.TypeCoin!=3)then begin
+  				  	rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
+  				  end else begin
+  				  	ToLocr.Code = StockMovr.ToLocation;
+  				  	readfirstmain(ToLocr,1,true);
+  				  	if(len(ToLocr.CoinStoreNr)!=4)then begin
+  				  		rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
+  				  	end else begin
+  				  		rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & ToLocr.CoinStoreNr;
+  				  	end;
+  				  end;
   				  rowdata = rowdata & NewM4PadString(CoinPackListHistr.TransportBill,16,"0",true) & CoinPackListHistr.TransportBillDate;
-  				  //?????
             rowdata = rowdata & "0000000000000" & "0000000000000" & "000000000" & "000000000" & " ";
   				  intValue = Round(StockMovrw.NewPrice,SetRoundModeD(2))*100;
   				  rowdata = rowdata & Left(StockMovr.CurncyCode,3) & NewM4PadString(intValue,15,"0",true) & "0011" & NewM4PadString("Unsellable",25," ",true);
@@ -562,7 +577,6 @@ begin
   			end; 
         if (foundf) then begin
           count = count + 2;
-          //Footer
           AddTextToArea("**FINE**MERCTRAN" & datestring & sstoreID & Right("0000000" & count,7) & nextline, ames);
           StockMovr.FileNameCoin = filename;
           StockMovr.SentDateCoin = CurrentDate;
@@ -720,6 +734,7 @@ Integer i;
  string 255 tstr;
 	i = 0;
 	BlockLoad(CoinSb);
+	RepSpec.flags[19] = 1;
   ExtractObj(CoinSb.ClientCodeStr,i,tstr);
   while(nonblank(tstr)) begin
 		if(nonblank(tstr))then begin
@@ -745,7 +760,7 @@ Integer i;
 				GruppoCoinStockCountMn(RepSpec);
 			end;
 			millisleep(200);
-			if (RepSpec.flags[3]==1) then begin
+			if (RepSpec.flags[3]==1) then begin				
 				GruppoCoinManageGoodsMn(RepSpec);
 			end;
 			millisleep(200);
