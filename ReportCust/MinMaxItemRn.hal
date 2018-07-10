@@ -1,0 +1,64 @@
+//server-only
+global procedure MinMaxItemRn(record RcVc RepSpec)
+begin
+	record INVc INr;
+	record ItemHistVc IHr;
+	record ItemStatusVc ISr;
+	boolean TrHs,testf;
+	vector val qty,soldqty;
+	vector boolean dex;
+	val curqty,prevqty,soldcurqty,prevsoldqty;
+	date sd,bldate,ed,cd;	
+	
+	startreportnoheaderjob("MinMaxItemRn");
+	
+	INr.Code = RepSpec.f1;
+	if(readfirstmain(INr,1,true))then begin
+		IHr.ArtCode = INr.Code;
+		IHr.TransDate = stringtodate("1/1/2011");
+		TrHs = true;
+		while(loopkey("ArtCode",IHr,1,TrHs))begin
+			testf = true;
+			if(IHr.ArtCode!=INr.Code)then begin TrHs = false; testf = false; end;
+			if(IHr.StockAffectf==0)then begin testf = false; end;
+			
+			if(testf)then begin
+				if(sd==bldate)then begin
+					sd = IHr.TransDate;
+				end;
+				ed = IHr.TransDate;
+				
+				curqty = curqty + IHr.Qty;
+				if(IHr.FileName=="IVVc")then begin
+					soldcurqty = soldcurqty - IHr.Qty;
+				end;
+				qty[IHr.TransDate] = curqty;
+				soldqty[IHr.TransDate] = soldcurqty;
+				dex[IHr.TransDate] = true;
+			end;
+		end;
+	end;
+	
+	if(sd>bldate)then begin
+		cd = sd;
+		while(cd<=ed)begin
+			if(dex[cd]==false)then begin
+				qty[cd] = prevqty;
+				soldqty[cd] = prevsoldqty;
+			end;
+			prevqty = qty[cd];
+			prevsoldqty = soldqty[cd];
+		
+			startformat(15);
+				outstring(0,0,cd,false);
+				outstring(0,0,qty[cd],false);
+				outstring(0,0,soldqty[cd],false);
+			endformat;
+			cd = addday(cd,1);
+		end;
+	end;
+	
+	endjob;
+	
+return;
+end;//1172305
