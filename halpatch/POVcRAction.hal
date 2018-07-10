@@ -880,6 +880,7 @@ begin
 	matrowget(POr,i,POrw);
 	if(found==false)then begin
 		if(nonblank(POrw.ArtCode) and nonblank(POrw.Spec) and POrw.Quant>0)then begin
+			logtext(0,"   ooo");
 			recordNew(newINr);
 			newINr.Code = POrw.ArtCode;
 			newINr.Name = POrw.Spec;
@@ -1001,6 +1002,8 @@ begin
 	end;
 return;
 end;
+
+
 
 global
 updating procedure UpdateINOnly_NewINJW(var record POVc POr,integer i,boolean found,var record INVc INr,val fr,val to1,val to2,val br1,val br2)
@@ -1647,7 +1650,7 @@ begin
   record POSettingBlock POSettingRec;
   Integer insertmode,updatemode;
   string 255 tstr,errstr,objstr;
-  Integer i,rwcnt,errcode;
+  Integer i,rwcnt,errcode,k,mtrw;
   LongInt oldnr,newnr;
   Boolean gentrans,found,transf;
   row POVc POrw;
@@ -1655,7 +1658,7 @@ begin
   record CUVc VEr;
   record PlanDeliveryBlock PDb;
   Integer prevvt,curvt;
-  Boolean check;
+  Boolean check,testf2,TrHs;
   record LocationVc Locationr;
   record TaxTemplateVc TTr;
   record SRBlock SRb;
@@ -1675,16 +1678,21 @@ begin
   boolean changef;
   record DIVc DIr;
   row POVc chPOrw;
-  integer lenth,lenth2,k;
+  integer lenth,lenth2,t,pos;
   string 100 tclass,tclass2,fullclass;
   boolean findclass;
   val fr,to1,to2,br1,br2;
+	record DiCheckBlock DiCb;
+	row DiCheckBlock DiCbw;
+	vector string 255 diCheckTypes;
+	string 255 type,outdisps,mes,ostr,nostr;
+	record BackOrderBlock BOb;
   
   GetFullCurncyRate(POr.CurncyCode,currentdate,fr,to1,to2,br1,br2);
 	
 	// Edit Start ---------------------------------------------- Edit Start
 	
-
+	BlockLoad(BOb);
 
   res = 0;
   insertmode = 1;
@@ -2032,7 +2040,7 @@ begin
   							  switch (currentcompany) begin 
       							case 1:CheckAndCreateClassification(tclass,"MODEL",false);
       							case 2:CheckAndCreateClassification(tclass,"BRAND",true);
-      							
+		
       							case 4:CheckAndCreateClassification(tclass,"BRAND",true);
       							case 5:CheckAndCreateClassification(tclass,"BRAND",true);
       							case 6:CheckAndCreateClassification(tclass,"BRAND",true);
@@ -2155,7 +2163,6 @@ begin
 							case 15:NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);		//Edit-------------------Vitalii 13:08 09.12.2015
 							case 16:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
 							case 17:NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);
-							
 							case 25:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);// Edit ************************** Thursday, 19 May 2016 12:30:51
 							otherwise
 							  if (CompanyIsJWLikeCompany(currentcompany)) then begin
@@ -2172,7 +2179,7 @@ begin
 					matrowget(POr,i,POrw);
 					found = ReadFirstItem(POrw.ArtCode,INr,true,false);// Edit ************************** Friday, 31 August 2012 16:21:48
           
-          if (found==false) then begin
+          if (found==false and blank(POrw.Spec)) then begin
             if (disperrf) then begin
               RecordCheckError(1120,POrw.ArtCode,i,"ArtCode");      
             end;
@@ -2180,6 +2187,41 @@ begin
             res = 1120; 
             goto LPOVcRecordCheck;
           end;
+					if (found==false and nonblank(POrw.Spec) and blank(POrw.UnitCode)) then begin 
+						POrw.UnitCode = "ШТ"; 
+						matrowput(POr,i,POrw);
+					end;
+					pos = 0;
+					testf2 = false;
+					TrHs = true;
+					ExtractObj(POrw.xClassification,pos,ostr);
+					while (nonblank(ostr) and TrHs) begin
+						DIr.CType = "TYPE";
+						DIr.Code = ostr;
+						if(readfirstkey("CType",DIr,2,true))then begin testf2 = true; TrHs = false; end;
+						ExtractObj(POrw.xClassification,pos,ostr);
+					end;
+					
+					if(testf2==false and BOb.BackOrderMark==1)then begin
+						RecordCheckError(35150,POrw.ArtCode,i,"ArtCode");
+						MessageBox(0,"введите классификацию типа \"TYPE\"!");
+						res = 35150; 
+            goto LPOVcRecordCheck;
+					end;
+					if(nonblank(POrw.Spec) and BOb.BackOrderMark==1)then begin
+						NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 16:07 10.07.2018
+					end else begin
+						if(POr.OKFlag==1 and BOb.BackOrderMark==1)then begin
+							RecordCheckError(1854,"",i,"Spec");
+							res = 1854; 
+							goto LPOVcRecordCheck;
+						end;
+					end;
+					if(blank(POrw.Quant) and POr.OKFlag==1 and BOb.BackOrderMark==1)then begin
+						RecordCheckError(1854,"",i,"Quant");
+						res = 1854; 
+						goto LPOVcRecordCheck;
+					end;
           if (INr.Terminated!=0) and (POrw.Shipd2==0) and (POrw.Invd==0) then begin
             if (disperrf) then begin
               RecordCheckError(21447,POrw.ArtCode,i,"ArtCode");      
