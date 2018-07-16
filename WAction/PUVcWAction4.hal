@@ -4,6 +4,9 @@ remote updating procedure OkAllStockMovementsPUr(record RcVc);
 remote procedure RetPUSumUp(var record RetPUVc);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 remote procedure HandleNewINDClassmCode(var record NewINVc,integer);
+remote procedure PUSumUp(var record PUVc); //Edit***************************Sasha2,13:09 08.04.2015
+remote procedure POSumup(var record POVc);
+external procedure VISumup(record VIVc,var val);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -408,6 +411,50 @@ end;
 
 
 
+
+
+global updating procedure CreateNoterToDelVIDsm()//EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:26 05.07.2018
+begin
+	integer wn,i,mtrw,rwcnt,j;
+	record VIVc VIr;
+	row VIVc VIrw;
+	record NotepadVc Noter,newNoter;
+	integer notenr;
+	record SerBalVc SBr;
+	string 100 tstr;
+	boolean serialfoundf,TrHs,testf;
+  record RLinkVc RLr;
+  boolean notercreate,skip;
+	
+	wn = curwindow;
+	getwindowrecord(wn,VIr);
+	
+	recordnew(newNoter);
+	newNoter.SerNr = NextSerNr("NotepadVc",CurrentDate,-1,false,"");
+	newNoter.Classification = "DEL";
+	if (RecordStore(newNoter,false)) then begin
+		CreateRecordLink(VIr,CurrentCompany,newNoter,CurrentCompany); 
+		CreateRecordLink(newNoter,CurrentCompany,VIr,CurrentCompany);   
+		notenr = 1;
+		while (ReadRecordLink(VIr,notenr,newNoter,RLr)) begin
+			notenr = notenr + 1;
+		end;
+		if (ReadRecordLink(VIr,notenr-1,newNoter,RLr)) then begin
+			RLr.Comment = "Delete List";
+			if (RecordStore(RLr,true)) then begin  end;
+		end;
+		OpenWindow("NotepadDClass",1,wn,"","",newNoter);
+	end else begin
+		messagebox(0,"Error store note");
+	end;
+
+return;
+end;
+
+
+
+
+
 global updating procedure DeleteItemsFromRetPUDsm()
 begin
 	integer wn,i,mtrw,rwcnt,j;
@@ -512,16 +559,26 @@ begin
 				matrowget(PUr,i,PUrw);
 				if(vartcode[PUrw.ArtCode]==true)then begin
 					if(vquant[PUrw.ArtCode]!=PUrw.Quant and nonblank(vquant[PUrw.ArtCode]) and vquant[PUrw.ArtCode]!=0)then begin
+						PUrw.Sum = PUrw.Sum / PUrw.Quant;
 						PUrw.Quant = vquant[PUrw.ArtCode];
+						PUrw.Sum = PUrw.Sum * PUrw.Quant;
 						matrowput(PUr,i,PUrw);
 					end;
 				end;
 				if(vartcode[PUrw.ArtCode]!=true)then begin
-					matrowdelete(PUr,i);
-					i=i-1;
-					mtrw = mtrw - 1;
+					if(blank(PUrw.VEItemCode) and blank(PUrw.VEUnit))then begin
+						matrowdelete(PUr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
+					end else begin
+						PUrw.Quant = 0;
+						PUrw.Sum = 0;
+						matrowput(PUr,i,PUrw);
+					end;
 				end;
 			end; 
+			putwindowrecord(wn,PUr);
+			PUSumUp(PUr);
 			putwindowrecord(wn,PUr);
 			MessageBox(0,"Были сохранены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне поступления");
 		end else begin
@@ -533,6 +590,88 @@ begin
 	
 return;
 end;
+
+
+
+
+global updating procedure SaveItemsFromVIDsm()//EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:25 05.07.2018
+begin
+	integer wn,i,mtrw,rwcnt,j;
+	record VIVc VIr;
+	row VIVc VIrw;
+	record NotepadVc Noter,newNoter;
+	integer notenr, pos;
+	record SerBalVc SBr;
+	string 100 tstr,qtstr;
+	boolean serialfoundf,TrHs,testf;
+  record RLinkVc RLr;
+  boolean notercreate,skip;
+  vector boolean vartcode;
+	vector Integer vquant;
+	val Sumval;
+	
+	recordnew(newNoter);
+	
+	notercreate = false;
+	
+	wn = curwindow;
+	if(windowstate(wn)==0)then begin
+		getwindowrecord(wn,VIr);
+		if(VIr.OKFlag==0)then begin
+			mtrw = matrowcnt(VIr);
+			notenr = 1;
+			while (ReadRecordLink(VIr,notenr,Noter,RLr)) begin
+				if ("DEL"==Noter.Classification) then begin
+			
+					rwcnt = LineTextCnt(Noter);
+					for (i=0;i<rwcnt;i=i+1) begin
+						pos = 0;
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,tstr);
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,qtstr);
+						if(nonblank(tstr))then begin
+							vartcode[tstr] = true;
+							vquant[tstr] = StringToInt(qtstr);
+						end;
+					end;  
+				end;
+				notenr = notenr + 1;
+			end;
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(VIr,i,VIrw);
+				if(vartcode[VIrw.Item]==true)then begin
+					if(vquant[VIrw.Item]!=VIrw.qty and nonblank(vquant[VIrw.Item]) and vquant[VIrw.Item]!=0)then begin
+						VIrw.Sum = VIrw.Sum / VIrw.qty;
+						VIrw.qty = vquant[VIrw.Item];
+						VIrw.Sum = VIrw.Sum * VIrw.qty;
+						matrowput(VIr,i,VIrw);
+					end;
+				end;
+				if(vartcode[VIrw.Item]!=true)then begin
+					matrowdelete(VIr,i);
+					i=i-1;
+					mtrw = mtrw - 1;
+				end;
+			end; 
+			putwindowrecord(wn,VIr);
+			getwindowrecord(wn,VIr);
+			rwcnt = matrowcnt(VIr);
+			for (i=0;i<rwcnt;i=i+1) begin
+				matrowget(VIr,i,VIrw);
+				Sumval = Sumval + VIrw.Sum;
+			end;
+			VIr.PayVal = Sumval;
+			putwindowrecord(wn,VIr);
+			MessageBox(0,"Были сохранены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне поступления");
+		end else begin
+			messagebox(0,"Запись должна быть разокеена");
+		end;
+	end else begin
+		messagebox(0,"Сначала сохраните запись");
+	end;
+	
+return;
+end;
+
 
 
 
@@ -581,16 +720,26 @@ begin
 				matrowget(POr,i,POrw);
 				if(vartcode[POrw.ArtCode]==true)then begin
 					if(vquant[POrw.ArtCode]!=POrw.Quant and nonblank(vquant[POrw.ArtCode]) and vquant[POrw.ArtCode]!=0)then begin
+						POrw.Sum = POrw.Sum / POrw.Quant;
 						POrw.Quant = vquant[POrw.ArtCode];
+						POrw.Sum = POrw.Sum * POrw.Quant;
 						matrowput(POr,i,POrw);
 					end;
 				end;
 				if(vartcode[POrw.ArtCode]!=true)then begin
-					matrowdelete(POr,i);
-					i=i-1;
-					mtrw = mtrw - 1;
+					if(blank(POrw.VEArtCode) and blank(POrw.VEUnit))then begin
+						matrowdelete(POr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
+					end else begin
+						POrw.Quant = blankval;
+						POrw.Sum = 0;
+						matrowput(POr,i,POrw);
+					end;
 				end;
 			end; 
+			putwindowrecord(wn,POr);
+			POSumup(POr);
 			putwindowrecord(wn,POr);
 			MessageBox(0,"Были сохранены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне заказа поставщику");
 		end else begin
@@ -650,17 +799,27 @@ begin
 				matrowget(PUr,i,PUrw);
 				if(vquant[PUrw.ArtCode]==PUrw.Quant)then begin
 					if(vartcode[PUrw.ArtCode]==true)then begin
-						matrowdelete(PUr,i);
-						i=i-1;
-						mtrw = mtrw - 1;
+						if(blank(PUrw.VEItemCode) and blank(PUrw.VEUnit))then begin
+							matrowdelete(PUr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end else begin
+							PUrw.Quant = 0;
+							PUrw.Sum = 0;
+							matrowput(PUr,i,PUrw);
+						end;
 					end;
 				end else begin
 					if(vquant[PUrw.ArtCode]>0)then begin
+						PUrw.Sum = PUrw.Sum / PUrw.Quant;
 						PUrw.Quant = PUrw.Quant - vquant[PUrw.ArtCode];
+						PUrw.Sum = PUrw.Sum * PUrw.Quant;
 						matrowput(PUr,i,PUrw);
 					end;
 				end;
 			end; 
+			putwindowrecord(wn,PUr);
+			PUSumUp(PUr);
 			putwindowrecord(wn,PUr);
 			MessageBox(0,"Были удалены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне поступления");
 		end else begin
@@ -673,6 +832,85 @@ begin
 return;
 end;
 
+
+global updating procedure DeleteItemsFromVIDsm() //EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:25 05.07.2018
+begin
+	integer wn,i,mtrw,rwcnt,j;
+	record VIVc VIr;
+	row VIVc VIrw;
+	record NotepadVc Noter,newNoter;
+	integer notenr, pos;
+	record SerBalVc SBr;
+	string 100 tstr,qtstr;
+	boolean serialfoundf,TrHs,testf;
+  record RLinkVc RLr;
+  boolean notercreate,skip;
+  vector boolean vartcode;
+	vector Integer vquant;
+	val Sumval;
+	
+	recordnew(newNoter);
+	
+	notercreate = false;
+	
+	wn = curwindow;
+	if(windowstate(wn)==0)then begin
+		getwindowrecord(wn,VIr);
+		if(VIr.OKFlag==0)then begin
+			mtrw = matrowcnt(VIr);
+			notenr = 1;
+			while (ReadRecordLink(VIr,notenr,Noter,RLr)) begin
+				if ("DEL"==Noter.Classification) then begin
+					rwcnt = LineTextCnt(Noter);
+					for (i=0;i<rwcnt;i=i+1) begin
+						pos = 0;
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,tstr);
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,qtstr);
+						if(nonblank(tstr))then begin
+							vartcode[tstr] = true;
+							vquant[tstr] = StringToInt(qtstr);
+						end;
+					end;  
+				end;
+				notenr = notenr + 1;
+			end;
+	
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(VIr,i,VIrw);
+				if(vquant[VIrw.Item]==VIrw.qty)then begin
+					if(vartcode[VIrw.Item]==true)then begin
+						matrowdelete(VIr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
+					end;
+				end else begin
+					if(vquant[VIrw.Item]>0)then begin
+						VIrw.Sum = VIrw.Sum / VIrw.qty;
+						VIrw.qty = VIrw.qty - vquant[VIrw.Item];
+						VIrw.Sum = VIrw.Sum * VIrw.qty;
+						matrowput(VIr,i,VIrw);
+					end;
+				end;
+			end; 
+			putwindowrecord(wn,VIr);
+			getwindowrecord(wn,VIr);
+			rwcnt = matrowcnt(VIr);
+			for (i=0;i<rwcnt;i=i+1) begin
+				matrowget(VIr,i,VIrw);
+				Sumval = Sumval + VIrw.Sum;
+			end;
+			VIr.PayVal = Sumval;
+			putwindowrecord(wn,VIr);
+			MessageBox(0,"Были удалены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне поступления");
+		end else begin
+			messagebox(0,"Запись должна быть разокеена");
+		end;
+	end else begin
+		messagebox(0,"Сначала сохраните запись");
+	end;
+	
+return;
+end;
 
 
 global updating procedure DeleteItemsFromPODsm() //EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:17 05.07.2018
@@ -720,17 +958,27 @@ begin
 				matrowget(POr,i,POrw);
 				if(vquant[POrw.ArtCode]==POrw.Quant)then begin
 					if(vartcode[POrw.ArtCode]==true)then begin
-						matrowdelete(POr,i);
-						i=i-1;
-						mtrw = mtrw - 1;
+						if(blank(POrw.VEArtCode) and blank(POrw.VEUnit))then begin
+							matrowdelete(POr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end else begin
+							POrw.Quant = 0;
+							POrw.Sum = 0;
+							matrowput(POr,i,POrw);
+						end;
 					end;
 				end else begin
 					if(vquant[POrw.ArtCode]>0)then begin
+						POrw.Sum = POrw.Sum / POrw.Quant;
 						POrw.Quant = POrw.Quant - vquant[POrw.ArtCode];
+						POrw.Sum = POrw.Sum * POrw.Quant;
 						matrowput(POr,i,POrw);
 					end;
 				end;
 			end; 
+			putwindowrecord(wn,POr);
+			POSumup(POr);
 			putwindowrecord(wn,POr);
 			MessageBox(0,"Были удалены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне заказа поставщику");
 		end else begin
