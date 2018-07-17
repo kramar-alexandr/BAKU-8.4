@@ -2,7 +2,7 @@ external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,va
 external procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);
 external procedure ExtractObj(string,var Integer,var string);
 remote procedure IDCreateCheck(string,string,string,string);
-
+remote function string 255 UserBlockedAccs(string);
 
 global procedure FindItemStartBalanceQty(string artcode, string location, date ed,var val qty,var val cost)
 begin
@@ -384,5 +384,56 @@ begin
   IDCreateCheck(custordnr,ipsernr,rownr,curcode);
   CloseWindow(currepwn);
   
+  return;
+end;
+
+global
+procedure DblTransServ300(string dblstr,string l,Integer currepwn)
+begin
+  record TRVc TRr;
+  Integer yc1;
+  LongInt ser1;
+  Integer wn;
+  string 255 blockaccs;
+  Boolean openf;
+  Integer i,rwcnt;
+  row TRVc TRrw;
+  Integer oldcomp,newcomp;
+
+  if (nonblank(dblstr)) then begin
+    ser1 = FirstTransInRange(dblstr);
+    //yc1 = StringToInt(FirstInRange(dblstr,5));
+    yc1 = 300;
+    oldcomp = CurrentCompany;
+    if (nonblank(l)) then begin
+      newcomp = StringToLongInt(l);
+      if (newcomp!=oldcomp) then begin
+        if (SetCompany(newcomp,false)) then begin
+        end;
+      end;
+    end;
+    TRr.Number = ser1;
+    TRr.IntYc = yc1;
+    if (ReadFirstMain(TRr,2,true)) then begin
+      openf = true;
+      blockaccs = UserBlockedAccs(CurrentUser);
+      if (nonblank(blockaccs)) then begin
+        rwcnt = MatRowCnt(TRr);
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(TRr,i,TRrw);
+          if (SetInSet(TRrw.AccNumber,blockaccs)) then begin
+            openf = false;
+            i = rwcnt;
+          end;
+        end;
+      end;
+      if (openf) then begin
+        wn = OpenWindow("TRDClass",1,0,"","",TRr);
+      end;
+    end;
+    if (oldcomp!=CurrentCompany) then begin
+      ResetCompany(oldcomp);
+    end;
+  end;
   return;
 end;
