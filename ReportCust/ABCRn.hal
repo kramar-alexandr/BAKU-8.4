@@ -1,5 +1,5 @@
 //server-only
-
+external function val AbsoluteVal(val);
 external procedure ExtractObj(string,var Integer,var string);
 
 
@@ -14,7 +14,26 @@ begin
 	row IVVc IVrw;
 	vector val SaleMon;
 	integer pos,mtrw,k,months,i,MonSep;
-	string 255 cmd,sCategory,sBrand;
+	string 255 cmd,sCategory,sBrand,sType;
+	date backdate,trdate;
+	val basesum;
+	vector integer Mon;
+	record CUVc CUr;
+	vector val brandleadtime;
+	
+	
+	CUr.VEType = 1;
+	TrHs = true;
+	while(loopkey("VEActCode",CUr,1,TrHs))begin
+		if(CUr.VEType==0)then begin
+			TrHs = false;
+		end;
+		
+		if(TrHs)then begin
+			brandleadtime[Cur.Name] = CUr.PlanShipDaysMin;
+		end;
+	
+	end;
 	
 	startreportnoheaderjob("Extended Data of Sales");
 		startformat(15);
@@ -106,12 +125,36 @@ begin
 		resetloop(INr);
 		INr.Code = "";
 		
+		switch(RepSpec.flags[0])begin
+			case 0: months = 1;
+			case 1: months = 2;
+			case 2:	months = 3;
+			case 3: months = 6;
+			case 4: months = 12;
+			case 5: months = 24;
+			case 6: months = 36;
+		end;
+		
+		trdate = currentdate;
+		trdate.day = 1;
+		backdate = AddMonth(CurrentDate,-months);
+		backdate.day = 1;
+		
+		i = 1;
+		while(trdate>=backdate)begin
+			Mon[trdate] = i;
+			i=i+1;
+			trdate = addmonth(trdate,-1);
+			trdate.day = 1;
+		end;
+				
+		
 		while(loopmain(INr,1,true))begin
 			testf = true;
 			if(INr.Terminated==1)then begin testf = false; end;
 			if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups))then begin testf = false; end;
 			if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf = false; end;
-			if(nonblank(RepSpec.f2) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf = false; end;
+			if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf = false; end;
 			if(setinset("30",INr.DispGroups))then begin testf = false; end;
 			if(setinset("31",INr.DispGroups))then begin testf = false; end;
 			if(setinset("32",INr.DispGroups))then begin testf = false; end;
@@ -133,37 +176,44 @@ begin
 					if(readfirstmain(DIr,1,true))then begin
 						if(DIr.CType=="BRAND")then begin sBrand = DIr.Code; end;
 						if(DIr.CType=="CATEGORY")then begin sCategory = DIr.Code; end;	
+						if(DIr.CType=="TYPE")then begin sType = DIr.Code; end;	
 					end;
 					ExtractObj(INr.DispGroups,pos,cmd);
 				end;
 				
-				switch(RepSpec.flags[0])begin
-					case 0: months = 1;
-					case 1: months = 2;
-					case 2:	months = 3;
-					case 3: months = 6;
-					case 4: months = 12;
-					case 5: months = 24;
-					case 6: months = 36;
-				end;
+				
 				datef = true;
 				IHr.ArtCode = INr.Code;
 				IHr.TransDate = CurrentDate;
 				MonSep = 1;
+				
 				while (loopbackkey("ArtCode",IHr,2,datef)) begin
-					if(IHr.TransDate<=AddMonth(CurrentDate,-months))then begin datef = false; end;
+					if(IHr.TransDate<=backdate)then begin datef = false; end;
 					if(IHr.ArtCode!=INr.Code)then begin datef = false; end;
+					
 					if(IHr.FileName=="IVVc" and datef)then begin
 						IVr.SerNr = IHr.TransNr;
 						if(readfirstmain(IVr,1,true))then begin
 							matrowget(IVr,IHr.Row,IVrw);
 							if(nonblank(IVrw.Sum))then begin
-								if(IHr.TransDate<AddMonth(CurrentDate,-MonSep))then begin MonSep = MonSep + 1; end;
-								if(SaleMon[MonSep & INr.Code]==blankval)then begin SaleMon[MonSep & INr.Code] = 0; end;
-								SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + IVrw.Sum;
+								basesum = AbsoluteVal(IVrw.Sum / IVrw.Quant * IHr.Qty);
+								if(IVrw.Sum<0)then begin
+									basesum = -basesum;
+								end;
+								if(IVr.ToRateB1!=0)then begin
+									basesum = basesum / IVr.FrRate * IVr.ToRateB1;
+								end;
+
+								trdate = IHr.TransDate;
+								trdate.day = 1;
+
+								MonSep = Mon[trdate];
+								//logtext(0,IHr.ArtCode & "__" & IHr.TransDate & "  " & MonSep & " " & basesum);
+								SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + basesum;
 							end;
 						end;
 					end;
+					
 				end;
 				
 				resetloop(IHr);
