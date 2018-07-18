@@ -1,11 +1,20 @@
 //server-only
+
+external procedure ExtractObj(string,var Integer,var string);
+
+
+
 global procedure ABCRn(record RcVc RepSpec)
 begin
 	record INVc INr;
 	record ItemHistVc IHr;
 	record DIVc DIr;
-	boolean TrHs,testf;
+	boolean TrHs,testf,datef;
 	record IVVc IVr;
+	row IVVc IVrw;
+	vector val SaleMon;
+	integer pos,mtrw,k,months,i,MonSep;
+	string 255 cmd,sCategory,sBrand;
 	
 	startreportnoheaderjob("Extended Data of Sales");
 		startformat(15);
@@ -21,13 +30,88 @@ begin
 			end;
 		endformat;
 		
+		startformat(15);
+			outstring(0,0,"Item ID",false);
+			outstring(0,0,"Item Name",false);
+			outstring(0,0,"Item Category",false);
+			outstring(0,0,"Item Brand",false);
+			outstring(0,0,"Brand Lead Time (Days)",false);
+			outstring(0,0,"ABC or E ",false);
+			outstring(0,0,"XYZ or S",false);
+			outstring(0,0,"Demand Type (Continuous/Discrete)",false);
+			outstring(0,0,"Lead Time (months)",false);
+			outstring(0,0,"Seasonal Life Cycle (Short /Long)",false);
+			outstring(0,0,"Seasonal Reorder Month",false);
+			outstring(0,0,"Annual Demand (for Last 12 months)",false);
+			outstring(0,0,"Unit Price (Last 12 Monthly Average)",false);
+			outstring(0,0,"E Level of Unit Price",false);
+			outstring(0,0,"Sales",false);
+		endformat;
+		
+		
+		startformat(15);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"",false);
+			outstring(0,0,"1",false);
+			if(RepSpec.flags[0]>0)then begin  outstring(0,0,"2",false);  end;
+			if(RepSpec.flags[0]>1)then begin  outstring(0,0,"3",false);  end;
+			if(RepSpec.flags[0]>2)then begin  outstring(0,0,"4",false); 
+																				outstring(0,0,"5",false); 
+																				outstring(0,0,"6",false);  end;
+			if(RepSpec.flags[0]>3)then begin  outstring(0,0,"7",false);
+																				outstring(0,0,"8",false);
+																				outstring(0,0,"9",false);
+																				outstring(0,0,"10",false);
+																				outstring(0,0,"11",false);
+																				outstring(0,0,"12",false); end;
+			if(RepSpec.flags[0]>4)then begin  outstring(0,0,"13",false);
+																				outstring(0,0,"14",false);
+																				outstring(0,0,"15",false);
+																				outstring(0,0,"16",false);
+																				outstring(0,0,"17",false);
+																				outstring(0,0,"18",false);
+																				outstring(0,0,"19",false);
+																				outstring(0,0,"20",false);
+																				outstring(0,0,"21",false);
+																				outstring(0,0,"22",false);
+																				outstring(0,0,"23",false);
+																				outstring(0,0,"24",false); end;
+			if(RepSpec.flags[0]>5)then begin  outstring(0,0,"25",false);
+																				outstring(0,0,"26",false);
+																				outstring(0,0,"27",false);
+																				outstring(0,0,"28",false);
+																				outstring(0,0,"29",false);
+																				outstring(0,0,"30",false);
+																				outstring(0,0,"31",false);
+																				outstring(0,0,"32",false);
+																				outstring(0,0,"33",false);
+																				outstring(0,0,"34",false);
+																				outstring(0,0,"35",false);
+																				outstring(0,0,"36",false); end;
+		endformat;
+		
+		
 		resetloop(INr);
 		INr.Code = "";
+		
 		while(loopmain(INr,1,true))begin
 			testf = true;
 			if(INr.Terminated==1)then begin testf = false; end;
 			if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups))then begin testf = false; end;
 			if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf = false; end;
+			if(nonblank(RepSpec.f2) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf = false; end;
 			if(setinset("30",INr.DispGroups))then begin testf = false; end;
 			if(setinset("31",INr.DispGroups))then begin testf = false; end;
 			if(setinset("32",INr.DispGroups))then begin testf = false; end;
@@ -37,12 +121,111 @@ begin
 			if(INr.ConsgType!=0)then begin
 				testf = false;
 			end;
-			
 			if(testf)then begin
-			
+				
+				pos = 0;
+				sCategory = "";
+				sBrand = "";
+				cmd = "";
+				ExtractObj(INr.DispGroups,pos,cmd);
+				while (nonblank(cmd)) begin
+					DIr.Code = cmd;
+					if(readfirstmain(DIr,1,true))then begin
+						if(DIr.CType=="BRAND")then begin sBrand = DIr.Code; end;
+						if(DIr.CType=="CATEGORY")then begin sCategory = DIr.Code; end;	
+					end;
+					ExtractObj(INr.DispGroups,pos,cmd);
+				end;
+				
+				switch(RepSpec.flags[0])begin
+					case 0: months = 1;
+					case 1: months = 2;
+					case 2:	months = 3;
+					case 3: months = 6;
+					case 4: months = 12;
+					case 5: months = 24;
+					case 6: months = 36;
+				end;
+				datef = true;
+				IHr.ArtCode = INr.Code;
+				IHr.TransDate = CurrentDate;
+				MonSep = 1;
+				while (loopbackkey("ArtCode",IHr,2,datef)) begin
+					if(IHr.TransDate<=AddMonth(CurrentDate,-months))then begin datef = false; end;
+					if(IHr.ArtCode!=INr.Code)then begin datef = false; end;
+					if(IHr.FileName=="IVVc" and datef)then begin
+						IVr.SerNr = IHr.TransNr;
+						if(readfirstmain(IVr,1,true))then begin
+							matrowget(IVr,IHr.Row,IVrw);
+							if(nonblank(IVrw.Sum))then begin
+								if(IHr.TransDate<AddMonth(CurrentDate,-MonSep))then begin MonSep = MonSep + 1; end;
+								if(SaleMon[MonSep & INr.Code]==blankval)then begin SaleMon[MonSep & INr.Code] = 0; end;
+								SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + IVrw.Sum;
+							end;
+						end;
+					end;
+				end;
+				
+				resetloop(IHr);
+					
+				
+				MonSep = 1;
+				startformat(15);
+					outstring(0,0,INr.Code,false);
+					outstring(0,0,INr.Name,false);
+					outstring(0,0,sCategory,false);
+					outstring(0,0,sBrand,false);
+					outstring(0,0,"",false);
+					outstring(0,0,INr.ItemCat,false);
+					outstring(0,0,INr.SubItemCat,false);
+					outstring(0,0,INr.TypeSeasNeeds,false);
+					outstring(0,0,INr.LeadTime,false);
+					outstring(0,0,INr.LifeCicle,false);
+					outstring(0,0,"",false);
+					outstring(0,0,"",false);
+					outstring(0,0,"",false);
+					outstring(0,0,"",false);
+					
+																						outstring(0,0,SaleMon[MonSep & INr.Code],false);
+					if(RepSpec.flags[0]>0)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);  end;
+					if(RepSpec.flags[0]>1)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);  end;
+					if(RepSpec.flags[0]>2)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); 
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); 
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);  end;
+					if(RepSpec.flags[0]>3)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); end;
+					if(RepSpec.flags[0]>4)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); end;
+					if(RepSpec.flags[0]>5)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
+																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); end;
+				endformat;
 			end;
 		end;
-	
+		ResetLoop(INr);
 	endjob;
 	
 return;
