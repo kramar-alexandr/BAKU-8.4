@@ -9,18 +9,23 @@ begin
 	record INVc INr;
 	record ItemHistVc IHr;
 	record DIVc DIr;
-	boolean TrHs,testf,datef;
+	boolean TrHs,testf,datef,anndemaatef,compf,INCodef,CustCodef;
 	record IVVc IVr;
 	row IVVc IVrw;
-	vector val SaleMon;
-	integer pos,mtrw,k,months,i,MonSep;
-	string 255 cmd,sCategory,sBrand,sType;
-	date backdate,trdate;
-	val basesum;
+	vector val SaleMon,INmatvalv;
+	integer pos,mtrw,k,months,i,MonSep,AnnDem,IVqty,POPlacingTime,Margin,oldcomp,currcomp,compmtrw,j,INq,a;
+	string 255 cmd,sCategory,sBrand,sType,sBrandName;
+	date backdate,trdate,AnnDemDate;
+	val basesum, middleinprice,basesumprice,LTd;
 	vector integer Mon;
 	record CUVc CUr;
 	vector val brandleadtime;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	array string 255 INCode;
+	vector string 255 INmatstrv;
 	
+	oldcomp = CurrentCompany;
 	
 	CUr.VEType = 1;
 	TrHs = true;
@@ -83,7 +88,7 @@ begin
 			outstring(0,0,"",false);
 			outstring(0,0,"",false);
 			outstring(0,0,"",false);
-			outstring(0,0,"1",false);
+																				outstring(0,0,"1",false);
 			if(RepSpec.flags[0]>0)then begin  outstring(0,0,"2",false);  end;
 			if(RepSpec.flags[0]>1)then begin  outstring(0,0,"3",false);  end;
 			if(RepSpec.flags[0]>2)then begin  outstring(0,0,"4",false); 
@@ -122,160 +127,464 @@ begin
 		endformat;
 		
 		
+		
 		resetloop(INr);
 		INr.Code = "";
 		
 		switch(RepSpec.flags[0])begin
-			case 0: months = 1;
-			case 1: months = 2;
-			case 2:	months = 3;
-			case 3: months = 6;
-			case 4: months = 12;
-			case 5: months = 24;
-			case 6: months = 36;
+			case 0: months = 0;
+			case 1: months = 1;
+			case 2:	months = 2;
+			case 3: months = 5;
+			case 4: months = 11;
+			case 5: months = 23;
+			case 6: months = 35;
 		end;
 		
-		trdate = currentdate;
-		trdate.day = 1;
-		backdate = AddMonth(CurrentDate,-months);
-		backdate.day = 1;
+		INq = 0;
 		
-		i = 1;
-		while(trdate>=backdate)begin
-			Mon[trdate] = i;
-			i=i+1;
-			trdate = addmonth(trdate,-1);
+		BlockLoad(Compb);
+		compmtrw = matrowcnt(Compb);
+		for (j=0;j<compmtrw;j=j+1)begin
+			trdate = currentdate;
 			trdate.day = 1;
-		end;
-				
-		
-		while(loopmain(INr,1,true))begin
-			testf = true;
-			if(INr.Terminated==1)then begin testf = false; end;
-			if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups))then begin testf = false; end;
-			if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf = false; end;
-			if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf = false; end;
-			if(setinset("30",INr.DispGroups))then begin testf = false; end;
-			if(setinset("31",INr.DispGroups))then begin testf = false; end;
-			if(setinset("32",INr.DispGroups))then begin testf = false; end;
-			if(setinset("33",INr.DispGroups))then begin testf = false; end;
-			if(setinset("34",INr.DispGroups))then begin testf = false; end;
-			if(setinset("35",INr.DispGroups))then begin testf = false; end;
-			if(INr.ConsgType!=0)then begin
-				testf = false;
+			backdate = AddMonth(CurrentDate,-months);
+			backdate.day = 1;
+			logtext(0,backdate);
+			AnnDemDate = AddMonth(CurrentDate,-11);
+			AnnDemDate.day = 1;
+			
+			i = 1;
+			while(trdate>=backdate)begin
+				Mon[trdate] = i;
+				i=i+1;
+				trdate = addmonth(trdate,-1);
+				trdate.day = 1;
 			end;
-			if(testf)then begin
-				
-				pos = 0;
-				sCategory = "";
-				sBrand = "";
-				cmd = "";
-				ExtractObj(INr.DispGroups,pos,cmd);
-				while (nonblank(cmd)) begin
-					DIr.Code = cmd;
-					if(readfirstmain(DIr,1,true))then begin
-						if(DIr.CType=="BRAND")then begin sBrand = DIr.Code; end;
-						if(DIr.CType=="CATEGORY")then begin sCategory = DIr.Code; end;	
-						if(DIr.CType=="TYPE")then begin sType = DIr.Code; end;	
-					end;
-					ExtractObj(INr.DispGroups,pos,cmd);
+			compf = true;
+			if(RepSpec.flags[1]==0)then begin
+				j=compmtrw;
+			end else begin
+				matrowget(Compb,j+1,Comprw);
+				if(Comprw.ActiveStatus==0)then begin
+					SetCompany(j+1,false);
+				end else begin
+					compf = false;
 				end;
-				
-				
-				datef = true;
-				IHr.ArtCode = INr.Code;
-				IHr.TransDate = CurrentDate;
-				MonSep = 1;
-				
-				while (loopbackkey("ArtCode",IHr,2,datef)) begin
-					if(IHr.TransDate<=backdate)then begin datef = false; end;
-					if(IHr.ArtCode!=INr.Code)then begin datef = false; end;
+			end;
+			logtext(0,j+1);
+			INr.Code = "";
+			while(loopmain(INr,1,compf))begin
+				testf = true;
+				if(INr.Terminated==1)then begin testf = false; end;
+				if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups))then begin testf = false; end;
+				if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf = false; end;
+				if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf = false; end;
+				if(setinset("30",INr.DispGroups))then begin testf = false; end;
+				if(setinset("31",INr.DispGroups))then begin testf = false; end;
+				if(setinset("32",INr.DispGroups))then begin testf = false; end;
+				if(setinset("33",INr.DispGroups))then begin testf = false; end;
+				if(setinset("34",INr.DispGroups))then begin testf = false; end;
+				if(setinset("35",INr.DispGroups))then begin testf = false; end;
+				if(INr.ConsgType!=0)then begin
+					testf = false;
+				end;
+				if(testf)then begin
 					
-					if(IHr.FileName=="IVVc" and datef)then begin
-						IVr.SerNr = IHr.TransNr;
-						if(readfirstmain(IVr,1,true))then begin
-							matrowget(IVr,IHr.Row,IVrw);
-							if(nonblank(IVrw.Sum))then begin
-								basesum = AbsoluteVal(IVrw.Sum / IVrw.Quant * IHr.Qty);
-								if(IVrw.Sum<0)then begin
-									basesum = -basesum;
+					pos = 0;
+					sCategory = "";
+					sBrand = "";
+					sBrandName = "";
+					cmd = "";
+					middleinprice = 0;
+					ExtractObj(INr.DispGroups,pos,cmd);
+					while (nonblank(cmd)) begin
+						DIr.Code = cmd;
+						if(readfirstmain(DIr,1,true))then begin
+							if(DIr.CType=="BRAND")then begin 
+								sBrand = DIr.Code; 
+								sBrandName = DIr.Name;
+							end;
+							if(DIr.CType=="CATEGORY")then begin sCategory = DIr.Code; end;	
+							if(DIr.CType=="TYPE")then begin sType = DIr.Code; end;	
+						end;
+						ExtractObj(INr.DispGroups,pos,cmd);
+					end;
+					
+					LTd = 0;
+					CUr.Code = sBrandName;
+					TrHs = true;
+					POPlacingTime = 4;
+					Margin = 4;
+					while (loopkey("Name",CUr,1,TrHs))begin
+						if(CUr.VEType==1)then begin 
+							if(UpperCase(sBrandName)==UpperCase(CUr.Name))then begin
+								if(blank(CUr.AirDeliveryDays))then begin CUr.AirDeliveryDays = 5; end;
+								if(blank(CUr.RoadDeliveryDays))then begin CUr.RoadDeliveryDays = 19; end;
+								if(RepSpec.flags[2]==0)then begin
+									LTd = LTd + CUr.AirDeliveryDays + POPlacingTime + (Margin-1) + CUr.PlanShipDays;
+								end else begin
+									LTd = LTd + CUr.RoadDeliveryDays + POPlacingTime + (Margin+1) + CUr.PlanShipDays;
 								end;
-								if(IVr.ToRateB1!=0)then begin
-									basesum = basesum / IVr.FrRate * IVr.ToRateB1;
-								end;
-
-								trdate = IHr.TransDate;
-								trdate.day = 1;
-
-								MonSep = Mon[trdate];
-								//logtext(0,IHr.ArtCode & "__" & IHr.TransDate & "  " & MonSep & " " & basesum);
-								SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + basesum;
+								LTd = LTd / 30;
+								TrHs = false;
 							end;
 						end;
 					end;
+					ResetLoop(CUr);
 					
+					datef = true;
+					anndemaatef = true;
+					IHr.ArtCode = INr.Code;
+					IHr.TransDate = CurrentDate;
+					MonSep = 1;
+					AnnDem = 0;
+					basesumprice = 0;
+					IVqty = 0;
+					TrHs = true;
+					while (loopbackkey("ArtCode",IHr,2,TrHs)) begin
+						if(IHr.TransDate<=backdate)then begin datef = false; end;
+						if(IHr.ArtCode!=INr.Code)then begin datef = false; TrHs = false; end;
+						if(IHr.TransDate<=AnnDemDate)then begin anndemaatef = false; end;
+						
+						INCodef = true;
+						for (k=0;k<INq;k=k+1)begin
+							if(INr.Code==INCode[k] or blank(INr.Code))then begin INCodef = false; k = INq + 1; end;
+						end;
+						
+						if(INCodef)then begin
+							INCode[INq] = INr.Code;
+							INq = INq + 1;
+						end;
+						
+						if(IHr.FileName=="IVVc" and TrHs)then begin
+							IVr.SerNr = IHr.TransNr;
+							if(readfirstmain(IVr,1,true))then begin
+								CustCodef = true;
+								if(setinset("FOB",IVr.CustCode))then begin CustCodef = false; end;
+								if(CustCodef)then begin
+									if(anndemaatef)then begin
+										AnnDem = AnnDem - IHr.Qty;
+									end;
+									matrowget(IVr,IHr.Row,IVrw);
+									if(nonblank(IVrw.Sum))then begin
+										basesum = AbsoluteVal(IVrw.Sum / IVrw.Quant * IHr.Qty);
+										if(anndemaatef)then begin
+											if(IVr.ToRateB1!=0)then begin
+												basesumprice = basesumprice + (IVrw.Price / IVr.FrRate * IVr.ToRateB1);
+											end else begin
+												basesumprice = basesumprice + IVrw.Price;
+											end;
+											IVqty = IVqty + 1;
+										end;
+										if(IVrw.Sum<0)then begin
+											basesum = -basesum;
+										end;
+										if(IVr.ToRateB1!=0)then begin
+											basesum = basesum / IVr.FrRate * IVr.ToRateB1;
+										end;
+										if(datef)then begin
+											trdate = IHr.TransDate;
+											trdate.day = 1;
+
+											MonSep = Mon[trdate];
+											//logtext(0,IHr.ArtCode & "__" & IHr.TransDate & "  " & MonSep & " " & basesum);
+											SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + basesum;
+										end;
+									end;
+								end;
+							end;
+						end;
+					end;
+				
+					resetloop(IHr);
+					
+					ResetCompany (oldcomp);
+					
+					middleinprice = basesumprice / IVqty;
+					if(blank(INmatstrv[INr.Code & "Name"]))then begin INmatstrv[INr.Code & "Name"] = INr.Name; end;
+					if(blank(INmatstrv[INr.Code & "sCategory"]))then begin INmatstrv[INr.Code & "sCategory"] = sCategory; end;
+					if(blank(INmatstrv[INr.Code & "sBrand"]))then begin INmatstrv[INr.Code & "sBrand"] = sBrand; end;
+					if(blank(INmatstrv[INr.Code & "LeadTime"]))then begin INmatstrv[INr.Code & "LeadTime"] = INr.LeadTime; end;
+					if(blank(INmatstrv[INr.Code & "ItemCat"]))then begin INmatstrv[INr.Code & "ItemCat"] = INr.ItemCat; end;
+					if(blank(INmatstrv[INr.Code & "SubItemCat"]))then begin INmatstrv[INr.Code & "SubItemCat"] = INr.SubItemCat; end;
+					if(blank(INmatstrv[INr.Code & "TypeSeasNeeds"]))then begin INmatstrv[INr.Code & "TypeSeasNeeds"] = INr.TypeSeasNeeds; end;
+					if(blank(INmatstrv[INr.Code & "INr.LifeCicle"]))then begin INmatstrv[INr.Code & "INr.LifeCicle"] = INr.LifeCicle; end;
+					
+					INmatvalv[INr.Code & "LeadTime"] = INr.LeadTime;
+					if(INr.LeadTime<0)then begin INmatvalv[INr.Code & "LeadTime"] = blankval; end;
+					INmatvalv[INr.Code & "LTd"] = LTd;
+					INmatvalv[INr.Code & "INr.SeasonalReorderMonth"] = INr.SeasonalReorderMonth;
+					if(INr.SeasonalReorderMonth<0)then begin INmatvalv[INr.Code & "INr.SeasonalReorderMonth"] = blankval; end;
+					if(blank(INmatvalv[INr.Code & "AnnDem"]))then begin
+						INmatvalv[INr.Code & "AnnDem"] = AnnDem;
+					end else begin
+						INmatvalv[INr.Code & "AnnDem"] = INmatvalv[INr.Code & "AnnDem"] + AnnDem;
+					end;
+					if(blank(INmatvalv[INr.Code & "middleinprice"]))then begin
+						INmatvalv[INr.Code & "middleinprice"] = middleinprice;
+					end else begin
+						if(middleinprice!=0)then begin
+							INmatvalv[INr.Code & "middleinprice"] = (INmatvalv[INr.Code & "middleinprice"] + middleinprice)/2;
+						end;
+					end;
 				end;
+			end;
+			ResetCompany (oldcomp);
+			ResetLoop(INr);
+		end;
+		for (k=0;k<INq;k=k+1)begin		 
+			MonSep = 1;
+			startformat(15);
+				outstring(0,0,INCode[k],false);
+				outstring(0,0,INmatstrv[INCode[k] & "Name"],false);
+				outstring(0,0,INmatstrv[INCode[k] & "sCategory"],false);
+				outstring(0,0,INmatstrv[INCode[k] & "sBrand"],false);
+				outstring(0,0,INmatvalv[INCode[k] & "LeadTime"],false);
+				outstring(0,0,INmatstrv[INCode[k] & "ItemCat"],false);
+				outstring(0,0,INmatstrv[INCode[k] & "SubItemCat"],false);
+				outstring(0,0,INmatstrv[INCode[k] & "TypeSeasNeeds"],false);
+				outstring(0,0,INmatvalv[INCode[k] & "LTd"],false);
+				outstring(0,0,INmatvalv[INCode[k] & "INr.LifeCicle"],false);
+				outstring(0,0,INmatvalv[INCode[k] & "INr.SeasonalReorderMonth"],false);
+				outstring(0,0,INmatvalv[INCode[k] & "AnnDem"],false);
+				outstring(0,0,INmatvalv[INCode[k] & "middleinprice"],false);
+				outstring(0,0,"",false);
 				
-				resetloop(IHr);
+																					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+				if(RepSpec.flags[0]>0)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);  end;
+				if(RepSpec.flags[0]>1)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);  end;
+				if(RepSpec.flags[0]>2)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false); 
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false); 
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);  end;
+				if(RepSpec.flags[0]>3)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false); end;
+				if(RepSpec.flags[0]>4)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false); end;
+				if(RepSpec.flags[0]>5)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false);
+																					outstring(0,0,SaleMon[(MonSep+=1) & INCode[k]],false); end;
+			endformat;
+		end;
+	endjob;
+	
+return;
+end;
+
+
+global procedure HistSaleQtyRn(record RcVc RepSpec)
+begin
+	record INVc INr;
+	record ItemHistVc IHr;
+	record DIVc DIr;
+	boolean TrHs,testf,datef,anndemaatef,compf,INCodef,CustCodef;
+	record IVVc IVr;
+	row IVVc IVrw;
+	vector val SaleMon;
+	integer pos,mtrw,y,months,i,MonSep,AnnDem,IVqty,POPlacingTime,Margin,oldcomp,currcomp,compmtrw,j,k,INq;
+	string 255 cmd,sCategory,sBrand,sType,sBrandName;
+	date backdate,trdate,AnnDemDate,FrontDate;
+	val basesum, middleitprice,basesumprice,LTd;
+	vector integer Mon;
+	record CUVc CUr;
+	vector val brandleadtime;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	longint quant;
+	array string 255 INCode;
+	
+	oldcomp = CurrentCompany;
+	
+	
+	
+	startreportnoheaderjob("Extended Data of Sales");
+		
+		
+		
+		resetloop(INr);
+		INr.Code = "";
+		
+		BlockLoad(Compb);
+		compmtrw = matrowcnt(Compb);
+		for(y=2;y>=0;y=y-1)begin
+			if(y==0)then begin
+				trdate = currentdate;
+				trdate.day = 1;
+			end else begin
+				trdate = addyear(currentdate,-y);
+				trdate.day = 1;
+				trdate.month = 12;
+			end;
+			backdate = AddYear(CurrentDate,-y);
+			backdate.month = 1;
+			backdate.day = 1;
+			
+			
+			i = 1;
+			while(trdate>=backdate)begin
+				Mon[trdate] = i;
+				i=i+1;
+				trdate = addmonth(trdate,-1);
+				trdate.day = 1;
+			end;
+			
+			startformat(15);
+				outstring(0,0,"____________________________________________________________YEAR " & GetYear(backdate) & "_____________________________________________________________________________",false);
+			endformat;
+			startformat(15);
+				outstring(0,0,"Item ID",false);
+				outstring(0,0,"January",false);
+				outstring(0,0,"February",false);
+				outstring(0,0,"March",false);
+				outstring(0,0,"April",false);
+				outstring(0,0,"May",false);
+				outstring(0,0,"June",false);
+				outstring(0,0,"July",false);
+				outstring(0,0,"August",false);
+				outstring(0,0,"Sept.",false);
+				outstring(0,0,"Oct.",false);
+				outstring(0,0,"Nov.",false);
+				outstring(0,0,"Dec.",false);
+			endformat;
+
+			for (j=0;j<compmtrw;j=j+1)begin
+				INq = 0;
+				compf = true;
+				if(RepSpec.flags[1]==0)then begin
+					j=compmtrw;
+				end else begin
+					matrowget(Compb,j+1,Comprw);
+					if(Comprw.ActiveStatus==0)then begin
+						SetCompany(j+1,false);
+					end else begin
+						compf = false;
+					end;
+				end;
+				INr.Code = "";
+				while(loopmain(INr,1,compf))begin
+					testf = true;
+					if(INr.Terminated==1)then begin testf = false; end;
+					if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups))then begin testf = false; end;
+					if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf = false; end;
+					if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf = false; end;
+					if(setinset("30",INr.DispGroups))then begin testf = false; end;
+					if(setinset("31",INr.DispGroups))then begin testf = false; end;
+					if(setinset("32",INr.DispGroups))then begin testf = false; end;
+					if(setinset("33",INr.DispGroups))then begin testf = false; end;
+					if(setinset("34",INr.DispGroups))then begin testf = false; end;
+					if(setinset("35",INr.DispGroups))then begin testf = false; end;
+					if(INr.ConsgType!=0)then begin
+						testf = false;
+					end;
+					if(testf)then begin
+						
+						
+						if(y==0)then begin
+							FrontDate = currentdate;
+						end else begin
+							FrontDate = addyear(currentdate,-y);
+							FrontDate.day = 31;
+							FrontDate.month = 12;
+						end;
+						
+						IHr.ArtCode = INr.Code;
+						IHr.TransDate = FrontDate;
+						MonSep = 1;
+						basesumprice = 0;
+						IVqty = 0;
+						TrHs = true;
+						quant = 0;
+						while (loopbackkey("ArtCode",IHr,2,TrHs)) begin
+							if(IHr.ArtCode!=INr.Code)then begin TrHs = false; end;
+							if(IHr.TransDate<backdate)then begin TrHs = false; end;
+							INCodef = true;
+							for (k=0;k<INq;k=k+1)begin
+								if(INCode[k]==INr.Code or blank(INr.Code))then begin INCodef = false; k = INq + 1; end;
+							end;
+							
+							if(INCodef)then begin
+								INCode[INq] = INr.Code;
+								INq = INq + 1;
+							end;
+							if(IHr.FileName=="IVVc" and TrHs)then begin
+							IVr.SerNr = IHr.TransNr;
+								if(readfirstmain(IVr,1,true))then begin
+									CustCodef = true;
+									if(setinset("FOB",IVr.CustCode))then begin CustCodef = false; end;
+									if(CustCodef)then begin
+										quant = -IHr.Qty;
+										trdate = IHr.TransDate;
+										trdate.day = 1;
+										MonSep = Mon[trdate];
+										SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + quant;
+									end;
+								end;
+							end;
+						end;
 					
-				
-				MonSep = 1;
+						resetloop(IHr);
+					end;
+				end;
+				ResetCompany (oldcomp);
+				ResetLoop(INr);
+			end;
+			ResetCompany (oldcomp);
+			for (k=0;k<INq;k=k+1)begin
+				MonSep = i - 1;
 				startformat(15);
-					outstring(0,0,INr.Code,false);
-					outstring(0,0,INr.Name,false);
-					outstring(0,0,sCategory,false);
-					outstring(0,0,sBrand,false);
-					outstring(0,0,"",false);
-					outstring(0,0,INr.ItemCat,false);
-					outstring(0,0,INr.SubItemCat,false);
-					outstring(0,0,INr.TypeSeasNeeds,false);
-					outstring(0,0,INr.LeadTime,false);
-					outstring(0,0,INr.LifeCicle,false);
-					outstring(0,0,"",false);
-					outstring(0,0,"",false);
-					outstring(0,0,"",false);
-					outstring(0,0,"",false);
-					
-																						outstring(0,0,SaleMon[MonSep & INr.Code],false);
-					if(RepSpec.flags[0]>0)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);  end;
-					if(RepSpec.flags[0]>1)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);  end;
-					if(RepSpec.flags[0]>2)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); 
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); 
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);  end;
-					if(RepSpec.flags[0]>3)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); end;
-					if(RepSpec.flags[0]>4)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); end;
-					if(RepSpec.flags[0]>5)then begin  outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false);
-																						outstring(0,0,SaleMon[(MonSep+=1) & INr.Code],false); end;
+					outstring(0,0,INCode[k],false);
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					MonSep=MonSep-1;
+					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
+					for (MonSep=1;MonSep<13;MonSep=MonSep+1) begin
+						SaleMon[MonSep & INCode[k]] = blankval;
+					end;
 				endformat;
 			end;
 		end;
-		ResetLoop(INr);
 	endjob;
 	
 return;
