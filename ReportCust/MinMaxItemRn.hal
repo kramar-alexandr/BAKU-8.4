@@ -1,5 +1,7 @@
 //server-only
-global procedure MinMaxItemRn(record RcVc RepSpec)
+external function longint DateDiff(date,date);
+
+global procedure MinMaxItem1Rn(record RcVc RepSpec)
 begin
 	record INVc INr;
 	record ItemHistVc IHr;
@@ -61,4 +63,144 @@ begin
 	endjob;
 	
 return;
+end;
+
+
+global procedure MinMaxItemRn(record RcVc RepSpec)
+begin
+	record INVc INr;
+	record ItemHistVc IHr;
+	record ItemStatusVc ISr;
+	boolean TrHs,testf,TrHs1,testf1,changedate;
+	vector val qty,soldqty,daysonstock;
+	vector boolean dex;
+	val curqty,prevqty,soldcurqty,prevsoldqty,instock,instockday;
+	date sd,bldate,ed,cd,frdate,lastday,lastadate,firstdate,loopdate;	
+	integer posdays;
+	record IVVc IVr;
+	record SHVc SHr;
+	record RetVc Retr;
+	vector integer vinstockpday;
+	array integer tab; 
+	
+	startreportnoheaderjob("MinMaxItemRn");
+	
+	switch(RepSpec.flags[0])begin
+		case 0: frdate = addmonth(currentdate,-1);
+		case 1: frdate = addmonth(currentdate,-2);
+		case 2: frdate = addmonth(currentdate,-3);
+		case 3: frdate = addmonth(currentdate,-6);
+		case 4: frdate = addmonth(currentdate,-12);
+		case 5: frdate = addmonth(currentdate,-24);
+		case 6: frdate = addmonth(currentdate,-36);
+	end;
+	frdate.day = 1;
+	
+	tab[0] = 0;
+	tab[1] = 50;
+	tab[2] = 200;
+	tab[3] = 250;
+	tab[4] = 350;
+	
+	startformat(15);
+		outstring(tab[0],0,"Code",false);
+		outstring(tab[1],0,"Name",false);
+		outstring(tab[2],0,"Total Sold",false);
+		outstring(tab[3],0,"Speed: qty by month",false);
+		outstring(tab[4],0,"Days on stock",false);
+	endformat;
+	
+	INr.Code = RepSpec.f1;
+	TrHs1 = true;
+	while(loopmain(INr,1,TrHs1)) begin
+		testf1 = true;
+		if(INr.Terminated==1)then begin testf1 = false; end;
+		if(nonblank(RepSpec.f1) and INr.Code!=RepSpec.f1)then begin TrHs1 = false; testf1 = false; end;
+		if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf1 = false; end;
+		if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf1 = false; end;
+		if(nonblank(RepSpec.f4) and !setinset(RepSpec.f4,INr.DispGroups))then begin testf1 = false; end;
+		if(setinset("30",INr.DispGroups))then begin testf1 = false; end;
+		if(setinset("31",INr.DispGroups))then begin testf1 = false; end;
+		if(setinset("32",INr.DispGroups))then begin testf1 = false; end;
+		if(setinset("33",INr.DispGroups))then begin testf1 = false; end;
+		if(setinset("34",INr.DispGroups))then begin testf1 = false; end;
+		if(setinset("35",INr.DispGroups))then begin testf1 = false; end;
+		if(INr.ConsgType!=0)then begin
+			testf1 = false;
+		end;
+		
+		if(testf1)then begin
+			
+			ISr.Code = INr.Code;
+			ISr.Location = ";;;";
+			readfirstmain(ISr,1,true);
+			instock = ISr.Instock;
+						
+			IHr.ArtCode = INr.Code;
+			IHr.TransDate = currentdate;
+			TrHs = true;
+			posdays = blankval;
+			changedate = false;
+			firstdate = bldate;
+			
+			while(loopbackkey("ArtCode",IHr,1,TrHs))begin
+				testf = true;
+				if(IHr.ArtCode!=INr.Code)then begin TrHs = false; testf = false; end;
+				if(IHr.TransDate<frdate)then begin TrHs = false; testf = false; end;
+				if(IHr.StockAffectf==0)then begin testf = false; end;
+			
+				if(testf)then begin
+					vinstockpday[IHr.TransDate] = vinstockpday[IHr.TransDate] + IHr.Qty;
+					
+					if(IHr.FileName=="IVVc" or IHr.FileName=="SHVc" or IHr.FileName=="RetVc")then begin
+						if(IHr.FileName=="IVVc")then begin
+							IVr.SerNr = IHr.TransNr;
+							if(readfirstmain(IVr,1,true))then begin
+								if(left(IVr.CustCode,3)!="FOB")then begin
+									soldqty[IHr.TransDate] = soldqty[IHr.TransDate] - IHr.Qty;
+								end;
+							end;
+						end else begin
+							soldqty[IHr.TransDate] = soldqty[IHr.TransDate] - IHr.Qty;
+						end;				
+					end;		
+				end;
+			end;
+			resetloop(IHr);
+			
+			loopdate = currentdate;
+			while(loopdate>=frdate)begin
+				instock = instock - vinstockpday[loopdate];
+				soldqty[INr.Code] = soldqty[INr.Code] + soldqty[loopdate];
+				if(instock>0)then begin
+					daysonstock[INr.Code] = daysonstock[INr.Code] + 1;
+				end;
+				loopdate = addday(loopdate,-1);
+			end;
+			
+			startformat(15);
+				outstring(tab[0],0,INr.Code,false);
+				outstring(tab[1],0,INr.Name,false);
+				outstring(tab[2],0,soldqty[INr.Code],false);
+				outstring(tab[3],0,soldqty[INr.Code]/(daysonstock[INr.Code]/30),false);
+				outstring(tab[4],0,daysonstock[INr.Code],false);
+			endformat;
+			
+			instock = blankval;
+			loopdate = currentdate;
+			while(loopdate>=frdate)begin
+				soldqty[loopdate] = blankval;
+				vinstockpday[loopdate] = blankval;
+				loopdate = addday(loopdate,-1);
+			end;
+		end;
+	end;
+	
+	
+	endjob;
+	
+return;
 end;//1172305
+
+//90023
+//89994
