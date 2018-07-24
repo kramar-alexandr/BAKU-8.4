@@ -3,6 +3,54 @@ external function val AbsoluteVal(val);
 external procedure ExtractObj(string,var Integer,var string);
 
 
+global procedure BrendLeadTime (var array string BrandNames, var array string VeCodes, 
+																var integer acnt, var array string DirCodes,var array val LTa, var array val LTr)
+begin
+	record CUVc CUr;
+	val LTd, POPlacingTime, Margin,i;
+	record DIVc DIr;
+	boolean TrHs, testf;
+	
+	
+	acnt = 0;
+	TrHs = true;
+	CUr.VEType = 1;
+	POPlacingTime = 4;
+	Margin = 4;
+	while (loopkey("VEActCode",CUr,1,TrHs))begin
+		if(CUr.VEType==1)then begin 
+				if(blank(CUr.AirDeliveryDays))then begin CUr.AirDeliveryDays = 5; end;
+				if(blank(CUr.RoadDeliveryDays))then begin CUr.RoadDeliveryDays = 19; end;
+				DIr.CType = "BRAND";
+				testf = true;
+				while(LoopKey("CType",DIr,1,testf))begin
+					testf = true;
+					if(DIr.CType!="BRAND")then begin testf = false; end;
+					if(testf)then begin
+						if(DIr.Name==CUr.Name)then begin
+							LTa[acnt] = CUr.AirDeliveryDays + POPlacingTime + (Margin-1) + CUr.PlanShipDays;
+							LTr[acnt] = CUr.RoadDeliveryDays + POPlacingTime + (Margin+1) + CUr.PlanShipDays;
+							BrandNames[acnt] = DIr.Name;
+							DirCodes[acnt] = DIr.Code;
+							VeCodes[acnt] = CUr.Code;
+							acnt=acnt+1;
+						end;
+					end;
+				end;
+				resetloop(DIr);
+
+		end else begin
+			TrHs = false;
+		end;
+	end;
+	ResetLoop(CUr);
+	
+	return;
+end;
+
+
+
+
 
 global procedure ABCRn(record RcVc RepSpec)
 begin
@@ -15,7 +63,7 @@ begin
 	vector val SaleMon,INmatvalv;
 	integer pos,mtrw,k,months,i,MonSep,AnnDem,IVqty,POPlacingTime,Margin,oldcomp,currcomp,compmtrw,j,INq,a;
 	string 255 cmd,sCategory,sBrand,sType,sBrandName;
-	date backdate,trdate,AnnDemDate;
+	date backdate,trdate,AnnDemDate,curper;
 	val basesum, middleinprice,basesumprice,LTd;
 	vector integer Mon;
 	record CUVc CUr;
@@ -132,13 +180,13 @@ begin
 		INr.Code = "";
 		
 		switch(RepSpec.flags[0])begin
-			case 0: months = 0;
-			case 1: months = 1;
-			case 2:	months = 2;
-			case 3: months = 5;
-			case 4: months = 11;
-			case 5: months = 23;
-			case 6: months = 35;
+			case 0: months = 1;
+			case 1: months = 2;
+			case 2:	months = 3;
+			case 3: months = 6;
+			case 4: months = 12;
+			case 5: months = 24;
+			case 6: months = 36;
 		end;
 		
 		INq = 0;
@@ -263,9 +311,6 @@ begin
 								CustCodef = true;
 								if(setinset("FOB",IVr.CustCode))then begin CustCodef = false; end;
 								if(CustCodef)then begin
-									if(anndemaatef)then begin
-										AnnDem = AnnDem - IHr.Qty;
-									end;
 									matrowget(IVr,IHr.Row,IVrw);
 									if(nonblank(IVrw.Sum))then begin
 										basesum = AbsoluteVal(IVrw.Sum / IVrw.Quant * IHr.Qty);
@@ -276,6 +321,7 @@ begin
 												basesumprice = basesumprice + IVrw.Price;
 											end;
 											IVqty = IVqty + 1;
+											AnnDem = AnnDem - IHr.Qty;
 										end;
 										if(IVrw.Sum<0)then begin
 											basesum = -basesum;
@@ -284,8 +330,15 @@ begin
 											basesum = basesum / IVr.FrRate * IVr.ToRateB1;
 										end;
 										if(datef)then begin
+											
 											trdate = IHr.TransDate;
 											trdate.day = 1;
+											curper = currentdate;
+											curper.day = 1;
+											
+											if(trdate==curper)then begin
+												trdate = addmonth(trdate,-1);
+											end;
 
 											MonSep = Mon[trdate];
 											//logtext(0,IHr.ArtCode & "__" & IHr.TransDate & "  " & MonSep & " " & basesum);
