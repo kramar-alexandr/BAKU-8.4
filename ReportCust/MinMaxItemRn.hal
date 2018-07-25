@@ -69,32 +69,41 @@ return;
 end;
 
 
-global procedure MinMaxItemRn(record RcVc RepSpec)
+global updating procedure MinMaxItemRn(record RcVc RepSpec)
 begin
 	record INVc INr;
 	record ItemHistVc IHr;
 	record ItemStatusVc ISr;
-	boolean TrHs,testf,TrHs1,testf1,changedate;
+	boolean TrHs,testf,TrHs1,testf1,changedate,ItAvalf,compf;
 	vector val qty,soldqty,daysonstock;
 	vector boolean dex;
-	val curqty,prevqty,soldcurqty,prevsoldqty,instock,instockday,LTd,POPlacingTime,Margin,LeadTime;
+	val curqty,prevqty,soldcurqty,prevsoldqty,instock,instockday,LTd,POPlacingTime,Margin,LeadTime,soldqtyday;
 	date sd,bldate,ed,cd,frdate,lastday,lastadate,firstdate,loopdate;	
-	integer posdays;
+	integer posdays, oldcomp, compmtrw;
 	record IVVc IVr;
 	record SHVc SHr;
 	record RetVc Retr;
 	vector integer vinstockpday;
 	array integer tab; 
 	vector val brandleadtime;
-	vector string 100 vename;
+	vector string 100 vename, veINCodes;
 	record CUVc CUr;
 	array string 200 avenames;
-	integer acnt,i;
+	integer acnt,i,rownr,rwcnt,j;
 	vector boolean vBrandf;
 	record DIVc DIr;
 	array string 255	BrandNames,VeCodes,DirCodes;
 	array val LTa,LTr;
+	record DWTRVc DWTRr;
+	row DWTRVc DWTRrw;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
 	
+	
+	oldcomp = CurrentCompany;
+	
+		
+	RecordNew(DWTRr);
 	
 	startreportnoheaderjob("MinMaxItemRn");
 	
@@ -142,98 +151,158 @@ begin
 		outstring(tab[5],0,"Lead Time",false);
 	endformat;
 	
-	INr.Code = RepSpec.f1;
-	TrHs1 = true;
-	while(loopmain(INr,1,TrHs1)) begin
-		testf1 = true;
-		if(INr.Terminated==1)then begin testf1 = false; end;
-		if(nonblank(RepSpec.f1) and INr.Code!=RepSpec.f1)then begin TrHs1 = false; testf1 = false; end;
-		if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf1 = false; end;
-		if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf1 = false; end;
-		if(nonblank(RepSpec.f4) and !setinset(RepSpec.f4,INr.DispGroups))then begin testf1 = false; end;
-		if(setinset("30",INr.DispGroups))then begin testf1 = false; end;
-		if(setinset("31",INr.DispGroups))then begin testf1 = false; end;
-		if(setinset("32",INr.DispGroups))then begin testf1 = false; end;
-		if(setinset("33",INr.DispGroups))then begin testf1 = false; end;
-		if(setinset("34",INr.DispGroups))then begin testf1 = false; end;
-		if(setinset("35",INr.DispGroups))then begin testf1 = false; end;
-		if(INr.ConsgType!=0)then begin
-			testf1 = false;
+	BlockLoad(Compb);
+	compmtrw = matrowcnt(Compb);
+	for (j=0;j<compmtrw;j=j+1)begin
+		compf = true;
+		if(RepSpec.flags[1]==0)then begin
+			j=compmtrw;
+		end else begin
+			matrowget(Compb,j+1,Comprw);
+			if(Comprw.ActiveStatus==0)then begin
+				SetCompany(j+1,false);
+			end else begin
+				compf = false;
+			end;
 		end;
-		
-		if(testf1)then begin
-			
-			ISr.Code = INr.Code;
-			ISr.Location = ";;;";
-			readfirstmain(ISr,1,true);
-			instock = ISr.Instock;
+		rownr = 0;
+		INr.Code = RepSpec.f1;
+		TrHs1 = compf;
+		logtext(0,j+1 & "/" & compmtrw & " <> " & compf);
+		while(loopmain(INr,1,TrHs1)) begin
+			testf1 = true;
+			if(INr.Terminated==1)then begin testf1 = false; end;
+			if(nonblank(RepSpec.f1) and INr.Code!=RepSpec.f1)then begin TrHs1 = false; testf1 = false; end;
+			if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf1 = false; end;
+			if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf1 = false; end;
+			if(nonblank(RepSpec.f4) and !setinset(RepSpec.f4,INr.DispGroups))then begin testf1 = false; end;
+			if(setinset("30",INr.DispGroups))then begin testf1 = false; end;
+			if(setinset("31",INr.DispGroups))then begin testf1 = false; end;
+			if(setinset("32",INr.DispGroups))then begin testf1 = false; end;
+			if(setinset("33",INr.DispGroups))then begin testf1 = false; end;
+			if(setinset("34",INr.DispGroups))then begin testf1 = false; end;
+			if(setinset("35",INr.DispGroups))then begin testf1 = false; end;
+			if(INr.ConsgType!=0)then begin
+				testf1 = false;
+			end;
+			if(testf1)then begin
+				ISr.Code = INr.Code;
+				ISr.Location = ";;;";
+				readfirstmain(ISr,1,true);
+				instock = ISr.Instock;
+							
+				IHr.ArtCode = INr.Code;
+				IHr.TransDate = currentdate;
+				TrHs = true;
+				posdays = blankval;
+				changedate = false;
+				firstdate = bldate;
+				
+				while(loopbackkey("ArtCode",IHr,1,TrHs))begin
+					testf = true;
+					if(IHr.ArtCode!=INr.Code)then begin TrHs = false; testf = false; end;
+					if(IHr.TransDate<frdate)then begin TrHs = false; testf = false; end;
+					if(IHr.StockAffectf==0)then begin testf = false; end;
+				
+					if(testf)then begin
+						vinstockpday[IHr.TransDate] = vinstockpday[IHr.TransDate] + IHr.Qty;
 						
-			IHr.ArtCode = INr.Code;
-			IHr.TransDate = currentdate;
-			TrHs = true;
-			posdays = blankval;
-			changedate = false;
-			firstdate = bldate;
-			
-			while(loopbackkey("ArtCode",IHr,1,TrHs))begin
-				testf = true;
-				if(IHr.ArtCode!=INr.Code)then begin TrHs = false; testf = false; end;
-				if(IHr.TransDate<frdate)then begin TrHs = false; testf = false; end;
-				if(IHr.StockAffectf==0)then begin testf = false; end;
-			
-				if(testf)then begin
-					vinstockpday[IHr.TransDate] = vinstockpday[IHr.TransDate] + IHr.Qty;
-					
-					if(IHr.FileName=="IVVc" or IHr.FileName=="SHVc" or IHr.FileName=="RetVc")then begin
-						if(IHr.FileName=="IVVc")then begin
-							IVr.SerNr = IHr.TransNr;
-							if(readfirstmain(IVr,1,true))then begin
-								if(left(IVr.CustCode,3)!="FOB")then begin
-									soldqty[IHr.TransDate] = soldqty[IHr.TransDate] - IHr.Qty;
+						if(IHr.FileName=="IVVc" or IHr.FileName=="SHVc" or IHr.FileName=="RetVc")then begin
+							if(IHr.FileName=="IVVc")then begin
+								IVr.SerNr = IHr.TransNr;
+								if(readfirstmain(IVr,1,true))then begin
+									if(left(IVr.CustCode,3)!="FOB")then begin
+										soldqty[IHr.TransDate] = soldqty[IHr.TransDate] - IHr.Qty;
+									end;
 								end;
-							end;
-						end else begin
-							soldqty[IHr.TransDate] = soldqty[IHr.TransDate] - IHr.Qty;
-						end;				
-					end;		
+							end else begin
+								soldqty[IHr.TransDate] = soldqty[IHr.TransDate] - IHr.Qty;
+							end;				
+						end;		
+					end;
 				end;
-			end;
-			resetloop(IHr);
-			
-			loopdate = currentdate;
-			while(loopdate>=frdate)begin
-				instock = instock - vinstockpday[loopdate];
-				soldqty[INr.Code] = soldqty[INr.Code] + soldqty[loopdate];
-				if(instock>0)then begin
-					daysonstock[INr.Code] = daysonstock[INr.Code] + 1;
+				resetloop(IHr);
+				
+				loopdate = currentdate;
+				while(loopdate>=frdate)begin
+					instock = instock - vinstockpday[loopdate];
+					soldqty[INr.Code] = soldqty[INr.Code] + soldqty[loopdate];
+					if(instock>0)then begin
+						daysonstock[INr.Code] = daysonstock[INr.Code] + 1;
+					end;
+					loopdate = addday(loopdate,-1);
 				end;
-				loopdate = addday(loopdate,-1);
-			end;
-			
-			LeadTime = blankval;
-			for(i=0;i<acnt;i=i+1)begin
-				if(setinset(avenames[i],INr.DispGroups))then begin
-					LeadTime = brandleadtime[avenames[i]];
+				
+				LeadTime = blankval;
+				for(i=0;i<acnt;i=i+1)begin
+					if(setinset(avenames[i],INr.DispGroups))then begin
+						LeadTime = brandleadtime[avenames[i]];
+					end;
 				end;
-			end;
-			
-			startformat(15);
-				outstring(tab[0],0,INr.Code,false);
-				outstring(tab[1],0,INr.Name,false);
-				outstring(tab[2],0,soldqty[INr.Code],false);
-				outstring(tab[3],0,soldqty[INr.Code]/(daysonstock[INr.Code]/30),false);
-				outstring(tab[4],0,daysonstock[INr.Code],false);
-				outstring(tab[5],0,LeadTime,false);
-			endformat;
-			
-			instock = blankval;
-			loopdate = currentdate;
-			while(loopdate>=frdate)begin
-				soldqty[loopdate] = blankval;
-				vinstockpday[loopdate] = blankval;
-				loopdate = addday(loopdate,-1);
+				
+				/*startformat(15);
+					outstring(tab[0],0,INr.Code,false);
+					outstring(tab[1],0,INr.Name,false);
+					outstring(tab[2],0,soldqty[INr.Code],false);
+					outstring(tab[3],0,soldqty[INr.Code]/(daysonstock[INr.Code]/30),false);
+					outstring(tab[4],0,daysonstock[INr.Code],false);
+					outstring(tab[5],0,LeadTime,false);
+				endformat;*/
+				
+				
+				soldqtyday = (soldqty[INr.Code]/daysonstock[INr.Code]);
+				
+				ItAvalf = false;
+				rwcnt = matrowcnt(DWTRr);
+				if(nonblank(veINCodes[INr.Code]))then begin
+					for(i=0;i<rwcnt;i=i+1)begin
+						matrowget(DWTRr,i,DWTRrw);
+						if(DWTRrw.AccNumber==INr.Code)then begin
+							DWTRrw.Qty = DWTRrw.Qty + soldqty[INr.Code];
+							DWTRrw.CurDebVal = (DWTRrw.CurDebVal/DWTRrw.CurCredVal + soldqtyday)*30;
+							DWTRrw.CurCredVal = 30;
+							matrowput(DWTRr,i,DWTRrw);
+							ItAvalf = true;
+						end;
+					end;
+				end;
+				
+				if(!ItAvalf)then begin
+					veINCodes[INr.Code] = INr.Name;
+					DWTRrw.AccNumber = INr.Code;
+					DWTRrw.Objects = INr.Name;
+					DWTRrw.Qty = soldqty[INr.Code];
+					DWTRrw.CurDebVal = soldqty[INr.Code]/(daysonstock[INr.Code]/30);
+					DWTRrw.CurCredVal = daysonstock[INr.Code];
+					DWTRrw.NomVal = LeadTime;
+					matrowput(DWTRr,rwcnt,DWTRrw);
+				end;
+				
+				
+				instock = blankval;
+				loopdate = currentdate;
+				while(loopdate>=frdate)begin
+					soldqty[loopdate] = blankval;
+					vinstockpday[loopdate] = blankval;
+					loopdate = addday(loopdate,-1);
+				end;
 			end;
 		end;
+		if(compf)then begin recordstore(DWTRr,true); end;
+		resetloop(INr);
+	end;
+	
+	rwcnt = matrowcnt(DWTRr);
+	for(i=0;i<rwcnt;i=i+1)begin
+		matrowget(DWTRr,i,DWTRrw);
+		startformat(15);
+			outstring(tab[0],0,DWTRrw.AccNumber,false);
+			outstring(tab[1],0,DWTRrw.Objects,false);
+			outstring(tab[2],0,DWTRrw.Qty,false);
+			outstring(tab[3],0,DWTRrw.CurDebVal,false);
+			outstring(tab[4],0,DWTRrw.CurCredVal,false);
+			outstring(tab[5],0,DWTRrw.NomVal,false);
+		endformat;
 	end;
 	
 	
