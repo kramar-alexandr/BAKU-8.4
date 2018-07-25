@@ -3,6 +3,54 @@ external function val AbsoluteVal(val);
 external procedure ExtractObj(string,var Integer,var string);
 
 
+global procedure BrendLeadTime (var array string BrandNames, var array string VeCodes, 
+																var integer acnt, var array string DirCodes,var array val LTa, var array val LTr)
+begin
+	record CUVc CUr;
+	val LTd, POPlacingTime, Margin,i;
+	record DIVc DIr;
+	boolean TrHs, testf;
+	
+	
+	acnt = 0;
+	TrHs = true;
+	CUr.VEType = 1;
+	POPlacingTime = 4;
+	Margin = 4;
+	while (loopkey("VEActCode",CUr,1,TrHs))begin
+		if(CUr.VEType==1)then begin 
+				if(blank(CUr.AirDeliveryDays))then begin CUr.AirDeliveryDays = 5; end;
+				if(blank(CUr.RoadDeliveryDays))then begin CUr.RoadDeliveryDays = 19; end;
+				DIr.CType = "BRAND";
+				testf = true;
+				while(LoopKey("CType",DIr,1,testf))begin
+					testf = true;
+					if(DIr.CType!="BRAND")then begin testf = false; end;
+					if(testf)then begin
+						if(DIr.Name==CUr.Name)then begin
+							LTa[acnt] = CUr.AirDeliveryDays + POPlacingTime + (Margin-1) + CUr.PlanShipDays;
+							LTr[acnt] = CUr.RoadDeliveryDays + POPlacingTime + (Margin+1) + CUr.PlanShipDays;
+							BrandNames[acnt] = DIr.Name;
+							DirCodes[acnt] = DIr.Code;
+							VeCodes[acnt] = CUr.Code;
+							acnt=acnt+1;
+						end;
+					end;
+				end;
+				resetloop(DIr);
+
+		end else begin
+			TrHs = false;
+		end;
+	end;
+	ResetLoop(CUr);
+	
+	return;
+end;
+
+
+
+
 
 global procedure ABCRn(record RcVc RepSpec)
 begin
@@ -15,8 +63,8 @@ begin
 	vector val SaleMon,INmatvalv;
 	integer pos,mtrw,k,months,i,MonSep,AnnDem,IVqty,POPlacingTime,Margin,oldcomp,currcomp,compmtrw,j,INq,a;
 	string 255 cmd,sCategory,sBrand,sType,sBrandName;
-	date backdate,trdate,AnnDemDate;
-	val basesum, middleitprice,basesumprice,LTd;
+	date backdate,trdate,AnnDemDate,curper;
+	val basesum, middleinprice,basesumprice,LTd;
 	vector integer Mon;
 	record CUVc CUr;
 	vector val brandleadtime;
@@ -150,7 +198,8 @@ begin
 			trdate.day = 1;
 			backdate = AddMonth(CurrentDate,-months);
 			backdate.day = 1;
-			AnnDemDate = AddMonth(CurrentDate,-12);
+			logtext(0,backdate);
+			AnnDemDate = AddMonth(CurrentDate,-11);
 			AnnDemDate.day = 1;
 			
 			i = 1;
@@ -171,7 +220,6 @@ begin
 					compf = false;
 				end;
 			end;
-			logtext(0,j+1);
 			INr.Code = "";
 			while(loopmain(INr,1,compf))begin
 				testf = true;
@@ -195,7 +243,7 @@ begin
 					sBrand = "";
 					sBrandName = "";
 					cmd = "";
-					middleitprice = 0;
+					middleinprice = 0;
 					ExtractObj(INr.DispGroups,pos,cmd);
 					while (nonblank(cmd)) begin
 						DIr.Code = cmd;
@@ -211,11 +259,11 @@ begin
 					end;
 					
 					LTd = 0;
-					CUr.Code = "";
+					CUr.Code = sBrandName;
 					TrHs = true;
 					POPlacingTime = 4;
 					Margin = 4;
-					while (loopmain(CUr,1,TrHs))begin
+					while (loopkey("Name",CUr,1,TrHs))begin
 						if(CUr.VEType==1)then begin 
 							if(UpperCase(sBrandName)==UpperCase(CUr.Name))then begin
 								if(blank(CUr.AirDeliveryDays))then begin CUr.AirDeliveryDays = 5; end;
@@ -225,7 +273,7 @@ begin
 								end else begin
 									LTd = LTd + CUr.RoadDeliveryDays + POPlacingTime + (Margin+1) + CUr.PlanShipDays;
 								end;
-								LTd = LTd / 31;
+								LTd = LTd / 30;
 								TrHs = false;
 							end;
 						end;
@@ -243,8 +291,7 @@ begin
 					TrHs = true;
 					while (loopbackkey("ArtCode",IHr,2,TrHs)) begin
 						if(IHr.TransDate<=backdate)then begin datef = false; end;
-						if(IHr.ArtCode!=INr.Code)then begin datef = false; TrHs = false; anndemaatef = false; end;
-						if(IHr.TransDate<=backdate and IHr.TransDate<=AnnDemDate)then begin TrHs = false; end;
+						if(IHr.ArtCode!=INr.Code)then begin datef = false; TrHs = false; end;
 						if(IHr.TransDate<=AnnDemDate)then begin anndemaatef = false; end;
 						
 						INCodef = true;
@@ -262,7 +309,7 @@ begin
 							if(readfirstmain(IVr,1,true))then begin
 								CustCodef = true;
 								if(setinset("FOB",IVr.CustCode))then begin CustCodef = false; end;
-								if(CustCodef and (datef and anndemaatef) or (datef or anndemaatef))then begin
+								if(CustCodef)then begin
 									if(anndemaatef)then begin
 										AnnDem = AnnDem - IHr.Qty;
 									end;
@@ -283,13 +330,20 @@ begin
 										if(IVr.ToRateB1!=0)then begin
 											basesum = basesum / IVr.FrRate * IVr.ToRateB1;
 										end;
+										if(datef)then begin
+											
+											trdate = IHr.TransDate;
+											trdate.day = 1;
+											curper = currentdate;
+											curper.day = 1;
+											if(trdate==curper)then begin
+												trdate = addmonth(trdate,-1);
+											end;
 
-										trdate = IHr.TransDate;
-										trdate.day = 1;
-
-										MonSep = Mon[trdate];
-										//logtext(0,IHr.ArtCode & "__" & IHr.TransDate & "  " & MonSep & " " & basesum);
-										SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + basesum;
+											MonSep = Mon[trdate];
+											//logtext(0,IHr.ArtCode & "__" & IHr.TransDate & "  " & MonSep & " " & basesum);
+											SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + basesum;
+										end;
 									end;
 								end;
 							end;
@@ -298,9 +352,7 @@ begin
 				
 					resetloop(IHr);
 					
-					ResetCompany (oldcomp);
-					
-					middleitprice = basesumprice / IVqty;
+					middleinprice = basesumprice / IVqty;
 					if(blank(INmatstrv[INr.Code & "Name"]))then begin INmatstrv[INr.Code & "Name"] = INr.Name; end;
 					if(blank(INmatstrv[INr.Code & "sCategory"]))then begin INmatstrv[INr.Code & "sCategory"] = sCategory; end;
 					if(blank(INmatstrv[INr.Code & "sBrand"]))then begin INmatstrv[INr.Code & "sBrand"] = sBrand; end;
@@ -320,11 +372,11 @@ begin
 					end else begin
 						INmatvalv[INr.Code & "AnnDem"] = INmatvalv[INr.Code & "AnnDem"] + AnnDem;
 					end;
-					if(blank(INmatvalv[INr.Code & "middleitprice"]))then begin
-						INmatvalv[INr.Code & "middleitprice"] = middleitprice;
+					if(blank(INmatvalv[INr.Code & "middleinprice"]))then begin
+						INmatvalv[INr.Code & "middleinprice"] = middleinprice;
 					end else begin
-						if(middleitprice!=0)then begin
-							INmatvalv[INr.Code & "middleitprice"] = (INmatvalv[INr.Code & "middleitprice"] + middleitprice)/2;
+						if(middleinprice!=0)then begin
+							INmatvalv[INr.Code & "middleinprice"] = (INmatvalv[INr.Code & "middleinprice"] + middleinprice)/2;
 						end;
 					end;
 				end;
@@ -347,7 +399,7 @@ begin
 				outstring(0,0,INmatvalv[INCode[k] & "INr.LifeCicle"],false);
 				outstring(0,0,INmatvalv[INCode[k] & "INr.SeasonalReorderMonth"],false);
 				outstring(0,0,INmatvalv[INCode[k] & "AnnDem"],false);
-				outstring(0,0,INmatvalv[INCode[k] & "middleitprice"],false);
+				outstring(0,0,INmatvalv[INCode[k] & "middleinprice"],false);
 				outstring(0,0,"",false);
 				
 																					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
@@ -547,7 +599,6 @@ begin
 						resetloop(IHr);
 					end;
 				end;
-				ResetCompany (oldcomp);
 				ResetLoop(INr);
 			end;
 			ResetCompany (oldcomp);
