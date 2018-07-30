@@ -1278,7 +1278,11 @@ begin
 		end;
 	end;
   
+LPODClassActiveEditField:;  
   if (currentcompany==28) then begin
+    switch (fieldname) begin
+      case "PayDeal": if (POr.IDPrepayPaid==1) then begin MessageBox(35151,""); res = false; end;
+    end;
     nwn = FindWindow("POShipmDataDClass");
     if (nwn!=0) then begin
       DeselectWindow(nwn,false);
@@ -1296,7 +1300,6 @@ begin
     //  nwn = OpenWindow("POShipmDataDClass",0,0,"","",POSDr);;
     end;
   end;
-LPODClassActiveEditField:;  
   PODClassActiveEditField = res;
   return;
 end;
@@ -1487,10 +1490,17 @@ function Boolean PODClassArtCodeEFAfter(Integer wn,Integer rownr,Boolean changed
 BEGIN
   record POVc POr;
   row POVc POrw;
+  string 200 art;
 
   GetWindowRecord(wn,POr);    
   MatRowGet(POr,rownr,POrw);
   if ((changedf) or (blank(POrw.Spec) and (nonblank(POrw.ArtCode)))) then begin
+    art = POrw.ArtCode;//Edit-------------------Vitalii 12:25 26.07.2018
+    NormalizeArtCode(art);
+    if(POrw.ArtCode!=art)then begin
+      POrw.ArtCode = art;
+      matrowput(POr,rownr,POrw);
+    end;
     if (POVc_PasteArtCode(POr,rownr,false)) then begin
       PutWindowRecord(wn,POr);
       if (PODClassSwitchRow(wn,rownr)) then begin end;
@@ -1953,11 +1963,49 @@ begin
   PODClassSum4EFAfter = true;
 end;
 
+function Boolean PODClassPayDealEFAfter(Integer wn,Integer changed)
+begin
+  record POVc POr;
+	record PDVc PDr;
+  boolean res;
+  
+  res = true;
+  if (changed!=0) then begin
+    if (currentcompany==28) then begin
+      GetWindowRecord(wn,POr);
+      
+      if (POr.IDPrepayPaid!=1) then begin
+        switch(POr.PayDeal) begin
+          case "100": POr.IDPrepayProc = 100;
+          case "A": POr.IDPrepayProc = 100;
+          case "70": POr.IDPrepayProc = 70;
+          case "60": POr.IDPrepayProc = 60;
+          case "50": POr.IDPrepayProc = 50;
+          case "40": POr.IDPrepayProc = 40;
+          case "30": POr.IDPrepayProc = 30;
+          case "20": POr.IDPrepayProc = 20;
+        end;
+				PDr.Code = POr.PayDeal;
+				if(ReadFirstMain(PDr,1,true))then begin
+					POr.IDPayDealText = PDr.pdComment;
+				end;
+        
+        POr.IDPrepay = POr.Sum4/100*POr.IDPrepayProc;
+        POr.IDBalPay = POr.Sum4 - POr.IDPrepay;
+        POr.IDBalPayProc = 100 - POr.IDPrepayProc;
+      end;
+      
+      PutWindowRecord(wn,POr);
+    end;
+  end;
+  PODClassPayDealEFAfter = res;
+end;
+
 function boolean PasteArtCode(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
 begin
-record POVc POr;
-row POVc POrw;
-string 200 spec;
+  record POVc POr;
+  row POVc POrw;
+  string 200 spec;
   
   
   if(changed==1)then begin
@@ -2027,12 +2075,13 @@ BEGIN
     case "MajStoneDet": res = PasteMajStoneDet(wn,fieldname,fn,rownr,changed);
     case "Size": res = PasteSize(wn,fieldname,fn,rownr,changed);
     case "Colour": res = PasteColour(wn,fieldname,fn,rownr,changed);
-    case "ArtCode": res = PasteArtCode(wn,fieldname,fn,rownr,changed);  //End----------------------Dima  19.05.2015
+    //case "ArtCode": res = PasteArtCode(wn,fieldname,fn,rownr,changed);  //End----------------------Dima  19.05.2015
     case "IDPrepay": res = PODClassIDPrepayEFAfter(wn,changed);//Edit-------------------Vitalii 15:17 22.03.2018
     case "IDPrepayProc": res = PODClassIDPrepayProcEFAfter(wn,changed);
     case "IDBalPay": res = PODClassIDBalPayEFAfter(wn,changed);
     case "IDBalPayProc": res = PODClassIDBalPayProcEFAfter(wn,changed);
     case "Sum4": res = PODClassSum4EFAfter(wn,changed);
+    case "PayDeal": res = PODClassPayDealEFAfter(wn,changed);
   end;
   PODClassAfterEditField = res;
   RETURN;
