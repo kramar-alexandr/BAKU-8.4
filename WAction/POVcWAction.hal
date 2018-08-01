@@ -1209,6 +1209,10 @@ begin
           res = false;
         end;
       end;
+    case "IDPrmsdDt":
+      if (rownr>-1) then begin
+        res = false;
+      end;
   end;
   if (res==false) then begin
     goto LPODClassActiveEditField;
@@ -1967,7 +1971,9 @@ function Boolean PODClassPayDealEFAfter(Integer wn,Integer changed)
 begin
   record POVc POr;
 	record PDVc PDr;
+  row PDVc PDrw;
   boolean res;
+  integer i,mtrw;
   
   res = true;
   if (changed!=0) then begin
@@ -1975,24 +1981,21 @@ begin
       GetWindowRecord(wn,POr);
       
       if (POr.IDPrepayPaid!=1) then begin
-        switch(POr.PayDeal) begin
-          case "100": POr.IDPrepayProc = 100;
-          case "A": POr.IDPrepayProc = 100;
-          case "70": POr.IDPrepayProc = 70;
-          case "60": POr.IDPrepayProc = 60;
-          case "50": POr.IDPrepayProc = 50;
-          case "40": POr.IDPrepayProc = 40;
-          case "30": POr.IDPrepayProc = 30;
-          case "20": POr.IDPrepayProc = 20;
-        end;
 				PDr.Code = POr.PayDeal;
 				if(ReadFirstMain(PDr,1,true))then begin
 					POr.IDPayDealText = PDr.pdComment;
+          mtrw = matrowcnt(PDr);
+          for (i=0;i<mtrw;i=i+1) begin
+            matrowget(PDr,i,PDrw);
+            if (UpperCase(left(PDrw.LangCode,4))=="KOEF") then begin
+              i = mtrw;
+              POr.IDPrepayProc = 100*StringToVal(PDrw.Text,M4Val);
+              POr.IDPrepay = POr.Sum4/100*POr.IDPrepayProc;
+              POr.IDBalPay = POr.Sum4 - POr.IDPrepay;
+              POr.IDBalPayProc = 100 - POr.IDPrepayProc;
+            end;
+          end;
 				end;
-        
-        POr.IDPrepay = POr.Sum4/100*POr.IDPrepayProc;
-        POr.IDBalPay = POr.Sum4 - POr.IDPrepay;
-        POr.IDBalPayProc = 100 - POr.IDPrepayProc;
       end;
       
       PutWindowRecord(wn,POr);
@@ -2026,6 +2029,33 @@ PasteArtCode = true;
 return;
 end;
 
+
+function Boolean PODClassPlanShipDateEFAfter(Integer wn,Integer changed)
+begin
+  record POVc POr;
+	row POVc POrw;
+  boolean res;
+  integer i,mtrw;
+  
+  res = true;
+  if (changed!=0) then begin
+    if (currentcompany==28) then begin
+      GetWindowRecord(wn,POr);
+      mtrw = matrowcnt(POr);
+      if (mtrw>0) then begin
+        for (i=0;i<mtrw;i=i+1) begin
+          matrowget(POr,i,POrw);
+          if (POrw.stp==kInvoiceRowTypeNormal) then begin
+            POrw.IDPrmsdDt = POr.PlanShipDate;
+            matrowput(POr,i,POrw);
+          end;
+        end;
+      end;
+      PutWindowRecord(wn,POr);
+    end;
+  end;
+  PODClassPlanShipDateEFAfter = res;
+end;
 
 global
 function Boolean PODClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
@@ -2082,6 +2112,7 @@ BEGIN
     case "IDBalPayProc": res = PODClassIDBalPayProcEFAfter(wn,changed);
     case "Sum4": res = PODClassSum4EFAfter(wn,changed);
     case "PayDeal": res = PODClassPayDealEFAfter(wn,changed);
+    case "PlanShipDate": res = PODClassPlanShipDateEFAfter(wn,changed);
   end;
   PODClassAfterEditField = res;
   RETURN;
@@ -2916,12 +2947,11 @@ begin
 return;
 end;
 
-
 global
 procedure IDAppendPRBtnClick()
 begin
   record POVc POr;
-  integer wn
+  integer wn;
   
   wn = curwindow;
   deselectwindow(wn,false);
@@ -2930,6 +2960,29 @@ begin
   if nonblank(POr.IDRefPRNum) then begin
     IDPasteORinPO(POr);
     putwindowrecord(wn,POr);
+  end else begin
+    MessageBox(35149,"");
+  end;
+  
+  return;
+end;
+
+global
+procedure IDOpenPRFromPO()
+begin
+  record POVc POr;
+  record ORVc ORr;
+  integer wn,nwn;
+  
+  wn = curwindow;
+  deselectwindow(wn,false);
+  getwindowrecord(wn,POr);
+  
+  if nonblank(POr.IDRefPRNum) then begin
+    ORr.CustOrdNr = POr.IDRefPRNum;
+    if (readfirstkey("CustOrdNr",ORr,1,true)) then begin
+      nwn = OpenWindow("ORDClass",0,0,"","",ORr);
+    end;
   end else begin
     MessageBox(35149,"");
   end;
