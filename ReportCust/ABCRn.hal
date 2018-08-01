@@ -117,11 +117,13 @@ begin
 			outstring(0,0,"Annual Demand (for Last 12 months)",false);
 			outstring(0,0,"Unit Price (Last 12 Monthly Average)",false);
 			outstring(0,0,"E Level of Unit Price",false);
+			outstring(0,0,"Recepy",false);
 			outstring(0,0,"Sales",false);
 		endformat;
 		
 		
 		startformat(15);
+			outstring(0,0,"",false);
 			outstring(0,0,"",false);
 			outstring(0,0,"",false);
 			outstring(0,0,"",false);
@@ -362,6 +364,7 @@ begin
 					if(blank(INmatstrv[INr.Code & "SubItemCat"]))then begin INmatstrv[INr.Code & "SubItemCat"] = INr.SubItemCat; end;
 					if(blank(INmatstrv[INr.Code & "TypeSeasNeeds"]))then begin INmatstrv[INr.Code & "TypeSeasNeeds"] = INr.TypeSeasNeeds; end;
 					if(blank(INmatstrv[INr.Code & "INr.LifeCicle"]))then begin INmatstrv[INr.Code & "INr.LifeCicle"] = INr.LifeCicle; end;
+					if(blank(INmatstrv[INr.Code & "INr.Recepy"]))then begin INmatstrv[INr.Code & "INr.Recepy"] = INr.Recepy; end;
 					
 					INmatvalv[INr.Code & "LeadTime"] = INr.LeadTime;
 					if(INr.LeadTime<0)then begin INmatvalv[INr.Code & "LeadTime"] = blankval; end;
@@ -401,6 +404,7 @@ begin
 				outstring(0,0,INmatvalv[INCode[k] & "INr.SeasonalReorderMonth"],false);
 				outstring(0,0,INmatvalv[INCode[k] & "AnnDem"],false);
 				outstring(0,0,INmatvalv[INCode[k] & "middleinprice"],false);
+				outstring(0,0,INmatvalv[INCode[k] & "INr.Recepy"],false);
 				outstring(0,0,"",false);
 				
 																					outstring(0,0,SaleMon[MonSep & INCode[k]],false);
@@ -637,6 +641,180 @@ begin
 				endformat;
 			end;
 		end;
+	endjob;
+	
+return;
+end;
+
+
+
+
+
+global procedure SesonalReorderRn(record RcVc RepSpec)
+begin
+	record INVc INr;
+	record ItemHistVc IHr;
+	record ItemStatusVc ISr;
+	record POVc POr;
+	row POVc POrw;
+	record DIVc DIr;
+	boolean TrHs,testf,datef,anndemaatef,compf,INCodef,CustCodef;
+	record IVVc IVr;
+	row IVVc IVrw;
+	vector val QtyOnHand,QtyOnOrder,QtyBackOrder;
+	integer pos,mtrw,y,months,i,MonSep,AnnDem,IVqty,POPlacingTime,Margin,oldcomp,currcomp,compmtrw,j,k,INq;
+	string 255 cmd,sCategory,sBrand,sType,sBrandName;
+	date backdate,trdate,AnnDemDate,FrontDate;
+	val basesum, middleitprice,basesumprice,LTd;
+	vector integer Mon;
+	record CUVc CUr;
+	vector val brandleadtime;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	longint quant;
+	array string 255 INCode,INCategory,INName,INBrand,ABC,Seasonal,Recepy;
+	
+	oldcomp = CurrentCompany;
+	
+	
+	
+	startreportnoheaderjob("Sesonal reorder data");
+		
+		
+		
+		resetloop(INr);
+		INr.Code = "";
+		
+		BlockLoad(Compb);
+		compmtrw = matrowcnt(Compb);
+	
+		
+		startformat(15);
+			outstring(0,0,"Item ID",false);
+			outstring(0,0,"Item Name",false);
+			outstring(0,0,"Item category",false);
+			outstring(0,0,"Item brand",false);
+			outstring(0,0,"ABC",false);
+			outstring(0,0,"Sesonal",false);
+			outstring(0,0,"Qty On-Hand",false);
+			outstring(0,0,"Qty On-Order",false);
+			outstring(0,0,"Qty Back-Order",false);
+			outstring(0,0,"Recepy",false);
+			
+		endformat;
+
+		for (j=0;j<compmtrw;j=j+1)begin
+			INq = 0;
+			compf = true;
+			if(RepSpec.flags[1]==0)then begin
+				j=compmtrw;
+			end else begin
+				matrowget(Compb,j+1,Comprw);
+				if(Comprw.ActiveStatus==0)then begin
+					SetCompany(j+1,false);
+				end else begin
+					compf = false;
+				end;
+			end;
+			POr.SerNr = -1;
+			while (loopmain(POr,1,true)) begin
+				if(POr.PUFlag==0 and POr.PIFlag>0)then begin
+					mtrw = matrowcnt(POr);
+					for (y=0;y<mtrw;y=y+1) begin
+						matrowget(POr,y,POrw);
+						if(POrw.Shipd2<1 and POrw.Invd>0)then begin
+							QtyBackOrder[POrw.ArtCode] = QtyBackOrder[POrw.ArtCode] + POrw.Invd;
+						end;
+					end;
+				end;
+			end;
+			
+			resetloop(POr);
+			
+			
+			INr.Code = "";
+			while(loopmain(INr,1,compf))begin
+				testf = true;
+				if(INr.Terminated==1)then begin testf = false; end;
+				if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups))then begin testf = false; end;
+				if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf = false; end;
+				if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf = false; end;
+				if(nonblank(RepSpec.f4) and RepSpec.f4!=INr.Recepy)then begin testf = false; end;
+				if(setinset("30",INr.DispGroups))then begin testf = false; end;
+				if(setinset("31",INr.DispGroups))then begin testf = false; end;
+				if(setinset("32",INr.DispGroups))then begin testf = false; end;
+				if(setinset("33",INr.DispGroups))then begin testf = false; end;
+				if(setinset("34",INr.DispGroups))then begin testf = false; end;
+				if(setinset("35",INr.DispGroups))then begin testf = false; end;
+				if(INr.ConsgType!=0)then begin
+					testf = false;
+				end;
+				if(testf)then begin
+					pos = 0;
+					sBrand = "";
+					sBrandName = "";
+					ExtractObj(INr.DispGroups,pos,cmd);
+					while (nonblank(cmd)) begin
+						DIr.Code = cmd;
+						if(readfirstmain(DIr,1,true))then begin
+							if(DIr.CType=="BRAND")then begin 
+								sBrand = DIr.Code; 
+								sBrandName = DIr.Name;
+							end;
+							if(DIr.CType=="CATEGORY")then begin sCategory = DIr.Code; end;	
+							if(DIr.CType=="TYPE")then begin sType = DIr.Code; end;	
+						end;
+						ExtractObj(INr.DispGroups,pos,cmd);
+					end;
+					INCodef = true; 
+					for (k=0;k<INq;k=k+1)begin
+						if(INCode[k]==INr.Code)then begin 
+							INCodef = false; 
+							if(blank(INName[k]))then begin INName[k] = INr.Name; end;
+							if(blank(INBrand[k]))then begin INBrand[k] = sBrand; end;
+							if(blank(ABC[k]))then begin ABC[k] = INr.ItemCat; end;
+							if(blank(Seasonal[k]))then begin Seasonal[k] = INr.TypeSeasNeeds; end;
+							if(blank(INCategory[k]))then begin INCategory[k] = sCategory; end;
+							if(blank(Recepy[k]))then begin Recepy[k] = INr.Recepy; end;
+							k = INq + 1; 
+						end;
+					end;
+					if(INCodef)then begin
+						INCode[INq] = INr.Code;
+						INName[INq] = INr.Name;
+						INBrand[INq] = sBrand;
+						ABC[INq] = INr.ItemCat;
+						Seasonal[INq] = INr.TypeSeasNeeds;
+						INCategory[INq] = sCategory;
+						Recepy[INq] = INr.Recepy;
+						INq = INq + 1;
+					end;
+					ISr.Code = INr.Code;
+					if(readfirstmain(ISr,1,true))then begin
+						QtyOnHand[INr.Code] = QtyOnHand[INr.Code] + ISr.Instock;
+						QtyOnOrder[INr.Code] = QtyOnOrder[INr.Code] + ISr.POQty;
+					end;
+				end;
+			end;
+			ResetLoop(INr);
+		end;
+		ResetCompany (oldcomp);
+		for (k=0;k<INq;k=k+1)begin
+			MonSep = i - 1;
+			startformat(15);
+				outstring(0,0,INCode[k],false);
+				outstring(0,0,INName[k],false);
+				outstring(0,0,INCategory[k],false);
+				outstring(0,0,INBrand[k],false);
+				outstring(0,0,ABC[k],false);
+				outstring(0,0,Seasonal[k],false);
+				outstring(0,0,QtyOnHand[INCode[k]],false);
+				outstring(0,0,QtyOnOrder[INCode[k]],false);
+				outstring(0,0,QtyBackOrder[INCode[k]],false);
+				outstring(0,0,Recepy[k],false);
+			endformat;
+		end;
+
 	endjob;
 	
 return;
