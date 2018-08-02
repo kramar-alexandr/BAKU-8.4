@@ -6267,7 +6267,7 @@ end;
 
 global updating procedure FixPOSButtonsMn()
 begin
-	record POSButtonsVc POSButtonsr;
+	record POSButtonsVc POSButtonsr,oldPOSButtonsr;
 	row POSButtonsVc POSButtonsrw;
 	record CompaniesBlock CBb;
 	row CompaniesBlock Comprw;
@@ -6279,11 +6279,11 @@ begin
 	mtrw = matrowcnt(CBb);
 	For(i=0;i<mtrw;i=i+1) begin
 	  matrowget(CBb,i,Comprw);
-	  if (SetCompany(i,false)) then begin
+	  if (SetCompany(i+1,false)) then begin
 	  	logtext(0,"Comp " & i);
-			POSButtonsr.WindowClass = "";
+	  	POSButtonsr.WindowClass = "";
 			while(loopmain(POSButtonsr,1,true))begin
-				rwcnt = matrowcnt(POSButtonsr);
+				/*rwcnt = matrowcnt(POSButtonsr);
 				For(j=0;j<rwcnt;j=j+1) begin
 	  			matrowget(POSButtonsr,j,POSButtonsrw);
 	  			if(POSButtonsrw.ButtonType>=100)then begin
@@ -6291,8 +6291,10 @@ begin
 						matrowput(POSButtonsr,j,POSButtonsrw);
 						logtext(0,POSButtonsrw.Label);
 					end;
-				end; 
-				recordstore(POSButtonsr,true);
+				end; */
+				recordcopy(oldPOSButtonsr,POSButtonsr);
+				POSButtonsr.WindowClass = "IVDClass";
+				recordupdate(oldPOSButtonsr,POSButtonsr,false);
 			end;
 			resetloop(POSButtonsr);
 		end;
@@ -6475,6 +6477,68 @@ begin
 	
 return;
 end; //Edit***************************Sasha2,10:38 19.06.2017 }
+
+
+
+
+
+
+global //Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 16:19 01.08.2018
+updating procedure CrtgroupsfrclassifMn(record RcVc RepSpec)
+begin
+	record ITVc ITr;
+	record DIVc DIr;
+	record INVc INr;
+	string 255 cmd;
+	Integer pos;
+	vector string 255 GroupCodes, BrandName;
+	
+	DIr.Code = "";
+	While (loopmain(DIr,1,true)) begin
+		if(DIr.CType=="BRAND")then begin 
+			ITr.Comment = DIr.Name;
+			BrandName[DIr.Code] = DIr.Name;
+			if(!readfirstkey("Comment",ITr,1,true))then begin
+				RecordNew(ITr);
+				ITr.Code = right(DIr.Code,5);
+				ITr.Comment = DIr.Name;
+				ITr.ClassType = DIr.CType;
+				ITr.Objects = DIr.Code;
+				RecordStore(ITr,true);
+			end;
+		end;
+	end;
+	resetloop(DIr);
+	ITr.Code = "";
+	while (loopmain(ITr,1,true)) begin
+		if(ITr.ClassType=="BRAND")then begin
+			GroupCodes[ITr.Comment] = ITr.Code;
+		end;
+	end;
+	resetloop(ITr);
+	INr.Code = "";
+	while(loopmain(INr,1,true))begin
+		if(nonblank(INr.DispGroups))then begin
+		pos = 0;
+			ExtractObj(INr.DispGroups,pos,cmd);
+			while (nonblank(cmd)) begin
+				if(nonblank(BrandName[cmd]))then begin
+					if(nonblank(GroupCodes[BrandName[cmd]]))then begin
+						INr.Group = GroupCodes[BrandName[cmd]];
+						RecordStore(INr,true);
+					end;
+				end;
+				ExtractObj(INr.DispGroups,pos,cmd);
+			end;
+		end;
+	end;
+	resetloop(INr);
+return;
+end; //Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 16:19 01.08.2018
+
+
+
+
 
 
 global updating procedure UpdateDocMn()
