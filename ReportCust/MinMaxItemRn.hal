@@ -115,12 +115,12 @@ begin
 			outstring(0,0,DirCodes[i],false);
 			if(RepSpec.flags[2]==0)then begin
 				Margin = 3;
-				brandleadtime[DirCodes[i]] = LTa[i]/30;
-				outstring(0,0,LTa[i]/30,false);
+				brandleadtime[DirCodes[i]] = LTa[i];
+				outstring(0,0,LTa[i],false);
 			end else begin 
 				Margin = 5;
-				brandleadtime[DirCodes[i]] = LTr[i]/30;
-				outstring(0,0,LTr[i]/30,false);
+				brandleadtime[DirCodes[i]] = LTr[i];
+				outstring(0,0,LTr[i],false);
 			end;
 		endformat;
 	end;
@@ -132,13 +132,13 @@ begin
 	
 	
 	switch(RepSpec.flags[4])begin
-		case 0: OP = 0.23;
-		case 1: OP = 0.46;
-		case 2: OP = 1;
-		case 3: OP = 2;
-		case 4: OP = 3;
-		case 5: OP = 6;
-		case 6: OP = 12;
+		case 0: OP = 7;
+		case 1: OP = 14;
+		case 2: OP = 30;
+		case 3: OP = 60;
+		case 4: OP = 90;
+		case 5: OP = 180;
+		case 6: OP = 365;
 	end;
 	
 	
@@ -167,7 +167,7 @@ begin
 		outstring(tab[0],0,"Code",false);
 		outstring(tab[1],0,"Name",false);
 		outstring(tab[2],0,"Total Sold",false);
-		outstring(tab[3],0,"Speed: qty by month",false);
+		outstring(tab[3],0,"Speed: qty by day",false);
 		outstring(tab[4],0,"Days on stock",false);
 		outstring(tab[5],0,"Lead Time",false);
 		outstring(tab[6],0,"Min Qty",false);
@@ -265,7 +265,7 @@ begin
 						end;
 					end;
 				end else begin
-					LeadTime = INr.LeadTime;
+					LeadTime = INr.LeadTime/30;
 				end;
 				/*startformat(15);
 					outstring(tab[0],0,INr.Code,false);
@@ -286,12 +286,12 @@ begin
 						matrowget(DWTRr,i,DWTRrw);
 						if(DWTRrw.AccNumber==INr.Code)then begin
 							DWTRrw.MyVal1 = DWTRrw.Qty + soldqty[INr.Code];
-							DWTRrw.MyVal2 = (DWTRrw.CurDebVal/DWTRrw.CurCredVal + soldqtyday)*30;
-							DWTRrw.MyVal3 = 30;
-							DWTRrw.MyVal5 = DWTRrw.MyVal5 + DWTRrw.MyVal2 * (LeadTime + SZ);
+							DWTRrw.MyVal2 = DWTRrw.MyVal2 + soldqtyday;
+							DWTRrw.MyVal3 = DWTRrw.MyVal3 + daysonstock[INr.Code];
+							DWTRrw.MyVal5 = DWTRrw.MyVal5 + DWTRrw.MyVal2 * LeadTime * SZ;
 							DWTRrw.MyVal6 = DWTRrw.MyVal6 + DWTRrw.MyVal5 + (OP * DWTRrw.MyVal2);
-							if((DWTRrw.MyVal2 * (LeadTime + SZ))>=instock)then begin
-								DWTRrw.MyVal7 = DWTRrw.MyVal7 + (DWTRrw.MyVal6 - DWTRrw.MyVal5);
+							if((DWTRrw.MyVal2 * LeadTime * SZ)>=instock)then begin
+								DWTRrw.MyVal7 = DWTRrw.MyVal6 - DWTRrw.MyVal5;
 							end;
 							matrowput(DWTRr,i,DWTRrw);
 							ItAvalf = true;
@@ -310,10 +310,10 @@ begin
 					DWTRrw.AccNumber = INr.Code;
 					DWTRrw.Objects = INr.Name;
 					DWTRrw.MyVal1 = soldqty[INr.Code];
-					DWTRrw.MyVal2 = soldqty[INr.Code]/(daysonstock[INr.Code]/30);
+					DWTRrw.MyVal2 = soldqty[INr.Code]/daysonstock[INr.Code];
 					DWTRrw.MyVal3 = daysonstock[INr.Code];
 					DWTRrw.MyVal4 = LeadTime;
-					DWTRrw.MyVal5 = DWTRrw.MyVal2 * (LeadTime + SZ);
+					DWTRrw.MyVal5 = DWTRrw.MyVal2 * LeadTime * SZ;
 					DWTRrw.MyVal6 = DWTRrw.MyVal5 + (OP * DWTRrw.MyVal2);
 					if(DWTRrw.MyVal5>=instock)then begin
 						DWTRrw.MyVal7 = (DWTRrw.MyVal6 - DWTRrw.MyVal5);
@@ -343,7 +343,9 @@ begin
 			outstring(tab[1],0,DWTRrw.Objects,false);
 			outstring(tab[2],0,DWTRrw.MyVal1,false);
 			outstring(tab[3],0,round(DWTRrw.MyVal2,SetRoundModeD(2)),false);
-			outstring(tab[4],0,DWTRrw.MyVal3,false);
+			if(RepSpec.flags[1]==0)then begin
+				outstring(tab[4],0,DWTRrw.MyVal3,false);
+			end;
 			outstring(tab[5],0,DWTRrw.MyVal4,false);
 			outstring(tab[6],0,round(DWTRrw.MyVal5,SetRoundModeD(0)),false);
 			outstring(tab[7],0,round(DWTRrw.MyVal6,SetRoundModeD(0)),false);
@@ -365,9 +367,9 @@ begin
 	record ItemHistVc IHr;
 	record ItemStatusVc ISr;
 	boolean TrHs,testf,TrHs1,testf1,changedate,ItAvalf,compf;
-	vector val qty,soldqty,daysonstock;
+	vector val qty,soldqty,daysonstock,OrderQty;
 	vector boolean dex;
-	val curqty,prevqty,soldcurqty,prevsoldqty,instock,instockday,LTd,POPlacingTime,Margin,LeadTime,soldqtyday,OP,SZ,OrderQty;
+	val curqty,prevqty,soldcurqty,prevsoldqty,instock,instockday,LTd,POPlacingTime,Margin,LeadTime,soldqtyday,OP,SZ;
 	date sd,bldate,ed,cd,frdate,lastday,lastadate,firstdate,loopdate;	
 	integer posdays, oldcomp, compmtrw;
 	record IVVc IVr;
@@ -405,12 +407,12 @@ begin
 			outstring(0,0,DirCodes[i],false);
 			if(RepSpec.flags[2]==0)then begin
 				Margin = 3;
-				brandleadtime[DirCodes[i]] = LTa[i]/30;
-				outstring(0,0,LTa[i]/30,false);
+				brandleadtime[DirCodes[i]] = LTa[i];
+				outstring(0,0,LTa[i],false);
 			end else begin 
 				Margin = 5;
-				brandleadtime[DirCodes[i]] = LTr[i]/30;
-				outstring(0,0,LTr[i]/30,false);
+				brandleadtime[DirCodes[i]] = LTr[i];
+				outstring(0,0,LTr[i],false);
 			end;
 		endformat;
 	end;
@@ -457,7 +459,7 @@ begin
 		outstring(tab[0],0,"Code",false);
 		outstring(tab[1],0,"Name",false);
 		outstring(tab[2],0,"Total Sold",false);
-		outstring(tab[3],0,"Speed: qty by month",false);
+		outstring(tab[3],0,"Speed: qty by day",false);
 		outstring(tab[4],0,"Days on stock",false);
 		outstring(tab[5],0,"Lead Time",false);
 		outstring(tab[6],0,"Min Qty",false);
@@ -504,7 +506,7 @@ begin
 				ISr.Location = ";;;";
 				if(readfirstmain(ISr,1,true))then begin
 					instock = ISr.Instock;
-					OrderQty = instock + ISr.POQty;
+					OrderQty[INr.Code] = OrderQty[INr.Code] + instock + ISr.POQty;
 				end;
 				IHr.ArtCode = INr.Code;
 				IHr.TransDate = currentdate;
@@ -556,7 +558,7 @@ begin
 						end;
 					end;
 				end else begin
-					LeadTime = INr.LeadTime;
+					LeadTime = INr.LeadTime / 30;
 				end;
 				/*startformat(15);
 					outstring(tab[0],0,INr.Code,false);
@@ -577,11 +579,11 @@ begin
 						matrowget(DWTRr,i,DWTRrw);
 						if(DWTRrw.AccNumber==INr.Code)then begin
 							DWTRrw.MyVal1 = DWTRrw.Qty + soldqty[INr.Code];
-							DWTRrw.MyVal2 = (DWTRrw.CurDebVal/DWTRrw.CurCredVal + soldqtyday)*30;
-							DWTRrw.MyVal3 = 30;
-							DWTRrw.MyVal5 = DWTRrw.MyVal5 + DWTRrw.MyVal2 * (LeadTime + SZ);
+							DWTRrw.MyVal2 = DWTRrw.MyVal2 + soldqtyday;
+							DWTRrw.MyVal3 = DWTRrw.MyVal3 + daysonstock[INr.Code];
+							DWTRrw.MyVal5 = DWTRrw.MyVal5 + DWTRrw.MyVal2 * LeadTime * SZ;
 							DWTRrw.MyVal6 = DWTRrw.MyVal6 + DWTRrw.MyVal5 + (OP * DWTRrw.MyVal2);
-							DWTRrw.MyVal7 = DWTRrw.MyVal7 + (DWTRrw.MyVal6 - OrderQty);
+							DWTRrw.MyVal7 = DWTRrw.MyVal7 + (DWTRrw.MyVal6 - OrderQty[INr.Code]);
 							matrowput(DWTRr,i,DWTRrw);
 							ItAvalf = true;
 						end;
@@ -599,12 +601,12 @@ begin
 					DWTRrw.AccNumber = INr.Code;
 					DWTRrw.Objects = INr.Name;
 					DWTRrw.MyVal1 = soldqty[INr.Code];
-					DWTRrw.MyVal2 = soldqty[INr.Code]/(daysonstock[INr.Code]/30);
+					DWTRrw.MyVal2 = soldqty[INr.Code]/daysonstock[INr.Code];
 					DWTRrw.MyVal3 = daysonstock[INr.Code];
 					DWTRrw.MyVal4 = LeadTime;
-					DWTRrw.MyVal5 = DWTRrw.MyVal2 * (LeadTime + SZ);
+					DWTRrw.MyVal5 = DWTRrw.MyVal2 * LeadTime * SZ;
 					DWTRrw.MyVal6 = DWTRrw.MyVal5 + (OP * DWTRrw.MyVal2);
-					DWTRrw.MyVal7 = (DWTRrw.MyVal6 - OrderQty);
+					DWTRrw.MyVal7 = (DWTRrw.MyVal6 - OrderQty[INr.Code]);
 					matrowput(DWTRr,rwcnt,DWTRrw);
 				end;
 				
@@ -630,7 +632,9 @@ begin
 			outstring(tab[1],0,DWTRrw.Objects,false);
 			outstring(tab[2],0,DWTRrw.MyVal1,false);
 			outstring(tab[3],0,round(DWTRrw.MyVal2,SetRoundModeD(2)),false);
-			outstring(tab[4],0,DWTRrw.MyVal3,false);
+			if(RepSpec.flags[1]==0)then begin
+				outstring(tab[4],0,DWTRrw.MyVal3,false);
+			end;
 			outstring(tab[5],0,DWTRrw.MyVal4,false);
 			outstring(tab[6],0,round(DWTRrw.MyVal5,SetRoundModeD(0)),false);
 			outstring(tab[7],0,round(DWTRrw.MyVal6,SetRoundModeD(0)),false);
