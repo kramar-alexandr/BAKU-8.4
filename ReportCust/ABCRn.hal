@@ -501,8 +501,8 @@ begin
 	record IVVc IVr;
 	row IVVc IVrw;
 	vector val SaleMon;
-	integer pos,mtrw,y,months,i,MonSep,AnnDem,IVqty,POPlacingTime,Margin,oldcomp,currcomp,compmtrw,j,k,INq;
-	string 255 cmd,sCategory,sBrand,sType,sBrandName;
+	integer pos,mtrw,y,months,i,MonSep,AnnDem,IVqty,POPlacingTime,Margin,oldcomp,currcomp,compmtrw,j,k,INq,CompDem,oldDemComp,brcnt,br;
+	string 255 cmd,sCategory,sBrand,sType,sBrandName,BrDemPl;
 	date backdate,trdate,AnnDemDate,FrontDate;
 	val basesum, middleitprice,basesumprice,LTd;
 	vector integer Mon;
@@ -511,9 +511,28 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	longint quant;
-	array string 255 INCode;
+	array string 255 INCode,arBR;
+	vector string 255 INmatstrv, CalculatedLeadTime;
+	vector integer arComp;
 	
 	oldcomp = CurrentCompany;
+	
+	
+	
+	
+	brcnt = 0;
+	DIr.CType = "BRAND";
+	TrHs = true;
+	while (loopkey("CType",DIr,1,TrHs)) begin
+		if(DIr.CType!="BRAND")then begin TrHs = false; end;
+		if(TrHs)then begin
+			arBR[brcnt] = DIr.Code;
+			brcnt = brcnt + 1;
+			//logtext(0,DIr.Code);
+		end;
+	end;
+	
+	resetloop(DIr);
 	
 	
 	
@@ -566,87 +585,131 @@ begin
 				outstring(0,0,"Nov.",false);
 				outstring(0,0,"Dec.",false);
 			endformat;
+			
+			if (RepSpec.flags[1]!=2 and nonblank(RepSpec.f1))then begin brcnt = 1; end;
+			if (nonblank(RepSpec.f1))then begin brcnt = 1; end;
+			INq = 0;
+			
+			for (br=0;br<brcnt;br=br+1)begin
+			
+				if(RepSpec.flags[1]==2 and blank(RepSpec.f1))then begin RepSpec.f1 = arBR[br]; end;
+			
+				if(nonblank(RepSpec.f1))then begin
+					BlockLoad(Compb);
+					compmtrw = matrowcnt(Compb);
+					TrHs = true;
+					CUr.Code = "";
+					while(loopmain(CUr,1,TrHs))begin
+						if(RepSpec.f1==UpperCase(CUr.Name))then begin
+							BrDemPl = oldcomp & "," & CUr.DemPlanner;
+							TrHs = false;
+						end;
+					end;
+					resetloop(CUr);
+					pos = 0;
+					cmd = "";
+					ExtractObj(BrDemPl,pos,cmd);
+					while (nonblank(cmd)) begin
+						CompDem = StringToInt(cmd);
+						matrowget(Compb,CompDem,Comprw);
+						if(Comprw.ActiveStatus==0)then begin
+							arComp[CompDem] = 1;
+						end;
+						ExtractObj(BrDemPl,pos,cmd);
+					end;
+				end;
+				
 
-			for (j=0;j<compmtrw;j=j+1)begin
-				INq = 0;
-				compf = true;
+				for (j=0;j<compmtrw;j=j+1)begin
+					compf = true;
 				if(RepSpec.flags[1]==0)then begin
 					j=compmtrw;
 				end else begin
-					matrowget(Compb,j+1,Comprw);
-					if(Comprw.ActiveStatus==0)then begin
-						SetCompany(j+1,false);
+					if(RepSpec.flags[1]==1)then begin
+						matrowget(Compb,j+1,Comprw);
+						if(Comprw.ActiveStatus==0)then begin
+							SetCompany(j+1,false);
+						end else begin
+							compf = false;
+						end;
 					end else begin
-						compf = false;
+						if(arComp[j+1]==1)then begin
+							//logtext(0,j+1 & " <> " & BrDemPl);
+							SetCompany(j+1,false);
+							arComp[j+1] = 0;
+						end else begin
+							compf = false;
+						end;
 					end;
 				end;
-				INr.Code = "";
-				while(loopmain(INr,1,compf))begin
-					testf = true;
-					if(INr.Terminated==1)then begin testf = false; end;
-					if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups))then begin testf = false; end;
-					if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf = false; end;
-					if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf = false; end;
-					if(nonblank(RepSpec.f4) and RepSpec.f4!=INr.Recepy)then begin testf = false; end;
-					if(setinset("30",INr.DispGroups))then begin testf = false; end;
-					if(setinset("31",INr.DispGroups))then begin testf = false; end;
-					if(setinset("32",INr.DispGroups))then begin testf = false; end;
-					if(setinset("33",INr.DispGroups))then begin testf = false; end;
-					if(setinset("34",INr.DispGroups))then begin testf = false; end;
-					if(setinset("35",INr.DispGroups))then begin testf = false; end;
-					if(INr.ConsgType!=0)then begin
-						testf = false;
-					end;
-					if(testf)then begin
-						
-						
-						if(y==0)then begin
-							FrontDate = currentdate;
-						end else begin
-							FrontDate = addyear(currentdate,-y);
-							FrontDate.day = 31;
-							FrontDate.month = 12;
+					INr.Code = "";
+					while(loopmain(INr,1,compf))begin
+						testf = true;
+						if(INr.Terminated==1)then begin testf = false; end;
+						if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups))then begin testf = false; end;
+						if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups))then begin testf = false; end;
+						if(nonblank(RepSpec.f3) and !setinset(RepSpec.f3,INr.DispGroups))then begin testf = false; end;
+						if(nonblank(RepSpec.f4) and RepSpec.f4!=INr.Recepy)then begin testf = false; end;
+						if(setinset("30",INr.DispGroups))then begin testf = false; end;
+						if(setinset("31",INr.DispGroups))then begin testf = false; end;
+						if(setinset("32",INr.DispGroups))then begin testf = false; end;
+						if(setinset("33",INr.DispGroups))then begin testf = false; end;
+						if(setinset("34",INr.DispGroups))then begin testf = false; end;
+						if(setinset("35",INr.DispGroups))then begin testf = false; end;
+						if(INr.ConsgType!=0)then begin
+							testf = false;
 						end;
-						
-						IHr.ArtCode = INr.Code;
-						IHr.TransDate = FrontDate;
-						MonSep = 1;
-						basesumprice = 0;
-						IVqty = 0;
-						TrHs = true;
-						quant = 0;
-						while (loopbackkey("ArtCode",IHr,2,TrHs)) begin
-							if(IHr.ArtCode!=INr.Code)then begin TrHs = false; end;
-							if(IHr.TransDate<backdate)then begin TrHs = false; end;
-							INCodef = true;
-							for (k=0;k<INq;k=k+1)begin
-								if(INCode[k]==INr.Code or blank(INr.Code))then begin INCodef = false; k = INq + 1; end;
+						if(testf)then begin
+							
+							
+							if(y==0)then begin
+								FrontDate = currentdate;
+							end else begin
+								FrontDate = addyear(currentdate,-y);
+								FrontDate.day = 31;
+								FrontDate.month = 12;
 							end;
 							
-							if(INCodef)then begin
-								INCode[INq] = INr.Code;
-								INq = INq + 1;
-							end;
-							if(IHr.FileName=="IVVc" and TrHs)then begin
-							IVr.SerNr = IHr.TransNr;
-								if(readfirstmain(IVr,1,true))then begin
-									CustCodef = true;
-									if(setinset("FOB",IVr.CustCode))then begin CustCodef = false; end;
-									if(CustCodef)then begin
-										quant = -IHr.Qty;
-										trdate = IHr.TransDate;
-										trdate.day = 1;
-										MonSep = Mon[trdate];
-										SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + quant;
+							IHr.ArtCode = INr.Code;
+							IHr.TransDate = FrontDate;
+							MonSep = 1;
+							basesumprice = 0;
+							IVqty = 0;
+							TrHs = true;
+							quant = 0;
+							while (loopbackkey("ArtCode",IHr,2,TrHs)) begin
+								if(IHr.ArtCode!=INr.Code)then begin TrHs = false; end;
+								if(IHr.TransDate<backdate)then begin TrHs = false; end;
+								INCodef = true;
+								for (k=0;k<INq;k=k+1)begin
+									if(INCode[k]==INr.Code or blank(INr.Code))then begin INCodef = false; k = INq + 1; end;
+								end;
+								
+								if(INCodef)then begin
+									INCode[INq] = INr.Code;
+									INq = INq + 1;
+								end;
+								if(IHr.FileName=="IVVc" and TrHs)then begin
+								IVr.SerNr = IHr.TransNr;
+									if(readfirstmain(IVr,1,true))then begin
+										CustCodef = true;
+										if(setinset("FOB",IVr.CustCode))then begin CustCodef = false; end;
+										if(CustCodef)then begin
+											quant = -IHr.Qty;
+											trdate = IHr.TransDate;
+											trdate.day = 1;
+											MonSep = Mon[trdate];
+											SaleMon[MonSep & INr.Code] = SaleMon[MonSep & INr.Code] + quant;
+										end;
 									end;
 								end;
 							end;
+						
+							resetloop(IHr);
 						end;
-					
-						resetloop(IHr);
 					end;
+					ResetLoop(INr);
 				end;
-				ResetLoop(INr);
 			end;
 			ResetCompany (oldcomp);
 			for (k=0;k<INq;k=k+1)begin
