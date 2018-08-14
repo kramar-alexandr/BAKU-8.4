@@ -1,0 +1,89 @@
+remote function Boolean FindWHVETax(string,Date,var record WHVEVc);
+remote function Boolean FindRPCUTax(string,Date,var record RPCUTaxVc);
+external procedure WindowFieldGotoForTouchScreen(Integer,Integer,string,Boolean);
+external procedure IVCashDClass_RefreshStringList(Integer,record IVCashVc);
+remote function Boolean PasteCust2InInv(var record IVVc,record LocalMachineBlock,string,Boolean,var string,var string,var string,var string,var string);
+remote function Boolean IVCashVc_PasteCustCode(var record IVCashVc,string,string,string,var Integer,var string);
+remote updating function Boolean AddContactCUDsmRemote(record CUVc,string);
+external procedure SetupCustPS2Rn(string,var record RcVc);
+external function Integer GetInternetEnablerCountry();
+external function Boolean OpenContactRecord(string,string);
+
+
+global
+function Boolean CUDClassOnClose(Integer wn,Integer wn2)// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 13 08 2018 y. î 14:54:11
+begin
+  Integer mwn;
+  record CUVc CUr;
+  record IVCashVc IVCashr;
+  record IVCashVc IVCash2r;
+  record IVVc IVr;
+  record IVVc IV2r;
+  record LocalMachineBlock LMb;
+  Integer err;
+  string 255 warning,tstr;
+  string 255 errstr,prepstr,invdatewarn,transdatewarn;
+  record RcVc RepSpec;
+  Boolean res;
+
+  GetWindowRecord(wn,CUr);
+  mwn = MotherWindow(wn);
+  if(mwn>0)then begin
+		switch (GetWindowClass(mwn)) begin
+			case "NPTSIVCashDClass":
+				GetWindowRecord(mwn,IVCashr);
+				if (IVCashr.OKFlag==0) and (IVCashr.Invalid==0) then begin
+					BlockLoad(LMb);
+					GetPrevWindowRecord(mwn,IVCash2r);
+					IVCash2r.CustCode = IVCashr.CustCode;
+					IVCashr.CustCode = CUr.Code;
+					if (IVCashVc_PasteCustCode(IVCashr,IVCash2r.CustCode,LMb.DefLocation,LMb.PLCode,err,warning)) then begin
+						if (nonblank(warning)) then begin
+							MessageBox(0,warning);
+						end;
+						if (err!=0) then begin
+							MessageBox(0,err);
+						end;
+					end;
+					PutWindowRecord(mwn,IVCashr);
+					PutWindowString(mwn,"ivcashcommand","");
+					ReRunWindowDef(mwn);
+					IVCashDClass_RefreshStringList(mwn,IVCashr);
+					WindowFieldGotoForTouchScreen(mwn,-1,"ivcashcommand",false);
+					res = false;
+				end;
+			case "IVDClass":
+				GetWindowRecord(mwn,IVr);
+				if (IVr.OKFlag==0) and (IVr.Invalid==0) then begin
+					BlockLoad(LMb);
+					GetPrevWindowRecord(mwn,IV2r);
+					IV2r.CustCode = IVr.CustCode;
+					IVr.CustCode = CUr.Code;
+					if (PasteCust2InInv(IVr,LMb,IV2r.CustCode,false,warning,errstr,prepstr,invdatewarn,transdatewarn)) then begin
+						if (nonblank(warning)) then begin
+							MessageBox(0,warning);
+						end;
+						if (err!=0) then begin
+							MessageBox(0,err);
+						end;
+					end;
+					PutWindowRecord(mwn,IVr);
+					ReRunWindowDef(mwn);
+				end;
+			case "ChangeAddressNPTSIVCashSClass":
+				GetWindowRecord(mwn,RepSpec);
+				RepSpec.f6 = CUr.Name;
+				RepSpec.f1 = CUr.InvAddr0;
+				RepSpec.f2 = CUr.InvAddr1;
+				RepSpec.f3 = CUr.InvAddr3;
+				RepSpec.f4 = CUr.InvAddr4;
+	//          RepSpec.f5 = CUr.InvAddr5;
+				RepSpec.f11 = CUr.RegNr1;
+				RepSpec.f11 = CUr.RegNr2;
+				RepSpec.f12 = CUr.VATNr;
+				PutWindowRecord(mwn,RepSpec);
+		end;
+  end;
+  CUDClassOnClose = res;
+  return;
+end;

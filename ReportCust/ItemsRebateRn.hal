@@ -1,0 +1,107 @@
+//server-only
+SetLangMode(LangRussian,"RUS",0);
+
+global 
+procedure ItemsRebateRn(record RcVc RepSpec)
+begin
+  array integer tab;
+  record CompaniesBlock Compb;
+  record INVc INr;
+  record ITVc ITr;
+  record RebVc Rebr;
+  row CompaniesBlock Comprw;
+  row RebVc Rebrw;
+  boolean TrHs,testf,differentf,f;
+  integer rwcnt,comprwcnt,i,j,compi,oldcomp,ii,ri;
+  vector val reb;
+  array string 50 items,rebs;
+  
+  tab[0] = 0;
+  tab[1] = tab[0] + 15;
+  tab[2] = tab[1] + 60;
+  tab[3] = tab[2] + 60;
+  oldcomp = CurrentCompany;  
+  BlockLoad(Compb);
+  comprwcnt = MatRowCnt(Compb);
+  StartReportNoHeaderJob("Список товаров со скидками");
+    StartFormat(15);
+      OutString(tab[0],0,"Компания",false);
+      OutString(tab[1],0,"Код товара",false);
+      OutString(tab[2],0,"Скидка",false);
+    EndFormat;
+    Black_Divider(0,1);
+    for (compi=0;compi<comprwcnt;compi=compi+1) begin
+      MatRowGet(Compb,compi,Comprw);
+      Gray_Divider(0,1);
+      StartFormat(15);
+        OutString(tab[0],0,Comprw.CompName,false);
+      EndFormat;
+      if (SetCompanyCode(Comprw.CompCode,false)) then begin
+        resetloop(Rebr);
+        Rebr.Code = "";
+        cleararray(items);
+        ii = 0;
+        cleararray(rebs);
+        ri = 0;
+        f = false;
+        while (loopmain(Rebr,1,true)) begin
+          if ((CurrentDate>=Rebr.FromDate) and (CurrentDate<=Rebr.ToDate)) or (blankdate(Rebr.FromDate) and blankdate(Rebr.ToDate)) then begin
+            rwcnt = MatRowCnt(Rebr);
+            if (rwcnt!=0) then begin
+              rebs[ri] = Rebr.Code;
+              ri = ri + 1;
+              for (i=0;i<rwcnt;i=i+1) begin
+                MatRowGet(Rebr,i,Rebrw);
+                items[ii] = Rebrw.CodeType & ";" & Rebrw.ITCode;
+                ii = ii + 1;
+                reb[Comprw.CompCode & ";" & Rebr.Code & ";" & Rebrw.CodeType & ";" & Rebrw.ITCode] = Rebrw.vra0;
+              end;
+              for (ii=0;ii<items.length;ii=ii+1) begin
+                differentf = false;
+                for (ri=0;ri<rebs.length-1;ri=ri+1) begin
+                  if (reb[Comprw.CompCode & ";" & rebs[ri] & ";" & items[ii]] != reb[Comprw.CompCode & ";" & rebs[ri+1] & ";" & items[ii]]) then begin
+                    differentf = true;
+                  end;
+                end;
+                if (!differentf) then begin
+                  StartFormat(15);
+                    OutString(tab[0],0,"",false);
+                    switch (FirstInRange(items[ii],20)) begin
+                      case kPLDefRowTypeItemGroup:
+                        OutString(tab[1],0,USetStr(9182),false);
+                      case kPLDefRowTypeItem:
+                        OutString(tab[1],0,USetStr(12002),false);
+                    end;
+                    OutString(tab[2],0,LastInRange(items[ii],20),false);
+                    OutString(tab[3],0,reb[Comprw.CompCode & ";" & rebs[0] & ";" & items[ii]],false);
+                  EndFormat;
+                end else begin
+                  f = true;
+                  StartFormat(15);
+                    OutString(tab[0],0,"",false);
+                    OutString(tab[1],0,FirstInRange(items[ii],20),false);
+                    OutString(tab[2],0,LastInRange(items[ii],20),false);
+                    for (ri=0;ri<rebs.length-1;ri=ri+1) begin
+                      OutString(tab[3] + ri*60,0,reb[Comprw.CompCode & ";" & rebs[ri] & ";" & items[ii]],false);
+                    end;
+                  EndFormat;
+                end;
+              end;
+            end;
+          end;
+        end;
+        if (f) then begin
+          StartFormat(15);
+            OutString(tab[1],0,"",false);
+            OutString(tab[2],0,"",false);
+            for (ri=0;ri<rebs.length-1;ri=ri+1) begin
+              OutString(tab[3] + ri*60,0,rebs[ri],false);
+            end;
+          EndFormat;
+        end;
+      end;
+    end;
+  ResetCompany(oldcomp);
+  EndJob;
+  return;
+end;
