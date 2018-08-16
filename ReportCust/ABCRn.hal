@@ -61,29 +61,18 @@ begin
 	val basesum, middleinprice,basesumprice,LTd;
 	vector integer Mon;
 	record CUVc CUr;
-	vector val brandleadtime;
+	vector val brandleadtime,vLTd;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	array string 255 INCode,arBR;
 	vector string 255 INmatstrv;
 	vector integer arComp;
-	vector boolean vOldItStr, vDemComp;
+	vector boolean vOldItStr, vDemComp, INCodesf;
 	record UserVc USr;
 	
 	oldcomp = CurrentCompany;
 	
-	/*brcnt = 0;
-	DIr.CType = "BRAND";
-	TrHs = true;
-	while (loopkey("CType",DIr,1,TrHs)) begin
-		if(DIr.CType!="BRAND")then begin TrHs = false; end;
-		if(TrHs)then begin
-			arBR[brcnt] = DIr.Code;
-			brcnt = brcnt + 1;
-		end;
-	end;
-	
-	resetloop(DIr);*/
+
 	
 	
 	
@@ -104,8 +93,13 @@ begin
 		end;
 	end;
 	
-	
-	
+	TrHs = true;
+	CUr.Code = "";
+	while (loopmain(CUr,1,TrHs))begin
+		if(CUr.VEType==1)then begin 
+			vLTd[UpperCase(CUr.Name)] = CUr.CalculatedLeadTime;
+		end;
+	end;
 	
 	
 
@@ -257,6 +251,7 @@ begin
 			resetloop(INr);
 			INr.Code = "";
 			while(loopmain(INr,1,compf))begin
+				//logtext(0,INr.Code);
 				testf = true;
 				if(INr.Terminated==1)then begin testf = false; end;
 				if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups))then begin testf = false; end;
@@ -304,7 +299,7 @@ begin
 					end;
 					if(testf)then begin
 						LTd = 0;
-						CUr.Code = sBrandName;
+						/*CUr.Code = sBrandName;
 						TrHs = true;
 						POPlacingTime = 4;
 						Margin = 4;
@@ -316,7 +311,12 @@ begin
 								end;
 							end;
 						end;
-						ResetLoop(CUr);
+						ResetLoop(CUr);*/
+						
+						
+						if(vLTd[UpperCase(sBrandName)]>0)then begin LTd = vLTd[UpperCase(sBrandName)]; end;
+						
+						
 						
 						datef = true;
 						anndemaatef = true;
@@ -332,13 +332,10 @@ begin
 							if(IHr.ArtCode!=INr.Code)then begin datef = false; TrHs = false; end;
 							if(IHr.TransDate<=AnnDemDate)then begin anndemaatef = false; end;
 							
-							INCodef = true;
-							for (k=0;k<INq;k=k+1)begin
-								if(INr.Code==INCode[k] or blank(INr.Code))then begin INCodef = false; k = INq + 1; end;
-							end;
 							
-							if(INCodef)then begin
+							if(INCodesf[INr.Code]!=true)then begin
 								INCode[INq] = INr.Code;
+								INCodesf[INr.Code] = true;
 								INq = INq + 1;
 							end;
 							
@@ -517,7 +514,7 @@ begin
 	array string 255 INCode,arBR;
 	vector string 255 INmatstrv, CalculatedLeadTime,MonName;
 	vector integer arComp, YearMonSep;
-	vector boolean vDemComp;
+	vector boolean vDemComp, SalesThrYf, SalesOneYf;
 	record UserVc USr;
 	
 	oldcomp = CurrentCompany;
@@ -688,6 +685,8 @@ begin
 										trdate = IHr.TransDate;
 										trdate.day = 1;
 										MonSep = Mon[trdate];
+										if(quant>0)then begin SalesThrYf[INr.Code] = true; end;
+										if(quant>0 and Year==GetYear(currentdate))then begin SalesOneYf[INr.Code] = true; end;
 										SaleMon[MonSep & INr.Code & Year] = SaleMon[MonSep & INr.Code & Year] + quant;
 									end;
 								end;
@@ -763,40 +762,45 @@ begin
 	
 	
 	for (k=0;k<INq;k=k+1) begin
-		for (MonSep=12;MonSep>0;MonSep=MonSep-1)begin
-			if(MonSep>0)then begin Quart = 4; end;
-			if(MonSep>3)then begin Quart = 3; end;
-			if(MonSep>6)then begin Quart = 2; end;
-			if(MonSep>9)then begin Quart = 1; end;
-			startformat(15);
-				outstring(0,0,"",false);
-				outstring(0,0,INCode[k],false);
-				outstring(0,0,SaleMon[MonSep & INCode[k] & Year],false);
-				outstring(0,0,(13-MonSep),false);
-				outstring(0,0,Quart,false);
-				outstring(0,0,Year,false);
-				outstring(0,0,"",false);
-				outstring(0,0,"",false);
-				if(RepSpec.flags[3]==0)then begin
+		testf = false;
+		if(RepSpec.flags[3]==0 and SalesThrYf[INCode[k]])then begin testf = true; end;
+		if(RepSpec.flags[3]==1 and SalesOneYf[INCode[k]])then begin testf = true; end;
+		if(testf)then begin
+			for (MonSep=12;MonSep>0;MonSep=MonSep-1)begin
+				if(MonSep>0)then begin Quart = 4; end;
+				if(MonSep>3)then begin Quart = 3; end;
+				if(MonSep>6)then begin Quart = 2; end;
+				if(MonSep>9)then begin Quart = 1; end;
+				startformat(15);
+					outstring(0,0,"",false);
 					outstring(0,0,INCode[k],false);
-					Year = Year - 1;
 					outstring(0,0,SaleMon[MonSep & INCode[k] & Year],false);
 					outstring(0,0,(13-MonSep),false);
 					outstring(0,0,Quart,false);
 					outstring(0,0,Year,false);
 					outstring(0,0,"",false);
 					outstring(0,0,"",false);
-					outstring(0,0,INCode[k],false);
-					Year = Year - 1;
-					outstring(0,0,SaleMon[MonSep & INCode[k] & Year],false);
-					outstring(0,0,(13-MonSep),false);
-					outstring(0,0,Quart,false);
-					outstring(0,0,Year,false);
-					outstring(0,0,"",false);
-					year = year + 2;
-				end;
-			endformat;
-		end;	
+					if(RepSpec.flags[3]==0)then begin
+						outstring(0,0,INCode[k],false);
+						Year = Year - 1;
+						outstring(0,0,SaleMon[MonSep & INCode[k] & Year],false);
+						outstring(0,0,(13-MonSep),false);
+						outstring(0,0,Quart,false);
+						outstring(0,0,Year,false);
+						outstring(0,0,"",false);
+						outstring(0,0,"",false);
+						outstring(0,0,INCode[k],false);
+						Year = Year - 1;
+						outstring(0,0,SaleMon[MonSep & INCode[k] & Year],false);
+						outstring(0,0,(13-MonSep),false);
+						outstring(0,0,Quart,false);
+						outstring(0,0,Year,false);
+						outstring(0,0,"",false);
+						year = year + 2;
+					end;
+				endformat;
+			end;	
+		end;
 	end;
 	endjob;
 	
@@ -837,7 +841,7 @@ begin
 	row ORVc ORrw;
 	vector string 255 INmatstrv, CalculatedLeadTime;
 	vector integer arComp;
-	vector boolean vDemComp;
+	vector boolean vDemComp,SalesThrYf;
 	record UserVc USr;
 	
 	oldcomp = CurrentCompany;
