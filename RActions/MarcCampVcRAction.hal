@@ -1,0 +1,240 @@
+external function Boolean CustomerWithPhoneExists(record CUVc,var string, var string);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 20 August 2018 16:41:05
+external function Boolean CustomerWithEmailExists(string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 20 August 2018 16:41:05
+
+
+global webpublic updating procedure WebCreateCustomer()
+begin
+	record CUVc CUr;
+	area getpost;
+	json jsresponse;
+	boolean foundf;
+	string 100 tstr,field;
+	date birthdate;
+	
+	logtext(0,"WebCreateCustomer");
+	
+	webgetpostdata(getpost);
+	
+	jsresponse = ParseJSONArea(getpost);
+	if(nonblank(JSONGet(jsresponse,"id")))then begin
+		CUr.Sorting = JSONGet(jsresponse,"id");
+		if(readfirstkey("Sorting",CUr,1,true)==false)then begin
+			CUr.Phone = JSONGet(jsresponse,"mobilePhone1");
+			if(readfirstkey("Phone",CUr,1,true))then begin
+				foundf = true;
+			end;
+			
+			CUr.Phone = JSONGet(jsresponse,"mobilePhone1");
+			CUr.Mobile = JSONGet(jsresponse,"mobilePhone2");
+			CUr.AltPhone = JSONGet(jsresponse,"mobilePhone3");
+			if(CustomerWithPhoneExists(CUr,tstr,field))then begin
+				weboutstring("{\"error\":\" Customer with phone exists" & field & "\"}");
+			end else begin
+				if(CustomerWithEmailExists("",JSONGet(jsresponse,"mainEmail")))then begin
+					weboutstring("{\"error\":\"Customer with e-Mail exist\"}");
+				end else begin
+					recordnew(CUr);
+					CUr.Code = JSONGet(jsresponse,"mobilePhone1");
+					CUr.Name = JSONGet(jsresponse,"firstName") & " " & JSONGet(jsresponse,"lastName");
+					CUr.Phone = JSONGet(jsresponse,"mobilePhone1");
+					CUr.Mobile = JSONGet(jsresponse,"mobilePhone2");
+					CUr.AltPhone = JSONGet(jsresponse,"mobilePhone3");
+					CUr.eMail = JSONGet(jsresponse,"mainEmail");
+					birthdate.year = stringtoint(left(JSONGet(jsresponse,"birthday"),4));
+					birthdate.day = stringtoint(right(JSONGet(jsresponse,"birthday"),2));
+					birthdate.month = stringtoint(mid(JSONGet(jsresponse,"birthday"),5,2));
+					CUr.BirthDate = birthdate;
+					CUr.Sorting = JSONGet(jsresponse,"id");
+					CUr.RebCode = "0%";
+					CUr.PLCode = "RRP";
+					recordinsert(CUr,true);
+					weboutstring("{\"id\":\"" & CUr.Code & "\"}");
+				end;
+			end;
+		end else begin
+			weboutstring("{\"error\":\"Customer already created\"}");
+		end;
+	end;
+return;
+end;
+
+
+global updating procedure SednMarcCampVcToCRM(var record MarcCampVc MCr)
+begin
+	integer err,noErr;
+  string 255 host,tstr,nonce,opaque,page;
+  LongInt port,pos,mtrw;
+  Area req,reply;
+  string 255 ha1,ha2;
+  row MarcCampVc MCrw;
+  integer i;
+  
+  host = "93.88.82.42";
+  page = "/api/MarketingCampaign/Create";
+  port = 8087;
+	
+	addtexttoarea("POST " & page & " HTTP/1.0" & chr(13) & chr(10),req);
+	addtexttoarea("host: " & host & chr(13) & chr(10),req);
+	addtexttoarea("Content-Type: application/json" & chr(13) & chr(10),req);
+	addtexttoarea(chr(13) & chr(10),req);
+	
+	addtexttoarea("{" & chr(13) & chr(10),req);
+	addtexttoarea("\"name\":\"" & MCr.Name & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"proposedStartDate\":"  & "\"" & DateToString(MCr.sDate,"YYYY.MM.DD") & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"proposedEndDate\":"  & "\"" & DateToString(MCr.eDate,"YYYY.MM.DD") & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"actualStartDate\":"  & "\"" & DateToString(MCr.RealsDate,"YYYY.MM.DD") & "\"," & chr(13) & chr(10),req);
+	
+	addtexttoarea("\"actualEndDate\":"  & "\"" & DateToString(MCr.RealeDate,"YYYY.MM.DD") & "\"," & chr(13) & chr(10),req);
+	mtrw = matrowcnt(MCr);
+	if(mtrw>0)then begin
+		addtexttoarea("\"productList\":[" & chr(13) & chr(10),req);
+		For(i=0;i<mtrw;i=i+1) begin
+			matrowget(MCr,i,MCrw);
+			if(i==mtrw-1)then begin
+				addtexttoarea("{\"hansaId\":\"" & MCrw.ItemCode & "\"," & chr(13) & chr(10),req);
+				addtexttoarea("\"name\":\"" & MCrw.Name & "\"}" & chr(13) & chr(10),req);
+			end else begin
+				addtexttoarea("{\"hansaId\":\"" & MCrw.ItemCode & "\"," & chr(13) & chr(10),req);
+				addtexttoarea("\"name\":\"" & MCrw.Name & "\"}," & chr(13) & chr(10),req);
+			end;
+		end; 
+		addtexttoarea("]," & chr(13) & chr(10),req);
+	end;
+	addtexttoarea("\"hansaId\":" & "\"" & MCr.Code & "\"" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	
+	writeareatofile(req,"CRMRequest.txt",0);
+	if (SendRawWebRequest(host,port,false,"POST",page,"application/json","",false,req,reply,10)) then begin
+		writeareatofile(reply,"CRMResponse.txt",0);
+  end;
+
+return;
+end;
+
+global updating procedure SednConsultantToCRM(var record UserVc USr)
+begin
+	integer err,noErr;
+  string 255 host,tstr,nonce,opaque,page;
+  LongInt port,pos,mtrw;
+  Area req,reply;
+  string 255 ha1,ha2;
+  row MarcCampVc MCrw;
+  integer i;
+  json jsresponse;
+  
+  host = "93.88.82.42";
+  page = "/api/Contact/Create";
+  port = 8087;
+	
+	//addtexttoarea("POST " & page & " HTTP/1.0" & chr(13) & chr(10),req);
+	//addtexttoarea("host: " & host & chr(13) & chr(10),req);
+	//addtexttoarea("Content-Type: application/json" & chr(13) & chr(10),req);
+	//addtexttoarea(chr(13) & chr(10),req);
+	
+	addtexttoarea("{" & chr(13) & chr(10),req);
+	addtexttoarea("\"firstName\":\"" & USr.Name & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"lastName\":"  & "\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"landlineNumber\":"  & "\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"mainEmail\":"  & "\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"addEmail\":"  & "\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"mobilePhone1\":" & "\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"mobilePhone2\":" & "\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"mobilePhone3\":" & "\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"birthday\":" & "\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"id\":" & "\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"hansaId\":" & "\"" & USr.Code & "\"" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	
+	writeareatofile(req,"CRMRequest.txt",0);
+	SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,10);
+	if(getarealength(reply)>0)then begin
+		jsresponse = ParseJSONArea(reply);
+		if(nonblank(JSONGet(jsresponse,"result")))then begin
+			USr.CRMid = JSONGet(jsresponse,"result");
+		end;
+	end;
+	//if (SendRawWebRequest(host,port,false,"POST",page,"application/json","",false,req,reply,10)) then begin
+		
+  //end;
+	writeareatofile(reply,"CRMResponse.txt",0);
+return;
+end;
+
+global updating procedure SednDelConsultantToCRM(var record UserVc USr)
+begin
+	integer err,noErr;
+  string 255 host,tstr,nonce,opaque,page;
+  LongInt port,pos,mtrw;
+  Area req,reply;
+  string 255 ha1,ha2;
+  row MarcCampVc MCrw;
+  integer i;
+  json jsresponse;
+  
+  host = "93.88.82.42";
+  page = "/api/Contact/Delete";
+  port = 8087;
+	
+	/*addtexttoarea("{" & chr(13) & chr(10),req);
+	addtexttoarea("\"id\":\"" & USr.CRMid & "\"" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	*/
+	writeareatofile(req,"CRMRequest.txt",0);
+	SendWebRequest(host,port,-1,false,"DELETE",page & "?id=" & USr.CRMid,"application/json","id",false,req,reply,10);
+	if(getarealength(reply)>0)then begin
+		jsresponse = ParseJSONArea(reply);
+		if(JSONGet(jsresponse,"result")==USr.CRMid)then begin
+			USr.CRMid = "";
+		end;
+		//USr.CRMid = "";
+	end;
+	//if (SendRawWebRequest(host,port,false,"POST",page,"application/json","",false,req,reply,10)) then begin
+		
+  //end;
+	writeareatofile(reply,"CRMResponse.txt",0);
+return;
+end;
+
+global
+updating function LongInt MarcCampVcRecordCheck(var record MarcCampVc MCr,record MarcCampVc MC2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  date bldate;
+  
+  res = 0;
+  
+  if(MCr.eDate<MCr.sDate)then begin
+  	MCr.eDate = bldate;
+  end;
+  if(MCr.RealeDate<MCr.RealsDate)then begin
+  	MCr.RealeDate = bldate;
+  end;
+  
+  if(blankdate(MCr.sDate)) then begin
+    RecordCheckError(1058,"",-1,"sDate");
+    res = -1;
+    goto LMarcCampVcRecordCheck;    
+  end; 
+  if(blankdate(MCr.eDate)) then begin
+    RecordCheckError(1058,"",-1,"eDate");
+    res = -1;
+    goto LMarcCampVcRecordCheck;    
+  end; 
+  if(blankdate(MCr.RealsDate)) then begin
+    RecordCheckError(1058,"",-1,"RealsDate");
+    res = -1;
+    goto LMarcCampVcRecordCheck;    
+  end; 
+  if(blankdate(MCr.RealeDate)) then begin
+    RecordCheckError(1058,"",-1,"RealeDate");
+    res = -1;
+    goto LMarcCampVcRecordCheck;    
+  end; 
+  
+  SednMarcCampVcToCRM(MCr);
+  
+  LMarcCampVcRecordCheck:;
+  
+  MarcCampVcRecordCheck = res;
+  RETURN;
+END;
