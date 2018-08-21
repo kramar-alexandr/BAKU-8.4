@@ -1,5 +1,209 @@
 external function Boolean CustomerWithPhoneExists(record CUVc,var string, var string);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 20 August 2018 16:41:05
 external function Boolean CustomerWithEmailExists(string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 20 August 2018 16:41:05
+external updating procedure CopyLoyaltyBalanceToNewCard(var record LoyaltyCardVc); //Edit***************************Sasha2,12:19 23.05.2017
+external updating procedure CreateLoyaltyCardRemote(record CUVc,var record LoyaltyCardVc);// Edit ************************** BPI Ukraine - KramarAlexandr - Thursday, 4 January 2018 12:28:35
+
+global webpublic updating procedure WebCreateConsultant()
+begin
+	record UserVc USr;
+	record CUVc CUr;
+	area getpost;
+	json jsresponse;
+	boolean foundf;
+	string 100 tstr,field;
+	date birthdate;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBrw;
+	integer mtrw,i;
+	record LocationVc Locr;
+	
+	logtext(0,"WebCreateConsultant");
+	
+	webgetpostdata(getpost);
+	
+	
+	jsresponse = ParseJSONArea(getpost);
+	if(nonblank(JSONGet(jsresponse,"hansaId")))then begin
+		if(nonblank(JSONGet(jsresponse,"shopId")))then begin
+			blockload(CBb);		
+			mtrw = matrowcnt(CBb);
+			For(i=0;i<mtrw;i=i+1) begin
+	  		matrowget(CBb,i,CBrw);
+	  		setcompany(i+1,true);
+	  		Locr.Code = "";
+	  		resetloop(Locr);
+	  		while(loopmain(Locr,1,true))begin
+	  			if(Locr.Code==JSONGet(jsresponse,"shopId"))then begin
+	  				USr.Code = JSONGet(jsresponse,"hansaId");
+	  				if(readfirstmain(USr,1,true)==false)then begin
+	  					if(nonblank(JSONGet(jsresponse,"firstName")))then begin
+								recordnew(USr);
+									USr.Code = left(JSONGet(jsresponse,"hansaId"),10);
+									USr.Name = JSONGet(jsresponse,"firstName") & " " & JSONGet(jsresponse,"lastName");
+									USr.AccessGroup = "DENY";
+									USr.TypeOfUser = kTypeOfUserConcurrent;
+									USr.StartLevel = 1;
+									USr.IsSalesMan = 1;
+									USr.Phone1 = JSONGet(jsresponse,"mainPhone");
+									USr.Phone2 = JSONGet(jsresponse,"mobilePhone");
+									USr.emailAddr = JSONGet(jsresponse,"email");
+									weboutstring("{\"id\":\"" & USr.Code & "\"}");
+								recordStore(USr,true);
+								goto lWebCreateConsultant;
+	  					end else begin
+	  						weboutstring("{\"error\":\"Blank first name\"}");
+	  					end;
+	  				end else begin
+	  					weboutstring("{\"error\":\"Consultant exist\"}");
+	  				end;
+	  			end;
+	  		end;
+			end; 
+		end else begin
+			weboutstring("{\"error\":\"hansaId is shopId\"}");
+		end;
+	end else begin
+		weboutstring("{\"error\":\"hansaId is blank\"}");
+	end;
+
+lWebCreateConsultant:;
+resetcompany(1);
+
+return;
+end;
+
+
+global webpublic updating procedure WebUpdateConsultant()
+begin
+	record UserVc USr;
+	record CUVc CUr;
+	area getpost;
+	json jsresponse;
+	boolean foundf;
+	string 100 tstr,field;
+	date birthdate;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBrw;
+	integer mtrw,i;
+	record LocationVc Locr;
+	
+	logtext(0,"WebCreateConsultant");
+	
+	webgetpostdata(getpost);
+	
+	
+	jsresponse = ParseJSONArea(getpost);
+	if(nonblank(JSONGet(jsresponse,"hansaId")))then begin
+		if(nonblank(JSONGet(jsresponse,"shopId")))then begin
+			blockload(CBb);		
+			mtrw = matrowcnt(CBb);
+			For(i=0;i<mtrw;i=i+1) begin
+	  		matrowget(CBb,i,CBrw);
+	  		setcompany(i+1,true);
+	  		Locr.Code = "";
+	  		resetloop(Locr);
+	  		while(loopmain(Locr,1,true))begin
+	  			if(Locr.Code==JSONGet(jsresponse,"shopId"))then begin
+	  				USr.Code = JSONGet(jsresponse,"hansaId");
+	  				if(readfirstmain(USr,1,true))then begin
+	  					if(nonblank(JSONGet(jsresponse,"firstName")))then begin
+								USr.Name = JSONGet(jsresponse,"firstName") & " " & JSONGet(jsresponse,"lastName");
+								USr.Phone1 = JSONGet(jsresponse,"mainPhone");
+								USr.Phone2 = JSONGet(jsresponse,"mobilePhone");
+								USr.emailAddr = JSONGet(jsresponse,"email");
+								weboutstring("{\"id\":\"" & USr.Code & "\"}");
+								recordStore(USr,true);
+								goto lWebUpdateConsultant;
+	  					end else begin
+	  						weboutstring("{\"error\":\"Blank first name\"}");
+	  					end;
+	  				end else begin
+	  					weboutstring("{\"error\":\"Consultant not exist\"}");
+	  				end;
+	  			end;
+	  		end;
+			end; 
+		end else begin
+			weboutstring("{\"error\":\"hansaId is shopId\"}");
+		end;
+	end else begin
+		weboutstring("{\"error\":\"hansaId is blank\"}");
+	end;
+
+lWebUpdateConsultant:;
+resetcompany(1);
+
+return;
+end;
+
+global webpublic updating procedure WebCreateLoyaltyCard()
+begin
+	record LoyaltyCardVc LCr;
+	record CUVc CUr;
+	area getpost;
+	json jsresponse;
+	boolean foundf;
+	string 100 tstr,field;
+	date birthdate;
+	
+	logtext(0,"WebCreateLoyCard");
+	
+	webgetpostdata(getpost);
+	
+	jsresponse = ParseJSONArea(getpost);
+	if(nonblank(JSONGet(jsresponse,"hansaId")))then begin
+		LCr.SerNr = JSONGet(jsresponse,"hansaId");
+		if(readfirstmain(LCr,1,true)==false)then begin
+			logtext(0,"Cont " & JSONGet(jsresponse,"contact"));
+			CUr.Code = JSONGet(jsresponse,"contact");
+			if(readfirstmain(CUr,1,true))then begin
+				recordnew(LCr);
+					CreateLoyaltyCardRemote(CUr,LCr);
+					LCr.SerNr = JSONGet(jsresponse,"hansaId");
+					LCr.CustCode = JSONGet(jsresponse,"contact");
+					LCr.LCMLevel = JSONGet(jsresponse,"loyaltyProgramId");
+					LCr.StartDate = currentdate;
+					CopyLoyaltyBalanceToNewCard(LCr);
+				recordstore(LCr,true);
+				weboutstring("{\"id\":\"" & LCr.SerNr & "\"}");
+			end else begin
+				weboutstring("{\"error\":\"Customer not found\"}");
+			end;
+		end else begin
+			weboutstring("{\"error\":\"Card already created\"}");
+		end;			
+	end;
+return;
+end;
+
+global webpublic updating procedure WebUpdateLoyaltyCard()
+begin
+	record LoyaltyCardVc LCr;
+	record CUVc CUr;
+	area getpost;
+	json jsresponse;
+	boolean foundf;
+	string 100 tstr,field;
+	date birthdate;
+	
+	logtext(0,"WebUpdateLoyCard");
+	
+	webgetpostdata(getpost);
+	
+	jsresponse = ParseJSONArea(getpost);
+	if(nonblank(JSONGet(jsresponse,"hansaId")))then begin
+		LCr.SerNr = JSONGet(jsresponse,"hansaId");
+		if(readfirstmain(LCr,1,true))then begin
+			LCr.SerNr = JSONGet(jsresponse,"hansaId");
+			LCr.LCMLevel = JSONGet(jsresponse,"loyaltyProgramId");
+			recordstore(LCr,true);
+			weboutstring("{\"id\":\"" & LCr.SerNr & "\"}");
+		end else begin
+			weboutstring("{\"error\":\"Card not found\"}");
+		end;			
+	end;
+return;
+end;
 
 
 global webpublic updating procedure WebCreateCustomer()
@@ -17,8 +221,8 @@ begin
 	
 	jsresponse = ParseJSONArea(getpost);
 	if(nonblank(JSONGet(jsresponse,"id")))then begin
-		CUr.Sorting = JSONGet(jsresponse,"id");
-		if(readfirstkey("Sorting",CUr,1,true)==false)then begin
+		CUr.ANACode = JSONGet(jsresponse,"id");
+		if(readfirstkey("ANACode",CUr,1,true)==false)then begin
 			CUr.Phone = JSONGet(jsresponse,"mobilePhone1");
 			if(readfirstkey("Phone",CUr,1,true))then begin
 				foundf = true;
@@ -44,7 +248,7 @@ begin
 					birthdate.day = stringtoint(right(JSONGet(jsresponse,"birthday"),2));
 					birthdate.month = stringtoint(mid(JSONGet(jsresponse,"birthday"),5,2));
 					CUr.BirthDate = birthdate;
-					CUr.Sorting = JSONGet(jsresponse,"id");
+					CUr.ANACode = JSONGet(jsresponse,"id");
 					CUr.RebCode = "0%";
 					CUr.PLCode = "RRP";
 					recordinsert(CUr,true);
@@ -53,6 +257,46 @@ begin
 			end;
 		end else begin
 			weboutstring("{\"error\":\"Customer already created\"}");
+		end;
+	end;
+return;
+end;
+
+global webpublic updating procedure WebUpdateCustomer()
+begin
+	record CUVc CUr,oldCUr;
+	area getpost;
+	json jsresponse;
+	boolean foundf;
+	string 100 tstr,field;
+	date birthdate;
+	
+	logtext(0,"WebUpdateCustomer");
+	
+	webgetpostdata(getpost);
+	
+	jsresponse = ParseJSONArea(getpost);
+	if(nonblank(JSONGet(jsresponse,"hansaId")))then begin
+		CUr.Code = JSONGet(jsresponse,"hansaId");
+		if(readfirstkey("Code",CUr,1,true)==true)then begin
+			recordcopy(oldCUr,CUr);
+			CUr.Name = JSONGet(jsresponse,"firstName") & " " & JSONGet(jsresponse,"lastName");
+			CUr.Phone = JSONGet(jsresponse,"mobilePhone1");
+			CUr.Mobile = JSONGet(jsresponse,"mobilePhone2");
+			CUr.AltPhone = JSONGet(jsresponse,"mobilePhone3");
+			CUr.eMail = JSONGet(jsresponse,"mainEmail");
+			birthdate.year = stringtoint(left(JSONGet(jsresponse,"birthday"),4));
+			birthdate.day = stringtoint(right(JSONGet(jsresponse,"birthday"),2));
+			birthdate.month = stringtoint(mid(JSONGet(jsresponse,"birthday"),5,2));
+			CUr.BirthDate = birthdate;
+			if(recordupdate(oldCUr,CUr,true)==0)then begin
+				weboutstring("{\"id\":\"" & CUr.Code & "\"}");
+			end	else begin
+				weboutstring("{\"error\":\"Can't update Customer\"}");
+			end;
+			
+		end else begin
+			weboutstring("{\"error\":\"Customer not exist\"}");
 		end;
 	end;
 return;
