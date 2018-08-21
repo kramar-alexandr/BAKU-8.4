@@ -50,6 +50,10 @@ external updating procedure UpdatePlanned(string,string,string,LongInt,Date,val,
 external updating procedure CalcPriceListsMn(record RcVc);
 external procedure INCatSClassArrayOnOpen(var Array string,var Integer);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:55 06.08.2018
 external procedure ExtractObj(string,var Integer,var string);
+remote function Boolean GetItemPriceDiscount3(string,val,var record INVc,string,val,val,val,val,val,string,string,string,string,
+                                                var val,var string,var val,var string,var val,var string,Integer,var Boolean,Date,Time,
+                                                string,Boolean,var Boolean,string,var string,var val,string,string,var string);
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -2073,7 +2077,7 @@ end;
 
 
 
-global updating procedure AddGSVcMn()
+global updating procedure AddGSVcMn()//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 18:01 20.08.2018
 begin
   record GlobalStoresVc GSr;
 	record LocationVc LCr;
@@ -2121,7 +2125,163 @@ end;
 
 
 
-global updating procedure GlobalBrandsVcfFrDIMn()
+
+
+global updating procedure GlobalItemVcfFrDIMn()//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:31 21.08.2018
+begin
+  record GlobalItemVc GIr;
+	row GlobalItemVc GIrw;
+	record INVc INr;
+	record DIVc DIr;
+	record ItemHistVc IHr;
+	record ItemStatusVc ISr;
+	record RebVc Rebr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	row RebVc Rebrw;
+	record LocationVc LCr;
+	integer CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant;
+	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1;
+	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
+	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
+	
+	
+	CompQty = 28;
+	OldComp = CurrentCompany;
+	BlockLoad(Compb);
+	for (i=0;i<CompQty;i=i+1)begin
+		matrowget(Compb,i+1,Comprw);
+		if(Comprw.ActiveStatus==0)then begin
+			SetCompany(i+1,false);
+			logtext(0,i+1);
+			TrHs = true;
+			if(CompanyIsJWLikeCompany(CurrentCompany) and CurrentCompany!=3)then begin TrHs = false; end;
+			ResetLoop(INr);
+			INr.Code = "";
+			While (loopmain(INr,1,TrHs)) begin
+				ISr.Code = INr.Code;
+				if(ReadFirstMain(ISr,1,true))then begin testf = false; end;
+				if(ISr.Instock>0)then begin testf = true; end;
+				/*resetloop(IHr);
+				IHr.ArtCode = INr.Code;
+				IHr.TransDate = CurrentDate;
+				TrHs1 = true;
+				testf1 = false;
+				if(loopbackkey("ArtCode",IHr,2,TrHs1))then begin
+					if(IHr.ArtCode!=INr.Code)then begin TrHs1 = false; end;
+					if(IHr.TransDate<AddYear(CurrentDate,-2))then begin  TrHs1 = false; logtext(0,"date"); end;
+					if(TrHs1 and IHr.FileName=="IVVc")then begin 
+						testf1 = true;
+						TrHs1 = false;
+					end;
+				end;
+				resetloop(IHr);
+				if(!testf1)then begin testf = false; end;*/
+				if(testf)then begin
+					class = "";
+					pos = 0;
+					BrandName = "";
+					BrandCode = "";
+					ExtractObj(INr.DispGroups,pos,class);
+					while(nonblank(class))begin
+						DIr.Code = class;
+						if(readfirstmain(DIr,1,true))then begin
+							if(DIr.CType=="BRAND")then begin
+								BrandName = DIr.Name;
+								BrandCode = DIr.Code;
+							end;
+						end;
+						ExtractObj(INr.DispGroups,pos,class);
+					end;
+					
+					CurCode = "AZN";
+					
+					GetFullCurncyRate(CurCode,CurrentDate,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2);
+					quant = 1;
+					if (GetItemPriceDiscount3(INr.Code,quant,INr,CurCode,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,"","","RRP","0%",price,curitemname,ITRebate,vatcode,baseprice,salesacc,exportflag,calcprice,currentdate,currenttime,"NONAME",true,dummyf,"",tax2code,tax2prc,"","",taxtemplatecode)) then begin
+					end;
+					
+					if(currentcompany==1)then begin
+						GIr.Code = "SW_" & INr.Code;
+					end else begin
+						if(nonblank(BrandCode))then begin
+							GIr.Code = BrandCode & "_" & INr.Code;
+						end else begin
+							GIr.Code = INr.Code;
+						end;
+					end;
+					//logtext(0,GIr.Code);
+					if(ReadFirstMain(GIr,1,true))then begin
+						GIr.HansaCode = INr.Code;
+						GIr.Name = INr.Name;
+						GIr.Brand = BrandName;
+						GIr.Classification = INr.DispGroups;
+						GIr.Price = price;
+						GIr.Rebate = ITRebate;
+						resetloop(LCr);
+						LCr.Code = "";
+						while (LoopMain(LCr,1,true)) begin
+							ISr.Code = INr.Code;
+							ISr.Location = LCr.Code;
+							if(ReadFirstMain(ISr,2,true))then begin
+								GIrw.Location = ISr.Location;
+								GIrw.Instock = ISr.Instock;
+								MatRowPut(GIr,j,GIrw);
+								j=j+1;
+							end;
+						end;
+						resetloop(LCr);
+						RecordStore(GIr,true);
+					end else begin
+						RecordNew(GIr);
+						if(currentcompany==1)then begin
+							GIr.Code = "SW_" & INr.Code;
+						end else begin
+							if(nonblank(BrandCode))then begin
+								GIr.Code = BrandCode & "_" & INr.Code;
+							end else begin
+								GIr.Code = INr.Code;
+							end;
+						end;
+						GIr.HansaCode = INr.Code;
+						GIr.Name = INr.Name;
+						GIr.Brand = BrandName;
+						GIr.Classification = INr.DispGroups;
+						GIr.Price = price;
+						GIr.Rebate = ITRebate;
+						resetloop(LCr);
+						LCr.Code = "";
+						j=0;
+						while (LoopMain(LCr,1,true)) begin
+							ISr.Code = INr.Code;
+							ISr.Location = LCr.Code;
+							if(ReadFirstMain(ISr,2,true))then begin
+								GIrw.Location = ISr.Location;
+								GIrw.Instock = ISr.Instock;
+								MatRowPut(GIr,j,GIrw);
+								j=j+1;
+							end;
+						end;
+						resetloop(LCr);
+						RecordStore(GIr,true);
+					end;
+				end;
+			end;
+			ResetLoop(INr);
+		end;
+	end;
+	ResetCompany(OldComp);
+  return;
+end;
+
+
+
+
+
+
+
+
+global updating procedure GlobalBrandsVcfFrDIMn()//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 18:01 20.08.2018
 begin
   record GlobalBrandsVc GBr;
 	record DIVc Dir;
@@ -2162,7 +2322,7 @@ end;
 
 
 
-global updating procedure PasteItemGroupByClassMn(record RcVc RepSpec)
+global updating procedure PasteItemGroupByClassMn(record RcVc RepSpec) 
 begin
 	record INVc INr;
 	record ITVc ITr;
