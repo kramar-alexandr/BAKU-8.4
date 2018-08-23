@@ -133,6 +133,35 @@ BEGIN
   RETURN;
 END;
 
+global
+function Boolean GetNextVENr(var string custnr)
+BEGIN
+  Boolean res;
+  record CUVc CUr;
+  record SRBlock SRRec;
+
+  BlockLoad(SRRec);
+  NextM4Number(SRRec.LastVECode,custnr);
+  if (nonblank(custnr)) then begin
+    CUr.Code = custnr;
+    if (ReadFirstMain(CUr,1,true)==false) then begin
+      SRRec.LastVECode = custnr;
+    end else begin
+      CUr.Code = "ZZZZZZZZZZZZZZZZZZZ";
+      if (ReadLastMain(CUr,1,false)) then begin
+        NextM4Number(CUr.Code,custnr);
+        if (nonblank(custnr)) then begin
+          SRRec.LastVECode = custnr; 
+        end else begin
+          custnr = "1";
+        end;
+      end;
+    end;
+  end;
+  GetNextVENr = res;
+  RETURN;
+END;
+
 
 global
 function LongInt CUVcRecordDefaults(var record CUVc CUr,record CUVc CU2r,LongInt stat,LongInt long4)
@@ -956,6 +985,28 @@ BEGIN
 
 		/*threadasync.UpdateCustomerOnCC(CUr,CU2r,true);
 		threadasync.SugarCRM_POST_CUVc(CUr);*/
+  end else begin
+  	BlockLoad(SRRec);
+  	if(len(CUr.Code)==5)then begin
+  		if(CUr.Code>SRRec.LastCustCode)then begin
+  			if(CUr.CUType==1 and CUr.VEType==0)then begin
+  				if(CUr.CustCat=="IDEA")then begin
+						SRRec.LastCustCode = CUr.Code;
+						BlockStore(SRRec);
+					end;
+				end;
+			end;
+		end;
+		if(len(CUr.Code)==7)then begin
+			if(CUr.Code>SRRec.LastVECode)then begin
+  			if(CUr.VEType==1 and CUr.CUType==0)then begin
+  				if(CUr.VECat=="IDEA")then begin
+						SRRec.LastVECode = CUr.Code;
+						BlockStore(SRRec);
+					end;
+				end;
+			end;
+  	end;
   end;
   CUVcRecordSaveAfter = res;
   RETURN;
@@ -2087,6 +2138,23 @@ begin
 			CUr.Code = cntcu;
 		end;
   end;// Edit ************************** Thursday, 24 October 2013 15:13:11
+  if(currentcompany==28)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 22 August 2018 10:10:01
+  	if (blank(CUr.Code)) then begin
+  		if(CUr.CUType==1 and CUr.VEType==0)then begin
+				if(CUr.CustCat=="IDEA")then begin
+					if (GetNextCustNr(tstr)) then begin end;
+					CUr.Code = tstr;					
+				end;
+			end;
+			if(CUr.CUType==0 and CUr.VEType==1)then begin
+				if(CUr.VECat=="IDEA")then begin
+					if (GetNextVENr(tstr)) then begin end;
+					CUr.Code = tstr;					
+				end;
+			end;
+  	end;
+  end;
+  
   
   if(currentcompany==25)then begin
   	if(left(CUr.Code,2)=="CC")then begin
