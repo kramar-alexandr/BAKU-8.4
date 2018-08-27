@@ -314,8 +314,7 @@ begin
   Boolean calcperceppercuf;
   record CUVc CUr;
   val sumworeb,ManTotal;// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 28 February 2018 11:14:54
-	
-	
+		
   if (UseTaxTemplatesforTaxCalc) then begin
     ORSumup_TaxTemplate(ORp);
     goto LORSumup;
@@ -499,7 +498,8 @@ begin
   ORp.SumIncCom = ORp.Sum4 + ORp.Commision;
   RecalcORSubtotal(ORp);  
   if (currentcompany==28) then begin
-  	
+  	ORp.Sum4 = ORp.IDTotalCost * (1-(ORp.IDDiscount/100));// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 22 August 2018 11:13:28
+
   	ManTotal = 0;
 		for(i=0;i<rwcnt;i=i+1)begin
 		MatRowGet(ORp,i,ORrw)
@@ -517,12 +517,10 @@ begin
     end else begin
       ORp.IDPrepay = ORp.Sum4/ORp.IDSum4Proc*ORp.IDPrepayProc;
     end;
+    messagebox(0,ORp.IDPrepay);
     ORp.IDBalPay = ORp.Sum4 - ORp.IDPrepay;
     ORp.IDBalPayProc = ORp.IDSum4Proc - ORp.IDPrepayProc;
     ORp.IDDesPay = ORp.Sum4*ORp.IDDesPayProc/ORp.IDSum4Proc;
-    if(currentcompany==28)then begin
-   		ORp.Sum4 = ORp.IDTotalCost * (1-(ORp.IDDiscount/100));// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 22 August 2018 11:13:28
-    end;
     if matrowcnt(ORp)>0 then begin
       //ORp.IDDiscount = (ORp.IDTotalCost - ORp.Sum4)/ORp.IDTotalCost*100;// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 22 August 2018 10:52:57
     end;
@@ -531,242 +529,6 @@ begin
 LORSumup:;  
   RETURN;
 END;
-
-
-
-
-
-
-global
-procedure ORSumupFrMat(var record ORVc ORp)
-begin
-  row ORVc ORrw;
-  val s,ms,ms2,temp,s2,tax1sum,tax2sum,t;
-  Integer i,rwcnt;
-  roundmode roundlines,rndtotal,roundvat;
-  record SMVc VATr;/*VATBaseRowType*/
-  record SMVc SMTax2r;
-  record SMVc RvrsVATr;
-  Integer vatcnt;  
-  val subtotv,tax1reb;
-  record Tax1RebVc Tax1Rebr;
-  val tms,ttax1sum;
-  record RPCUTaxVc RPCUTaxr;
-  Boolean calcperceppercuf;
-  record CUVc CUr;
-  val sumworeb;// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 28 February 2018 11:14:54
-
-  if (UseTaxTemplatesforTaxCalc) then begin
-    ORSumup_TaxTemplate(ORp);
-    goto LORSumup;
-  end;
-  CUr.Code = ORp.CustCode;
-  ReadFirstMain(CUr,1,true);
-  calcperceppercuf = FindRPCUTax(ORp.CustCode,ORp.OrdDate,RPCUTaxr);
-  SetupVATBase(VATr,vatcnt);
-  SetupVATBase(RvrsVATr,vatcnt);
-  ORp.TotGP = 0;
-  rwcnt = MatRowCnt(ORp);
-  for (i=0;i<rwcnt;i=i+1) begin
-    MatRowGet(ORp,i,ORrw);
-    if (ORrw.stp==kInvoiceRowTypeNormal) then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 28 February 2018 11:17:38
-   	 sumworeb = sumworeb + ORrw.Price * ORrw.Quant;
-    end;
-    if (ORrw.stp!=kInvoiceRowTypeSubtotal) and (ORrw.stp!=kInvoiceRowTypePerceptionTax) then begin
-      tax1reb = ORrw.TAX1Reb;
-//      tax1reb = 0;
-//      Tax1Rebr.Code = ORrw.VATCode;
-//      Tax1Rebr.CustCode = ORp.CustCode;
-//      if (ReadFirstMain(Tax1Rebr,2,true)) then begin end;
-//      if (ORp.OrdDate>=Tax1Rebr.From) then begin
-//        tax1reb = Tax1Rebr.TAX1Reb;
-//      end;
-      ORp.TotGP = ORp.TotGP + ORrw.rowGP;
-      temp = MulRateToBase1(ORp.CurncyCode,ORrw.Sum,ORp.FrRate,ORp.ToRateB1,ORp.ToRateB2,ORp.BaseRate1,ORp.BaseRate2,DefaultCurRoundOff);        
-      s = s + ORrw.Sum;
-      s2 = s2 + temp;
-      if (blank(ORrw.RvrsVATCode)) then begin
-        AddVATBase(VATr,ORrw.VATCode,ORrw.Sum,tax1reb,vatcnt,ORp.InclVAT,ORp.NoTAXonVAT);
-      end else begin
-        AddVATBase(RvrsVATr,ORrw.VATCode,ORrw.Sum,tax1reb,vatcnt,ORp.InclVAT,ORp.NoTAXonVAT);
-      end;
-      AddTAX2Base(calcperceppercuf,SMTax2r,ORrw.TAX2Code,ORrw.TAX2Prc,ORrw.TAX2Reb,ORrw.Sum,ORp.InclVAT,ORrw.VATCode);        
-      MatRowPut(ORp,i,ORrw);
-      subtotv = subtotv + ORrw.Sum;
-    end else begin
-      if (ORrw.Sum!=subtotv) then begin
-        ORrw.Sum = subtotv;
-        MatRowPut(ORp,i,ORrw);
-      end;
-      subtotv = blankval;
-    end;
-  end;
-  if (ORp.FrPrice!=0) then begin
-    tax1reb = 0;
-    Tax1Rebr.Code = ORp.FrVATCode;
-    Tax1Rebr.CustCode = ORp.CustCode;
-    if (ReadFirstMain(Tax1Rebr,2,true)) then begin end;
-    if (ORp.OrdDate>=Tax1Rebr.From) then begin
-      tax1reb = Tax1Rebr.TAX1Reb;
-    end;
-    if (ORp.InclVAT==0) then begin
-      ms2 = ORp.FrPrice + ms2;
-      s = ORp.FrPrice + s;
-      if ((ORp.ExportFlag==0) or (ORp.ExportFlag==3) or (ORp.ExportFlag==4)) then begin
-        t = FindVAT(ORp.FrVATCode,ORp.FrPrice,ORp.InclVAT,ORp.NoTAXonVAT);
-        if (t==0) then begin
-          s2 = ORp.FrPrice + s2;
-        end;  
-        ms = t + ms;
-        AddVATBase(VATr,ORp.FrVATCode,ORp.FrPrice,tax1reb,vatcnt,ORp.InclVAT,ORp.NoTAXonVAT);
-      end else begin
-        s2 = ORp.FrPrice + s2;
-      end;
-    end else begin
-      if ((ORp.ExportFlag==0) or (ORp.ExportFlag==3) or (ORp.ExportFlag==4)) then begin
-        ms2 = ORp.FrPrice + ms2;
-        t = FindVAT(ORp.FrVATCode,ORp.FrPrice,ORp.InclVAT,ORp.NoTAXonVAT);
-        ms = t + ms;
-        AddVATBase(VATr,ORp.FrVATCode,ORp.FrPrice,tax1reb,vatcnt,ORp.InclVAT,ORp.NoTAXonVAT);
-        s = ORp.FrPrice + s;
-        if (t==0) then begin
-          s2 = ORp.FrPrice + s2;
-        end;  
-      end else begin
-        ms2 = ORp.FrPrice + ms2;      
-        t = FindVAT(ORp.FrVATCode,ORp.FrPrice,ORp.InclVAT,ORp.NoTAXonVAT);
-        ms = t + ms;
-        AddVATBase(VATr,ORp.FrVATCode,ORp.FrPrice,tax1reb,vatcnt,ORp.InclVAT,ORp.NoTAXonVAT);
-        ms2 = ms2 - t;
-        s = ORp.FrPrice + s;
-        if (t==0) then begin
-          s2 = ORp.FrPrice + s2;
-        end;  
-      end;
-    end;
-  end;
-  CalcVATBaseVAT(VATr,ORp.InclVAT,ORp.NoTAXonVAT,vatcnt,ms,tax1sum);
-  CalcVATBaseVAT2(RvrsVATr,ORp.InclVAT,ORp.NoTAXonVAT,vatcnt,CUr.RvrsVAT!=0,ORp.RvrsVAT,t);  
-  if (calcperceppercuf) then begin
-    tax2sum = ORVc_CalcTax2perCustomer(RPCUTaxr,ORp);  
-  end else begin
-    tax2sum = CalcTax2BaseTax2(false,SMTax2r,ORp.InclVAT);  
-  end;
-  ORp.TAX1Sum = Round(tax1sum,DefaultRoundMode);
-  ORp.TAX2Sum = Round(tax2sum,DefaultRoundMode);  
-  if (ORp.TAX1Sum==0) then begin ORp.TAX1Sum = blankval; end;
-  if (ORp.TAX2Sum==0) then begin ORp.TAX2Sum = blankval; end;
-  if (ORp.NoTax1!=0) then begin  ORp.TAX1Sum = blankval; end;
-  if (ORp.NoTax2!=0) then begin  ORp.TAX2Sum = blankval; end;
-  GetCurncyRoundoff(ORp.CurncyCode,ORp.PayDeal,"ORVc",rndtotal,roundlines,roundvat);
-  ms = Round(ms,roundvat);
-  if ((ORp.ExportFlag==1) or (ORp.ExportFlag==2)) then begin
-    if (ORp.InclVAT>0) then begin
-      ms2 = s - ms;
-    end else begin
-      ms2 = s;
-    end;  
-    ms = blankval;
-  end else begin
-    if (ORp.InclVAT>0) then begin
-      ms2 = s;
-    end else begin
-      ms2 = s + ms;
-    end;  
-
-    switch (ORp.InclVAT) begin
-      case 1:
-        switch (ORp.NoTAXonVAT) begin
-          case 1:
-          case 2:
-          otherwise
-        end;
-      case 2:
-        switch (ORp.NoTAXonVAT) begin
-          case 2:
-            if (ORp.TotalwoTAX==0) then begin
-              ms2 = ms2 + tax1sum;
-            end;
-            CalcVATBaseVAT(VATr,ORp.InclVAT,1,vatcnt,tms,ttax1sum);  
-            ms2 = ms2 + ms-tms;
-          otherwise
-            if (ORp.TotalwoTAX==0) then begin
-              ms2 = ms2 + tax1sum;
-            end;
-        end;
-      otherwise
-        switch (ORp.NoTAXonVAT) begin
-          otherwise
-            if (ORp.TotalwoTAX==0) then begin
-              ms2 = ms2 + tax1sum;
-            end;
-        end;
-    end;
-
-  end;
-
-  t = ms2;
-  ms2 = Round(t,rndtotal);
-  t = ms2 - t;
-  ORp.Sum0 = t + ORp.Sum0;
-    
-  ms2 = ms2 + ORp.TAX2Sum;
-  s = Round(s,DefaultRoundMode);
-  ms = Round(ms,roundvat);
-  ms2 = Round(ms2,rndtotal);
-  if (ORp.DiscPerc!=blankval) then begin    
-    MulM4ProcVal(ORp.DiscPerc,s,temp);
-    ORp.DiscSum = temp;
-  end;  
-  ORp.DiscSum = Round(ORp.DiscSum,DefaultRoundMode);
-  ORp.Sum1 = s;
-  ORp.Sum3 = ms;
-  ORp.Sum4 = ms2;
-  //ORp.IDTotalCost = sumworeb;// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 28 February 2018 11:16:29
-  
-  if (ORp.InclVAT==0) then begin
-    temp = ORp.TotGP/s2;
-  end else begin
-    temp = s2-MulRateToBase1(ORp.CurncyCode,ORp.Sum3,ORp.FrRate,ORp.ToRateB1,ORp.ToRateB2,ORp.BaseRate1,ORp.BaseRate2,DefaultCurRoundOff);
-    if (temp!=0) then begin
-      temp = ORp.TotGP/temp;
-    end;
-  end;
-  ORp.GPProc = temp*100;
-  if (nonblank(ORp.CurncyCode)) then begin
-    ORp.BaseSum4 = MulRateToBase1(ORp.CurncyCode,ORp.Sum4,ORp.FrRate,ORp.ToRateB1,ORp.ToRateB2,ORp.BaseRate1,ORp.BaseRate2,DefaultCurRoundOff);
-  end;  
-  ORp.SumIncCom = ORp.Sum4 + ORp.Commision;
-  RecalcORSubtotal(ORp);  
-  if (currentcompany==28) then begin
-    /*ORp.IDSum4Proc = 100;//Edit-------------------Vitalii 14:26 22.03.2018
-    if (ORp.IDPrepayPaid==1) then begin
-      ORp.IDPrepayProc = ORp.IDSum4Proc*ORp.IDPrepay/ORp.Sum4;
-    end else begin
-      ORp.IDPrepay = ORp.Sum4/ORp.IDSum4Proc*ORp.IDPrepayProc;
-    end;
-    ORp.IDBalPay = ORp.Sum4 - ORp.IDPrepay;
-    ORp.IDBalPayProc = ORp.IDSum4Proc - ORp.IDPrepayProc;
-    ORp.IDDesPay = ORp.Sum4*ORp.IDDesPayProc/ORp.IDSum4Proc;*/
-    if(currentcompany==28)then begin
-   		ORp.Sum4 = ORp.IDTotalCost * (1-(ORp.IDDiscount/100));// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 22 August 2018 11:13:28
-    end;
-    if matrowcnt(ORp)>0 then begin
-      //ORp.IDDiscount = (ORp.IDTotalCost - ORp.Sum4)/ORp.IDTotalCost*100;// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 22 August 2018 10:52:57
-    end;
-    //IDPasteDescs(ORp);
-  end;
-LORSumup:;  
-  RETURN;
-END;
-
-
-
-
-
-
-
-
 
 global
 procedure ORDchsum(var record ORVc ORp,Integer rownr)
@@ -845,37 +607,6 @@ BEGIN
   ORSumup(ORp);
   RETURN;
 END;
-
-
-global
-procedure ORVc_PasteSumAftEdMat(var record ORVc ORp,Integer rownr,var Boolean chsum)
-BEGIN
-  val s,t;
-  row ORVc ORrw;
-  record GeneralOptionBlock GenOptr;
-  
-  MatRowGet(ORp,rownr,ORrw);
-  if ((ORrw.Quant!=0) and (ORrw.Price!=0)) then begin  
-    chsum = true;
-    ORrw.vRebate = blankval;
-    BlockLoad(GenOptr);      
-    CalcSum(ORrw.Quant,ORrw.Price,ORrw.PriceFactor,ORrw.vRebate,t,GenOptr.UseDiscount);
-    RoundRowSum(ORp.CurncyCode,ORp.PayDeal,"ORVc",t);
-    s = ORrw.Sum;// /ORrw.Quant not good
-    s = t - s;
-    s = s*100;
-    s = s/t;
-    ORrw.vRebate = Round(s,SetRoundModeD(1));
-    RowCalculateTaxMatrix_ORVc(ORp,rownr,ORrw);
-    if (ORrw.vRebate==0) then begin ORrw.vRebate = blankval; end;
-    MatRowPut(ORp,rownr,ORrw);
-  end;
-	ORSumupFrMat(ORp);
-  RETURN;
-END;
-
-
-
 
 function Boolean ORDClassUnitXvalEFAfter(Integer wn,Integer fn, Integer rownr,Integer changed)
 BEGIN
@@ -1144,11 +875,7 @@ begin
     end;
     if (chsum) then begin
       ORDchsum(ORr,rownr);
-      if(currentcompany!=28)then begin
-				ORSumup(ORr);
-			end else begin
-				ORSumupFrMat(ORr);
-			end;
+      ORSumup(ORr);
     end;    
     PutWindowRecord(wn,ORr);
   end;
@@ -1423,11 +1150,7 @@ begin
     GetWindowRecord(wn,ORr);
     ORVc_PasteCommision(ORr,chsum);
     if (chsum) then begin
-      if(currentcompany!=28)then begin
-				ORSumup(ORr);
-			end else begin
-				ORSumupFrMat(ORr);
-			end;
+      ORSumup(ORr);
     end;    
     PutWindowRecord(wn,ORr);
   end;  
@@ -1515,11 +1238,7 @@ begin
     chsum = ORVc_PasteUnitFactQuant(ORr,rownr);
     if (chsum) then begin
       ORDchsum(ORr,rownr);
-      if(currentcompany!=28)then begin
-				ORSumup(ORr);
-			end else begin
-				ORSumupFrMat(ORr);
-			end;
+      ORSumup(ORr);
     end;    
     PutWindowRecord(wn,ORr);
   end;  
@@ -1549,11 +1268,7 @@ begin
     GetWindowRecord(wn,ORr);
     ORVc_PasteRecepy(ORr,rownr,chsum);
     if (chsum) then begin
-      if(currentcompany!=28)then begin
-				ORSumup(ORr);
-			end else begin
-				ORSumupFrMat(ORr);
-			end;
+      ORDchsum(ORr,rownr);
     end;    
     PutWindowRecord(wn,ORr);
   end;  
@@ -1571,11 +1286,7 @@ begin
     ORVc_PastePriceFactor(ORr,rownr,chsum);
     if (chsum) then begin
       ORDchsum(ORr,rownr);
-      if(currentcompany!=28)then begin
-				ORSumup(ORr);
-			end else begin
-				ORSumupFrMat(ORr);
-			end;
+      ORSumup(ORr);
     end;    
     PutWindowRecord(wn,ORr);
   end;  
@@ -1593,11 +1304,7 @@ begin
     ORVc_PastePrice(ORr,rownr,chsum);
     if (chsum) then begin
       ORDchsum(ORr,rownr);
-      if(currentcompany!=28)then begin
-				ORSumup(ORr);
-			end else begin
-				ORSumupFrMat(ORr);
-			end;
+      ORSumup(ORr);
     end;
     PutWindowRecord(wn,ORr);
     AutomatedSalesOrderly("HasPriceLists+Edit_ORVc");
@@ -1616,12 +1323,7 @@ begin
     ORVc_PastevRebate(ORr,rownr,chsum);
     if (chsum) then begin
       ORDchsum(ORr,rownr);
-      if(currentcompany!=28)then begin
-				ORSumup(ORr);
-			end else begin
-				ORSumupFrMat(ORr);
-			end;
-			
+      ORSumup(ORr);
     end;    
     PutWindowRecord(wn,ORr);
     AutomatedSalesOrderly("HasPriceLists+Edit_ORVc");
@@ -1640,11 +1342,7 @@ begin
     ORVc_PasteBasePrice(ORr,rownr,chsum);
     if (chsum) then begin
       ORDchsum(ORr,rownr);
-			if(currentcompany!=28)then begin
-				ORSumup(ORr);
-			end else begin
-				ORSumupFrMat(ORr);
-			end;
+      ORSumup(ORr);
     end;    
     PutWindowRecord(wn,ORr);
   end;  
@@ -1663,11 +1361,7 @@ begin
     if (chsum) then begin
       ORDchsum(ORr,rownr);
     end;    
-    if(currentcompany!=28)then begin
-			ORSumup(ORr);
-		end else begin
-			ORSumupFrMat(ORr);
-		end;
+    ORSumup(ORr);
     PutWindowRecord(wn,ORr);
   end;  
   ORDClassVATCodeEFAfter = true;
@@ -1685,11 +1379,7 @@ begin
     if (chsum) then begin
       ORDchsum(ORr,rownr);
     end;    
-    if(currentcompany!=28)then begin
-			ORSumup(ORr);
-		end else begin
-			ORSumupFrMat(ORr);
-		end;
+    ORSumup(ORr);
     PutWindowRecord(wn,ORr);
   end;  
   ORDClassTaxTemplateCodeEFAfter = true;
@@ -1703,19 +1393,11 @@ begin
 
   if (changed!=0) and (rownr>=0) then begin  
     GetWindowRecord(wn,ORr);
-		if(currentcompany!=28)then begin
-			ORVc_PasteSum(ORr,rownr,chsum);
-		end else begin
-			ORVc_PasteSumAftEdMat(ORr,rownr,chsum);
-		end;
+    ORVc_PasteSum(ORr,rownr,chsum);
     if (chsum) then begin      
 //      chsum = ORDchrsum(ORr,rownr);
       ORDchsum(ORr,rownr);
-      if(currentcompany!=28)then begin
-				ORSumup(ORr);
-			end else begin
-				ORSumupFrMat(ORr);
-			end;
+      ORSumup(ORr);
     end;
     PutWindowRecord(wn,ORr);
   end;  
@@ -1731,16 +1413,6 @@ begin
   if (changed!=0)then begin  
     GetWindowRecord(wn,ORr);
     ORSumup(ORr);
-		ORr.IDSum4Proc = 100;
-		if (ORr.IDPrepayPaid==1) then begin
-			ORr.IDPrepayProc = ORr.IDSum4Proc*ORr.IDPrepay/ORr.Sum4;
-		end else begin
-			ORr.IDPrepay = ORr.Sum4/ORr.IDSum4Proc*ORr.IDPrepayProc;
-		end;
-		ORr.IDBalPay = ORr.Sum4 - ORr.IDPrepay;
-		ORr.IDBalPayProc = ORr.IDSum4Proc - ORr.IDPrepayProc;
-		ORr.IDDesPay = ORr.Sum4*ORr.IDDesPayProc/ORr.IDSum4Proc;
-		IDPasteDescs(ORr);
     PutWindowRecord(wn,ORr);
   end;  
   ORDClassOnlySum = true;
