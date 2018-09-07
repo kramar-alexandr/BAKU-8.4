@@ -1115,10 +1115,12 @@ end;
 
 function Integer VerifyClassificationNew(string classifications,var string classification)// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 31 August 2018 14:09:14
 begin
-  Integer res;
-  Integer pos;
+  Integer res,pos,rwcnt,i;
   record DIVc DIr;
   string 100 group,type,model,brand;
+	vector string 100 vclassification;
+	record NewClassSetVc NCSr;
+	row NewClassSetVc NCSrw;
   
   res = 0;
   ExtractObj(classifications,pos,classification);
@@ -1137,23 +1139,53 @@ begin
       if(DIr.CType=="TYPE")then begin
       	type = DIr.Code;
       end;
-      
+			vclassification[DIr.CType] = DIr.Code;
     end;
     ExtractObj(classifications,pos,classification);
   end;
+	
+	
   
   if(blank(brand))then begin
-  	res = 2214;
+  	res = 1707;
+		goto LVerifyClassificationNew;
   end;
   if(blank(model))then begin
-  	res = 2214;
+  	res = 1707;
+		goto LVerifyClassificationNew;
   end;
   if(blank(group))then begin
-  	res = 2214;
+  	res = 1707;
+		goto LVerifyClassificationNew;
   end;
   if(blank(type))then begin
-  	res = 2214;
+  	res = 1707;
+		goto LVerifyClassificationNew;
   end;
+	
+	
+	
+	NCSr.Group = group;
+	NCSr.Type = type;
+	if(readfirstmain(NCSr,2,true))then begin
+		rwcnt = matrowcnt(NCSr);
+		for (i=0;i<rwcnt;i=i+1)begin
+			matrowget(NCSr,i,NCSrw);
+			if(blank(vclassification[NCSrw.CType]))then begin
+				res = -1;
+				classification = "Укажите классификацию с типом: " & NCSrw.CType;
+				goto LVerifyClassificationNew;
+			end else begin
+				if(vclassification[NCSrw.CType]!=NCSrw.CCode)then begin
+					res = -1;
+					classification = "Недопустимая классификация для данного типа классификации " & vclassification[NCSrw.CType] & " - " & NCSrw.CType;
+					goto LVerifyClassificationNew;
+				end;
+			end;
+		end;
+	end;
+	
+	
   
 LVerifyClassificationNew:;  
   VerifyClassificationNew = res;  
@@ -1736,18 +1768,19 @@ begin
       goto LINVcRecordCheck;
     end;
   end;
-  
-  if(false)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 31 August 2018 14:07:14
-		if (nonblank(INr.DispGroups)) then begin
-			errcode = VerifyClassificationNew(INr.DispGroups,tstr);
-			if (errcode!=0) then begin
-				RecordCheckError(errcode," " & tstr & " " & INr.Code,rownr,"DispGroups");//change type     
-				res = -1; 
-				goto LINVcRecordCheck;
-			end;
+	if (nonblank(INr.DispGroups)) then begin
+		errcode = VerifyClassificationNew(INr.DispGroups,tstr);
+		if (errcode>0) then begin
+			RecordCheckError(errcode," " & tstr & " " & INr.Code,rownr,"DispGroups");//change type     
+			res = -1; 
+			goto LINVcRecordCheck;
 		end;
-  end;
-  
+		if(errcode==-1)then begin
+			MessageBox(0," " & tstr);
+			res = -1; 
+			goto LINVcRecordCheck;
+		end;
+	end;
   if (CheckMultipleIndexField(INr.DispGroups,10,10)==false) then begin
     RecordCheckError(2246,"",-1,"DispGroups");      
     res = -1; 
