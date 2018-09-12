@@ -23,7 +23,98 @@ external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmod
 external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
 remote updating procedure Handle_Zebra_Printing(record RcVc,var area,var integer,string,record ZebraPrinterBlock); //Edit***************************Sasha2,17:01 08.07.2015
 remote function boolean CompanyIsJWLikeCompany(Integer);
-remote updating procedure CheckBarcodeValue(var record INVc,var string);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 11 September 2018 15:03:41
+external function boolean CheckIfBarcodeIsDigits(string);
+external procedure NextM4Number(string,var string);
+
+updating procedure CheckBarcodeValue(var record INVc INr,var string bcode)
+begin
+  Boolean proceedf;
+  record INVc IN2r,oldINr;
+  string 20 barcodenr;
+    
+    logtext(0,INr.Code);
+    
+    bcode = INr.Code;
+    if(nonblank(INr.BarCode))then begin
+    	if(len(INr.BarCode)<=len(INr.Code))then begin
+    		bcode = INr.BarCode;
+    	end;
+    end;
+    proceedf = !CheckIfBarcodeIsDigits(bcode);
+    if (proceedf and len(bcode)<=12) then begin
+      goto LCheckBarcodeValue;
+    end;
+    if (proceedf and Nonblank(INr.BarCode) and len(bcode)>len(INr.BarCode)) then begin
+      bcode = INr.BarCode;
+      proceedf = !CheckIfBarcodeIsDigits(bcode);
+    end;
+    if (proceedf and len(bcode)<=12) then begin
+      goto LCheckBarcodeValue;
+    end; 
+    if (proceedf and Nonblank(INr.AlternativeCode) and len(bcode)>len(INr.AlternativeCode)) then begin
+      bcode = INr.AlternativeCode;
+      proceedf = !CheckIfBarcodeIsDigits(bcode);
+    end;
+    if (proceedf and blank(INr.AlternativeCode) and NonBlank(INr.BarCode)) then begin
+      INr.AlternativeCode = INr.BarCode;
+      INr.BarCode = "";
+    end;
+    
+    if(INr.BarCode==INr.AlternativeCode)then begin
+    	INr.BarCode = "";
+    end;
+    if(INr.BarCode==INr.Code)then begin
+    	INr.BarCode = "";
+    end;
+    
+    if (proceedf and blank(INr.BarCode) and len(bcode)>12) then begin
+      IN2r.BarCode = "IN_BC999999";
+      if (ReadLastKey("BarCode",IN2r,1,false)) then begin
+        if (mid(IN2r.BarCode,0,5)=="IN_BC" and len(IN2r.BarCode)==11) then begin
+          if (IN2r.BarCode=="IN_BC999999") then begin
+            goto LCheckBarcodeValue;
+          end;
+  LCheckBarcodeValueRepeat:;        
+          NextM4Number(IN2r.BarCode,barcodenr);
+          IN2r.Code = barcodenr;
+          if (ReadFirstmain(IN2r,1,true)) then begin
+            if (IN2r.Code=="IN_BC999999") then begin
+              goto LCheckBarcodeValue;
+            end;
+            goto LCheckBarcodeValueRepeat;
+          end;
+          IN2r.AlternativeCode = barcodenr;
+          if (ReadFirstKey("AlternativeCode",IN2r,1,true)) then begin
+            if (IN2r.AlternativeCode=="IN_BC999999") then begin
+              goto LCheckBarcodeValue;
+            end;
+            goto LCheckBarcodeValueRepeat;
+          end;
+        end else begin
+          barcodenr = "IN_BC000001";
+          IN2r.BarCode = "IN_BC000001";
+          if (ReadFirstKey("BarCode",IN2r,1,true)) then begin
+            goto LCheckBarcodeValue;
+          end;
+        end;
+        if (nonblank(barcodenr) and barcodenr!="1") then begin
+        	recordcopy(oldINr,INr);
+          INr.BarCode = barcodenr;
+          Logtext(0,"INr.Code " & INr.Code);
+          Logtext(0,"INr.UUID " & INr.UUID);
+          RECORDupdate(oldINr,INr,false);
+          bcode = barcodenr;
+        end;
+      end;
+    end;
+  
+  LCheckBarcodeValue:;
+  
+  logtext(0,bcode);
+  
+  return;
+end;
+
 
 updating procedure PrintINinStockLabel(var record INVc INr,record DocVc Docr)
 begin
