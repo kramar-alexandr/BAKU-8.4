@@ -379,7 +379,171 @@ LCalculateOPPrepaymentAvgRate:;
 end;
 
 updating function Integer PasteRowToPU(record POSettingBlock POSetb,record CostAccBlock CAb,record MainStockBlock MSb,record PUVc PUp,record POVc POp,row POVc POrw,Integer rownr,record INVc INr,
-                                       val qty,var Integer nrwcnt)
+                                       val qty,var Integer nrwcnt)//vector integer SerialNrInd,
+begin
+  Integer res;
+  row PUVc PUrw;
+  val p,t,v1,v2,pv,sv;
+  string 255 extra,stockacc,purchacc;
+  record PIVc PIr;
+  Boolean foundpi;
+  val frrate,torate1,torate2,baserate1,baserate2;
+  record ORVc ORr;// Edit ************************** Thursday, 12 September 2013 10:15:38
+  
+  
+  ClearRow(PUp,PUrw,1);
+  PUrw.StockType = POrw.StockType;
+  PUrw.TREO = POrw.TREO;
+  PUrw.ArtCode = POrw.ArtCode;
+  PUrw.VATCode = POrw.VATCode;
+  PUrw.Coefficient = INr.UnitCoefficient;
+  if (POp.SetZeroPUQuant!=0) then begin
+    PUrw.Quant = 0;
+  end else begin
+    PUrw.Quant = qty;
+  end;
+  PUrw.UnitCode = POrw.UnitCode;
+  PUrw.Spec = POrw.Spec;
+  PUrw.SerialNr = "";
+  p = POrw.Price;
+  PUrw.PIFactor = POrw.PIFactor;
+  PUrw.VEUnit = POrw.VEUnit;
+  PUrw.InPrice = INr.InPrice;
+  DivPIFactor(PUrw.Quant,PUrw.PIFactor,t);
+  PUrw.VEQuant = t;
+  if (POrw.PIFactor!=0) then begin
+    p = p/POrw.PIFactor;
+  end;
+  CalcSum(1,p,0,POrw.vRebate,t,0);
+  PUrw.UPrice = Round(t,SetRoundModeD(5));//UPrice is 5 only
+  extra = "";
+  PIr.ItemCode = POrw.ArtCode;
+  PIr.Location = POp.Location;
+  PIr.VECode = POp.VECode;
+  PIr.VEItemCode = POrw.VEArtCode;
+  foundpi = ReadFirstMain(PIr,4,true);
+  if (foundpi==false) then begin
+    if (nonblank(POp.Location)) then begin
+      PIr.ItemCode = POrw.ArtCode;
+      PIr.Location = "";
+      PIr.VECode = POp.VECode;
+      PIr.VEItemCode = POrw.VEArtCode;
+      foundpi = ReadFirstMain(PIr,4,true);
+    end;
+  end;
+  if (foundpi) then begin
+    extra = PIr.PurchaseCost;
+    if (nonblank(PIr.OrgCountry)) then begin
+      PUrw.CountryOfOrg = PIr.OrgCountry;
+    end;
+  end;
+  if (nonblank(POp.CurncyCode)) then begin
+    if (((POp.BaseRate1!=0) and (POp.BaseRate2!=0)) or
+       ((POp.ToRateB1!=0) or (POp.ToRateB2!=0))) then begin
+      frrate = POp.FrRate;
+      torate1 = POp.ToRateB1;
+      torate2 = POp.ToRateB2;
+      baserate1 = POp.BaseRate1;
+      baserate2 = POp.BaseRate2;
+    end else begin
+      GetFullCurncyRate(PUp.CurncyCode,CurrentDate,frrate,torate1,torate2,baserate1,baserate2);
+    end;
+    t = MulRateToBase1(POp.CurncyCode,PUrw.UPrice,frrate,torate1,torate2,baserate1,baserate2,SetRoundModeD(5));
+    CalcExtra(t,extra,v1);
+  end else begin
+    CalcExtra(PUrw.UPrice,extra,v1);
+  end;
+  
+  if (nonblank(POrw.CustomsCost)) then begin
+    PUrw.CustomsCost = POrw.CustomsCost;
+  end else begin  
+    PUrw.CustomsCost = v1;
+  end;
+  if (POrw.ShipCost<>blankval and POrw.ShipCost<>0) then begin
+    PUrw.ShipCost = POrw.ShipCost;
+  end else begin  
+    PUrw.ShipCost = v2;
+  end;
+  PUrw.RowCost1 = POrw.RowCost1;
+  PUrw.RowCost2 = POrw.RowCost2;
+  PUrw.RowCost3 = POrw.RowCost3;
+  PUrw.RowCost4 = POrw.RowCost4;
+  PUrw.RowCost5 = POrw.RowCost5;
+  // Edit Start ---------------------------------------------- Edit Start
+	//Thursday, 12 September 2013 10:07:12
+  ORr.SerNr = POp.OrdNr;
+  if(readfirstmain(ORr,1,true))then begin
+  	PUrw.SerialNr = ORr.OrderClass & ORr.SerNr;
+  end;
+	if(currentcompany==28)then begin
+		
+	end;
+
+	// Edit End ---------------------------------------------- Edit End
+	
+  PUrw.Extra = INr.ExtraCost;
+  PUrw.CostPrice = blankval;
+  PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUp.InclVAT,PUp.NoTAXonVAT,PUrw.Extra,PUp.CurncyCode,
+                  PUp.FrRate,PUp.ToRateB1,PUp.ToRateB2,PUp.BaseRate1,PUp.BaseRate2,
+                  PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+                  PUrw.CustomsCost,pv,PUrw.Quant,sv,PUrw.VATCode,PUp.ExportFlag);
+  PUrw.CostPrice = pv;                                        
+  PUrw.Sum = sv;
+  PUrw.OrdRow = rownr;
+  if (MSb.PONoOnPURowsOnly==1) then begin
+    PUrw.PONr = POp.SerNr;
+  end;
+  PUrw.ChargeNumber = POrw.ChargeNumber;
+  PUrw.VEItemCode = POrw.VEArtCode;
+  PUrw.VARList = POrw.VARList;
+  PUrw.Objects = POrw.Objects;
+  if (POSetb.TransAccObjToPU!=0) then begin
+    PUrw.Objects = POrw.Objects;
+    PUrw.CredAcc = POrw.CostAcc;
+  end;
+  PUrw.UnitXval = INr.Width;
+  PUrw.UnitYval = INr.Height;
+  PUrw.UnitZval = INr.Depth;
+
+  PUrw.SuppSerialNr = INr.SuppSerialNr;
+  PUrw.MajStoneDet = INr.MajStoneDet;
+  PUrw.Colour = INr.Colour;
+  PUrw.Clarity = INr.Clarity;
+  PUrw.Cert = INr.Cert;
+  PUrw.MinStoneDet = INr.MinStoneDet;
+  PUrw.Metal = INr.Metal;
+  PUrw.RowWeight = INr.RowWeight;
+  PUrw.Size = INr.Size;
+  PUrw.Length = INr.Length;
+
+  PUrw.WatchBrand = INr.WatchBrand;
+  PUrw.StyleName = INr.StyleName;
+  PUrw.WatchMetal = INr.WatchMetal;
+  PUrw.Movement = INr.Movement;
+  PUrw.BrcStr = INr.BrcStr;
+  PUrw.Gender = INr.Gender;
+  PUrw.Other = INr.Other;
+  PUrw.Other2 = INr.Other2;
+
+  PUrw.BasePrice = INr.UPrice1;
+  FindPUStockAcc(PUp.VECode,CAb,PUrw.CostAcc,PUrw.CredAcc,PUp.Location,INr,PUrw.StockType,stockacc,purchacc,false);
+  PUrw.CostAcc = stockacc;
+  if (blank(PUrw.CredAcc)) then begin
+    PUrw.CredAcc = purchacc;
+  end;
+  res = 0;
+  MatRowPut(PUp,nrwcnt,PUrw);
+  if (PUFromPO_PasteQuant(PUp,POp.SerNr,nrwcnt,200,POp)==0) then begin end;
+  nrwcnt = MatRowCnt(PUp);
+  PasteRowToPU = res;
+  return;
+end;
+
+
+
+
+updating function Integer IDPasteRowToPU(record POSettingBlock POSetb,record CostAccBlock CAb,record MainStockBlock MSb,record PUVc PUp,record POVc POp,row POVc POrw,Integer rownr,record INVc INr,
+                                       val qty,string serialNr,var Integer nrwcnt)
 begin
   Integer res;
   row PUVc PUrw;
@@ -532,9 +696,15 @@ begin
   MatRowPut(PUp,nrwcnt,PUrw);
   if (PUFromPO_PasteQuant(PUp,POp.SerNr,nrwcnt,200,POp)==0) then begin end;
   nrwcnt = MatRowCnt(PUp);
-  PasteRowToPU = res;
+  IDPasteRowToPU = res;
   return;
 end;
+
+
+
+
+
+
 
 global
 updating function Integer PastePOInPU(record POVc POp,record PUVc PUp,Integer maxrows)
@@ -564,6 +734,8 @@ BEGIN
   record SerNrTrackBlock SNrb;
 	record ORVc ORr;// Edit ************************** Thursday, 12 September 2013 10:15:32
 	integer maxrows1;
+	vector integer vRepserialNrMat;
+	string 255 SerialNr;
 	
 	maxrows1 = 999;
 	
@@ -579,7 +751,13 @@ BEGIN
   BlockLoad(SNrb);
   if (MSb.dontAllowOverreceive!=1) then begin res = -1; end;
   if (MSb.PONoOnPURowsOnly<>1) then begin
-    PUp.PONr = POp.SerNr;
+		if(currentcompany!=28)then begin
+			PUp.PONr = POp.SerNr;
+		end else begin
+			PUp.PONr = POp.SerNr;
+			PUp.IDPONr = POp.Reference;
+		end;
+		
   end else begin
     PUp.PONr = -1;
   end;
@@ -650,6 +828,19 @@ BEGIN
   end;
   CalcExtra(POp.Sum1,POp.CostPerUnit,v2);
   v2 = v2/totqty;
+	
+	for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(POp,i,POrw);
+		if(vRepserialNrMat[POrw.ArtCode]<1)then begin
+			vRepserialNrMat[POrw.ArtCode] = 1;
+		end else begin
+			vRepserialNrMat[POrw.ArtCode] = vRepserialNrMat[POrw.ArtCode] + 1;
+			vRepserialNrMat[POrw.ArtCode & i] = vRepserialNrMat[POrw.ArtCode];
+		end;
+	end;
+	
+	
+	
   for (i=0;i<rwcnt;i=i+1) begin
     MatRowGet(POp,i,POrw);
     if (blank(POrw.ArtCode)) then begin goto LSKIPROWPastePOInPU; end;
@@ -666,9 +857,20 @@ BEGIN
       CreateRecordLink(POp,CurrentCompany,PUp,CurrentCompany);
       CreateNewPUFromPO(PUp,POp,ponr);
     end;
+		if(vRepserialNrMat[POrw.ArtCode]>1)then begin
+			if(vRepserialNrMat[POrw.ArtCode & i]>0)then begin
+				SerialNr = POp.Reference & "-" & vRepserialNrMat[POrw.ArtCode & i];
+			end;
+		end else begin
+			SerialNr = POp.Reference;
+		end;
     if ((INr.SerNrf==1) and (MSb.NoSerOnPU==0)) then begin
       if (SNrb.BulkSerialNos!=0) then begin
-        res = PasteRowToPU(POSetb,CAb,MSb,PUp,POp,POrw,i,INr,POrw.Quant,nrwcnt);
+			if(currentcompany!=28)then begin
+				res = PasteRowToPU(POSetb,CAb,MSb,PUp,POp,POrw,i,INr,POrw.Quant,nrwcnt);
+			end else begin
+				res = IDPasteRowToPU(POSetb,CAb,MSb,PUp,POp,POrw,i,INr,POrw.Quant,SerialNr,nrwcnt);
+			end;
       end else begin
       
         while (remn>0) begin
@@ -683,7 +885,12 @@ BEGIN
             CreateNewPUFromPO(PUp,POp,ponr);
           end;
           remn = remn - 1;
-          res = PasteRowToPU(POSetb,CAb,MSb,PUp,POp,POrw,i,INr,1.00,nrwcnt);
+					if(currentcompany!=28)then begin
+						res = PasteRowToPU(POSetb,CAb,MSb,PUp,POp,POrw,i,INr,1.00,nrwcnt);
+					end else begin
+						res = IDPasteRowToPU(POSetb,CAb,MSb,PUp,POp,POrw,i,INr,1.00,SerialNr,nrwcnt);
+					end;
+					
         end;
       end;
     end else begin
@@ -707,6 +914,9 @@ BEGIN
         ORr.SerNr = POp.OrdNr;
 				if(readfirstmain(ORr,1,true))then begin
 					PUrw.SerialNr = ORr.OrderClass & ORr.SerNr;
+				end;
+				if(currentcompany==28)then begin
+					PUrw.SerialNr = serialNr;
 				end;
       p = POrw.Price;
       PUrw.PIFactor = POrw.PIFactor;
