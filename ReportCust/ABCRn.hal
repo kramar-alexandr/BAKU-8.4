@@ -1237,7 +1237,8 @@ begin
 	area aitems;
 	record ItemStatusVc ISr;
 	record ItemHistVc IHr;
-	boolean testf;
+	boolean testf,testf1;
+	vector boolean jwitemfnd;
 	
 	
 	blockload(CBr);
@@ -1245,50 +1246,62 @@ begin
 		matrowget(CBr,i,CBrw);
 	  if(true)begin
 	  	setcompany(i+1,true);
-	  	addtexttoarea("Company" & chr(9) & "ItemCode" & chr(9) & "Brand" & chr(9) & "Model/Collection" & chr(9) & "Name" & chr(13) & chr(10),aitems);
+	  	addtexttoarea("Company" & chr(9) & "ItemCode" & chr(9) & "Brand" & chr(9) & "Model/Collection" & chr(9) & "Name" & chr(9) & "InStock" & chr(9) & "LastStockHistDate" & chr(13) & chr(10),aitems);
 	  	resetloop(INr);
 			INr.Code = "";
 			while(loopmain(INr,1,true))begin
-				testf = false;
-				ISr.Location = ";;;";
-				ISr.Code = INr.Code;
-				if(readfirstmain(ISr,2,true) and ISr.Instock>0)then begin
-					testf = true;
+				testf1 = true;
+				if(blank(INr.BPIGroup))then begin
+					if(CompanyIsJWLikeCompany(i+1))then begin
+						if(jwitemfnd[INr.Code])then begin
+							testf1 = false;
+						end else begin
+							jwitemfnd[INr.Code]=true;
+						end;
+					end;
 				end;
-				if(testf==false)then begin
-					IHr.TransDate = currentdate;
-					IHr.ArtCode = INr.Code;
-					readlastkey("ArtCode",IHr,2,false)begin
-						if(IHr.ArtCode==INr.Code)then begin
-							if(IHr.TransDate>=stringtodate("1/3/2016"))then begin
-								testf = true;
+				if(blank(INr.BPIGroup) and testf1)then begin
+					testf = false;
+					ISr.Location = ";;;";
+					ISr.Code = INr.Code;
+					if(readfirstmain(ISr,2,true) and ISr.Instock>0)then begin
+						testf = true;
+					end;
+					if(testf==false)then begin
+						IHr.TransDate = currentdate;
+						IHr.ArtCode = INr.Code;
+						readlastkey("ArtCode",IHr,2,false)begin
+							if(IHr.ArtCode==INr.Code)then begin
+								if(IHr.TransDate>=stringtodate("1/3/2016"))then begin
+									testf = true;
+								end;
 							end;
 						end;
 					end;
-				end;
-				if(testf)then begin
-					pos = 0;
-					class = "";
-					brand = "";
-					model = "";
-					ExtractObj(INr.DispGroups,pos,class);
-					while(nonblank(class))begin
-						DIr.Code = class;
-						readfirstmain(DIr,1,true);
-						if(DIr.CType=="BRAND")then begin
-							brand = DIr.Name;
-						end;
-						if(DIr.CType=="MODEL")then begin
-							model = DIr.Name;
-						end;
+					if(testf)then begin
+						pos = 0;
+						class = "";
+						brand = "";
+						model = "";
 						ExtractObj(INr.DispGroups,pos,class);
+						while(nonblank(class))begin
+							DIr.Code = class;
+							readfirstmain(DIr,1,true);
+							if(DIr.CType=="BRAND")then begin
+								brand = DIr.Name;
+							end;
+							if(DIr.CType=="MODEL")then begin
+								model = DIr.Name;
+							end;
+							ExtractObj(INr.DispGroups,pos,class);
+						end;
+						addtexttoarea(CBrw.CompName & chr(9) & INr.Code & chr(9) & brand & chr(9) & model & chr(9) & INr.Name & chr(9) & ISr.Instock & chr(9) & IHr.TransDate & chr(13) & chr(10),aitems);
 					end;
-					addtexttoarea(CBrw.CompName & chr(9) & INr.Code & chr(9) & brand & chr(9) & model & chr(9) & INr.Name & chr(13) & chr(10),aitems);
 				end;
 			end;
 			
 			logtext(0,"CompanyNr " & CBrw.CompName);
-			writeareatofile(aitems,"Items_" & CBrw.CompName & ".txt",0);
+			writeareatofile(aitems,"BlankItems_" & CBrw.CompName & ".txt",0);
 			setareazerosize(aitems);
 	  end;
 	end;
