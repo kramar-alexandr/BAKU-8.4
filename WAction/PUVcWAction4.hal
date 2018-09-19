@@ -1035,3 +1035,115 @@ begin
 	end;
 return;
 end;
+
+
+global
+updating function Integer PastePUInStockMov(record PUVc PUp,record StockMovVc SMp,Integer maxrows)
+BEGIN
+  Integer res;
+  record POSettingBlock POSetb;
+	record ItemStatusVc ISr;
+  record CostAccBlock CAb;
+  record INVc INr;
+  record PIVc PIr;
+  row PUVc PUrw;
+  row StockMovVc SMrw;
+  Integer i,rwcnt,nrwcnt,j;
+	res = 0;
+	rwcnt = matrowcnt(PUp);
+	if(rwcnt>0)then begin
+		j = 0;
+		for (i=0;i<rwcnt;i=i+1)begin
+			ISr.Code = SMrw.ArtCode;
+			SMp.FrPos = PUp.Location;
+			ISr.Location = SMp.FrPos;
+			if(readfirstmain(ISr,2,true))then begin
+				matrowget(PUp,i,PUrw);
+				SMrw.ArtCode = PUrw.ArtCode;
+				if(PUrw.Quant<=ISr.Instock)then begin 
+					SMrw.Quant = PUrw.Quant;
+				end else begin
+					SMrw.Quant = ISr.Instock;
+				end;
+				SMrw.Spec = PUrw.Spec;
+				if(SMrw.Quant>0)then begin
+					matrowput(SMp,j,SMrw);
+					j=j+1;
+				end else begin
+					messagebox(0,"Этого товара нет на складе: " & SMrw.ArtCode);
+				end;
+			end;
+		end;
+	end;
+	
+	
+	
+  PastePUInStockMov = res; 
+  RETURN;
+END;
+
+
+
+
+
+
+global
+updating function LongInt RecordAction_raPastePUInStockMov(var record PUVc PUp,var record StockMovVc SMp)
+BEGIN
+  LongInt res,ponr,newnr;
+  record SRBlock SRRec;
+      
+  if (ReadFirstMain(PUp,0,true)) then begin end;  
+  RecordNew(SMp);
+  SMp.SerNr = NextSerNr("StockMovVc",CurrentDate,-1,false,"");  
+  res = PastePUInStockMov(PUp,SMp,199);
+  if (res!=0) then begin
+    goto LRecordAction_raPastePUInStockMov;
+  end;
+  if ((MatRowCnt(SMp)>0) and (SMp.SerNr!=-1)) then begin
+    if (RecordStore(SMp,false)) then begin 
+      CreateRecordLink(SMp,CurrentCompany,PUp,CurrentCompany);  
+      CreateRecordLink(PUp,CurrentCompany,SMp,CurrentCompany);  
+    end;
+    res = 0;
+  end;
+LRecordAction_raPastePUInStockMov:;  
+  RecordAction_raPastePUInStockMov = res;
+  RETURN;
+END;
+
+
+global updating procedure StockMovFromPUDsm() //EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:17 05.07.2018
+begin
+	record PUVc PUr;
+  record StockMovVc SMr;
+  LongInt r;
+  Integer wn,nwn,err;
+  Boolean testf;
+  wn = CurWindow;
+  if (WindowState(wn)==0) then begin//Rs_normal
+    GetWindowRecord(wn,PUr);
+		testf = true;
+		if (PUr.OKFlag==0) then begin 
+			testf = false;
+			MessageBox(0,"Невозможно создать перемещение складированных товаров с неутвержденного поступления!");
+		end;
+		if (testf) then begin
+			r = RecordAction_raPastePUInStockMov(PUr,SMr);
+			switch (r) begin
+				case -1: Beep;
+				case -2: MessageBox(0,"Не создано!");
+				case 0:
+					nwn = OpenWindow("StockMovDClass",1,0,"","",SMr);
+					SetRLink(wn,true);  
+				otherwise
+					MessageBox(r,"");
+			end;
+			UpdateBrowses("PUVc");
+		end;       
+  end else begin
+    Beep;
+  end;
+LStockMovFromPUDsm:;  
+  return;
+end;
