@@ -15,7 +15,14 @@ begin
 	integer i,rwcnt;
 	area areq;
 	boolean TrHs,testf,headf,foundf;
+	record PLVc PLr;
+	record GlobalItemVc GIr;
+	val price;
+	string 255 class;
+	string 20 brand;
+	integer curcmp;
 	
+	curcmp = currentcompany;
 	webgetpostdata(getpost);
 	
 	jsresponse = ParseJSONArea(getpost);
@@ -24,6 +31,9 @@ begin
 		TrHs = true;
 		MCr.Code = JSONGet(jsresponse,"hansaId");
 		while(loopmain(MCr,1,TrHs))begin
+			if(MCr.CompNr>0)then begin
+				SetCompany(MCr.CompNr,false);
+			end;
 			if(MCr.Code!=JSONGet(jsresponse,"hansaId"))then begin TrHs = false; end;
 			
 			if(TrHs)then begin
@@ -42,6 +52,20 @@ begin
 						AddTextToArea(",",areq); 
 						WebOutString(",");
 					end;
+					
+					price = blankval;
+					brand = "";
+					class = "";
+					GIr.Code = MCrw.ItemCode;
+					if(readfirstmain(GIr,1,true))then begin
+						PLr.ArtCode = GIr.HansaCode;
+						PLr.PLCode = "RRP";
+						readfirstmain(PLr,2,true);
+						price = PLr.ExVatPrice;
+						brand = GIr.Brand;
+						class = GIr.Classification;
+					end;
+					
 					AddTextToArea("{",areq);
 					AddTextToArea("\"hansaID\":\"" & MCrw.ItemCode & "\",",areq);
 					AddTextToArea("\"discount\":" & MCrw.vRebate & "",areq);
@@ -49,6 +73,13 @@ begin
 					
 					WebOutString("{");
 					WebOutString("\"hansaID\":\"" & MCrw.ItemCode & "\",");
+					WebOutString("\"price\":\"" & price & "\",");
+					if(nonblank(brand))then begin
+						WebOutString("\"brand\":\"" & brand & "\",");
+					end;
+					if(nonblank(class))then begin
+						WebOutString("\"classification\":\"" & class & "\",");
+					end;
 					WebOutString("\"discount\":" & MCrw.vRebate & "");
 					WebOutString("}");
 				end;
@@ -69,6 +100,7 @@ begin
 	end else begin
 		WebOutString("{\"Error\":\"hansaId not found\"}");
 	end;
+	ReSetCompany(curcmp);
 
 return;
 end;
@@ -1964,8 +1996,31 @@ updating function LongInt MarcCampVcRecordCheck(var record MarcCampVc MCr,record
 BEGIN
   LongInt res;
   date bldate;
+  row MarcCampVc MCrw;
+  integer i,rwcnt,mtrw;
+  record GlobalItemVc GIr;
   
   res = 0;
+  
+  if(stat==RS_insert)then begin
+  	MCr.CompNr = currentcompany;
+  end;
+  
+  mtrw = matrowcnt(MCr);
+  for(i=0;i<mtrw;i=i+1)begin
+  	matrowget(MCr,i,MCrw);
+  	if(blank(MCrw.Name))then begin
+  		GIr.Code = MCrw.ItemCode;
+  		if(readfirstmain(GIr,1,true))then begin
+  			MCrw.Name = GIr.HansaName;
+  			if(nonblank(GIr.Name))then begin
+  				MCrw.Name = GIr.Name;
+  				matrowput(MCr,i,MCrw);
+  			end;
+  		end;
+  	end;
+
+  end;
   
   if(MCr.eDate<MCr.sDate)then begin
   	MCr.eDate = bldate;
