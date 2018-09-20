@@ -1128,6 +1128,7 @@ begin
   record DIVc DIr;
   string 100 group,type,model,brand,collect,subgroup;
 	vector string 100 vclassification;
+	vector boolean vclasstipecode;
 	record NewClassSetVc NCSr;
 	row NewClassSetVc NCSrw;
 	record BPIBrandVc Brandr;
@@ -1166,6 +1167,7 @@ begin
 		end;
 	end else begin
 		res = 1707;
+		classification = "BRAND";
 		goto LVerifyClassificationNew;
 	end;
 	
@@ -1176,6 +1178,7 @@ begin
 		end;
 	end else begin
 		res = 1707;
+		classification = "COLLECTION";
 		goto LVerifyClassificationNew;
 	end;
 	
@@ -1186,6 +1189,7 @@ begin
 		end;
 	end else begin
 		res = 1707;
+		classification = "GROUP";
 		goto LVerifyClassificationNew;
 	end;
 	
@@ -1196,6 +1200,7 @@ begin
 		end;
 	end else begin
 		res = 1707;
+		classification = "SUBGROUP";
 		goto LVerifyClassificationNew;
 	end;
 	
@@ -1248,21 +1253,25 @@ begin
 	
 	
 	NCSr.Group = group;
-	NCSr.Type = type;
+	NCSr.Type = subgroup;
 	if(readfirstmain(NCSr,2,true))then begin
 		rwcnt = matrowcnt(NCSr);
 		for (i=0;i<rwcnt;i=i+1)begin
 			matrowget(NCSr,i,NCSrw);
 			if(blank(vclassification[NCSrw.CType]))then begin
 				res = -1;
-				classification = "”кажите классификацию с типом: " & NCSrw.CType;
+				classification = "Укажите классификацию с типом: " & NCSrw.CType;
 				goto LVerifyClassificationNew;
 			end else begin
-				if(vclassification[NCSrw.CType]!=NCSrw.CCode)then begin
-					res = -1;
-					classification = "Ќедопустима€ классификаци€ дл€ данного типа классификации " & vclassification[NCSrw.CType] & " - " & NCSrw.CType;
-					goto LVerifyClassificationNew;
-				end;
+				vclasstipecode[NCSrw.CType & NCSrw.CCode] = true;
+			end;
+		end;
+		for (i=0;i<rwcnt;i=i+1)begin
+			matrowget(NCSr,i,NCSrw);
+			if(!vclasstipecode[NCSrw.CType & vclassification[NCSrw.CType]])then begin
+				res = -1;
+				classification = "Недопустимая классификация для данного типа классификации " & vclassification[NCSrw.CType] & " - " & NCSrw.CType;
+				goto LVerifyClassificationNew;
 			end;
 		end;
 	end;
@@ -1842,14 +1851,16 @@ begin
       goto LINVcRecordCheck;
     end;
   end;
-  if (nonblank(INr.DispGroups)) then begin
-    errcode = VerifyClassification(INr.DispGroups,tstr);
-    if (errcode!=0) then begin
-      RecordCheckError(errcode," " & tstr & " " & INr.Code,-1,"DispGroups");//change type     //edit by BPI
-      res = -1; 
-      goto LINVcRecordCheck;
-    end;
-  end;
+	if(true)then begin
+		if (nonblank(INr.DispGroups)) then begin
+			errcode = VerifyClassification(INr.DispGroups,tstr);
+			if (errcode!=0) then begin
+				RecordCheckError(errcode," " & tstr & " " & INr.Code,-1,"DispGroups");//change type     //edit by BPI
+				res = -1; 
+				goto LINVcRecordCheck;
+			end;
+		end;
+	end;
 	if(false)then begin // __________________________________________________________________________Checking Classification
 		if (nonblank(INr.DispGroups)) then begin
 			errcode = VerifyClassificationNew(INr,INr.DispGroups,tstr);
