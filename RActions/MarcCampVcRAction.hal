@@ -15,22 +15,39 @@ begin
 	integer i,rwcnt;
 	area areq;
 	boolean TrHs,testf,headf,foundf;
+	record PLVc PLr;
+	record GlobalItemVc GIr;
+	val price;
+	string 255 class,hansaidget;
+	string 20 brand;
+	integer curcmp;
 	
+	curcmp = currentcompany;
 	webgetpostdata(getpost);
 	
+	hansaidget = webgetarg("hansaId");
+	logtext(0,"hansaidget " & hansaidget);
 	jsresponse = ParseJSONArea(getpost);
 	if(nonblank(JSONGet(jsresponse,"hansaId")))then begin	
+		hansaidget = JSONGet(jsresponse,"hansaId");
+	end;
+	
+	if(nonblank(hansaidget))then begin	
 		foundf = false;
 		TrHs = true;
-		MCr.Code = JSONGet(jsresponse,"hansaId");
+		MCr.Code = hansaidget;
+		if(nonblank(hansaidget))then begin
+			MCr.Code = hansaidget;
+		end;
 		while(loopmain(MCr,1,TrHs))begin
-			if(MCr.Code!=JSONGet(jsresponse,"hansaId"))then begin TrHs = false; end;
+			if(MCr.CompNr>0)then begin
+				SetCompany(MCr.CompNr,false);
+			end;
+			if(MCr.Code!=hansaidget)then begin TrHs = false; end;
 			
 			if(TrHs)then begin
 				if(headf==false)then begin
 					foundf = true;
-					//printheader
-					AddTextToArea("{\"hansaID\":\"" & MCr.Code & "\",\"Items\":[",areq);
 					WebOutString("{\"hansaID\":\"" & MCr.Code & "\",\"Items\":[");
 					headf = true;
 				end;
@@ -42,33 +59,48 @@ begin
 						AddTextToArea(",",areq); 
 						WebOutString(",");
 					end;
-					AddTextToArea("{",areq);
-					AddTextToArea("\"hansaID\":\"" & MCrw.ItemCode & "\",",areq);
-					AddTextToArea("\"discount\":" & MCrw.vRebate & "",areq);
-					AddTextToArea("}",areq);
 					
+					price = blankval;
+					brand = "";
+					class = "";
+					GIr.Code = MCrw.ItemCode;
+					if(readfirstmain(GIr,1,true))then begin
+						PLr.ArtCode = GIr.HansaCode;
+						PLr.PLCode = "RRP";
+						readfirstmain(PLr,2,true);
+						price = PLr.ExVatPrice;
+						brand = GIr.Brand;
+						class = GIr.Classification;
+					end;
+
 					WebOutString("{");
 					WebOutString("\"hansaID\":\"" & MCrw.ItemCode & "\",");
+					WebOutString("\"name\":\"" & MCrw.Name & "\",");
+					WebOutString("\"price\":" & price & ",");
+					if(nonblank(brand))then begin
+						WebOutString("\"brand\":\"" & brand & "\",");
+					end;
+					if(nonblank(class))then begin
+						WebOutString("\"classification\":\"" & class & "\",");
+					end;
 					WebOutString("\"discount\":" & MCrw.vRebate & "");
 					WebOutString("}");
 				end;
 			end;
-			
+			ReSetCompany(curcmp);
 		end;
 		
 		if(headf)then begin
-			AddTextToArea("]}",areq);
 			WebOutString("]}");
 		end;
-		
-		WriteAreaToFile(areq,"ItemRebates.json",0);
-		
+				
 		if(foundf==false)then begin
 			WebOutString("{\"Error\":\"MarcCampVc not found\"}");
 		end;
 	end else begin
 		WebOutString("{\"Error\":\"hansaId not found\"}");
 	end;
+	
 
 return;
 end;
@@ -276,7 +308,7 @@ begin
 	json jsresponse;
 	boolean foundf;
 	string 100 tstr,field;
-	date birthdate;
+	date birthdate,d1;
 	
 	logtext(0,"WebCreateLoyCard");
 	
@@ -293,9 +325,22 @@ begin
 					CreateLoyaltyCardRemote(CUr,LCr);
 					LCr.SerNr = JSONGet(jsresponse,"hansaId");
 					LCr.CustCode = JSONGet(jsresponse,"contact");
-					LCr.LCMLevel = JSONGet(jsresponse,"loyaltyProgramId");
+					LCr.LCMLevel = JSONGet(jsresponse,"hansaLoyaltyProgram");
 					LCr.CRMid = JSONGet(jsresponse,"id");
-					LCr.StartDate = currentdate;
+					
+					d1.year = stringtoint(left(JSONGet(jsresponse,"startdate"),4));
+					d1.day = stringtoint(mid(JSONGet(jsresponse,"startdate"),8,2));
+					d1.month = stringtoint(mid(JSONGet(jsresponse,"startdate"),5,2));
+					LCr.StartDate = d1;
+					d1.year = stringtoint(left(JSONGet(jsresponse,"enddate"),4));
+					d1.day = stringtoint(mid(JSONGet(jsresponse,"enddate"),8,2));
+					d1.month = stringtoint(mid(JSONGet(jsresponse,"enddate"),5,2));
+					LCr.ExpiryDate = d1;
+					if(JSONGet(jsresponse,"status")=="inactive")then begin
+						LCr.Closed = 1;
+					end;
+					
+					
 					CopyLoyaltyBalanceToNewCard(LCr);
 				recordstore(LCr,true);
 				weboutstring("{\"hansaId\":\"" & LCr.SerNr & "\"}");
@@ -317,7 +362,7 @@ begin
 	json jsresponse;
 	boolean foundf;
 	string 100 tstr,field;
-	date birthdate;
+	date birthdate,d1;
 	
 	logtext(0,"WebUpdateLoyCard");
 	
@@ -328,7 +373,21 @@ begin
 		LCr.SerNr = JSONGet(jsresponse,"hansaId");
 		if(readfirstmain(LCr,1,true))then begin
 			LCr.SerNr = JSONGet(jsresponse,"hansaId");
-			LCr.LCMLevel = JSONGet(jsresponse,"loyaltyProgramId");
+			LCr.LCMLevel = JSONGet(jsresponse,"hansaLoyaltyProgram");
+			d1.year = stringtoint(left(JSONGet(jsresponse,"startdate"),4));
+			d1.day = stringtoint(mid(JSONGet(jsresponse,"startdate"),8,2));
+			d1.month = stringtoint(mid(JSONGet(jsresponse,"startdate"),5,2));
+			LCr.StartDate = d1;
+			d1.year = stringtoint(left(JSONGet(jsresponse,"enddate"),4));
+			d1.day = stringtoint(mid(JSONGet(jsresponse,"enddate"),8,2));
+			d1.month = stringtoint(mid(JSONGet(jsresponse,"enddate"),5,2));
+			LCr.ExpiryDate = d1;
+			if(JSONGet(jsresponse,"status")=="inactive")then begin
+				LCr.Closed = 1;
+			end;
+			if(JSONGet(jsresponse,"status")=="active")then begin
+				LCr.Closed = 0;
+			end;
 			recordstore(LCr,true);
 			weboutstring("{\"hansaId\":\"" & LCr.SerNr & "\"}");
 		end else begin
@@ -1937,8 +1996,33 @@ updating function LongInt MarcCampVcRecordCheck(var record MarcCampVc MCr,record
 BEGIN
   LongInt res;
   date bldate;
+  row MarcCampVc MCrw;
+  integer i,rwcnt,mtrw;
+  record GlobalItemVc GIr;
   
   res = 0;
+  
+  if(stat==RS_insert)then begin
+  	MCr.CompNr = currentcompany;
+  end;
+  if(MCr.CompNr==0)then begin
+  	MCr.CompNr = currentcompany;
+  end;
+  
+  mtrw = matrowcnt(MCr);
+  for(i=0;i<mtrw;i=i+1)begin
+  	matrowget(MCr,i,MCrw);
+  	if(blank(MCrw.Name))then begin
+  		GIr.Code = MCrw.ItemCode;
+  		if(readfirstmain(GIr,1,true))then begin
+  			MCrw.Name = GIr.HansaName;
+  			if(nonblank(GIr.Name))then begin
+  				MCrw.Name = GIr.Name;
+  			end;
+  			matrowput(MCr,i,MCrw);
+  		end;
+  	end;
+  end;
   
   if(MCr.eDate<MCr.sDate)then begin
   	MCr.eDate = bldate;
@@ -1967,6 +2051,7 @@ BEGIN
     res = -1;
     goto LMarcCampVcRecordCheck;    
   end; 
+  logtext(0,"matrowcnt(MCr)1 " & matrowcnt(MCr));
   
  	if(stat==Rs_insert)then begin
 		if(MCr.SendToCRM>0)then begin
@@ -1983,7 +2068,7 @@ BEGIN
   end;
 
   LMarcCampVcRecordCheck:;
-  
+  logtext(0,"matrowcnt(MCr)2 " & matrowcnt(MCr));
   MarcCampVcRecordCheck = res;
   RETURN;
 END;
