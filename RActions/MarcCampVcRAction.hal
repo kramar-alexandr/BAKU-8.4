@@ -326,14 +326,38 @@ begin
 		if(readfirstmain(LCr,1,true)==false)then begin
 			logtext(0,"Cont " & JSONGet(jsresponse,"contact"));
 			CUr.Code = JSONGet(jsresponse,"contact");
-			if(readfirstmain(CUr,1,true))then begin
+			if(nonblank(CUr.Code))then begin
+				if(readfirstmain(CUr,1,true))then begin
+					recordnew(LCr);
+						CreateLoyaltyCardRemote(CUr,LCr);
+						LCr.SerNr = JSONGet(jsresponse,"hansaId");
+						LCr.CustCode = JSONGet(jsresponse,"contact");
+						LCr.LCMLevel = JSONGet(jsresponse,"hansaLoyaltyProgram");
+						LCr.CRMid = JSONGet(jsresponse,"id");
+					
+						d1.year = stringtoint(left(JSONGet(jsresponse,"startdate"),4));
+						d1.day = stringtoint(mid(JSONGet(jsresponse,"startdate"),8,2));
+						d1.month = stringtoint(mid(JSONGet(jsresponse,"startdate"),5,2));
+						LCr.StartDate = d1;
+						d1.year = stringtoint(left(JSONGet(jsresponse,"enddate"),4));
+						d1.day = stringtoint(mid(JSONGet(jsresponse,"enddate"),8,2));
+						d1.month = stringtoint(mid(JSONGet(jsresponse,"enddate"),5,2));
+						LCr.ExpiryDate = d1;
+						if(JSONGet(jsresponse,"status")=="inactive")then begin
+							LCr.Closed = 1;
+						end;					
+						CopyLoyaltyBalanceToNewCard(LCr);
+					recordstore(LCr,true);
+					weboutstring("{\"hansaId\":\"" & LCr.SerNr & "\"}");
+				end else begin
+					weboutstring("{\"error\":\"Customer not found\"}");
+				end;
+			end else begin
 				recordnew(LCr);
-					CreateLoyaltyCardRemote(CUr,LCr);
 					LCr.SerNr = JSONGet(jsresponse,"hansaId");
 					LCr.CustCode = JSONGet(jsresponse,"contact");
 					LCr.LCMLevel = JSONGet(jsresponse,"hansaLoyaltyProgram");
 					LCr.CRMid = JSONGet(jsresponse,"id");
-					
 					d1.year = stringtoint(left(JSONGet(jsresponse,"startdate"),4));
 					d1.day = stringtoint(mid(JSONGet(jsresponse,"startdate"),8,2));
 					d1.month = stringtoint(mid(JSONGet(jsresponse,"startdate"),5,2));
@@ -342,16 +366,8 @@ begin
 					d1.day = stringtoint(mid(JSONGet(jsresponse,"enddate"),8,2));
 					d1.month = stringtoint(mid(JSONGet(jsresponse,"enddate"),5,2));
 					LCr.ExpiryDate = d1;
-					if(JSONGet(jsresponse,"status")=="inactive")then begin
-						LCr.Closed = 1;
-					end;
-					
-					
-					CopyLoyaltyBalanceToNewCard(LCr);
+					LCr.Closed = 1;
 				recordstore(LCr,true);
-				weboutstring("{\"hansaId\":\"" & LCr.SerNr & "\"}");
-			end else begin
-				weboutstring("{\"error\":\"Customer not found\"}");
 			end;
 		end else begin
 			weboutstring("{\"error\":\"Card already created\"}");
