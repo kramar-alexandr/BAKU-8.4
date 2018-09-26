@@ -3083,3 +3083,134 @@ begin
   
   return;
 end;
+
+
+global procedure OSDSumUp (var record OSDVc OSDr)
+begin
+	row OSDVc OSDrw;
+	longint i, j,rwcnt;
+	val sum;
+	rwcnt = matrowcnt(OSDr);
+	for (i=0;i<rwcnt;i=i+1) begin
+		matrowget(OSDr,i,OSDrw);
+		sum = sum + OSDrw.Sum;
+	end;
+	OSDr.Total = sum;
+return;
+end;
+
+
+
+function boolean OSDDDClassQuantAfter(integer wn,integer rownr,Integer changed)
+begin
+	record OSDVc OSDr;
+	row OSDVc OSDrw;
+	record INVc INr;
+	
+	if(changed>0 and rownr>=0)then begin
+		getwindowrecord(wn,OSDr);
+		matrowget(OSDr,rownr,OSDrw);
+		if(nonblank(OSDrw.CostPrice) and nonblank(OSDrw.Quant))then begin
+			OSDrw.Sum = OSDrw.CostPrice*OSDrw.Quant;
+		end else begin
+			OSDrw.Sum = 0;
+		end;
+		matrowput(OSDr,rownr,OSDrw);
+		Putwindowrecord(wn,OSDr);
+		getwindowrecord(wn,OSDr);
+		OSDSumUp(OSDr);
+		Putwindowrecord(wn,OSDr);
+	end;
+	
+	OSDDDClassQuantAfter = true;
+return;
+end;
+
+
+
+
+
+function boolean OSDDDClassSumAfter(integer wn,integer rownr,Integer changed)
+begin
+	record OSDVc OSDr;
+	row OSDVc OSDrw;
+	record INVc INr;
+	
+	if(changed>0 and rownr>=0)then begin
+		getwindowrecord(wn,OSDr);
+		matrowget(OSDr,rownr,OSDrw);
+		if(nonblank(OSDrw.CostPrice) and nonblank(OSDrw.Quant) and nonblank(OSDrw.Sum))then begin
+			OSDrw.CostPrice = OSDrw.Sum/OSDrw.Quant;
+		end else begin
+			OSDrw.Sum = 0;
+		end;
+		matrowput(OSDr,rownr,OSDrw);
+		Putwindowrecord(wn,OSDr);
+		getwindowrecord(wn,OSDr);
+		OSDSumUp(OSDr);
+		Putwindowrecord(wn,OSDr);
+	end;
+	
+	OSDDDClassSumAfter = true;
+return;
+end;
+
+
+
+
+
+
+
+function boolean OSDDDClassArtCodeAfter(integer wn,integer rownr,Integer changed)
+begin
+	record OSDVc OSDr;
+	row OSDVc OSDrw;
+	record INVc INr;
+	
+	if(changed>0 and rownr>=0)then begin
+		getwindowrecord(wn,OSDr);
+		matrowget(OSDr,rownr,OSDrw);
+		if(nonblank(OSDrw.ArtCode))then begin
+			INr.Code = OSDrw.ArtCode;
+			readfirstmain(INr,1,true);
+			OSDrw.Spec = INr.Name;
+			OSDrw.UnitCode = INr.Unittext;
+			OSDrw.Article = INr.AlternativeCode;
+			OSDrw.Classification = INr.DispGroups;
+		end else begin
+			OSDrw.Spec = "";
+			OSDrw.Spec = "";
+			OSDrw.UnitCode = "";
+			OSDrw.Article = "";
+			OSDrw.Classification = "";
+		end;
+		matrowput(OSDr,rownr,OSDrw);
+		Putwindowrecord(wn,OSDr);
+	end;
+	
+	OSDDDClassArtCodeAfter = true;
+return;
+end;
+
+
+
+
+
+global
+function Boolean OSDDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+	
+	
+	switch (fieldname) begin
+    case "ArtCode": res = OSDDDClassArtCodeAfter(wn,rownr,changed);
+		case "Quant": res = OSDDDClassQuantAfter(wn,rownr,changed);
+		case "CostPrice": res = OSDDDClassQuantAfter(wn,rownr,changed);
+		case "Sum": res = OSDDDClassSumAfter(wn,rownr,changed);
+  end;
+	
+	
+	OSDDClassAfterEditField = res;
+  return;
+end;
+
