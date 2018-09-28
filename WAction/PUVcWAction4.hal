@@ -7,6 +7,8 @@ remote procedure HandleNewINDClassmCode(var record NewINVc,integer);
 remote procedure PUSumUp(var record PUVc); //Edit***************************Sasha2,13:09 08.04.2015
 remote procedure POSumup(var record POVc);
 external procedure VISumup(record VIVc,var val);
+external procedure NextM4Number(string,var string);
+external procedure OSDSumUp (var record OSDVc);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -1151,3 +1153,161 @@ begin
 LStockMovFromPUDsm:;  
   return;
 end;
+
+
+
+global
+updating function Integer PastePUInOSD(record PUVc PUp,record OSDVc OSDr,Integer maxrows) //Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 14:51 19.09.2018
+BEGIN
+  Integer res;
+  record POSettingBlock POSetb;
+	record ItemStatusVc ISr;
+  record CostAccBlock CAb;
+  record INVc INr;
+  record PIVc PIr;
+  row PUVc PUrw;
+  row StockMovVc SMrw;
+  Integer i,rwcnt,nrwcnt,j;
+	record POVc POr;
+	record CUVc CUr;
+	row OSDVc OSDrw;
+	record OSDVc OSDOldr;
+	boolean TrHs;
+	string 255 OldSNr, NewSNr;
+	
+	
+	res = 0;
+	rwcnt = matrowcnt(PUp);
+	OSDOldr.Code = "ZZZZZZZZZZZZZZZZZZZZZZZZ";
+		TrHs = true;
+		while (LoopBackKey("Code",OSDOldr,1,TrHs))begin 
+			OldSNr = OSDOldr.Code;
+			NextM4Number(OldSNr,NewSNr);
+			OSDr.Code = NewSNr;
+			if(blank(OSDr.Code))then begin OSDr.Code = "1"; end;
+			TrHs = false;
+		end;
+	OSDr.TransDate = currentdate;
+	OSDr.PONr = PUp.IDPONr;
+	POr.SerNr = PUp.PONr;
+	if(ReadFirstMain(POr,1,true))then begin
+		OSDr.PODate = POr.TransDate;
+	end;
+	OSDr.RefPRNr = PUp.RefPrNr;
+	OSDr.PrjCode = PUp.PRJCode;
+	OSDr.VendorCode = PUp.VECode;
+	OSDr.VendorName = PUp.VEName;
+	OSDr.GBRNr = PUp.SerNr;
+	CUr.Code = PUp.VECode;
+	if(ReadFirstMain(CUr,1,true))then begin
+		OSDr.Contact = CUr.Person;
+		OSDr.Phone = CUr.Phone;
+		OSDr.Fax = CUr.Fax;
+	end;
+	
+	if(rwcnt>0)then begin
+		for (i=0;i<rwcnt;i=i+1)begin
+			matrowget(PUp,i,PUrw);
+			OSDrw.ArtCode = PUrw.ArtCode;
+			OSDrw.Quant = PUrw.Quant;
+			OSDrw.UnitCode = PUrw.UnitCode;
+			OSDrw.Article = PUrw.SerialNr;
+			OSDrw.Spec = PUrw.Spec;
+			OSDrw.Price = PUrw.UPrice;
+			OSDrw.CostPrice = PUrw.CostPrice;
+			OSDrw.Sum = PUrw.Sum;
+			INr.Code = PUrw.ArtCode;
+			if(ReadFirstMain(INr,1,true))then begin
+				OSDrw.Classification = INr.DispGroups;
+			end;
+			matrowput(OSDr,i,OSDrw);
+		end;
+	end;
+	
+	
+  PastePUInOSD = res; 
+  RETURN;
+END;
+
+
+
+
+
+
+global
+updating function LongInt RecordAction_raPastePUInOSD(var record PUVc PUp,var record OSDVc OSDp)//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 14:51 19.09.2018
+BEGIN
+  LongInt res,ponr,newnr;
+  record SRBlock SRRec;
+	record OSDVc OldOSDr;
+	string 255 OldSNr, NewSNr;
+	boolean TrHs;
+      
+  if (ReadFirstMain(PUp,0,true)) then begin end;  
+  RecordNew(OSDp);
+  OldOSDr.Code = "ZZZZZZZZZZZZZZZZZZZZZZZZ";
+		TrHs = true;
+		while (LoopBackKey("Code",OldOSDr,1,TrHs))begin 
+			OldSNr = OldOSDr.Code;
+			NextM4Number(OldSNr,NewSNr);
+			OSDp.Code = NewSNr;
+			TrHs = false;
+		end;
+  res = PastePUInOSD(PUp,OSDp,199);
+  if (res!=0) then begin
+    goto LRecordAction_raPastePUInOSD;
+  end;
+  if ((MatRowCnt(OSDp)>0) and nonblank(OSDp.Code)) then begin
+		OSDSumUp (OSDp);
+    if (RecordStore(OSDp,false)) then begin 
+      CreateRecordLink(OSDp,CurrentCompany,PUp,CurrentCompany);  
+      CreateRecordLink(PUp,CurrentCompany,OSDp,CurrentCompany);  
+    end;
+    res = 0;
+  end;
+LRecordAction_raPastePUInOSD:;  
+  RecordAction_raPastePUInOSD = res;
+  RETURN;
+END;
+
+
+
+
+global updating procedure OSDFromPUDsm() //EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 14:51 19.09.2018
+begin
+	record PUVc PUr;
+  record OSDVc OSDr;
+  LongInt r;
+  Integer wn,nwn,err;
+  Boolean testf;
+  wn = CurWindow;
+  if (WindowState(wn)==0) then begin//Rs_normal
+    GetWindowRecord(wn,PUr);
+		testf = true;
+		if (PUr.OKFlag==0) then begin 
+			testf = false;
+			MessageBox(0,"Невозможно создать OS&D с неутвержденного поступления!");
+		end;
+		if (testf) then begin
+			r = RecordAction_raPastePUInOSD(PUr,OSDr);
+			switch (r) begin
+				case -1: Beep;
+				case -2: MessageBox(0,"Не создано!");
+				case 0:
+					nwn = OpenWindow("OSDDClass",1,0,"","",OSDr);
+					SetRLink(wn,true);  
+				otherwise
+					MessageBox(r,"");
+			end;
+			UpdateBrowses("PUVc");
+		end;       
+  end else begin
+    Beep;
+  end;
+LOSDFromPUDsm:;  
+  return;
+end;
+
+
+
+

@@ -53,7 +53,8 @@ external procedure ExtractObj(string,var Integer,var string);// Edit ***********
 remote updating procedure CreateLoyaltyCardRemote(record CUVc,var record LoyaltyCardVc);// Edit ************************** Tuesday, 1 April 2014 16:05:50
 remote procedure IDPasteORinPO(var record POVc);
 remote procedure PrintOSD(record RcVc,record OSDVc,string);
-
+remote procedure IDPasteItemsPOinOR(var record POVc,var record ORVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:18 28.09.2018
+external procedure PasteFromSysList(Integer,Integer);
 
 
 global
@@ -3061,6 +3062,33 @@ begin
   return;
 end;
 
+
+
+global
+updating procedure PasteItemsToPR()
+begin
+  record POVc POr;
+  record ORVc ORr;
+  integer wn,nwn;
+  
+  wn = curwindow;
+  deselectwindow(wn,false);
+  getwindowrecord(wn,POr);
+  
+  if nonblank(POr.IDRefPRNum) then begin
+    IDPasteItemsPOinOR(POr,ORr);
+		if (readfirstkey("CustOrdNr",ORr,1,true)) then begin
+      nwn = OpenWindow("ORDClass",0,0,"","",ORr);
+    end;
+  end else begin
+    MessageBox(35149,"");
+  end;
+  
+  return;
+end;
+
+
+
 global
 procedure IDOpenPRFromPO()
 begin
@@ -3081,5 +3109,183 @@ begin
     MessageBox(35149,"");
   end;
   
+  return;
+end;
+
+
+global procedure OSDSumUp (var record OSDVc OSDr)
+begin
+	row OSDVc OSDrw;
+	longint i, j,rwcnt;
+	val sum;
+	rwcnt = matrowcnt(OSDr);
+	for (i=0;i<rwcnt;i=i+1) begin
+		matrowget(OSDr,i,OSDrw);
+		sum = sum + OSDrw.Sum;
+	end;
+	OSDr.Total = sum;
+return;
+end;
+
+
+
+function boolean OSDDDClassQuantAfter(integer wn,integer rownr,Integer changed)
+begin
+	record OSDVc OSDr;
+	row OSDVc OSDrw;
+	record INVc INr;
+	
+	if(changed>0 and rownr>=0)then begin
+		getwindowrecord(wn,OSDr);
+		matrowget(OSDr,rownr,OSDrw);
+		if(nonblank(OSDrw.CostPrice) and nonblank(OSDrw.Quant))then begin
+			OSDrw.Sum = OSDrw.CostPrice*OSDrw.Quant;
+		end else begin
+			OSDrw.Sum = 0;
+		end;
+		matrowput(OSDr,rownr,OSDrw);
+		Putwindowrecord(wn,OSDr);
+		getwindowrecord(wn,OSDr);
+		OSDSumUp(OSDr);
+		Putwindowrecord(wn,OSDr);
+	end;
+	
+	OSDDDClassQuantAfter = true;
+return;
+end;
+
+
+
+
+
+function boolean OSDDDClassSumAfter(integer wn,integer rownr,Integer changed)
+begin
+	record OSDVc OSDr;
+	row OSDVc OSDrw;
+	record INVc INr;
+	
+	if(changed>0 and rownr>=0)then begin
+		getwindowrecord(wn,OSDr);
+		matrowget(OSDr,rownr,OSDrw);
+		if(nonblank(OSDrw.CostPrice) and nonblank(OSDrw.Quant) and nonblank(OSDrw.Sum))then begin
+			OSDrw.CostPrice = OSDrw.Sum/OSDrw.Quant;
+		end else begin
+			OSDrw.Sum = 0;
+		end;
+		matrowput(OSDr,rownr,OSDrw);
+		Putwindowrecord(wn,OSDr);
+		getwindowrecord(wn,OSDr);
+		OSDSumUp(OSDr);
+		Putwindowrecord(wn,OSDr);
+	end;
+	
+	OSDDDClassSumAfter = true;
+return;
+end;
+
+
+
+function boolean OSDDDClassArtCodeAfter(integer wn,integer rownr,Integer changed)
+begin
+	record OSDVc OSDr;
+	row OSDVc OSDrw;
+	record INVc INr;
+	
+	if(changed>0 and rownr>=0)then begin
+		getwindowrecord(wn,OSDr);
+		matrowget(OSDr,rownr,OSDrw);
+		if(nonblank(OSDrw.ArtCode))then begin
+			INr.Code = OSDrw.ArtCode;
+			readfirstmain(INr,1,true);
+			OSDrw.Spec = INr.Name;
+			OSDrw.UnitCode = INr.Unittext;
+			OSDrw.Article = INr.AlternativeCode;
+			OSDrw.Classification = INr.DispGroups;
+		end else begin
+			OSDrw.Spec = "";
+			OSDrw.Spec = "";
+			OSDrw.UnitCode = "";
+			OSDrw.Article = "";
+			OSDrw.Classification = "";
+		end;
+		matrowput(OSDr,rownr,OSDrw);
+		Putwindowrecord(wn,OSDr);
+	end;
+	
+	OSDDDClassArtCodeAfter = true;
+return;
+end;
+
+global
+function Boolean OSDDClassOnOverStrike(Integer wn,Integer rownr)
+BEGIN
+  record OSDVc OSDr;
+
+  if (rownr>=0) then begin
+    GetWindowRecord(wn,OSDr);
+			OSDSumup(OSDr);
+    PutWindowRecord(wn,OSDr);    
+  end;
+  OSDDClassOnOverStrike = true;
+  RETURN;
+END;
+
+
+
+global
+function Boolean OSDDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+begin
+  Boolean res;
+	
+	
+	switch (fieldname) begin
+    case "ArtCode": res = OSDDDClassArtCodeAfter(wn,rownr,changed);
+		case "Quant": res = OSDDDClassQuantAfter(wn,rownr,changed);
+		case "CostPrice": res = OSDDDClassQuantAfter(wn,rownr,changed);
+		case "Sum": res = OSDDDClassSumAfter(wn,rownr,changed);
+  end;
+	
+	
+	OSDDClassAfterEditField = res;
+  return;
+end;
+
+
+
+global
+procedure OSDCodeSClassArrayOnOpen(var Array string astr,var Integer acnt)
+begin
+  
+	
+	astr[0] = "120000   Серия номеров I";
+	astr[1] = "140000   Серия номеров II";
+
+	
+	acnt = 2;
+			
+    
+  return;
+end;
+
+
+global
+function Boolean OSDCodeSClassOnOpenWindow(Integer wn)
+begin
+  Array string 255 astr;
+  Integer i,acnt;
+  
+  OSDCodeSClassArrayOnOpen(astr,acnt);
+  for (i=0;i<acnt;i=i+1) begin
+    SetListString(wn,len(astr[i]),astr[i],false);    
+  end;
+  OSDCodeSClassOnOpenWindow = false;
+  return;
+end;
+
+global
+function Boolean OSDCodeSClassOnOKWindow(Integer wn)
+begin
+  PasteFromSysList(wn,6);
+  OSDCodeSClassOnOKWindow = false;
   return;
 end;
