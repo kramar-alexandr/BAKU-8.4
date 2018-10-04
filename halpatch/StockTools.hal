@@ -87,7 +87,7 @@ updating procedure UpdateInstock(string filename,string transnr,string ac,string
 BEGIN
   record ItemStatusVc ISr;
   record ItemStatusVc oldISr;
-  Boolean found,deltest;
+  Boolean found,deltest,locf;
   string 10 loc2;
   Date bldat;
   val waprice;
@@ -174,7 +174,37 @@ LUpdateInstock:;
       (ISr.InWSheet==0)) then begin deltest = true; end;
   if (deltest==false) then begin
     if (found==false) then begin
-      if (RecordStore(ISr,true)) then begin end;
+      if (RecordStore(ISr,true)) then begin 
+				if(nonblank(INr.BPIBrand))then begin
+					GIr.Code = INr.BPIBrand & "_" & INr.Code;
+					oldGIr.Code = INr.BPIBrand & "_" & INr.Code;
+				end else begin
+					GIr.Code = INr.Code;
+					oldGIr.Code = INr.Code;
+				end;
+				if (readfirstmain(GIr,1,true))then begin
+					if (readfirstmain(oldGIr,1,true)) then begin end;
+					rwcnt = matrowcnt(GIr);
+					locf = false;
+					for (i=0;i<rwcnt;i=i+1)begin
+						matrowget(GIr,i,GIrw);
+						if(GIrw.Location==loc2)then begin
+							locf = true;
+							GIrw.Instock = ISr.Instock;
+							matrowput(GIr,i,GIrw);
+							if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
+						end;
+					end;
+					if(!locf)then begin
+						if(loc2!=";;;")then begin
+							GIrw.Instock = ISr.Instock;
+							GIrw.Location = loc2;
+							matrowput(GIr,rwcnt,GIrw);
+							if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
+						end;
+					end;
+				end;
+			end;
     end else begin
       if (RecordUpdate(oldISr,ISr,false)==0) then begin 
 				if(nonblank(INr.BPIBrand))then begin
@@ -185,14 +215,23 @@ LUpdateInstock:;
 					oldGIr.Code = INr.Code;
 				end;
 				if (readfirstmain(GIr,1,true))then begin
-					logtext(0,"Enter2");
 					if (readfirstmain(oldGIr,1,true)) then begin end;
 					rwcnt = matrowcnt(GIr);
+					locf = false;
 					for (i=0;i<rwcnt;i=i+1)begin
 						matrowget(GIr,i,GIrw);
 						if(GIrw.Location==loc2)then begin
+							locf = true;
 							GIrw.Instock = ISr.Instock;
 							matrowput(GIr,i,GIrw);
+							if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
+						end;
+					end;
+					if(!locf)then begin
+						if(loc2!=";;;")then begin
+							GIrw.Instock = ISr.Instock;
+							GIrw.Location = loc2;
+							matrowput(GIr,rwcnt,GIrw);
 							if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
 						end;
 					end;
@@ -202,20 +241,35 @@ LUpdateInstock:;
   end else begin
     if (found) then begin
       if (RecordUpdate(oldISr,ISr,false)==0) then begin 
-				/*GIr.Code = INr.BPIBrand & "_" & INr.Code;
-				oldGIr.Code = INr.BPIBrand & "_" & INr.Code;
+				if(nonblank(INr.BPIBrand))then begin
+					GIr.Code = INr.BPIBrand & "_" & INr.Code;
+					oldGIr.Code = INr.BPIBrand & "_" & INr.Code;
+				end else begin
+					GIr.Code = INr.Code;
+					oldGIr.Code = INr.Code;
+				end;
 				if (readfirstmain(GIr,1,true))then begin
 					if (readfirstmain(oldGIr,1,true)) then begin end;
 					rwcnt = matrowcnt(GIr);
+					locf = false;
 					for (i=0;i<rwcnt;i=i+1)begin
 						matrowget(GIr,i,GIrw);
 						if(GIrw.Location==loc2)then begin
+							locf = true;
 							GIrw.Instock = ISr.Instock;
 							matrowput(GIr,i,GIrw);
 							if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
 						end;
 					end;
-				end;*/
+					if(!locf)then begin
+						if(loc2!=";;;")then begin
+							GIrw.Instock = ISr.Instock;
+							GIrw.Location = loc2;
+							matrowput(GIr,rwcnt,GIrw);
+							if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
+						end;
+					end;
+				end;
 			end;
 //      RecordDelete(ISr);
     end;
