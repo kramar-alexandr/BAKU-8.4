@@ -28,8 +28,72 @@ external procedure ExtractElemFromSet(string,integer,var string);
 external updating procedure CalcPriceListsMn(record RcVc);// Edit ************************** Thursday, 21 February 2013 09:44:41
 remote function boolean SkipCheckDIType(string); //Edit***************************Sasha2,16:35 25.12.2015
 external function roundmode SetRoundModeD(Integer); //edited by BPI
+remote procedure NextM4SerialNumber(string,var string); 
 
 SetLangMode(LangRussian,"RUS",0);
+
+
+
+
+
+global
+updating procedure PasteglobalIteminIN(var record ORVc ORr)
+begin
+	record INVc INr, oldINr;
+	record GlobalItemVc GIr;
+	row ORVc ORrw;
+	longint rwcnt,i;
+	string 50 OldINCode, NewINCode;
+	vector boolean CreateItemf;
+	boolean TrHs;
+	
+	
+	
+	rwcnt = matrowcnt(ORr);
+	
+	for (i=0;i<rwcnt;i=i+1)begin
+		matrowget (ORr,i,ORrw);
+		if(nonblank(ORrw.GlobalItemArtCode))then begin
+			CreateItemf[ORrw.GlobalItemArtCode] = true;
+		end;
+	end;
+	
+	i=0;
+	TrHs = true;
+	oldINr.Code = "";
+	while (loopmain(oldINr,1,TrHs)) begin
+		if(CreateItemf[oldINr.GlobalArtCode])then begin CreateItemf[oldINr.GlobalArtCode] = false; i=i+1; end;
+		if(i==rwcnt)then begin TrHs = false; end;
+	end;
+	ResetLoop(oldINr);
+	
+	
+	for (i=0;i<rwcnt;i=i+1)begin
+		matrowget (ORr,i,ORrw);
+		if(CreateItemf[ORrw.GlobalItemArtCode])then begin 
+			oldINr.Code = "ZZZZZZZZZZZZZZ";
+			TrHs = true;
+			while (LoopBackKey("Code",oldINr,1,TrHs)) begin OldINCode = oldINr.Code; TrHs = false; end;
+			ResetLoop(oldINr);
+			if(Blank(OldINCode))then begin OldINCode = "000001"; end;
+			RecordNew(INr);
+			NextM4SerialNumber(OldINCode,NewINCode);
+			GIr.Code = ORrw.GlobalItemArtCode;
+			if(ReadFirstMain(GIr,1,true))then begin
+				INr.Code = NewINCode;
+				INr.Name = GIr.HansaCode;
+				INr.GlobalArtCode = GIr.Code; 
+				if(RecordStore(INr,true))then begin 
+					ORrw.ArtCode = INr.Code;
+					MatRowPut(ORr,i,ORrw);
+				end;
+			end;
+		end;
+	end;
+
+return;
+end;
+
 
 
 global
