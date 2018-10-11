@@ -209,28 +209,41 @@ begin
   LongInt res;
   record SDVc NilSDr;
   record UserVc Userr;
-  record ORVc ORr;
+	row SDVc SDrw;
+	integer mtrw,i;
 
   Userr.Code = SDr.Sign;
   ReadFirstMain(Userr,1,true);
   SDr.SalesGroup = Userr.SalesGroup;  
   if (SDr.OKFlag!=0) then begin
     SDUpdateStock(SDr,false);
+//    SDUpdateCostPrice(SDr);//waht the heck ? 
     SDUpdateItemHist(SDr);
     SDUpdateSerialNr(SDr,false,true);
     SDOK(SDr,false);
     AutomatedSalesOrderly("HasIntegratedNL");
   end;  
+	
+	
+	if (SDr.OKFlag==0 and SD2r.OKFlag!=0) then begin
+		mtrw = matrowcnt(SDr);
+		for (i=0;i<mtrw;i=i+1)begin
+			matrowget(SDr,i,SDrw);
+			SDrw.Qty = SDrw.Qty * (-1);
+			matrowput(SDr,i,SDrw);
+		end;
+    SDUpdateStock(SDr,false);
+//    SDUpdateCostPrice(SDr);//waht the heck ? 
+    SDUpdateItemHist(SDr);
+    SDUpdateSerialNr(SDr,false,true);
+    SDOK(SDr,false);
+    AutomatedSalesOrderly("HasIntegratedNL");
+  end;  
+	
+	
   if (SDr.IntORNo!=-1) then begin
     NilSDr.CostAcc = "NIL";
     UpdateIntOrderFromSD(SDr,NilSDr,false);
-  end;
-  if (nonblank(SDr.RefStr)) then begin
-    ORr.CustOrdNr = SDr.RefStr;
-    if (readfirstkey("CustOrdNr",ORr,1,true)) then begin
-      CreateRecordLink(SDr,CurrentCompany,ORr,CurrentCompany);
-      CreateRecordLink(ORr,CurrentCompany,SDr,CurrentCompany);
-    end;
   end;
   SDVcRecordSaveAfter = res;
   RETURN;
