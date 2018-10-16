@@ -10,7 +10,7 @@ remote function boolean SkipCheckDIType(string); //Edit*************************
 remote function string 20 ReturnFieldDITypeNotJW(string); //Edit***************************Sasha2,16:50 14.06.2016
 external function string 255 ReplaceCharByString(string,string,string);
 external function string 255 NormalizeSetString(string);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 3 April 2018 12:00:28
-
+external procedure NextM4Number(string,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -810,19 +810,19 @@ BEGIN
     switch (CurrentCompany) begin
 		  case 9: insertDispNameNotCode = true;
 		end;
-    
-    BlockLoad(DiCb); //Edit***************************Sasha2,16:53 07.12.2015 {
-		
-    mtrw = MatRowCnt(DiCb);
-    if (mtrw>0) then begin
-      for (i=0;i<mtrw;i=i+1) begin
-        MatRowGet(DiCb,i,DiCbw);
-        if (NonBlank(DiCbw.DiCode) and NonBlank(DiCbw.DiType)) then begin
-          diCheckTypes[DiCbw.DiCode] = DiCbw.DiType;
-        end;
-      end;
-    end; //Edit***************************Sasha2,16:53 07.12.2015 }
-    
+    if(NCCHb.ClassifCheck==0)then begin
+			BlockLoad(DiCb); //Edit***************************Sasha2,16:53 07.12.2015 {
+			
+			mtrw = MatRowCnt(DiCb);
+			if (mtrw>0) then begin
+				for (i=0;i<mtrw;i=i+1) begin
+					MatRowGet(DiCb,i,DiCbw);
+					if (NonBlank(DiCbw.DiCode) and NonBlank(DiCbw.DiType)) then begin
+						diCheckTypes[DiCbw.DiCode] = DiCbw.DiType;
+					end;
+				end;
+			end; //Edit***************************Sasha2,16:53 07.12.2015 }
+    end;
     group = "";
   	if (NonBlank(newINr.Brand)) then begin
   	  DIr.Code = newINr.Brand;
@@ -886,6 +886,21 @@ BEGIN
 					RecordCheckError(31228," \"COLLECT\" должна быть заполнена!",i,"Collection");
 					goto LNewINVcRecordCheck;
 				end;*/
+				
+				
+				if(nonblank(vclassification["COLLECT"]))then begin
+					if(left(vclassification["COLLECT"],4)!="COLL")then begin
+						res = -1;
+						RecordCheckError(31228," \"COLLECT\": неверное значение!",i,"Collection");
+						goto LNewINVcRecordCheck;
+					end;
+					if(len(vclassification["COLLECT"])!=9)then begin
+						res = -1;
+						RecordCheckError(31228," \"COLLECT\": неверное значение!",i,"Collection");
+						goto LNewINVcRecordCheck;
+					end;
+				end;
+				
 				
 				
 				
@@ -1640,4 +1655,43 @@ LNewINVcRecordCheck:;
   NewINVcRecordCheck = res;
   RETURN;
 END;
+
+
+
+
+
+global
+updating function LongInt BPICollectionVcRecordCheck(var record BPICollectionVc Collectr,record BPICollectionVc Collect2r,LongInt stat,LongInt long4)
+
+begin
+  LongInt res,errcode;
+	record BPICollectionVc oldCollectr;
+	boolean TrHs;
+	string 255 OldCode;
+
+	res = 0;
+	oldCollectr.Name = Collectr.Name;
+	if(ReadFirstKey("Name",oldCollectr,1,true))then begin
+		MessageBox(0,"Классификация с таким именем уже существует");
+		res = -1;
+		goto LBPICollectionVcRecordCheck;
+	end;
+	if(blank(Collectr.Code))then begin
+		oldCollectr.Code = "COLL99999";
+		while (LoopBackKey("Code",oldCollectr,1,TrHs)) begin
+			OldCode = oldCollectr.Code;
+			TrHs = false;
+		end;
+		MessageBox(0,"OldCode");
+		NextM4Number(OldCode,Collectr.Code);
+	end;
+	
+	LBPICollectionVcRecordCheck:;
+ return;
+end;
+
+
+
+
+
 
