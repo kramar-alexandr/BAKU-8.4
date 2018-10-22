@@ -23,6 +23,21 @@ begin
   return;
 end;
 
+
+procedure CollectNewBrands(var string classlist)
+begin
+  record BPIBrandVc Brandr;
+  boolean testf;
+    
+    classlist = "";
+    Brandr.Code = "";
+    while (LoopMain(Brandr,1,true)) begin
+      classlist = classlist & Brandr.Code & ",";
+    end;
+    
+  return;
+end;
+
 procedure Collectfullstocktotal(date ed,string location,var val fullstocktot)
 begin
   record ItemHistVc IHr;
@@ -59,7 +74,7 @@ begin
   row IVVc IVrw;
   record INVc INr;
   string 20 keyname,brand;
-  boolean TrHs,testf;
+  boolean TrHs,testf,testbrf;
   integer keys,i,rwcnt,sign,pos;
   val fr,to1,to2,br1,br2,rate;
   vector string 20 itembrand;
@@ -82,7 +97,7 @@ begin
       if (IVr.OKFlag==0 or IVr.Invalid!=0) then begin testf = false; end;
       if (nonblank(location) and location!=IVr.Location and keys==1) then begin testf = false; end;
       if (nonblank(location) and location!=IVr.Location and keys==2) then begin TrHs = false; testf = false; end;
-      if (GetYear(IVr.InvDate)<GetYear(addyear(sd,-1))) then begin TrHs = false; testf = false;end;
+      if (GetYear(IVr.InvDate)<GetYear(addyear(sd,-1))) then begin TrHs = false; testf = false; end;
       if (testf) then begin
       
         if (IVr.CurncyCode==basecur) then begin
@@ -122,9 +137,10 @@ begin
                 if (ReadFirstMain(INr,1,true)) then begin
                   pos = 0;
                   brand = "";
+									testbrf = true;
                 	ExtractObj(classlist,pos,brand);
-                	while (nonblank(brand)) begin
-                	  if (setinset(brand,INr.DispGroups)) then begin
+                	while (nonblank(brand) and testbrf) begin
+                	  if (setinset(brand,INr.BPIBrand)) then begin
                 	    itembrand[INr.Code] = brand;
                       if (GetYear(IVr.InvDate)==GetYear(ed)) then begin
                         totturnoverBr[brand] = totturnoverBr[brand] + IVrw.Sum*rate*sign;
@@ -132,7 +148,7 @@ begin
                       if (GetYear(IVr.InvDate)==GetYear(addyear(ed,-1))) then begin
                         prtotturnoverBr[brand] = prtotturnoverBr[brand] + IVrw.Sum*rate*sign;
                       end;
-                  	  pos = 255;
+											testbrf = false;
                 	  end;
                 	  ExtractObj(classlist,pos,brand);
 	                end;
@@ -250,7 +266,7 @@ begin
 	
 	BlockLoad(bascur);
 	if (blank(classlist)) then begin
-	  CollectBrands(classlist);
+	  CollectNewBrands(classlist);
 	end;
 	CollectTurnOverTotals(totturnover,prtotturnover,sd,ed,location,bascur.BaseCur1,totturnoverBr,prtotturnoverBr,classlist,false,true); //Edit***************************Sasha2,14:34 07.05.2015
 	Collectfullstocktotal(ed,location,fullstocktot);
@@ -258,7 +274,6 @@ begin
 	pos = 0;
 	ExtractObj(classlist,pos,class);
 	while (nonblank(class)) begin //class = RepSpec.f1;
-	  
   	For(i=1;i<13;i=i+1) begin
   	  turnover[i] = 0;
   	  pertr[i] = 0;
@@ -284,10 +299,9 @@ begin
   	resetloop(INr);
   	while(loopmain(/*"MyDispGroups",*/INr,1,INTrHs)) begin
   		intestf = true;
-  		if(nonblank(class) and !setinset(class,INr.DispGroups))then begin intestf = false; /*INTrHs = false;*/ end;
+  		if(nonblank(class) and class==INr.BPIBrand)then begin intestf = false; /*INTrHs = false;*/ end;
   		if(INr.Terminated>0)then begin intestf = false; end;
   		if(intestf)then begin 
-
   			if (NonBlank(location)) then begin
   			  IHr.ArtCode = INr.Code;
           IHr.Location = location;
