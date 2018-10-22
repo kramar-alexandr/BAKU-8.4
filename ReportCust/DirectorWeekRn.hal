@@ -933,7 +933,7 @@ begin
 	record CLOutVc CLOutr;
 	row CLOutVc CLOutrw;
 	record CurncyCodeVc CCr;
-	record AccVc Accr50,Accr58,Accr59,Accr591,Accr592,Accr4403,Accr51,Accr52,Accr8403,Accr76,Accr7505,Accr53,Accr601,Accr54;
+	record AccVc Accr50,Accr58,Accr59,Accr591,Accr592,Accr4403,Accr51,Accr512,Accr52,Accr8403,Accr76,Accr7505,Accr53,Accr601,Accr54;
 	array string 5 CurList;
 	integer i,j,k,l,rwcnt,rwcnt2,curi,ci;
 	boolean TrHs,testf,done,f;
@@ -946,7 +946,7 @@ begin
 	integer step;
 	string 5 tempStr;
 	string 200 tempComm;
-	boolean jewlf,njewlf,cretivef,prihodprntdf,rashodprntdf,ksdacheprntdf;
+	boolean jewlf,njewlf,cretivef,prihodprntdf,rashodprntdf,ksdacheprntdf,flag51;
   roundmode rnd;
   
   rnd = DefaultCurRoundoff;
@@ -1054,6 +1054,8 @@ begin
 	ReadFirstMain(Accr50,1,true);
 	Accr51.AccNumber = "51";
 	ReadFirstMain(Accr51,1,true);
+	Accr512.AccNumber = "51/2";
+	ReadFirstMain(Accr512,1,true);
   Accr52.AccNumber = "52";
 	ReadFirstMain(Accr52,1,true);
 	Accr58.AccNumber = "58";
@@ -1351,7 +1353,7 @@ begin
 									end;
 								end;
 							end;
-							testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval) or CorspTRTest(TRr,Accr512,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
 							if testf then begin
 								if(TRrw.CredVal!=0)then begin
 									DWTRrw.MyVal1 = -TRrw.CurCredVal;
@@ -1563,6 +1565,7 @@ begin
 					for (i=0;i<rwcnt;i=i+1) begin
 						MatRowGet(TRr,i,TRrw);
 						if ((TRrw.AccNumber == "51") and (TRrw.ovst <> 1) and SetInSet(RepSpec.ObjStr,TRrw.Objects)) then begin
+							flag51 = true;
 							switch (TRr.IntYc) begin
 								case IVYc:
 									if (f) then begin
@@ -1755,6 +1758,12 @@ begin
 								end;
 							end;
               
+              testf = CorspTRTest(TRr,Accr512,i,corspdebval,corspcredval);
+							if (testf and (corspdebval==TRrw.CredVal or corspcredval==TRrw.DebVal) and (TRr.IntYc != IVYc) and (TRr.IntYc != IPYc)) then begin
+								flag51 = false;
+							end;
+              
+              
               corspdebval = blankval;
 							corspcredval = blankval;
 							testf = CorspTRTest(TRr,Accr52,i,corspdebval,corspcredval);
@@ -1815,12 +1824,333 @@ begin
                 DWTRrw.ExtraComment = TRrw.Comment;
               end;
               
-							if ((RepSpec.ArtMode == 1) and (TRr.IntYc == IVYc) and nonblank(TRrw.DebVal)) then begin
-								MatRowPut(DWTR2r,l,DWTRrw);
-								l = l + 1;
-							end else begin
-								MatRowPut(DWTRr,j,DWTRrw);
-								j = j + 1;
+              if(flag51)then begin
+								if ((RepSpec.ArtMode == 1) and (TRr.IntYc == IVYc) and nonblank(TRrw.DebVal)) then begin
+									MatRowPut(DWTR2r,l,DWTRrw);
+									l = l + 1;
+								end else begin
+									MatRowPut(DWTRr,j,DWTRrw);
+									j = j + 1;
+								end;
+							end;
+              DWTRrw.ReconDate = "";
+							DWTRrw.Curncy = "";
+							DWTRrw.CurDebVal = blankval;
+							DWTRrw.CurCredVal = blankval;
+							DWTRrw.DebVal = blankval;
+							DWTRrw.CredVal = blankval;
+							DWTRrw.MyVal1 = blankval;// Edit ************************** Wednesday, 26 August 2015 11:34:24
+							DWTRrw.MyVal2 = blankval;// Edit ************************** Wednesday, 26 August 2015 11:34:24
+              DWTRrw.MyVal3 = blankval;
+							DWTRrw.Comment = "";
+							DWTRrw.ExtraComment = "";
+              Clearrow(DWTRr,DWTRrw,1);
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	ResetLoop(mainr);
+	mainr.AccNumber = "51/2";
+	mainr.TransDate = RepSpec.sStartDate;
+	TrHs = true;
+	while (LoopMain(mainr,2,TrHs)) begin
+		if ((mainr.AccNumber != "51/2") or (mainr.TransDate > RepSpec.sEndDate))  then begin
+			TrHs = false;	
+		end;
+		if (TrHs) then begin
+			TRr.Number = mainr.TransNr;
+			TRr.IntYc = mainr.IntYc;
+			if (ReadFirstMain(TRr,2,true)) then begin
+				if (mainr.TransDate == TRr.TransDate) and (left(TRr.Comment,len(USetStr(35148)))!=USetStr(35148)) then begin
+					rwcnt = MatRowCnt(TRr);
+          switch (TRr.IntYc) begin
+            case IVYc:
+              IVr.SerNr = TRr.Number;
+              if (ReadFirstMain(IVr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case IPYc:
+              IPr.SerNr = TRr.Number;
+              if (ReadFirstMain(IPr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case CLInYc:
+              CLInr.SerNr = TRr.Number;
+              if (ReadFirstMain(CLInr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+            case CLOutYc:
+              CLOutr.SerNr = TRr.Number;
+              if (ReadFirstMain(CLOutr,1,true)) then begin
+                f = true;
+              end else begin
+                f = false;
+              end;
+          end;
+					for (i=0;i<rwcnt;i=i+1) begin
+						MatRowGet(TRr,i,TRrw);
+						if ((TRrw.AccNumber == "51/2") and (TRrw.ovst <> 1) and SetInSet(RepSpec.ObjStr,TRrw.Objects)) then begin
+							
+							flag51 = true;
+							switch (TRr.IntYc) begin
+								case IVYc:
+									if (f) then begin
+										DWTRrw.Comment = "СЧ/КЛ." & IVr.SerNr;
+										DWTRrw.ExtraComment = TRr.Comment;
+									end;
+								case IPYc:
+									if (f) then begin
+										DWTRrw.Comment = "ПЛ/КЛ." & IPr.SerNr;
+										DWTRrw.ExtraComment = TRr.Comment;
+									end;
+								case CLInYc:
+									if (f) then begin
+										DWTRrw.Comment = "ПКО." & CLInr.SerNr;
+										rwcnt2 = MatRowCnt(CLInr);
+										for (k=0;k<rwcnt2;k=k+1) begin
+											MatRowGet(CLInr,k,CLInrw);
+											if(TRrw.RowNr>0 and TRrw.RowNr<999)then begin 
+												MatRowGet(CLInr,TRrw.RowNr,CLInrw);
+												DWTRrw.ExtraComment = CLINrw.Comment;
+												k = rwcnt2;
+											end else begin
+												if nonblank(CLInrw.Comment) and (CLInrw.Comment!="") and ((AbsoluteVal(CLInrw.Sum) == AbsoluteVal(TRrw.CurDebVal)) or (AbsoluteVal(CLInrw.Sum) == AbsoluteVal(TRrw.CurCredVal))) and ((nonblank(CLInrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLInrw.Objects,TRrw.Objects)) or (blank(CLInrw.Objects) and (TRrw.Objects==CLInr.Objects))) then begin
+													DWTRrw.ExtraComment = CLInrw.Comment;
+													//CLInrw.Comment = "";
+													matrowput(CLInr,k,CLInrw);
+													k = rwcnt2;
+												end;
+											end;
+										end;
+										if blank(DWTRrw.ExtraComment) then begin
+											DWTRrw.ExtraComment = CLInr.CorspComment;
+										end;
+									end;
+								case CLOutYc:
+									if (f) then begin
+										DWTRrw.Comment = "РКО." & CLOutr.SerNr;
+										rwcnt2 = MatRowCnt(CLOutr);
+										for (k=0;k<rwcnt2;k=k+1) begin
+											MatRowGet(CLOutr,k,CLOutrw);
+											if(TRrw.RowNr>0 and TRrw.RowNr<999)then begin 
+												MatRowGet(CLOutr,TRrw.RowNr,CLOutrw);
+												DWTRrw.ExtraComment = CLOutrw.Comment;
+												k = rwcnt2;
+											end else begin
+												if nonblank(CLOutrw.Comment) and (CLOutrw.Comment!="") and (((AbsoluteVal(CLOutrw.Sum) == AbsoluteVal(TRrw.CurCredVal)) or (AbsoluteVal(CLOutrw.Sum) == AbsoluteVal(TRrw.CurDebVal))) and ((nonblank(CLOutrw.Objects) and nonblank(TRrw.Objects) and SetInSet(CLOutrw.Objects,TRrw.Objects)) or (blank(CLOutrw.Objects) and (TRrw.Objects==CLOutr.Objects)))) then begin
+													DWTRrw.ExtraComment = CLOutrw.Comment;
+													//CLOutrw.Comment = "";
+													matrowput(CLOutr,k,CLOutrw);
+													k = rwcnt2;
+												end;
+											end;
+										end;
+										if blank(DWTRrw.ExtraComment) then begin
+											DWTRrw.ExtraComment = CLOutr.CorspComment;
+										end;
+									end;
+								case 300:
+                  DWTRrw.Comment = "300." & TRr.Number;
+                  DWTRrw.ExtraComment = TRr.Comment;
+								otherwise
+									YcToStr(TRr.IntYc,tempStr);
+									DWTRrw.Comment = tempStr & "." & TRr.Number;
+									DWTRrw.ExtraComment = TRr.Comment;
+							end;
+							DWTRrw.ReconDate = mainr.TransDate;
+							DWTRrw.Curncy = "TER";				//валюта
+							DWTRrw.CurDebVal = TRrw.DebVal;		//в столбики Поступления AZN банк
+							DWTRrw.CurCredVal = TRrw.CredVal;		//в столбики Расходы AZN банк
+							DWTRrw.DebVal = TRrw.DebVal;
+							DWTRrw.CredVal = TRrw.CredVal;
+							
+							corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr50,i,corspdebval,corspcredval);
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									DWTRrw.MyVal1 = -TRrw.CurCredVal;
+									DWTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									DWTRrw.MyVal1 = TRrw.CurDebVal;
+									DWTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								DWTRrw.CurDebVal = blankval;
+								DWTRrw.DebVal = blankval;
+								DWTRrw.CurCredVal = blankval;
+								DWTRrw.CredVal = blankval;
+							end;
+              
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr601,i,corspdebval,corspcredval);//Edit-------------------Vitalii 11:15 16.02.2016
+							if (testf) then begin
+								if(TRrw.CredVal!=0)then begin
+									DWTRrw.MyVal1 = -TRrw.CurCredVal;
+									DWTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									DWTRrw.MyVal1 = TRrw.CurDebVal;
+									DWTRrw.MyVal2 = TRrw.DebVal;
+								end;
+                v["BalItem2"] = v["BalItem2"] + TRrw.CredVal - TRrw.DebVal;
+								DWTRrw.CurDebVal = blankval;
+								DWTRrw.DebVal = blankval;
+								DWTRrw.CurCredVal = blankval;
+								DWTRrw.CredVal = blankval;
+							end;
+              
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr76,i,corspdebval,corspcredval);//Edit-------------------Vitalii 14:48 28.08.2015
+							if (testf and (SetInSet("E131",TRrw.Objects) or SetInSet("E98",TRrw.Objects))) then begin
+								if(TRrw.CredVal!=0)then begin
+									DWTRrw.MyVal1 = -TRrw.CurCredVal;
+									DWTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									DWTRrw.MyVal1 = TRrw.CurDebVal;
+									DWTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								if SetInSet("E131",TRrw.Objects) then begin
+									v["BalItem1"] = v["BalItem1"] - TRrw.CredVal + TRrw.DebVal;
+								end;
+								if SetInSet("E98",TRrw.Objects) then begin
+									v["BalItem2"] = v["BalItem2"] + TRrw.CredVal - TRrw.DebVal;
+								end;
+								DWTRrw.CurDebVal = blankval;
+								DWTRrw.DebVal = blankval;
+								DWTRrw.CurCredVal = blankval;
+								DWTRrw.CredVal = blankval;
+							end;
+							
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr512,i,corspdebval,corspcredval);
+							if (testf and (corspdebval==TRrw.CredVal or corspcredval==TRrw.DebVal) and (TRr.IntYc != IVYc) and (TRr.IntYc != IPYc)) then begin
+								store = "";
+								GetObjs("STORE",TRrw.Objects,store);
+								if nonblank(store) then begin
+									for (k=0;k<rwcnt;k=k+1) begin
+										MatRowGet(TRr,k,TR2rw);
+										if (TR2rw.AccNumber == "51/2") and (TR2rw.ovst <> 1) then begin 
+											if ((TR2rw.CredVal == TRrw.DebVal) and (TR2rw.DebVal == TRrw.CredVal)) then begin
+												store2 = "";
+												GetObjs("STORE",TR2rw.Objects,store2);
+												if (store == store2) then begin
+													if (TRrw.CredVal!=0) then begin
+														DWTRrw.MyVal1 = -TRrw.CredVal;
+														DWTRrw.MyVal2 = -TRrw.CredVal;
+													end else begin
+														DWTRrw.MyVal1 = TRrw.DebVal;
+														DWTRrw.MyVal2 = TRrw.DebVal;
+													end;
+													DWTRrw.CurDebVal = blankval;
+													DWTRrw.DebVal = blankval;
+													DWTRrw.CurCredVal = blankval;
+													DWTRrw.CredVal = blankval;
+												end else begin
+													if (TRrw.DebVal!=0) then begin
+														TRrw.CredVal = -TRrw.DebVal;
+														TRrw.DebVal = blankval;
+														TRrw.CurCredVal = -TRrw.DebVal;
+														TRrw.CurDebVal = blankval;
+													end;
+													DWTRrw.CurDebVal = TRrw.DebVal;
+													DWTRrw.CurCredVal = TRrw.CredVal;
+													DWTRrw.DebVal = TRrw.DebVal;
+													DWTRrw.CredVal = TRrw.CredVal;
+												end;
+											end else begin
+												if i != k then begin
+													if ((TR2rw.CredVal == TRrw.DebVal) or (TR2rw.DebVal == TRrw.CredVal)) and (TR2rw.Objects == TRrw.Objects) then begin
+														testf = CorspTRTest(TRr,Accr8403,k,corspdebval,corspcredval);
+														if testf then begin
+															if (TRrw.CredVal!=0) then begin
+																DWTRrw.MyVal1 = -TRrw.CurCredVal;
+																DWTRrw.MyVal2 = -TRrw.CredVal;
+															end else begin
+																DWTRrw.MyVal1 = TRrw.CurDebVal;
+																DWTRrw.MyVal2 = TRrw.DebVal;
+															end;
+															DWTRrw.CurDebVal = blankval;
+															DWTRrw.DebVal = blankval;
+															DWTRrw.CurCredVal = blankval;
+															DWTRrw.CredVal = blankval;
+														end;
+													end;
+												end;
+											end;
+										end;
+									end;
+								end;
+							end;
+							
+							corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval);
+							if (testf and (corspdebval==TRrw.CredVal or corspcredval==TRrw.DebVal) and (TRr.IntYc != IVYc) and (TRr.IntYc != IPYc)) then begin
+								flag51 = false;
+							end;
+              
+              corspdebval = blankval;
+							corspcredval = blankval;
+							testf = CorspTRTest(TRr,Accr52,i,corspdebval,corspcredval);
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									DWTRrw.MyVal1 = -TRrw.CurCredVal;
+									DWTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									DWTRrw.MyVal1 = TRrw.CurDebVal;
+									DWTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								DWTRrw.CurDebVal = blankval;
+								DWTRrw.DebVal = blankval;
+								DWTRrw.CurCredVal = blankval;
+								DWTRrw.CredVal = blankval;
+							end;
+              
+              testf = CorspTRTest(TRr,Accr53,i,corspdebval,corspcredval);//Edit-------------------Vitalii 11:07 12.03.2018
+							if testf then begin
+								if(TRrw.CredVal!=0)then begin
+									DWTRrw.MyVal1 = -TRrw.CurCredVal;
+									DWTRrw.MyVal2 = -TRrw.CredVal;
+								end else begin
+									DWTRrw.MyVal1 = TRrw.CurDebVal;
+									DWTRrw.MyVal2 = TRrw.DebVal;
+								end;
+								DWTRrw.CurDebVal = blankval;
+								DWTRrw.DebVal = blankval;
+								DWTRrw.CurCredVal = blankval;
+								DWTRrw.CredVal = blankval;
+							end;
+							
+              corspdebval = blankval;
+							corspcredval = blankval;
+              testf = CorspTRTest(TRr,Accr54,i,corspdebval,corspcredval);
+							if testf then begin
+                DWTRrw.CurDebVal = TRrw.CurDebVal;
+                DWTRrw.CurCredVal = TRrw.CurCredVal;
+                DWTRrw.DebVal = TRrw.DebVal;
+                DWTRrw.CredVal = TRrw.CredVal;
+                DWTRrw.ExtraComment = TRrw.Comment;
+              end;
+              
+              if(flag51)then begin
+								if ((RepSpec.ArtMode == 1) and (TRr.IntYc == IVYc) and nonblank(TRrw.DebVal)) then begin
+									MatRowPut(DWTR2r,l,DWTRrw);
+									l = l + 1;
+								end else begin
+									MatRowPut(DWTRr,j,DWTRrw);
+									j = j + 1;
+								end;
 							end;
               DWTRrw.ReconDate = "";
 							DWTRrw.Curncy = "";
@@ -2150,7 +2480,7 @@ begin
 									end;
 								end;
 							end;
-							testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
+							testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval) or CorspTRTest(TRr,Accr512,i,corspdebval,corspcredval);// Edit ************************** Wednesday, 26 August 2015 16:05:46
 							if testf then begin
 								if(TRrw.CredVal!=0)then begin
 									DWTRrw.MyVal8 = -TRrw.CurCredVal;
@@ -2495,7 +2825,7 @@ begin
                 end;
                 corspdebval = blankval;
                 corspcredval = blankval;
-                testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval);
+                testf = CorspTRTest(TRr,Accr51,i,corspdebval,corspcredval) or CorspTRTest(TRr,Accr512,i,corspdebval,corspcredval);
                 if testf then begin
                   if(TRrw.CredVal!=0)then begin
                     DWTRrw.MyVal18 = -TRrw.CurCredVal;
@@ -3275,12 +3605,16 @@ begin
 			if left(CurList[i],3)=="USD" then begin
 				FindNLAccBal("51",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
 				v["BeginBalance51USD"] = v["BeginBalance51USD"] + tempBal;
+				FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				v["BeginBalance51USD"] = v["BeginBalance51USD"] + tempBal;
 			end;
 		end;
 		tempBal = 0;
 		for (i=0;i<curi;i=i+1) begin
 			if left(CurList[i],3)=="CHF" then begin
 				FindNLAccBal("51",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				v["BeginBalance51CHF"] = v["BeginBalance51CHF"] + tempBal;
+				FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
 				v["BeginBalance51CHF"] = v["BeginBalance51CHF"] + tempBal;
 			end;
 		end;
@@ -3289,12 +3623,16 @@ begin
 			if left(CurList[i],3)=="GBP" then begin
 				FindNLAccBal("51",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
 				v["BeginBalance51GBP"] = v["BeginBalance51GBP"] + tempBal;
+				FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				v["BeginBalance51GBP"] = v["BeginBalance51GBP"] + tempBal;
 			end;
 		end;
 		tempBal = 0;
 		for (i=0;i<curi;i=i+1) begin
 			if left(CurList[i],3)=="EUR" then begin
 				FindNLAccBal("51",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				v["BeginBalance51EUR"] = v["BeginBalance51EUR"] + tempBal;
+				FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
 				v["BeginBalance51EUR"] = v["BeginBalance51EUR"] + tempBal;
 			end;
 		end;
@@ -3303,12 +3641,16 @@ begin
 			if left(CurList[i],3)=="AZN" then begin
 				FindNLAccBal("51",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
 				v["BeginBalance51AZN"] = v["BeginBalance51AZN"] + tempBal;
+				FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,CurList[i],0,"","",tempBal);
+				v["BeginBalance51AZN"] = v["BeginBalance51AZN"] + tempBal;
 			end;
 		end;
 		
     tempBal = 0;
 		FindNLAccBal("51",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,"",0,"","",tempBal);
     v["BeginBalance51"] = tempBal;
+    FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",RepSpec.sStartDate,0,0,false,"",0,"","",tempBal);
+    v["BeginBalance51"] = v["BeginBalance51"] + tempBal;
     
     //========================================== BeginBalance53
 		tempBal = 0;
@@ -6620,12 +6962,16 @@ begin
 				if left(CurList[i],3)=="USD" then begin
 					FindNLAccBal("51",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
 					v["SaldoEndPeriod51USD"] = v["SaldoEndPeriod51USD"] + tempBal;
+					FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+					v["SaldoEndPeriod51USD"] = v["SaldoEndPeriod51USD"] + tempBal;
 				end;
 			end;
 			tempBal = 0;
 			for (i=0;i<curi;i=i+1) begin
 				if left(CurList[i],3)=="EUR" then begin
 					FindNLAccBal("51",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+					v["SaldoEndPeriod51EUR"] = v["SaldoEndPeriod51EUR"] + tempBal;
+					FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
 					v["SaldoEndPeriod51EUR"] = v["SaldoEndPeriod51EUR"] + tempBal;
 				end;
 			end;
@@ -6634,6 +6980,8 @@ begin
 				if left(CurList[i],3)=="AZN" then begin
 					FindNLAccBal("51",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
 					v["SaldoEndPeriod51AZN"] = v["SaldoEndPeriod51AZN"] + tempBal;
+					FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+					v["SaldoEndPeriod51AZN"] = v["SaldoEndPeriod51AZN"] + tempBal;
 				end;
 			end;
 			tempBal = 0;
@@ -6641,12 +6989,16 @@ begin
 				if left(CurList[i],3)=="CHF" then begin
 					FindNLAccBal("51",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
 					v["SaldoEndPeriod51CHF"] = v["SaldoEndPeriod51CHF"] + tempBal;
+					FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+					v["SaldoEndPeriod51CHF"] = v["SaldoEndPeriod51CHF"] + tempBal;
 				end;
 			end;
 			tempBal = 0;
 			for (i=0;i<curi;i=i+1) begin
 				if left(CurList[i],3)=="GBP" then begin
 					FindNLAccBal("51",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
+					v["SaldoEndPeriod51GBP"] = v["SaldoEndPeriod51GBP"] + tempBal;
+					FindNLAccBal("51/2",RepSpec.ObjStr,"",0,"",addday(RepSpec.sEndDate,1),0,0,false,CurList[i],0,"","",tempBal);
 					v["SaldoEndPeriod51GBP"] = v["SaldoEndPeriod51GBP"] + tempBal;
 				end;
 			end;
