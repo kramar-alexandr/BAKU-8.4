@@ -86,7 +86,8 @@ remote function Boolean DenyOperationsWithBlockedCustomer(record CUVc,string); /
 remote updating procedure PasteglobalIteminIN(var record ORVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:57 08.10.2018
 external procedure NextM4Number(string,var string);
 remote updating procedure UnReservLinkedFromWebORVc(var record ORVc,Boolean);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:17 22.10.2018
-
+external updating procedure IVFromLocWEBORDsm(record ORVc);
+external updating procedure SHFromLocWEBORDsm(record ORVc);
 
 
 
@@ -399,7 +400,7 @@ end;
 
 
 global 
-updating function longint CreateLocalORFromWebOR (record ORVc ORr)
+updating function longint CreateLocalORFromWebOR (record ORVc ORr) //Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 17:56 17.10.2018
 begin
 	row ORVc ORrw;
 	record ORVc LocORr;
@@ -412,11 +413,11 @@ begin
 	vector boolean ORItemToLocalOR, ItemSearchf, Compf; 	
 	vector longint ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate;
 	array string 255 ArtCodes;
-	string 255 strlc, HansaArtCode;
+	string 255 strlc, HansaArtCode,Store;
 	integer pos;
 	boolean testf,TrHs,Insertf;
 	record INVc INr;
-	
+	vector string 255 vComdItemLocation;
 	
 	OldComp = CurrentCompany;
 	res = 0;
@@ -426,7 +427,6 @@ begin
 		matrowget(ORr,i,ORrw);
 		if(nonblank(ORrw.GlobalItemArtCode))then begin
 			ArtCodes[i] = mid(ORrw.GlobalItemArtCode,9,len(ORrw.GlobalItemArtCode)-9);
-			logtext(0,ArtCodes[i]);
 			ItemSearchf[ArtCodes[i] & i] = true;
 			NeedItQty[ArtCodes[i] & i] = ORrw.Quant;
 		end;
@@ -455,15 +455,17 @@ begin
 								ISr.Code = ArtCodes[j];
 								if(readfirstmain(ISr,2,true))then begin
 									ItemInStocks[ArtCodes[j] & j] = 0;
-									if((ISr.Instock-ItemDuplicate[ArtCodes[j] & i+1])>0)then begin
+									if((ISr.Instock-ISr.StockRsrvQty-ItemDuplicate[ArtCodes[j] & i+1])>0)then begin
 										if(ItemSearchf[ArtCodes[j] & j])then begin
-											if(ItemInStocks[ArtCodes[j] & j]<NeedItQty[ArtCodes[j] & j] and (ISr.Instock-ItemDuplicate[ArtCodes[j] & i+1])<=(NeedItQty[ArtCodes[j] & j]-ItemInStocks[ArtCodes[j] & j]))then begin
-												vItemCompQty[j & "_" & i+1] = ISr.Instock-ItemDuplicate[ArtCodes[j] & i+1];
+											if(ItemInStocks[ArtCodes[j] & j]<NeedItQty[ArtCodes[j] & j] and (ISr.Instock-ISr.StockRsrvQty-ItemDuplicate[ArtCodes[j] & i+1])<=(NeedItQty[ArtCodes[j] & j]-ItemInStocks[ArtCodes[j] & j]))then begin
+												vItemCompQty[j & "_" & i+1] = ISr.Instock-ISr.StockRsrvQty-ItemDuplicate[ArtCodes[j] & i+1];
 												Compf[i+1] = true;
+												vComdItemLocation [j & "_" & i+1] = ISr.Location;
 											end;
-											if(ItemInStocks[ISr.Code]<NeedItQty[ArtCodes[j] & j] and (ISr.Instock-ItemDuplicate[ArtCodes[j] & i+1])>(NeedItQty[ArtCodes[j] & j]-ItemInStocks[ArtCodes[j] & j]))then begin
+											if(ItemInStocks[ISr.Code]<NeedItQty[ArtCodes[j] & j] and (ISr.Instock-ISr.StockRsrvQty-ItemDuplicate[ArtCodes[j] & i+1])>(NeedItQty[ArtCodes[j] & j]-ItemInStocks[ArtCodes[j] & j]))then begin
 												vItemCompQty[j & "_" & i+1] = NeedItQty[ArtCodes[j] & j] - ItemInStocks[ArtCodes[j] & j];
 												Compf[i+1] = true;
+												vComdItemLocation [j & "_" & i+1] = ISr.Location;
 											end;
 											ItemDuplicate[ArtCodes[j] & i+1] = ItemDuplicate[ArtCodes[j] & i+1] + vItemCompQty[j & "_" & i+1];
 											ItemInStocks[ArtCodes[j] & j] = ItemInStocks[ArtCodes[j] & j] + vItemCompQty[j & "_" & i+1];
@@ -514,6 +516,8 @@ begin
 				LocORr.OfficialSerNr = "EC_" & ORr.SerNr;
 				LocORr.CurncyCode = ORr.CurncyCode;
 				LocORr.Comment = ORr.Comment;
+				LocORr.Objects = ORr.Objects;
+				LocORr.OKFlag = ORr.OKFlag;
 				j = 0;
 				for (i=0;i<orrwcnt;i=i+1) begin
 					MatRowGet(ORr,i,ORrw);
@@ -527,7 +531,10 @@ begin
 						LocORrw.SerialNr = ORrw.SerialNr;
 						LocORrw.PlanShipRow = ORrw.PlanShipRow;
 						LocORrw.GlobalItemArtCode = ORrw.GlobalItemArtCode;
-						LocORrw.Sum = LocORrw.Sum;
+						LocORrw.Objects = ORrw.Objects;
+						LocORrw.Sum = ORrw.Sum;
+						LocORrw.Location = vComdItemLocation[i & "_" & c];
+						LocORr.Location = LocORrw.Location;
 						MatRowPut(LocORr,j,LocORrw);
 						j=j+1;
 					end;
@@ -536,10 +543,19 @@ begin
 					RecordInsert(LocORr,true);
 					CreateRecordLink(LocORr,c,ORr,OldComp);
 					CreateRecordLink(ORr,OldComp,LocORr,c);
+					if(ORr.OrderConfirmed==1)then begin
+						IVFromLocWEBORDsm(LocORr);
+						SHFromLocWEBORDsm(LocORr);
+					end;
 				end else begin
-					CreateRecordLink(LocORr,c,ORr,OldComp);
-					CreateRecordLink(ORr,OldComp,LocORr,c);
-					RecordStore(LocORr,true);
+					if(RecordStore(LocORr,true))then begin
+						CreateRecordLink(LocORr,c,ORr,OldComp);
+						CreateRecordLink(ORr,OldComp,LocORr,c);
+						if(ORr.OrderConfirmed==1)then begin
+							IVFromLocWEBORDsm(LocORr);
+							SHFromLocWEBORDsm(LocORr);
+						end;
+					end;
 				end;
 			end;
 		end;
@@ -551,12 +567,26 @@ begin
 	LCreateLocalORFromWebOR:;
 	CreateLocalORFromWebOR = res;
 return;
+end;//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 17:56 22.10.2018
+
+/*
+global 
+updating function longint CreateGlobalPUInEC (record ORVc ORr)
+begin
+	record PUVc PUr;
+	integer OldComp;
+	
+	OldComp = CurrentCompany;
+	if(SetCompany(29,false))then begin
+		Recordnew(PUr);
+		LocORr.SerNr = NextSerNr("PUVc",CurrentDate,-1,false,"");
+		if
+	end;
+	
+return;
 end;
 
-
-
-
-
+*/
 
 
 
@@ -611,9 +641,12 @@ begin
   Boolean initotcheckf;  
   record CUUserLabelBlock CUUerLb;
   record CountryVc Countryr;
-	integer notenr;
+	integer notenr,locnotenr;
 	record RlinkVc RLr;
 	record ORVc LocORr;
+	record SHVc SHr;
+	record IVVc IVr;
+	
   
   res = 0;
   insertmode = 1;//Rs_insert
@@ -844,7 +877,6 @@ begin
       goto LORVcRecordCheck;
     end;
   end;
-
    
   if (nonblank(ORr.PRCode)) then begin
     PRr.Code = ORr.PRCode;
@@ -1036,6 +1068,16 @@ begin
     res = -1; 
     goto LORVcRecordCheck;
   end;    
+	if(stat==Rs_insert and ORr.WEBReservOnStock==1)then begin
+		MessageBox(36202,"");
+		ORr.WEBReservOnStock = 0;
+		PutWindowRecord(CurWindow,ORr);
+		res = -1;
+		goto LORVcRecordCheck;
+	end;
+	/*if(ORr.CustCode=="E_COMMERCE" and (OR2r.OKFlag==0 and ORr.OKFlag==1)then begin
+		
+	end;*/
   if (HasLocalization("PRT")) then begin
     BlockLoad(CUUerLb);  
     tstr = "";
@@ -1064,6 +1106,8 @@ begin
       end;
     end;
     
+		
+		
     tstr = "";
     switch (CUUerLb.CountryAddrLine) begin
       case kCountryAddrLineUserAddr0: tstr = ORr.ShipAddr0; errstr = "ShipAddr0";
@@ -1612,8 +1656,21 @@ LORVcRecordRowCheck:;
 		if(OR2r.WEBReservOnStock==1 and ORr.WEBReservOnStock==0)then begin
 			notenr = 1;
 			while (ReadRecordLink(ORr,notenr,LocORr,RLr))begin
-				UnReservLinkedFromWebORVc(LocORr, false);
-				notenr = notenr + 1;
+				testf = true;
+				if (ReadRecordLink(LocORr,1,SHr,RLr))then begin
+					testf = false;
+				end;
+				if(ReadRecordLink(LocORr,1,IVr,RLr))then begin
+					testf = false;
+				end;
+				if(testf)then begin
+					UnReservLinkedFromWebORVc(LocORr, false);
+					notenr = notenr + 1;
+				end else begin
+					MessageBox(36201,"");
+					res = -1; 
+					goto LORVcRecordCheck;
+				end;
 			end;
 		end;
 	end;
@@ -1992,6 +2049,9 @@ begin
 	integer notenr;
 	record RlinkVc RLr;
 	record ORVc LocORr;
+	record SHVc SHr;
+	record IVVc IVr;
+	boolean testf;
 
   if (ORr.Closed==0) then begin
     UpdateOrdOut(ORr,false,true);
@@ -2016,8 +2076,20 @@ begin
 	if(CurrentCompany==29)then begin
 		notenr = 1;
 		while (ReadRecordLink(ORr,notenr,LocORr,RLr))begin
-			UnReservLinkedFromWebORVc(LocORr,true);
-			notenr = notenr + 1;
+			testf = true;
+			if (ReadRecordLink(LocORr,1,SHr,RLr))then begin
+				testf = false;
+			end;
+			if(ReadRecordLink(LocORr,1,IVr,RLr))then begin
+				testf = false;
+			end;
+			if(testf)then begin
+				UnReservLinkedFromWebORVc(LocORr,true);
+				notenr = notenr + 1;
+			end else begin
+				MessageBox(36201,"");
+				res = -1; 
+			end;
 		end;
 	end;
   ORVcRecordRemove = res; 
