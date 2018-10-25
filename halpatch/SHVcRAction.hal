@@ -1390,19 +1390,45 @@ begin
 	record PUVc PUr;
 	row PUVc PUrw;
 	row SHVc SHrw;
-	integer OldComp,mtrw,i;
+	integer OldComp,mtrw,i,ormtrw,j;
+	record ORVc ORr;
+	row ORVc ORrw;
+	string 255 OfficialSerNr,GlobalORSerNr;
+	vector longint vItQty;
+	vector string 255 vGlobalArtCodes, vECommerceArtcode;
 	
-	
+	ORr.SerNr = SHr.OrderNr;
+	if(ReadFirstMain(ORr,1,true))then begin
+		if(left(ORr.OfficialSerNr,3)=="EC_")then begin
+			OfficialSerNr = ORr.OfficialSerNr;
+			ormtrw = matrowcnt(ORr);
+			for (j=0;j<ormtrw;j=j+1)begin
+				matrowget(ORr,j,ORrw);
+				vItQty[ORrw.GlobalItemArtCode] = ORrw.Quant;
+				vGlobalArtCodes[ORrw.ArtCode] = ORrw.GlobalItemArtCode;
+			end;
+		end;
+	end;
 	OldComp = CurrentCompany;
 	if(SetCompany(29,false))then begin
+		ORr.OfficialSerNr = OfficialSerNr;
+		if(ReadFirstKey("OfficialSerNr",ORr,1,true))then begin
+			ormtrw = matrowcnt(ORr);
+			for (j=0;j<ormtrw;j=j+1)begin
+				matrowget(ORr,j,ORrw);
+				if(vItQty[ORrw.GlobalItemArtCode]>0)then begin
+					vECommerceArtcode[ORrw.GlobalItemArtCode] = ORrw.ArtCode;
+				end;
+			end;
+		end;
 		Recordnew(PUr);
 		PUr.SerNr = NextSerNr("PUVc",CurrentDate,-1,false,"");
 		mtrw = matrowcnt(SHr);
 		for (i=0;i<mtrw;i=i+1)begin
 			matrowget(SHr,i,SHrw);
-			PUrw.ArtCode = SHrw.ArtCode;
+			PUrw.ArtCode = vECommerceArtcode[vGlobalArtCodes[SHrw.ArtCode]];
 			PUrw.Quant = SHrw.Ordered;
-			PUrw.SerialNr = SHrw.SerialNr;
+			ORr.SerNr = SHr.OrderNr;
 			PUrw.Spec = SHrw.Spec;
 			PUrw.InPrice = SHrw.BasePrice;
 			matrowput(PUr,i,PUrw);

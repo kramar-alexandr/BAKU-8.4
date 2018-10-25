@@ -86,8 +86,8 @@ remote function Boolean DenyOperationsWithBlockedCustomer(record CUVc,string); /
 remote updating procedure PasteglobalIteminIN(var record ORVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:57 08.10.2018
 external procedure NextM4Number(string,var string);
 remote updating procedure UnReservLinkedFromWebORVc(var record ORVc,Boolean);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:17 22.10.2018
-external updating procedure IVFromLocWEBORDsm(record ORVc);
-external updating procedure SHFromLocWEBORDsm(record ORVc);
+external updating function longint IVFromLocWEBORDsm(record ORVc);
+external updating function longint SHFromLocWEBORDsm(record ORVc);
 
 
 
@@ -400,7 +400,7 @@ end;
 
 
 global 
-updating function longint CreateLocalORFromWebOR (record ORVc ORr) //Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 17:56 17.10.2018
+updating function longint CreateLocalORFromWebOR (var record ORVc ORr) //Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 17:56 17.10.2018
 begin
 	row ORVc ORrw;
 	record ORVc LocORr;
@@ -490,9 +490,13 @@ begin
 			MessageBox(0,"Not enough goods in warehouses: " & ArtCodes[i]);
 			res = -1;
 			goto LCreateLocalORFromWebOR;
+		end else begin
+			MatRowGet(ORr,i,ORrw);
+			ORrw.SerialNr = "EC_" & ORr.SerNr & "_" & ORrw.ArtCode;
+			MatRowPut(ORr,i,ORrw);
 		end;
 	end;
-
+	
 	for (c=1;c<30;c=c+1)begin
 		if(Compf[c])then begin
 			if(SetCompany(c,false))then begin
@@ -528,7 +532,6 @@ begin
 						LocORrw.Price = ORrw.Price;
 						LocORrw.vRebate = ORrw.vRebate;
 						LocORrw.BasePrice = ORrw.BasePrice;
-						LocORrw.SerialNr = ORrw.SerialNr;
 						LocORrw.PlanShipRow = ORrw.PlanShipRow;
 						LocORrw.GlobalItemArtCode = ORrw.GlobalItemArtCode;
 						LocORrw.Objects = ORrw.Objects;
@@ -544,16 +547,16 @@ begin
 					CreateRecordLink(LocORr,c,ORr,OldComp);
 					CreateRecordLink(ORr,OldComp,LocORr,c);
 					if(ORr.OrderConfirmed==1)then begin
-						IVFromLocWEBORDsm(LocORr);
-						SHFromLocWEBORDsm(LocORr);
+						res = IVFromLocWEBORDsm(LocORr);
+						res = SHFromLocWEBORDsm(LocORr);
 					end;
 				end else begin
 					if(RecordStore(LocORr,true))then begin
 						CreateRecordLink(LocORr,c,ORr,OldComp);
 						CreateRecordLink(ORr,OldComp,LocORr,c);
 						if(ORr.OrderConfirmed==1)then begin
-							IVFromLocWEBORDsm(LocORr);
-							SHFromLocWEBORDsm(LocORr);
+							res = IVFromLocWEBORDsm(LocORr);
+							res = SHFromLocWEBORDsm(LocORr);
 						end;
 					end;
 				end;
@@ -1451,14 +1454,14 @@ begin
             res = -1; 
             goto LORVcRecordCheck;
           end;
-          if ((currentcompany!=28) and (ORrw.Quant!=0)) then begin//Edit-------------------Vitalii 15:16 16.04.2018
+          if ((currentcompany!=29) and (ORrw.Quant!=0)) then begin//Edit-------------------Vitalii 15:16 16.04.2018
             RecordCheckError(1130,ORrw.ArtCode,i,"ArtCode");      
             res = -1; 
             goto LORVcRecordCheck;
           end;
         end;
         if (ORrw.Sum!=0) then begin
-          if ((currentcompany!=28) and (blank(ORrw.ArtCode))) then begin//Edit-------------------Vitalii 15:27 16.04.2018
+          if ((currentcompany!=29) and (blank(ORrw.ArtCode))) then begin//Edit-------------------Vitalii 15:27 16.04.2018
             RecordCheckError(1130,ORrw.ArtCode,i,"ArtCode");      
             res = -1;
             goto LORVcRecordCheck;
@@ -1636,6 +1639,7 @@ LORVcRecordRowCheck:;
   end;
   
 	if(CurrentCompany==29)then begin
+		PasteglobalIteminIN(ORr);
 		if(ORr.WEBReservOnStock==1)then begin
 			res = CreateLocalORFromWebOR(ORr);
 		end;
