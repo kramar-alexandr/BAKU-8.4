@@ -1383,6 +1383,41 @@ LSHVcRecordCheck:;
   return;
 end;
 
+
+global 
+updating function longint CreatePUInEC (record SHVc SHr)
+begin
+	record PUVc PUr;
+	row PUVc PUrw;
+	row SHVc SHrw;
+	integer OldComp,mtrw,i;
+	
+	
+	OldComp = CurrentCompany;
+	if(SetCompany(29,false))then begin
+		Recordnew(PUr);
+		PUr.SerNr = NextSerNr("PUVc",CurrentDate,-1,false,"");
+		mtrw = matrowcnt(SHr);
+		for (i=0;i<mtrw;i=i+1)begin
+			matrowget(SHr,i,SHrw);
+			PUrw.ArtCode = SHrw.ArtCode;
+			PUrw.Quant = SHrw.Ordered;
+			PUrw.SerialNr = SHrw.SerialNr;
+			PUrw.Spec = SHrw.Spec;
+			PUrw.InPrice = SHrw.BasePrice;
+			matrowput(PUr,i,PUrw);
+		end;
+		if(RecordInsert(PUr,true))then begin
+			CreateRecordLink(PUr,CurrentCompany,SHr,OldComp);
+			CreateRecordLink(SHr,OldComp,PUr,CurrentCompany);
+		end;
+	end;
+	
+return;
+end;
+
+
+
 global
 updating function LongInt SHVcRecordCheck(var record SHVc SHp,record SHVc SH2p,LongInt stat,LongInt check)
 begin
@@ -1397,6 +1432,11 @@ begin
   if (res!=0) then begin
     RecordCheckError(error,errorstr,rownr,fieldstr);   
   end;
+	if(SH2p.OKFlag==0 and SHp.OKFlag==1)then begin
+		if(SHp.CustCode=="E_COMMERCE")then begin
+			 CreatePUInEC (SHp);
+		end;
+	end;
   SHVcRecordCheck = res;
   return;
 end;
