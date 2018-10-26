@@ -403,7 +403,7 @@ global
 updating function longint CreateLocalORFromWebOR (var record ORVc ORr) //Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 17:56 17.10.2018
 begin
 	row ORVc ORrw;
-	record ORVc LocORr;
+	record ORVc LocORr, OldLocORr;
 	row ORVc LocORrw; 
 	record ItemStatusVc ISr;
 	record CompaniesBlock Compb;
@@ -412,7 +412,7 @@ begin
 	longint i,j,rwcnt,orrwcnt,res,itemsincomp,OldComp,NxtSerNr,c;
 	vector boolean ORItemToLocalOR, ItemSearchf, Compf; 	
 	vector longint ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate;
-	array string 255 ArtCodes;
+	array string 255 ArtCodes, ItemBrands;
 	string 255 strlc, HansaArtCode,Store;
 	integer pos;
 	boolean testf,TrHs,Insertf;
@@ -427,6 +427,7 @@ begin
 		matrowget(ORr,i,ORrw);
 		if(nonblank(ORrw.GlobalItemArtCode))then begin
 			ArtCodes[i] = mid(ORrw.GlobalItemArtCode,9,len(ORrw.GlobalItemArtCode)-9);
+			ItemBrands[i] = left(ORrw.GlobalItemArtCode,8);
 			ItemSearchf[ArtCodes[i] & i] = true;
 			NeedItQty[ArtCodes[i] & i] = ORrw.Quant;
 		end;
@@ -449,7 +450,7 @@ begin
 						testf = true;
 						INr.Code = ArtCodes[j];
 						if(ReadfirstMain(INr,1,true))then begin
-							if(INr.BPIBrand==Left(ORrw.GlobalItemArtCode,8))then begin testf = false; end;
+							if(INr.BPIBrand!=ItemBrands[j])then begin testf = false; end;
 							if(testf)then begin
 								ISr.Location = strlc;
 								ISr.Code = ArtCodes[j];
@@ -506,11 +507,13 @@ begin
 					Recordnew(LocORr);
 					LocORr.SerNr = NextSerNr("ORVc",CurrentDate,-1,false,"");
 					Insertf = true;
+				end else begin
+					RecordCopy(OldLocORr,LocORr);
 				end;
 				LocORr.OrdDate = currentdate;
 				LocORr.Reserved = 1;
-				LocORr.CustCode = ORr.CustCode;
-				LocORr.Addr0 = ORr.Addr0;
+				LocORr.CustCode = "E_COMMERCE";
+				LocORr.Addr0 = "E_Commerce";
 				LocORr.PayDeal = ORr.PayDeal;
 				LocORr.PlanShipDate = ORr.PlanShipDate;
 				LocORr.DespatchDate = ORr.DespatchDate;
@@ -532,6 +535,7 @@ begin
 						LocORrw.Price = ORrw.Price;
 						LocORrw.vRebate = ORrw.vRebate;
 						LocORrw.BasePrice = ORrw.BasePrice;
+						LocORrw.SerialNr = ORrw.SerialNr;
 						LocORrw.PlanShipRow = ORrw.PlanShipRow;
 						LocORrw.GlobalItemArtCode = ORrw.GlobalItemArtCode;
 						LocORrw.Objects = ORrw.Objects;
@@ -543,15 +547,16 @@ begin
 					end;
 				end;
 				if (Insertf)then begin
-					RecordInsert(LocORr,true);
-					CreateRecordLink(LocORr,c,ORr,OldComp);
-					CreateRecordLink(ORr,OldComp,LocORr,c);
-					if(ORr.OrderConfirmed==1)then begin
-						res = IVFromLocWEBORDsm(LocORr);
-						res = SHFromLocWEBORDsm(LocORr);
+					if(RecordInsert(LocORr,true))then begin
+						CreateRecordLink(LocORr,c,ORr,OldComp);
+						CreateRecordLink(ORr,OldComp,LocORr,c);
+						if(ORr.OrderConfirmed==1)then begin
+							res = IVFromLocWEBORDsm(LocORr);
+							res = SHFromLocWEBORDsm(LocORr);
+						end;
 					end;
 				end else begin
-					if(RecordStore(LocORr,true))then begin
+					if(RecordUpdate(OldLocORr,LocORr,true)==0)then begin
 						CreateRecordLink(LocORr,c,ORr,OldComp);
 						CreateRecordLink(ORr,OldComp,LocORr,c);
 						if(ORr.OrderConfirmed==1)then begin
@@ -1673,6 +1678,9 @@ LORVcRecordCheck:;
     ORr.OfficialSerNr = oldOfficialSerNr;
     ORr.OfficialSerNrSerie = "";
   end;
+	if(Left(OR2r.OfficialSerNr,2)=="EC")then begin
+		ORr.OfficialSerNr = OR2r.OfficialSerNr;
+	end;
   ORVcRecordCheck = res;
   return;
 end;
