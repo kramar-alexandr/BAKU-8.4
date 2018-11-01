@@ -1,1440 +1,1 @@
-//server-only
-
-external procedure ExtractObj(string,var Integer,var string);
-external procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);
-external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);// Edit ************************** Wednesday, 19 June 2013 13:43:37
-external function boolean CompanyIsJWLikeCompany(Integer);
-external procedure CalcCostInCurncyOldDate(record ItemHistVc,var val, string,integer);
-external procedure CalcCostInCurncyCurDate(record ItemHistVc,var val, string,integer);
-external function val ItemQtyPerDateGlob(string, date,string);
-external  function string 100 BPICodeToName(string);
-
-
-procedure GroupCostIHSerch(string item,date sd,date ed,var val sqty,var val eqty,var val totcostsd,var val ivtotsum,
-                           var val ivshtotsum,var val ivshpricesum,var val putotsum,var val sdtotsum,var val smpozitivtotsum,
-                           var val smnegativtotsum,var val totcosted,string location,var val retsum,var integer qty,var array val sdcost,var val inpo,var val qtynotpay, var val retpu,var val srval,string curcode,string basecur)
-begin
-  record ItemHistVc IHr;
-  record SHVc SHr;
-  row SHVc SHrw;  
-  record IVVc IVr;
-  row IVVc IVrw;
-  Boolean TrHs,testf;
-  string 50 key;
-  integer kint;
-  record INVc INr;
-  val incost,ihcost;
-  string 100 oldartcode,oldfilename;
-  longint oldsernr;
-  integer oldrow;
-  record SDVc SDr;
-  record StandProblemVc SPr;
-  integer spi,oldinvalid;
-  boolean findf,testf1;
- 	record ItemStatusVc ISr;
- 	integer gi;
- 	record ORVc ORr;
- 	row ORVc ORrw;
- 	val fr,to1,to2,br1,br2,ivfr,ivto;
-  string 20 curncy;
-	Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
-  Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52
-  Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51
-  record RetVc Retr;
-  row RetVc Retrw;
-  val torate;// Edit ************************** Thursday, 8 October 2015 13:48:34
-  string 10 tempcur;
-  
-	CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);// Edit ************************** Wednesday, 19 June 2013 13:59:15
-	curncy = acrncy[0];// Edit ************************** Wednesday, 19 June 2013 13:59:14
-	
-	torate = 1;
-	
-	if(currentcompany==11 or currentcompany==12)then begin
-		curncy = "EUR";
-	end;
- 	
-  spi=1;
-  
-  ISr.Code = item;
-	ISr.Location = ";;;";
-	readfirstmain(ISr,2,true);
-	inpo = inpo + ISr.POUnOKQty;
-  
-  IHr.ArtCode = item;
-  INr.Code = item;
-  readfirstmain(INr,1,true);
-  incost = INr.InPrice;
-  TrHs = true;
-    key = "ArtCode";
-    kint = 1;
-  /*if(nonblank(location))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:48:24
-    key = "ArtCodeLoc";
-    kint = 3;
-    IHr.Location = location;
-  end;*/
-  
-  while (LoopKey(key,IHr,kint,TrHs)) begin
-  	IHr.Location = uppercase(IHr.Location);
-    ihcost = IHr.TotCostPrice;
-    if(ihcost==0)then begin
-      //ihcost = incost;
-    end;
-    testf = true;
-    testf1 = true;
-    if(IHr.FileName=="IVVc" and oldartcode==IHr.ArtCode and oldsernr==IHr.TransNr and oldrow==IHr.Row and oldfilename==IHr.FileName)then begin
-      testf1 = false;
-      if(oldinvalid!=0)then begin
-      	testf = false;
-      end;
-    end;
-    
-    oldartcode = IHr.ArtCode;
-    oldsernr = IHr.TransNr;
-    oldrow = IHr.Row;
-    oldinvalid = IHr.Invalid;
-    oldfilename = IHr.FileName;
-    
-    if IHr.ArtCode!=item or IHr.TransDate>ed then begin
-      testf = false;
-      TrHs = false;
-    end;
-    if IHr.Invalid!=0 then begin
-      testf = false;
-    end;
-    if(nonblank(location))then begin
-    	if (!setinset(IHr.Location,location)) then begin
-      //if IHr.Location!=location then begin
-        testf = false;
-        //TrHs = false;
-      end;
-    end;
-    if testf then begin
-    	
-    	/*
-    	
-    	if(curcode==basecur)then begin// Edit ************************** Thursday, 8 October 2015 14:00:53
-    		torate = 1;
-    	end else begin
-    		if(nonblank(IHr.InDate))then begin
-    			if(IHr.CurncyCode==curcode)then begin
-						if(IHr.TotCostPrice/IHr.TotCostPriceCurncy!=0)then begin
-							torate = IHr.TotCostPriceCurncy/IHr.TotCostPrice;
-						end else begin
-							tempcur = curcode;
-							GetFullCurncyRate(tempcur,IHr.InDate,fr,to1,to2,br1,br2);
-							if(fr==0 or to1==0)then begin
-								tempcur = curcode;
-								GetFullCurncyRate(tempcur,IHr.TransDate,fr,to1,to2,br1,br2);
-								if(fr==0 or to1==0)then begin
-									tempcur = curcode;
-									GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);
-									if(fr==0 or to1==0)then begin
-										fr = 1;	to1 = 1;
-									end;
-								end;
-							end;
-							torate = fr/to1;
-						end;
-    			end else begin
-    				tempcur = curcode;
-    				GetFullCurncyRate(tempcur,IHr.InDate,fr,to1,to2,br1,br2);
-						if(fr==0 or to1==0)then begin
-							tempcur = curcode;
-							GetFullCurncyRate(tempcur,IHr.TransDate,fr,to1,to2,br1,br2);
-							if(fr==0 or to1==0)then begin
-								tempcur = curcode;
-								GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);
-								if(fr==0 or to1==0)then begin
-									fr = 1;	to1 = 1;
-								end;
-							end;
-						end;
-						torate = fr/to1;
-    			end;
-    		end else begin
-    			tempcur = curcode;
-    			GetFullCurncyRate(tempcur,IHr.TransDate,fr,to1,to2,br1,br2);
-					if(fr==0 or to1==0)then begin
-						tempcur = curcode;
-						GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);
-						if(fr==0 or to1==0)then begin
-							fr = 1;	to1 = 1;
-						end;
-					end;
-					torate = fr/to1;
-    		end;
-    	end;// Edit ************************** Thursday, 8 October 2015 14:00:51
-    	
-    	*/
-    	if(curcode!=basecur)then begin
-    		ihcost = blankval;
-				CalcCostInCurncyOldDate(IHr,ihcost,curcode,1);
-    	end;// else begin
-    	//ihcost = ihcost * torate;// Edit ************************** Thursday, 8 October 2015 14:00:49
-    	//end;
-      if IHr.TransDate<sd then begin
-      	if(IHr.StockAffectf==1)then begin
-					sqty = sqty + IHr.Qty;
-					eqty = eqty + IHr.Qty;
-      	end;
-        switch (IHr.FileName) begin
-          case "IVVc":
-            if IHr.StockAffectf==1 then begin
-              if IHr.Qty>=0 then begin
-                totcostsd = totcostsd + ihcost;
-                totcosted = totcosted + ihcost;
-              end else begin
-                totcostsd = totcostsd + (-ihcost);
-                totcosted = totcosted + (-ihcost);
-              end;
-            end;
-          case "PUVc":
-            totcostsd = totcostsd + ihcost;
-            totcosted = totcosted + ihcost;
-          case "SHVc":
-            totcostsd = totcostsd + (-ihcost);
-            totcosted = totcosted + (-ihcost);
-          case "SDVc":
-            totcostsd = totcostsd + (-ihcost);
-            totcosted = totcosted + (-ihcost);
-          case "StockMovVc":
-            if IHr.Qty>=0 then begin
-              totcostsd = totcostsd + ihcost;
-              totcosted = totcosted + ihcost;
-            end else begin
-              totcostsd = totcostsd + (-ihcost);
-              totcosted = totcosted + (-ihcost);
-            end;
-          case "RetVc":
-            totcostsd = totcostsd + ihcost;
-            totcosted = totcosted + ihcost;
-          case "RetPUVc":
-            totcostsd = totcostsd + (-ihcost);
-            totcosted = totcosted + (-ihcost);
-          case "SRVc":
-          	if IHr.Qty>=0 then begin
-							totcostsd = totcostsd + ihcost;
-							totcosted = totcosted + ihcost;
-						end else begin
-							totcostsd = totcostsd + (-ihcost);
-							totcosted = totcosted + (-ihcost);
-						end;
-        end;
-        
-        //logtext(0,"s " & IHr.ArtCode & " " & IHr.SerNr & " " & totcostsd);
-        
-      end else begin
-      	if(IHr.StockAffectf==1)then begin
-					eqty = eqty + IHr.Qty;
-      	end;
-        switch (IHr.FileName) begin
-          case "IVVc":
-            qty = qty+1;
-						if IHr.Qty>=0 then begin
-							IVr.SerNr = IHr.TransNr;
-							if (ReadFirstMain(IVr,1,true) and testf1) then begin
-								ivfr = 1; ivto = 1;
-								fr = 1; to1 = 1;
-								if(IVr.CurncyCode!=curcode)then begin
-									ivfr = IVr.FrRate;
-									ivto = IVr.ToRateB1;
-									if(ivfr==0 or ivto==0)then begin
-										ivfr = 1;	ivto = 1;
-									end;
-									tempcur = curcode;
-									GetFullCurncyRate(tempcur,IVr.TransDate,fr,to1,to2,br1,br2);
-									if(fr==0 or to1==0)then begin
-										fr = 1;	to1 = 1;
-									end;
-								end;
-								MatRowGet(IVr,IHr.Row,IVrw);
-								retsum = retsum - IVrw.Sum/ivfr*ivto*fr/to1;
-							end;						
-						end else begin
-							IVr.SerNr = IHr.TransNr;
-							if (ReadFirstMain(IVr,1,true)and testf1) then begin
-								ivfr = 1; ivto = 1;
-								fr = 1; to1 = 1;
-								if(IVr.CurncyCode!=curcode)then begin
-									ivfr = IVr.FrRate;
-									ivto = IVr.ToRateB1;
-									if(ivfr==0 or ivto==0)then begin
-										ivfr = 1;	ivto = 1;
-									end;
-									tempcur = curcode;
-									GetFullCurncyRate(tempcur,IVr.TransDate,fr,to1,to2,br1,br2);
-									//logtext(0,curncy & " " & fr & " " & to1);
-									if(fr==0 or to1==0)then begin
-										fr = 1;	to1 = 1;
-									end;
-								end;
-								MatRowGet(IVr,IHr.Row,IVrw);
-								ivshpricesum = ivshpricesum + IVrw.Sum/ivfr*ivto*fr/to1;
-								
-							end;
-						end;
-            if IHr.StockAffectf==1 then begin
-              if IHr.Qty>=0 then begin
-                ivtotsum = ivtotsum + ihcost; 
-                totcosted = totcosted + ihcost;
-                
-              end else begin
-                ivshtotsum = ivshtotsum + ihcost;
-                totcosted = totcosted + (-ihcost);                
-                IVr.SerNr = IHr.TransNr;
-              end;
-            end;
-          case "PUVc":
-            putotsum = putotsum + ihcost;
-            totcosted = totcosted + ihcost;
-          case "SRVc":
-          	if IHr.Qty>=0 then begin
-          		srval = srval + ihcost;
-							totcosted = totcosted + ihcost;
-						end else begin
-							srval = srval + (-ihcost);
-							totcosted = totcosted + (-ihcost);
-						end;
-          case "SHVc":
-            ivshtotsum = ivshtotsum + ihcost;
-            totcosted = totcosted + (-ihcost);
-            SHr.SerNr = IHr.TransNr;
-            if ReadFirstMain(SHr,1,true) then begin
-            	ORr.SerNr = SHr.OrderNr;
-            	if(readfirstmain(ORr,1,true))then begin
-								MatRowGet(SHr,IHr.Row,SHrw);
-								MatRowGet(ORr,SHrw.OrdRow,ORrw);
-								ivfr = 1; ivto = 1;
-								fr = 1; to1 = 1;
-								if(ORr.CurncyCode!=curcode)then begin
-									ivfr = ORr.FrRate;
-									ivto = ORr.ToRateB1;
-									if(ivfr==0 or ivto==0)then begin
-										ivfr = 1;	ivto = 1;
-									end;
-									tempcur = curcode;
-									GetFullCurncyRate(tempcur,ORr.OrdDate,fr,to1,to2,br1,br2);
-									if(fr==0 or to1==0)then begin
-										fr = 1;	to1 = 1;
-									end;
-								end;
-								if(ORrw.Invd>ORrw.Shipd2)then begin
-									ORrw.Invd=ORrw.Shipd2;
-								end;
-								qtynotpay = qtynotpay + (ORrw.Shipd2-ORrw.Invd)*(-IHr.Qty/ORrw.Shipd2-ORrw.Invd)*ORrw.Sum/ORrw.Quant/ivfr*ivto*fr/to1; //Edit-------------------Vitalii 15:32 23.12.2015
-  						end;
-              //ivshpricesum = ivshpricesum - IHr.Qty * ORrw.Sum/ORrw.Quant; 
-            end;
-          case "SDVc":
-          		SDr.SerNr = IHr.TransNr;
-          		if ReadFirstMain(SDr,1,true) then begin
-              SPr.Code = "";
-              findf = true;
-              spi=1;
-              while(loopmain(SPr,1,true))begin
-              		if(SPr.Code==SDr.Reason)then begin
-              			sdcost[spi]=sdcost[spi]+ihcost;
-              			findf = false;
-              		end;
-              		spi=spi+1;
-              end;
-              resetloop(SPr);
-              if(findf)then begin
-              		sdcost[0]=sdcost[0]+ihcost;
-              end;
-            end;
-	          sdtotsum = sdtotsum + ihcost;
-            totcosted = totcosted + (-ihcost);
-          case "StockMovVc":
-            if IHr.Qty>0 then begin
-              smpozitivtotsum = smpozitivtotsum + ihcost; 
-              totcosted = totcosted + ihcost;
-            end else begin
-              smnegativtotsum = smnegativtotsum + ihcost; 
-              totcosted = totcosted + (-ihcost);
-            end;
-          case "RetVc":
-						Retr.SerNr = IHr.TransNr;
-						if ReadFirstMain(Retr,1,true) then begin
-							ORr.SerNr = Retr.OrdNr;
-							matrowget(Retr,IHr.Row,Retrw);
-							if(readfirstmain(ORr,1,true))then begin
-								MatRowGet(ORr,Retrw.OrdRow,ORrw);
-								ivfr = 1; ivto = 1;
-								fr = 1; to1 = 1;
-								if(ORr.CurncyCode!=curcode)then begin
-									ivfr = ORr.FrRate;
-									ivto = ORr.ToRateB1;
-									if(ivfr==0 or ivto==0)then begin
-										ivfr = 1;	ivto = 1;
-									end;
-									tempcur = curcode;
-									GetFullCurncyRate(tempcur,ORr.OrdDate,fr,to1,to2,br1,br2);
-									if(fr==0 or to1==0)then begin
-										fr = 1;	to1 = 1;
-									end;
-								end;
-								if(ORrw.Invd>ORrw.Shipd2)then begin
-									ORrw.Invd=ORrw.Shipd2;
-								end;
-								qtynotpay = qtynotpay - (ORrw.Shipd2-ORrw.Invd)*(IHr.Qty/ORrw.Shipd2-ORrw.Invd)*ORrw.Sum/ORrw.Quant/ivfr*ivto*fr/to1;//Edit-------------------Vitalii 15:33 23.12.2015
-							end;
-						end;
-						ivshtotsum = ivshtotsum - ihcost;
-            totcosted = totcosted + ihcost;
-          case "RetPUVc":
-          	retpu = retpu + ihcost;
-            totcosted = totcosted + (-ihcost);
-        end;
-        //logtext(0,"e " & IHr.ArtCode & " " & IHr.SerNr & " " & totcostsd);
-      end;
-    end;
-  end;
-  return;
-end;
-
-global
-procedure SumCostByPeriodRn(record RcVc RepSpec)
-begin
-  record INVc INr,IN2r;
-  Date sd,ed;
-  string 20 curgr,curgr1;
-  integer rownr,qty;
-  val totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,retsum,qtynotpay,retpu;
-  array val totals;
-  record DIVc DIr;
-  string 100 tstr,location,category;
-  boolean calc;
-  array val sdcost,sdtotal;
-  record StandProblemVc SPr; 
-  integer spi,j;
-  val inpo,totalinpo;
-  integer gi;
-  val rate,coef,fr,to1,to2,br1,br2,srval,srvalsum;
-	string 10 curcode;
-	record BaseCurBlock BCBb;
-	string 20 tempcur,tempdi;
-	Boolean checkctypef; //Edit***************************Sasha2,11:37 09.02.2016
-	val prevcostsd,sqty,eqty,prevcosted,allprevcost;
-	record ItemStatusVc ISr;
-	boolean ISrTrHs,tstfl;
-  
-  if (CompanyIsJWLikeCompany(currentcompany)) then begin
-    checkctypef = true; //Edit***************************Sasha2,11:38 09.02.2016
-  end;
-  spi = 1;
-  location = uppercase(RepSpec.f1);
-  
-  rate = 1;
-
-	//Edit--start------------------------------------------Dima  03.02.2015
-	BlockLoad(BCBb);
-	curcode = RepSpec.f3;
-	if (blank(curcode)) then begin
-			curcode = BCBb.BaseCur1;			
-	end;
-
-  fr = 1; to1 = 1;
-  tempcur = curcode;
-	GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);
-	
-	if(fr==0 or to1==0)then begin
-			fr = 1;	to1 = 1;
-	end;
-	coef = fr/to1;
-	if (rate==1) then begin
-		rate = rate * coef;
-	end;
-	rate = 1;// Edit ************************** Thursday, 8 October 2015 13:44:44
-	//Edit----end-------------------------------------------Dima  03.02.2015
-
-  //SetLangMode(LangRussian,"RUS",0); //Edit***************************Sasha2,15:17 09.12.2014
-  
-  StartReportNoHeaderJob(USetStr(31100));
-  //IF(blank(RepSpec.f2) and currentcompany!=1)THEN BEGIN
-  IF(false)THEN BEGIN// Edit ************************** Monday, 17 August 2015 12:24:46
-    StartFormat(15);
-      OutString(0,0,USetStr(31101),false);
-    EndFormat;
-  end else begin
-      sd = RepSpec.sStartDate;
-      ed = RepSpec.sEndDate;
-    
-      if blankdate(sd) then begin
-        StartFormat(15);
-        OutString(0,0,USetStr(31088),false);
-        EndFormat;
-      end else begin 
-        StartFormat(15);
-        OutString(0,0,USetStr(31100),false);
-        EndFormat;
-      
-        StartFormat(15);
-            OutString(0,0,USetStr(31102),false);
-            OutString(100,0,RepSpec.sStartDate & ":" & RepSpec.sEndDate,false);
-        endformat;
-        if(nonblank(location))then begin
-          StartFormat(15);
-              OutString(0,0,USetStr(31103),false);
-              OutString(100,0,location,false);
-          endformat;
-        end else begin
-            StartFormat(15);
-              OutString(0,0,USetStr(31103),false);
-              OutString(100,0,USetStr(31104),false);
-          endformat;
-        end;
-
-      	OutString(0,0,USetStr(31309) & curcode,false);	//Edit----------------------Dima  03.02.2015
-      	endformat;
-      
-        gray_divider(0,1);
-      
-        StartFormat(15);
-        OutString(0,0,USetStr(31105),false);
-        if(currentcompany==9)then begin
-					outstring(0,0,USetStr(9131),false);					//Edit----------------------Dima  20.03.2015
-				end;
-        OutString(45,0,USetStr(31081),false);
-        OutString(70,0,USetStr(31106),false);
-        OutString(90,0,USetStr(1828),false);
-        OutString(135,0,USetStr(31082),false);
-        OutString(180,0,USetStr(31091),false);
-        OutString(200,0,USetStr(31107),false);
-        OutString(225,0,USetStr(31108),false);
-        OutString(270,0,USetStr(31109),false);
-        OutString(315,0,USetStr(31085),false);
-        OutString(360,0,USetStr(17167),false);
-        OutString(370,0,USetStr(31110),false);
-        OutString(380,0,USetStr(31111),false);
-        OutString(385,0,USetStr(9651),false);// Edit ************************** Friday, 26 December 2014 13:34:10
-        SPr.Code = "";
-        while(loopmain(SPr,1,true)) begin
-            OutString(390,0,SPr.ShortDesc,false);
-            spi=spi+1;
-        end;
-        OutString(405,0,USetStr(31086),false);
-        EndFormat;
-        qty=0;
-        IN2r.DispGroups = "";
-        if (ReadLastKey("MyDispGroups",IN2r,1,false)) then begin
-          //curgr=IN2r.DispGroups;
-          if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {
-            gi=0;
-            tempdi = "";
-            curgr1 = "";
-            ExtractObj(IN2r.DispGroups,gi,curgr);
-            while (NonBlank(curgr)) begin
-              DIr.Code = curgr;
-              if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin
-                if (currentcompany==9 and DIr.CType=="BRAND") then begin
-                  curgr1 = DIr.Code;
-                end;
-                if (Blank(tempdi)) then begin
-                  tempdi = curgr; 
-                end;           
-              end;
-              ExtractObj(IN2r.DispGroups,gi,curgr);
-            end;
-            curgr = tempdi;
-          end else begin //Edit***************************Sasha2,11:38 09.02.2016 }
-            gi=0;
-            ExtractObj(IN2r.DispGroups,gi,curgr);
-            if(currentcompany==9)then begin
-              ExtractObj(INr.DispGroups,gi,curgr1);
-              DIr.Code = curgr1;
-              if(readfirstmain(DIr,1,true))then begin
-                if(DIr.CType!="BRAND")then begin
-                  curgr1 = "";                
-                end;
-              end;
-            end;
-          end;
-
-        end;
-        curgr = "";
-        rownr = 1;
-        totcostsd = 0;
-        allprevcost = 0;
-        ivtotsum = 0;
-        ivshtotsum = 0;
-        ivshpricesum = 0;
-        putotsum = 0;
-        sdtotsum = 0;
-        smpozitivtotsum = 0;
-        smnegativtotsum = 0;
-        totcosted = 0;
-        retsum = 0;
-        qtynotpay = 0;
-        retpu = 0;
-        inpo = 0;
-        srval = 0;
-        INr.DispGroups = "";
-        calc = true;
-        while (LoopKey("MyDispGroups",INr,1,true)) begin
-        
-        	//if(setinset("KAUFFMAN",INr.DispGroups))then begin// Edit ************************** Monday, 2 October 2017 17:08:15
-					//if((currentuser=="SA" and setinset("V&B_CL",INr.DispGroups))or(currentuser!="SA"))then begin// Edit ************************** Tuesday, 3 October 2017 17:09:24
-					if(true)then begin
-						if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {
-							gi=0;
-							tempdi = "";
-							ExtractObj(INr.DispGroups,gi,curgr1);
-							while (NonBlank(curgr1)) begin
-								DIr.Code = curgr1;
-								if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin
-									tempdi = curgr1;
-									gi = len(INr.DispGroups);                
-								end;
-								ExtractObj(INr.DispGroups,gi,curgr1);
-							end;
-							curgr1 = tempdi;
-						end else begin //Edit***************************Sasha2,11:38 09.02.2016 }
-							gi=0;
-							ExtractObj(INr.DispGroups,gi,curgr1);
-							if(currentcompany==9)then begin
-								ExtractObj(INr.DispGroups,gi,curgr1);
-								DIr.Code = curgr1;
-								if(readfirstmain(DIr,1,true))then begin
-									if(DIr.CType!="BRAND")then begin
-										curgr1 = "";                
-									end;
-								end;
-							end;
-						end;
- 
-						if (curgr!=curgr1) then begin          
-							calc = false;
-						end;
-						if(calc==false)then begin
-							StartFormat(15);          
-							tstr = "";
-							if(nonblank(curgr))then begin
-								DIr.Code = curgr;
-								if(readfirstmain(DIr,1,true))then begin 
-									tstr = DIr.Name; 
-								end else begin
-									tstr = "Classification with no card" & "(" & curgr & ")";
-								end;
-							end else begin
-								tstr = "---";
-							end;
-							if(tstr=="---")then begin
-								//messagebox(0,INr.Code & "  1  " & ivshpricesum);
-							end;
-							//OutString(15,0,curgr,false);
-							OutString(0,0,tstr,false);
-							if ((currentcompany==9) and (DIr.CType=="BRAND")) then begin				//Edit----------------------Dima  20.03.2015
-									OutString(40,0,DIr.CCat,false);	
-							end;	          
-							OutString(45,0,totcostsd*rate,false);           
-							OutString(70,0,inpo,false);
-							totalinpo = totalinpo + inpo;
-							totals[0] = totals[0] + totcostsd*rate;
-							OutString(90,0,putotsum*rate,false);
-							totals[1] = totals[1] + putotsum*rate;
-							OutString(135,0,smpozitivtotsum*rate,false);
-							totals[2] = totals[2] + smpozitivtotsum*rate;
-							OutString(180,0,ivtotsum*rate,false);
-							OutString(200,0,retsum*rate,false);// Edit ************************** Monday, 8 October 2012 10:21:45
-							totals[3] = totals[3] + ivtotsum*rate;
-							totals[9] = totals[9] + retsum*rate;
-							OutString(225,0,ivshtotsum*rate,false);
-							totals[4] = totals[4] + ivshtotsum*rate;
-							OutString(270,0,ivshpricesum*rate,false);
-							totals[5] = totals[5] + ivshpricesum*rate;
-							OutString(315,0,smnegativtotsum*rate,false);
-							totals[6] = totals[6] + smnegativtotsum*rate;
-							OutString(360,0,sdcost[0]*rate,false);         
-							totals[7] = totals[7] + sdcost[0]*rate;
-							OutString(370,0,qtynotpay*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51 
-							totals[8] = totals[8] + qtynotpay*rate;
-							OutString(380,0,retpu*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51 
-							totals[11] = totals[11] + retpu*rate;
-							OutString(385,0,srval*rate,false); // Edit ************************** Friday, 26 December 2014 13:31:59
-							totals[12] = totals[12] + srval*rate;
-				
-							
-							//if(curcode!=BCBb.BaseCur1)then begin
-							//	totcosted = allprevcost + totcosted;// Edit ************************** Tuesday, 10 October 2017 12:19:14
-							//end else begin
-								//totcosted = totcosted + totcostsd;
-							//end;
-							
-							for(j=1;j<spi;j=j+1) begin
-								OutString(390,0,sdcost[j]*rate,false);// Edit ************************** Wednesday, 31 October 2012 13:57:36
-								sdtotal[j] = sdtotal[j] + sdcost[j]*rate;
-							end;
-							OutString(405,0,totcosted*rate,false);
-							totals[10] = totals[10] + totcosted*rate;
-							EndFormat;
-							totcostsd = 0;
-							allprevcost = 0;
-							ivtotsum = 0;
-							ivshtotsum = 0;
-							ivshpricesum = 0;
-							putotsum = 0;
-							sdtotsum = 0;
-							smpozitivtotsum = 0;
-							smnegativtotsum = 0;
-							totcosted = 0;
-							qtynotpay = 0;// Edit ************************** Monday, 13 January 2014 13:37:23
-							retsum = 0;
-							inpo = 0;
-							retpu = 0;
-							srval = 0;
-							rownr = rownr + 1;
-							for(j=0;j<spi;j=j+1) begin
-									sdcost[j]=0;
-							end;
-							calc = true;
-							//curgr = INr.DispGroups;
-							if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {
-								gi=0;
-								tempdi = "";
-								ExtractObj(INr.DispGroups,gi,curgr);
-								while (NonBlank(curgr)) begin
-									DIr.Code = curgr;
-									if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin
-										tempdi = curgr;
-										gi = len(INr.DispGroups);                
-									end;
-									ExtractObj(INr.DispGroups,gi,curgr);
-								end;
-								curgr = tempdi;
-								if(currentcompany==9)then begin
-									DIr.Code = curgr1;
-									if(readfirstmain(DIr,1,true) and DIr.CType!="BRAND")then begin
-										curgr1 = "";                 
-									end;
-								end;
-							end else begin //Edit***************************Sasha2,11:38 09.02.2016 }
-								gi=0;
-								ExtractObj(INr.DispGroups,gi,curgr);
-								if(currentcompany==9)then begin
-									ExtractObj(INr.DispGroups,gi,curgr);
-									DIr.Code = curgr1;
-									if(readfirstmain(DIr,1,true))then begin
-										if(DIr.CType!="BRAND")then begin
-											curgr1 = "";                 
-										end;
-									end;
-								end;  
-							end;
-
-						end;          
-						if(calc)then begin
-							if(curcode==BCBb.BaseCur1)then begin
-								GroupCostIHSerch(INr.Code,sd,ed,sqty,eqty,totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,location,retsum,qty,sdcost,inpo,qtynotpay,retpu,srval,curcode,BCBb.BaseCur1);
-							end else begin
-								ISrTrHs = true;
-								ISr.Code = INr.Code;
-								//ISr.Location = location;// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:51:05
-								while(loopmain(ISr,1,ISrTrHs))begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:51:04
-									tstfl = true;
-									prevcostsd = totcostsd;
-									prevcosted = totcosted;
-									sqty = blankval;
-									eqty = blankval;
-								
-									if(ISr.Code!=INr.Code)then begin ISrTrHs = false; end;
-									//if(nonblank(location) and ISr.Location!=location)then begin ISrTrHs = false; end;
-									if(nonblank(location) and (!setinset(ISr.Location,location)))then begin tstfl = false; end;
-									
-									if(tstfl)then begin
-										if(ISrTrHs and ISr.Location!=";;;")then begin
-											//if(ItemQtyPerDateGlob(INr.Code,sd,ISr.Location)>0 or ItemQtyPerDateGlob(INr.Code,ed,ISr.Location)>0)then begin
-												GroupCostIHSerch(INr.Code,sd,ed,sqty,eqty,totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,ISr.Location,retsum,qty,sdcost,inpo,qtynotpay,retpu,srval,curcode,BCBb.BaseCur1);
-											//end;
-										end;
-								
-										if(curcode!=BCBb.BaseCur1)then begin
-											if(eqty<=0)then begin
-												totcosted = prevcosted;  
-											end;
-											if(sqty<=0)then begin
-												totcostsd = prevcostsd;    
-											end;
-										
-										end;
-										if(currentuser=="SA")then begin
-											if(sqty>0)then begin
-												//logtext(0,INr.Code & " " & totcostsd-prevcostsd & " " & totcosted-prevcosted);
-											end;
-										end;
-									end;
-								end;
-								resetloop(ISr);
-							end;
-						end;
-          end;
-        end;       
-        StartFormat(15);
-          tstr = "";
-          if(nonblank(curgr))then begin
-            DIr.Code = curgr;
-            if(readfirstmain(DIr,1,true))then begin tstr = DIr.Name; end;
-          end else begin
-            tstr = "---";
-          end;
-          if(tstr=="---")then begin
-            //messagebox(0,INr.Code & "  2  " & ivshpricesum);
-          end;
-          //OutString(15,0,curgr,false);
-          OutString(0,0,tstr,false);
-					if ((currentcompany==9) and (DIr.CType=="BRAND")) then begin				//Edit----------------------Dima  20.03.2015
-							OutString(40,0,DIr.CCat,false);	
-					end;						
-          OutString(45,0,totcostsd*rate,false);
-          OutString(70,0,inpo,false);
-          totalinpo = totalinpo + inpo;
-          totals[0] = totals[0] + totcostsd*rate;
-          OutString(90,0,putotsum*rate,false);
-          totals[1] = totals[1] + putotsum*rate;
-          OutString(135,0,smpozitivtotsum*rate,false);
-          totals[2] = totals[2] + smpozitivtotsum*rate;
-          OutString(180,0,ivtotsum*rate,false);
-          OutString(200,0,retsum*rate,false);// Edit ************************** Monday, 8 October 2012 10:21:45
-          totals[3] = totals[3] + ivtotsum*rate;
-          totals[9] = totals[9] + retsum*rate;
-          OutString(225,0,ivshtotsum*rate,false);
-          totals[4] = totals[4] + ivshtotsum*rate;
-          OutString(270,0,ivshpricesum*rate,false);
-          totals[5] = totals[5] + ivshpricesum*rate;
-          OutString(315,0,smnegativtotsum*rate,false);
-          totals[6] = totals[6] + smnegativtotsum*rate;
-          OutString(360,0,sdcost[0]*rate,false);
-          totals[7] = totals[7] + sdcost[0]*rate;
-          OutString(370,0,qtynotpay*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51 
-          totals[8] = totals[8] + qtynotpay*rate;
-          OutString(380,0,retpu*rate,false);
-          totals[11] = totals[11] + retpu*rate;
-          OutString(385,0,srval*rate,false);
-          totals[12] = totals[12] + srval*rate;
-          //
-          //if(curcode!=BCBb.BaseCur1)then begin
-						//totcosted = allprevcost + totcosted;// Edit ************************** Tuesday, 10 October 2017 12:19:05
-					//end else begin
-						//totcosted = totcosted + totcostsd;
-					//end;
-          
-          for(j=1;j<spi;j=j+1) begin
-            OutString(390,0,sdcost[j]*rate,false);// Edit ************************** Wednesday, 31 October 2012 13:57:36
-            sdtotal[j] = sdtotal[j] + sdcost[j]*rate;
-          end;
-        	
-          OutString(405,0,totcosted*rate,false);
-          totals[10] = totals[10] + totcosted*rate;
-        EndFormat;
-        totcostsd = 0;
-        ivtotsum = 0;
-        ivshtotsum = 0;
-        ivshpricesum = 0;
-        putotsum = 0;
-        sdtotsum = 0;
-        smpozitivtotsum = 0;
-        smnegativtotsum = 0;
-        totcosted = 0;
-        retsum = 0;
-        retpu = 0;
-        rownr = rownr + 1;
-        calc = true;
-        //curgr = INr.DispGroups;
-        if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {
-          gi=0;
-          tempdi = "";
-          ExtractObj(INr.DispGroups,gi,curgr);
-          while (NonBlank(curgr)) begin
-            DIr.Code = curgr;
-            if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin
-              tempdi = curgr;
-              gi = len(INr.DispGroups);                
-            end;
-            ExtractObj(INr.DispGroups,gi,curgr);
-          end;
-          curgr = tempdi;
-          if(currentcompany==9)then begin
-            DIr.Code = curgr1;
-            if(readfirstmain(DIr,1,true) and DIr.CType!="BRAND")then begin
-              curgr1 = "";                 
-            end;
-          end;  
-        end else begin //Edit***************************Sasha2,11:38 09.02.2016 }
-          gi=0;
-          ExtractObj(INr.DispGroups,gi,curgr);
-          if(currentcompany==9)then begin
-            ExtractObj(INr.DispGroups,gi,curgr);
-            DIr.Code = curgr1;
-            if(readfirstmain(DIr,1,true))then begin
-              if(DIr.CType!="BRAND")then begin
-                curgr1 = "";                  
-              end;
-            end;
-          end;  
-        end;
-
-        inpo = 0;
-        
-        Black_Divider(0,1);
-      
-        StartFormat(15);
-          OutString(0,0,USetStr(23659),false);
-          if(currentcompany==9)then begin
-  						outstring(40,0,"",false);					//Edit----------------------Dima  20.03.2015
-  				end;        
-          //OutString(15,0,"",false);
-          OutString(45,0,totals[0],false);
-          OutString(70,0,totalinpo,false);
-          OutString(90,0,totals[1],false);
-          OutString(135,0,totals[2],false);
-          OutString(180,0,totals[3],false);
-          OutString(200,0,totals[9],false);// Edit ************************** Monday, 8 October 2012 10:22:20
-          OutString(225,0,totals[4],false);
-          OutString(270,0,totals[5],false);
-          OutString(315,0,totals[6],false);
-          OutString(360,0,totals[7],false);
-          OutString(370,0,totals[8],false);
-          OutString(380,0,totals[11],false);
-          OutString(385,0,totals[12],false);
-          for(j=1;j<spi;j=j+1) begin
-            OutString(390,0,sdtotal[j],false);// Edit ************************** Wednesday, 31 October 2012 13:57:36
-          end;
-          OutString(405,0,totals[10],false);
-        EndFormat;
-      
-        StartFormat(15);
-          OutString(0,0,USetStr(31112),false);
-          if(currentcompany==9)then begin
-  						outstring(40,0,"",false);					//Edit----------------------Dima  20.03.2015
-  				end;  
-          OutString(15,0,"",false);
-          OutString(45,0,"",false);
-          OutString(90,0,"",false);
-          OutString(135,0,"",false);
-          OutString(180,0,"",false);
-          OutString(200,0,"",false);// Edit ************************** Monday, 8 October 2012 10:22:20
-          OutString(225,0,"",false);
-          OutString(270,0,totals[5]-totals[9],false);
-          OutString(315,0,"",false);
-          OutString(360,0,"",false);
-          OutString(370,0,"",false);
-          OutString(380,0,"",false);
-          OutString(385,0,"",false);
-          OutString(405,0,"",false);
-        EndFormat;
-          
-      end;   
-    end;
-    EndJob;
-  return;
-end;
-
-global
-procedure NewSumCostByPeriodRn(record RcVc RepSpec)
-begin
-  record INVc INr,IN2r;
-  Date sd,ed;
-  string 20 curgr,curgr1;
-  integer rownr,qty;
-  val totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,retsum,qtynotpay,retpu;
-  array val totals;
-  record DIVc DIr;
-  string 100 tstr,location,category;
-  boolean calc;
-  array val sdcost,sdtotal;
-  record StandProblemVc SPr; 
-  integer spi,j;
-  val inpo,totalinpo;
-  integer gi;
-  val rate,coef,fr,to1,to2,br1,br2,srval,srvalsum;
-	string 10 curcode;
-	record BaseCurBlock BCBb;
-	string 20 tempcur,tempdi;
-	Boolean checkctypef; //Edit***************************Sasha2,11:37 09.02.2016
-	val prevcostsd,sqty,eqty,prevcosted,allprevcost;
-	record ItemStatusVc ISr;
-	boolean ISrTrHs,tstfl;
-	Vector val totvec;
-	vector string 200 vecname;
-  record BPIBrandVc BBr;
-  if (CompanyIsJWLikeCompany(currentcompany)) then begin
-    checkctypef = true; //Edit***************************Sasha2,11:38 09.02.2016
-  end;
-  spi = 1;
-  location = uppercase(RepSpec.f1);
-  
-  rate = 1;
-
-	//Edit--start------------------------------------------Dima  03.02.2015
-	BlockLoad(BCBb);
-	curcode = RepSpec.f3;
-	if (blank(curcode)) then begin
-			curcode = BCBb.BaseCur1;			
-	end;
-
-  fr = 1; to1 = 1;
-  tempcur = curcode;
-	GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);
-	
-	if(fr==0 or to1==0)then begin
-			fr = 1;	to1 = 1;
-	end;
-	coef = fr/to1;
-	if (rate==1) then begin
-		rate = rate * coef;
-	end;
-	rate = 1;// Edit ************************** Thursday, 8 October 2015 13:44:44
-	//Edit----end-------------------------------------------Dima  03.02.2015
-
-  //SetLangMode(LangRussian,"RUS",0); //Edit***************************Sasha2,15:17 09.12.2014
-  
-  StartReportNoHeaderJob(USetStr(31100));
-  //IF(blank(RepSpec.f2) and currentcompany!=1)THEN BEGIN
-  IF(false)THEN BEGIN// Edit ************************** Monday, 17 August 2015 12:24:46
-    StartFormat(15);
-      OutString(0,0,USetStr(31101),false);
-    EndFormat;
-  end else begin
-      sd = RepSpec.sStartDate;
-      ed = RepSpec.sEndDate;
-    
-      if blankdate(sd) then begin
-        StartFormat(15);
-        OutString(0,0,USetStr(31088),false);
-        EndFormat;
-      end else begin 
-        StartFormat(15);
-        OutString(0,0,USetStr(31100),false);
-        EndFormat;
-      
-        StartFormat(15);
-            OutString(0,0,USetStr(31102),false);
-            OutString(100,0,RepSpec.sStartDate & ":" & RepSpec.sEndDate,false);
-        endformat;
-        if(nonblank(location))then begin
-          StartFormat(15);
-              OutString(0,0,USetStr(31103),false);
-              OutString(100,0,location,false);
-          endformat;
-        end else begin
-            StartFormat(15);
-              OutString(0,0,USetStr(31103),false);
-              OutString(100,0,USetStr(31104),false);
-          endformat;
-        end;
-
-      	OutString(0,0,USetStr(31309) & curcode,false);	//Edit----------------------Dima  03.02.2015
-      	endformat;
-      
-        gray_divider(0,1);
-      
-        StartFormat(15);
-        OutString(0,0,USetStr(31105),false);
-        if(currentcompany==9)then begin
-					outstring(0,0,USetStr(9131),false);					//Edit----------------------Dima  20.03.2015
-				end;
-        OutString(45,0,USetStr(31081),false);
-        OutString(70,0,USetStr(31106),false);
-        OutString(90,0,USetStr(1828),false);
-        OutString(135,0,USetStr(31082),false);
-        OutString(180,0,USetStr(31091),false);
-        OutString(200,0,USetStr(31107),false);
-        OutString(225,0,USetStr(31108),false);
-        OutString(270,0,USetStr(31109),false);
-        OutString(315,0,USetStr(31085),false);
-        OutString(360,0,USetStr(17167),false);
-        OutString(370,0,USetStr(31110),false);
-        OutString(380,0,USetStr(31111),false);
-        OutString(385,0,USetStr(9651),false);// Edit ************************** Friday, 26 December 2014 13:34:10
-        SPr.Code = "";
-        while(loopmain(SPr,1,true)) begin
-            OutString(390,0,SPr.ShortDesc,false);
-            spi=spi+1;
-        end;
-        OutString(405,0,USetStr(31086),false);
-        EndFormat;
-        qty=0;
-        IN2r.Code = "";
-        if (ReadLastKey("Code",IN2r,1,false)) then begin
-          //curgr=IN2r.DispGroups;
-          if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {
-            gi=0;
-            tempdi = "";
-            curgr1 = "";
-                  curgr1 = INr.BPIBrand;
-          end else begin //Edit***************************Sasha2,11:38 09.02.2016 }
-                  curgr1 = "";                
-          end;
-
-        end;
-        curgr = "";
-        rownr = 1;
-        totcostsd = 0;
-        allprevcost = 0;
-        ivtotsum = 0;
-        ivshtotsum = 0;
-        ivshpricesum = 0;
-        putotsum = 0;
-        sdtotsum = 0;
-        smpozitivtotsum = 0;
-        smnegativtotsum = 0;
-        totcosted = 0;
-        retsum = 0;
-        qtynotpay = 0;
-        retpu = 0;
-        inpo = 0;
-        srval = 0;
-        INr.Code = "";
-        calc = true;
-        while (LoopMain(INr,1,true)) begin
-        
-        	//if(setinset("KAUFFMAN",INr.DispGroups))then begin// Edit ************************** Monday, 2 October 2017 17:08:15
-					//if((currentuser=="SA" and setinset("V&B_CL",INr.DispGroups))or(currentuser!="SA"))then begin// Edit ************************** Tuesday, 3 October 2017 17:09:24
-					if(true)then begin
-						if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {
-							gi=0;
-									tempdi = INr.BPIBrand;
-						end else begin //Edit***************************Sasha2,11:38 09.02.2016 }
-										curgr1 = "";                
-						end;
- 
-						if (curgr!=curgr1) then begin          
-							calc = false;
-						end;
-						if(calc==false)then begin
-							StartFormat(15);   
-							if(nonblank(INr.BPIBrand)) then begin	
-									tstr = BPICodeToName(INr.BPIBrand); 
-							end else begin
-								tstr = "---";
-							end;
-							if(tstr=="---")then begin
-								//messagebox(0,INr.Code & "  1  " & ivshpricesum);
-							end;
-							//OutString(15,0,curgr,false);       
-							//OutString(45,0,totcostsd*rate,false);           
-							//OutString(70,0,inpo,false);
-							totalinpo = totalinpo + inpo;
-							totals[0] = totals[0] + totcostsd*rate;
-							//OutString(90,0,putotsum*rate,false);
-							totals[1] = totals[1] + putotsum*rate;
-							//OutString(135,0,smpozitivtotsum*rate,false);
-							totals[2] = totals[2] + smpozitivtotsum*rate;
-							//OutString(180,0,ivtotsum*rate,false);
-							//OutString(200,0,retsum*rate,false);// Edit ************************** Monday, 8 October 2012 10:21:45
-							totals[3] = totals[3] + ivtotsum*rate;
-							totals[9] = totals[9] + retsum*rate;
-							//OutString(225,0,ivshtotsum*rate,false);
-							totals[4] = totals[4] + ivshtotsum*rate;
-							//OutString(270,0,ivshpricesum*rate,false);
-							totals[5] = totals[5] + ivshpricesum*rate;
-							//OutString(315,0,smnegativtotsum*rate,false);
-							totals[6] = totals[6] + smnegativtotsum*rate;
-							//OutString(360,0,sdcost[0]*rate,false);         
-							totals[7] = totals[7] + sdcost[0]*rate;
-							//OutString(370,0,qtynotpay*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51 
-							totals[8] = totals[8] + qtynotpay*rate;
-							//OutString(380,0,retpu*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51 
-							totals[11] = totals[11] + retpu*rate;
-							//OutString(385,0,srval*rate,false); // Edit ************************** Friday, 26 December 2014 13:31:59
-							totals[12] = totals[12] + srval*rate;
-				
-							
-							//if(curcode!=BCBb.BaseCur1)then begin
-							//	totcosted = allprevcost + totcosted;// Edit ************************** Tuesday, 10 October 2017 12:19:14
-							//end else begin
-								//totcosted = totcosted + totcostsd;
-							//end;
-							
-							for(j=1;j<spi;j=j+1) begin
-								//OutString(390,0,sdcost[j]*rate,false);// Edit ************************** Wednesday, 31 October 2012 13:57:36
-								sdtotal[j] = sdtotal[j] + sdcost[j]*rate;
-							end;
-							//OutString(405,0,totcosted*rate,false);
-							totals[10] = totals[10] + totcosted*rate;
-							EndFormat;
-							totcostsd = 0;
-							allprevcost = 0;
-							ivtotsum = 0;
-							ivshtotsum = 0;
-							ivshpricesum = 0;
-							putotsum = 0;
-							sdtotsum = 0;
-							smpozitivtotsum = 0;
-							smnegativtotsum = 0;
-							totcosted = 0;
-							qtynotpay = 0;// Edit ************************** Monday, 13 January 2014 13:37:23
-							retsum = 0;
-							inpo = 0;
-							retpu = 0;
-							srval = 0;
-							rownr = rownr + 1;
-							for(j=0;j<spi;j=j+1) begin
-									sdcost[j]=0;
-							end;
-							calc = true;
-							//curgr = INr.DispGroups;
-							if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {
-								gi=0;
-								tempdi = "";
-								ExtractObj(INr.DispGroups,gi,curgr);
-								while (NonBlank(curgr)) begin
-									DIr.Code = curgr;
-									if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin
-										tempdi = curgr;
-										gi = len(INr.DispGroups);                
-									end;
-									ExtractObj(INr.DispGroups,gi,curgr);
-								end;
-								curgr = tempdi;
-								if(currentcompany==9)then begin
-									DIr.Code = curgr1;
-									if(readfirstmain(DIr,1,true) and DIr.CType!="BRAND")then begin
-										curgr1 = "";                 
-									end;
-								end;
-							end else begin //Edit***************************Sasha2,11:38 09.02.2016 }
-								gi=0;
-								ExtractObj(INr.DispGroups,gi,curgr);
-								if(currentcompany==9)then begin
-									ExtractObj(INr.DispGroups,gi,curgr);
-									DIr.Code = curgr1;
-									if(readfirstmain(DIr,1,true))then begin
-										if(DIr.CType!="BRAND")then begin
-											curgr1 = "";                 
-										end;
-									end;
-								end;  
-							end;
-
-						end;          
-						if(calc)then begin
-							if(curcode==BCBb.BaseCur1)then begin
-								GroupCostIHSerch(INr.Code,sd,ed,sqty,eqty,totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,location,retsum,qty,sdcost,inpo,qtynotpay,retpu,srval,curcode,BCBb.BaseCur1);
-							end else begin
-								ISrTrHs = true;
-								ISr.Code = INr.Code;
-								//ISr.Location = location;// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:51:05
-								while(loopmain(ISr,1,ISrTrHs))begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:51:04
-									tstfl = true;
-									prevcostsd = totcostsd;
-									prevcosted = totcosted;
-									sqty = blankval;
-									eqty = blankval;
-								
-									if(ISr.Code!=INr.Code)then begin ISrTrHs = false; end;
-									//if(nonblank(location) and ISr.Location!=location)then begin ISrTrHs = false; end;
-									if(nonblank(location) and (!setinset(ISr.Location,location)))then begin tstfl = false; end;
-									
-									if(tstfl)then begin
-										if(ISrTrHs and ISr.Location!=";;;")then begin
-											//if(ItemQtyPerDateGlob(INr.Code,sd,ISr.Location)>0 or ItemQtyPerDateGlob(INr.Code,ed,ISr.Location)>0)then begin
-												GroupCostIHSerch(INr.Code,sd,ed,sqty,eqty,totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,ISr.Location,retsum,qty,sdcost,inpo,qtynotpay,retpu,srval,curcode,BCBb.BaseCur1);
-											//end;
-										end;
-								
-										if(curcode!=BCBb.BaseCur1)then begin
-											if(eqty<=0)then begin
-												totcosted = prevcosted;  
-											end;
-											if(sqty<=0)then begin
-												totcostsd = prevcostsd;    
-											end;
-										
-										end;
-										if(currentuser=="SA")then begin
-											if(sqty>0)then begin
-												//logtext(0,INr.Code & " " & totcostsd-prevcostsd & " " & totcosted-prevcosted);
-											end;
-										end;
-									end;
-								end;
-								resetloop(ISr);
-							end;
-						end;
-          end; 	
-					//StartFormat(15);
-						tstr = "";
-            if(nonblank(INr.BPIBrand))then begin tstr = BPICodeToName(INr.BPIBrand); 
-          end else begin
-            tstr = "---";
-						INr.BPIBrand="---";
-          end;
-          if(tstr=="---")then begin
-            //messagebox(0,INr.Code & "  2  " & ivshpricesum);
-          end;
-          //OutString(15,0,curgr,false);
-					If(nonblank(INr.BPIBrand)) then begin
-						vecname[INr.BPIBrand] = tstr;		
-						totvec[INr.BPIBrand]=totcostsd;
-
-						totvec[INr.BPIBrand & "INP"] = totvec[INr.BPIBrand & "INP"] + inpo;
-						totvec[INr.BPIBrand & "0"] = totvec[INr.BPIBrand & "0"] + totcostsd*rate;
-						totvec[INr.BPIBrand & "1"] = totvec[INr.BPIBrand & "1"] + putotsum*rate;
-						totvec[INr.BPIBrand & "2"] = totvec[INr.BPIBrand & "2"] + smpozitivtotsum*rate;
-						totvec[INr.BPIBrand & "3"] = totvec[INr.BPIBrand & "3"] + ivtotsum*rate;
-						totvec[INr.BPIBrand & "9"] = totvec[INr.BPIBrand & "9"] + retsum*rate;
-						totvec[INr.BPIBrand & "4"] = totvec[INr.BPIBrand & "4"] + ivshtotsum*rate;
-						totvec[INr.BPIBrand & "5"] = totvec[INr.BPIBrand & "5"] + ivshpricesum*rate;
-						totvec[INr.BPIBrand & "6"] = totvec[INr.BPIBrand & "6"] + smnegativtotsum*rate;
-						totvec[INr.BPIBrand & "7"] = totvec[INr.BPIBrand & "7"] + sdcost[0]*rate;
-						totvec[INr.BPIBrand & "8"] = totvec[INr.BPIBrand & "8"] + qtynotpay*rate;
-						totvec[INr.BPIBrand & "11"] = totvec[INr.BPIBrand & "11"] + retpu*rate;
-						totvec[INr.BPIBrand & "12"] = totvec[INr.BPIBrand & "12"] + srval*rate;
-							totalinpo = totalinpo + inpo;
-							totals[0] = totals[0] + totcostsd*rate;
-							totals[1] = totals[1] + putotsum*rate;
-							totals[2] = totals[2] + smpozitivtotsum*rate;
-							totals[3] = totals[3] + ivtotsum*rate;
-							totals[9] = totals[9] + retsum*rate;
-							totals[4] = totals[4] + ivshtotsum*rate;
-							totals[5] = totals[5] + ivshpricesum*rate;
-							totals[6] = totals[6] + smnegativtotsum*rate;         
-							totals[7] = totals[7] + sdcost[0]*rate;
-							totals[8] = totals[8] + qtynotpay*rate;
-							totals[11] = totals[11] + retpu*rate;
-							totals[12] = totals[12] + srval*rate;
-          //
-          //if(curcode!=BCBb.BaseCur1)then begin
-						//totcosted = allprevcost + totcosted;// Edit ************************** Tuesday, 10 October 2017 12:19:05
-					//end else begin
-						//totcosted = totcosted + totcostsd;
-					//end;
- 
-          for(j=1;j<spi;j=j+1) begin
-            OutString(390,0,sdcost[j]*rate,false);// Edit ************************** Wednesday, 31 October 2012 13:57:36
-            sdtotal[j] = sdtotal[j] + sdcost[j]*rate;
-          end;
-        	totals[10] = totals[10] +  totcosted*rate;
-          totvec[INr.BPIBrand & "10"] = totvec[INr.BPIBrand & "10"] + totcosted*rate;
-					end;
-					
-        //EndFormat;
-        rownr = 1;
-        totcostsd = 0;
-        allprevcost = 0;
-        ivtotsum = 0;
-        ivshtotsum = 0;
-        ivshpricesum = 0;
-        putotsum = 0;
-        sdtotsum = 0;
-        smpozitivtotsum = 0;
-        smnegativtotsum = 0;
-        totcosted = 0;
-        retsum = 0;
-        qtynotpay = 0;
-        retpu = 0;
-        inpo = 0;
-				sdcost[0]=0;
-        srval = 0;
-        calc = true;
-				end;
-        //curgr = INr.DispGroups;
-        if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {
-          gi=0;
-          tempdi = "";
-          if(NonBlank(INr.BPIBrand)) then begin
-              tempdi = INr.BPIBrand;
-					end;		
-         
-        end;
-        inpo = 0;
-        Black_Divider(0,1);
-        BBr.Code="";
-				While(LoopMain(BBr,1,true)) begin
-					StartFormat(15);
-						//OutString(0,0,USetStr(23659),false);
-						if(currentcompany==9)then begin
-								outstring(40,0,"",false);					//Edit----------------------Dima  20.03.2015
-						end; 
-						if(nonblank(vecname[BBr.Code])) then begin 
-						//OutString(15,0,"",false);
-							OutString(45,0,vecname[BBr.Code],false);
-							OutString(45,0,totvec[BBr.Code & "0"],false);
-							OutString(70,0,totvec[BBr.Code & "INP"],false);
-							OutString(90,0,totvec[BBr.Code & "1"],false);
-							OutString(135,0,totvec[BBr.Code & "2"],false);
-							OutString(180,0,totvec[BBr.Code & "3"],false);
-							OutString(200,0,totvec[BBr.Code & "9"],false);// Edit ************************** Monday, 8 October 2012 10:22:20
-							OutString(225,0,totvec[BBr.Code & "4"],false);
-							OutString(270,0,totvec[BBr.Code & "5"],false);
-							OutString(315,0,totvec[BBr.Code & "6"],false);
-							OutString(360,0,totvec[BBr.Code & "7"],false);
-							OutString(370,0,totvec[BBr.Code & "8"],false);
-							OutString(380,0,totvec[BBr.Code & "11"],false);
-							OutString(385,0,totvec[BBr.Code & "12"],false);
-							for(j=1;j<spi;j=j+1) begin
-								OutString(390,0,sdtotal[j],false);// Edit ************************** Wednesday, 31 October 2012 13:57:36
-							end;
-							OutString(405,0,totvec[BBr.Code & "10"],false);
-						EndFormat;
-						end;
-        end;
-					StartFormat(15);
-					BBr.Code="---";
-					OutString(45,0,vecname[BBr.Code],false);
-							OutString(45,0,totvec[BBr.Code & "0"],false);
-							OutString(70,0,totvec[BBr.Code & "INP"],false);
-							OutString(90,0,totvec[BBr.Code & "1"],false);
-							OutString(135,0,totvec[BBr.Code & "2"],false);
-							OutString(180,0,totvec[BBr.Code & "3"],false);
-							OutString(200,0,totvec[BBr.Code & "9"],false);// Edit ************************** Monday, 8 October 2012 10:22:20
-							OutString(225,0,totvec[BBr.Code & "4"],false);
-							OutString(270,0,totvec[BBr.Code & "5"],false);
-							OutString(315,0,totvec[BBr.Code & "6"],false);
-							OutString(360,0,totvec[BBr.Code & "7"],false);
-							OutString(370,0,totvec[BBr.Code & "8"],false);
-							OutString(380,0,totvec[BBr.Code & "11"],false);
-							OutString(385,0,totvec[BBr.Code & "12"],false);
-							for(j=1;j<spi;j=j+1) begin
-								OutString(390,0,sdtotal[j],false);// Edit ************************** Wednesday, 31 October 2012 13:57:36
-							end;
-							OutString(405,0,totvec[BBr.Code & "10"],false);
-						EndFormat;
-				StartFormat(15);
-				 	OutString(0,0,USetStr(23659),false);
-					 OutString(45,0,totals[0],false);
-          OutString(70,0,totalinpo,false);
-          OutString(90,0,totals[1],false);
-          OutString(135,0,totals[2],false);
-          OutString(180,0,totals[3],false);
-          OutString(200,0,totals[9],false);// Edit ************************** Monday, 8 October 2012 10:22:20
-          OutString(225,0,totals[4],false);
-          OutString(270,0,totals[5],false);
-          OutString(315,0,totals[6],false);
-          OutString(360,0,totals[7],false);
-          OutString(370,0,totals[8],false);
-          OutString(380,0,totals[11],false);
-          OutString(385,0,totals[12],false);
-					for(j=1;j<spi;j=j+1) begin
-            OutString(390,0,sdtotal[j],false);// Edit ************************** Wednesday, 31 October 2012 13:57:36
-          end;
-          OutString(405,0,totals[10],false);
-				EndFormat;
-        StartFormat(15);
-          OutString(0,0,USetStr(31112),false);
-          if(currentcompany==9)then begin
-  						outstring(40,0,"",false);					//Edit----------------------Dima  20.03.2015
-  				end;  
-          OutString(15,0,"",false);
-          OutString(45,0,"",false);
-          OutString(90,0,"",false);
-          OutString(135,0,"",false);
-          OutString(180,0,"",false);
-          OutString(200,0,"",false);// Edit ************************** Monday, 8 October 2012 10:22:20
-          OutString(225,0,"",false);
-          OutString(270,0,totals[5]-totals[9],false);
-          OutString(315,0,"",false);
-          OutString(360,0,"",false);
-          OutString(370,0,"",false);
-          OutString(380,0,"",false);
-          OutString(385,0,"",false);
-          OutString(405,0,"",false);
-        EndFormat;
-          
-      end;   
-    end;
-    EndJob;
-  return;
-end;
+//server-onlyexternal procedure ExtractObj(string,var Integer,var string);external procedure CntPOSCurrencies(var Array string,var Array Boolean,var Integer);external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);// Edit ************************** Wednesday, 19 June 2013 13:43:37external function boolean CompanyIsJWLikeCompany(Integer);external procedure CalcCostInCurncyOldDate(record ItemHistVc,var val, string,integer);external procedure CalcCostInCurncyCurDate(record ItemHistVc,var val, string,integer);external function val ItemQtyPerDateGlob(string, date,string);external  function string 100 BPICodeToName(string);procedure GroupCostIHSerch(string item,date sd,date ed,var val sqty,var val eqty,var val totcostsd,var val ivtotsum,                           var array val ivshtotsum,var array val ivshpricesum,var array val putotsum,var val sdtotsum,var val smpozitivtotsum,                           var val smnegativtotsum,var val totcosted,string location,var val retsum,var integer qty,var array val sdcost,var val inpo,var val qtynotpay, var val retpu,var val srval,string curcode,string basecur)begin  record ItemHistVc IHr;  record SHVc SHr;  row SHVc SHrw;    record IVVc IVr;  row IVVc IVrw;  Boolean TrHs,testf;  string 50 key;  integer kint;  record INVc INr;  val incost,ihcost;  string 100 oldartcode,oldfilename;  longint oldsernr;  integer oldrow;  record SDVc SDr;  record StandProblemVc SPr;  integer spi,oldinvalid;  boolean findf,testf1; 	record ItemStatusVc ISr; 	integer gi; 	record ORVc ORr; 	row ORVc ORrw; 	val fr,to1,to2,br1,br2,ivfr,ivto;  string 20 curncy;	Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06  Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52  Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51  record RetVc Retr;  row RetVc Retrw;  val torate;// Edit ************************** Thursday, 8 October 2015 13:48:34  string 10 tempcur;  record PUVc PUr;		CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);// Edit ************************** Wednesday, 19 June 2013 13:59:15	curncy = acrncy[0];// Edit ************************** Wednesday, 19 June 2013 13:59:14		torate = 1;		if(currentcompany==11 or currentcompany==12)then begin		curncy = "EUR";	end; 	  spi=1;    ISr.Code = item;	ISr.Location = ";;;";	readfirstmain(ISr,2,true);	inpo = inpo + ISr.POUnOKQty;    IHr.ArtCode = item;  INr.Code = item;  readfirstmain(INr,1,true);  incost = INr.InPrice;  TrHs = true;    key = "ArtCode";    kint = 1;  /*if(nonblank(location))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:48:24    key = "ArtCodeLoc";    kint = 3;    IHr.Location = location;  end;*/    while (LoopKey(key,IHr,kint,TrHs)) begin  	IHr.Location = uppercase(IHr.Location);    ihcost = IHr.TotCostPrice;    if(ihcost==0)then begin      //ihcost = incost;    end;    testf = true;    testf1 = true;    if(IHr.FileName=="IVVc" and oldartcode==IHr.ArtCode and oldsernr==IHr.TransNr and oldrow==IHr.Row and oldfilename==IHr.FileName)then begin      testf1 = false;      if(oldinvalid!=0)then begin      	testf = false;      end;    end;        oldartcode = IHr.ArtCode;    oldsernr = IHr.TransNr;    oldrow = IHr.Row;    oldinvalid = IHr.Invalid;    oldfilename = IHr.FileName;        if IHr.ArtCode!=item or IHr.TransDate>ed then begin      testf = false;      TrHs = false;    end;    if IHr.Invalid!=0 then begin      testf = false;    end;    if(nonblank(location))then begin    	if (!setinset(IHr.Location,location)) then begin      //if IHr.Location!=location then begin        testf = false;        //TrHs = false;      end;    end;    if testf then begin    	    	/*    	    	if(curcode==basecur)then begin// Edit ************************** Thursday, 8 October 2015 14:00:53    		torate = 1;    	end else begin    		if(nonblank(IHr.InDate))then begin    			if(IHr.CurncyCode==curcode)then begin						if(IHr.TotCostPrice/IHr.TotCostPriceCurncy!=0)then begin							torate = IHr.TotCostPriceCurncy/IHr.TotCostPrice;						end else begin							tempcur = curcode;							GetFullCurncyRate(tempcur,IHr.InDate,fr,to1,to2,br1,br2);							if(fr==0 or to1==0)then begin								tempcur = curcode;								GetFullCurncyRate(tempcur,IHr.TransDate,fr,to1,to2,br1,br2);								if(fr==0 or to1==0)then begin									tempcur = curcode;									GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);									if(fr==0 or to1==0)then begin										fr = 1;	to1 = 1;									end;								end;							end;							torate = fr/to1;						end;    			end else begin    				tempcur = curcode;    				GetFullCurncyRate(tempcur,IHr.InDate,fr,to1,to2,br1,br2);						if(fr==0 or to1==0)then begin							tempcur = curcode;							GetFullCurncyRate(tempcur,IHr.TransDate,fr,to1,to2,br1,br2);							if(fr==0 or to1==0)then begin								tempcur = curcode;								GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);								if(fr==0 or to1==0)then begin									fr = 1;	to1 = 1;								end;							end;						end;						torate = fr/to1;    			end;    		end else begin    			tempcur = curcode;    			GetFullCurncyRate(tempcur,IHr.TransDate,fr,to1,to2,br1,br2);					if(fr==0 or to1==0)then begin						tempcur = curcode;						GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);						if(fr==0 or to1==0)then begin							fr = 1;	to1 = 1;						end;					end;					torate = fr/to1;    		end;    	end;// Edit ************************** Thursday, 8 October 2015 14:00:51    	    	*/    	if(curcode!=basecur)then begin    		ihcost = blankval;				CalcCostInCurncyOldDate(IHr,ihcost,curcode,1);    	end;// else begin    	//ihcost = ihcost * torate;// Edit ************************** Thursday, 8 October 2015 14:00:49    	//end;      if IHr.TransDate<sd then begin      	if(IHr.StockAffectf==1)then begin					sqty = sqty + IHr.Qty;					eqty = eqty + IHr.Qty;      	end;        switch (IHr.FileName) begin          case "IVVc":            if IHr.StockAffectf==1 then begin              if IHr.Qty>=0 then begin                totcostsd = totcostsd + ihcost;                totcosted = totcosted + ihcost;              end else begin                totcostsd = totcostsd + (-ihcost);                totcosted = totcosted + (-ihcost);              end;            end;          case "PUVc":            totcostsd = totcostsd + ihcost;            totcosted = totcosted + ihcost;          case "SHVc":            totcostsd = totcostsd + (-ihcost);            totcosted = totcosted + (-ihcost);          case "SDVc":            totcostsd = totcostsd + (-ihcost);            totcosted = totcosted + (-ihcost);          case "StockMovVc":            if IHr.Qty>=0 then begin              totcostsd = totcostsd + ihcost;              totcosted = totcosted + ihcost;            end else begin              totcostsd = totcostsd + (-ihcost);              totcosted = totcosted + (-ihcost);            end;          case "RetVc":            totcostsd = totcostsd + ihcost;            totcosted = totcosted + ihcost;          case "RetPUVc":            totcostsd = totcostsd + (-ihcost);            totcosted = totcosted + (-ihcost);          case "SRVc":          	if IHr.Qty>=0 then begin							totcostsd = totcostsd + ihcost;							totcosted = totcosted + ihcost;						end else begin							totcostsd = totcostsd + (-ihcost);							totcosted = totcosted + (-ihcost);						end;        end;                //logtext(0,"s " & IHr.ArtCode & " " & IHr.SerNr & " " & totcostsd);              end else begin      	if(IHr.StockAffectf==1)then begin					eqty = eqty + IHr.Qty;      	end;        switch (IHr.FileName) begin          case "IVVc":            qty = qty+1;						if IHr.Qty>=0 then begin							IVr.SerNr = IHr.TransNr;							if (ReadFirstMain(IVr,1,true) and testf1) then begin								ivfr = 1; ivto = 1;								fr = 1; to1 = 1;								if(IVr.CurncyCode!=curcode)then begin									ivfr = IVr.FrRate;									ivto = IVr.ToRateB1;									if(ivfr==0 or ivto==0)then begin										ivfr = 1;	ivto = 1;									end;									tempcur = curcode;									GetFullCurncyRate(tempcur,IVr.TransDate,fr,to1,to2,br1,br2);									if(fr==0 or to1==0)then begin										fr = 1;	to1 = 1;									end;								end;								MatRowGet(IVr,IHr.Row,IVrw);								retsum = retsum - IVrw.Sum/ivfr*ivto*fr/to1;							end;												end else begin							IVr.SerNr = IHr.TransNr;							if (ReadFirstMain(IVr,1,true)and testf1) then begin								ivfr = 1; ivto = 1;								fr = 1; to1 = 1;								if(IVr.CurncyCode!=curcode)then begin									ivfr = IVr.FrRate;									ivto = IVr.ToRateB1;									if(ivfr==0 or ivto==0)then begin										ivfr = 1;	ivto = 1;									end;									tempcur = curcode;									GetFullCurncyRate(tempcur,IVr.TransDate,fr,to1,to2,br1,br2);									//logtext(0,curncy & " " & fr & " " & to1);									if(fr==0 or to1==0)then begin										fr = 1;	to1 = 1;									end;								end;								MatRowGet(IVr,IHr.Row,IVrw);								if(left(IVr.CustCode,3)=="FOB") then begin									ivshpricesum[0] = ivshpricesum[0] +  IVrw.Sum/ivfr*ivto*fr/to1;								end else begin										ivshpricesum[1] = ivshpricesum[1] +  IVrw.Sum/ivfr*ivto*fr/to1;								end;																end;						end;            if IHr.StockAffectf==1 then begin              if IHr.Qty>=0 then begin                ivtotsum = ivtotsum + ihcost;                 totcosted = totcosted + ihcost;                              end else begin								IVr.SerNr=IHr.TransNr;								ReadFirstMain(IVr,1,true);								if(left(IVr.CustCode,3)=="FOB") then begin									ivshtotsum[0] = ivshtotsum[0] + ihcost;								end else begin										ivshtotsum[1] = ivshtotsum[1] + ihcost;								end;	                totcosted = totcosted + (-ihcost);                                IVr.SerNr = IHr.TransNr;              end;            end;          case "PUVc":						PUr.SerNr=IHr.TransNr;						readfirstmain(PUr,1,true);						if(left(PUr.VECode,3)=="FOB") then begin							putotsum[0] = putotsum[0] + ihcost;						end else begin							putotsum[1] = putotsum[1] + ihcost;						end;            totcosted = totcosted + ihcost;          case "SRVc":          	if IHr.Qty>=0 then begin          		srval = srval + ihcost;							totcosted = totcosted + ihcost;						end else begin							srval = srval + (-ihcost);							totcosted = totcosted + (-ihcost);						end;          case "SHVc":								SHr.SerNr=IHr.TransNr;								ReadFirstMain(SHr,1,true);								if(left(SHr.CustCode,3)=="FOB") then begin									ivshtotsum[0] = ivshtotsum[0] + ihcost;								end else begin										ivshtotsum[1] = ivshtotsum[1] + ihcost;								end;	            totcosted = totcosted + (-ihcost);            SHr.SerNr = IHr.TransNr;            if ReadFirstMain(SHr,1,true) then begin            	ORr.SerNr = SHr.OrderNr;            	if(readfirstmain(ORr,1,true))then begin								MatRowGet(SHr,IHr.Row,SHrw);								MatRowGet(ORr,SHrw.OrdRow,ORrw);								ivfr = 1; ivto = 1;								fr = 1; to1 = 1;								if(ORr.CurncyCode!=curcode)then begin									ivfr = ORr.FrRate;									ivto = ORr.ToRateB1;									if(ivfr==0 or ivto==0)then begin										ivfr = 1;	ivto = 1;									end;									tempcur = curcode;									GetFullCurncyRate(tempcur,ORr.OrdDate,fr,to1,to2,br1,br2);									if(fr==0 or to1==0)then begin										fr = 1;	to1 = 1;									end;								end;								if(ORrw.Invd>ORrw.Shipd2)then begin									ORrw.Invd=ORrw.Shipd2;								end;								qtynotpay = qtynotpay + (ORrw.Shipd2-ORrw.Invd)*(-IHr.Qty/ORrw.Shipd2-ORrw.Invd)*ORrw.Sum/ORrw.Quant/ivfr*ivto*fr/to1; //Edit-------------------Vitalii 15:32 23.12.2015  						end;              //ivshpricesum = ivshpricesum - IHr.Qty * ORrw.Sum/ORrw.Quant;             end;          case "SDVc":          		SDr.SerNr = IHr.TransNr;          		if ReadFirstMain(SDr,1,true) then begin              SPr.Code = "";              findf = true;              spi=1;              while(loopmain(SPr,1,true))begin              		if(SPr.Code==SDr.Reason)then begin              			sdcost[spi]=sdcost[spi]+ihcost;              			findf = false;              		end;              		spi=spi+1;              end;              resetloop(SPr);              if(findf)then begin              		sdcost[0]=sdcost[0]+ihcost;              end;            end;	          sdtotsum = sdtotsum + ihcost;            totcosted = totcosted + (-ihcost);          case "StockMovVc":            if IHr.Qty>0 then begin              smpozitivtotsum = smpozitivtotsum + ihcost;               totcosted = totcosted + ihcost;            end else begin              smnegativtotsum = smnegativtotsum + ihcost;               totcosted = totcosted + (-ihcost);            end;          case "RetVc":						Retr.SerNr = IHr.TransNr;						if ReadFirstMain(Retr,1,true) then begin							ORr.SerNr = Retr.OrdNr;							matrowget(Retr,IHr.Row,Retrw);							if(readfirstmain(ORr,1,true))then begin								MatRowGet(ORr,Retrw.OrdRow,ORrw);								ivfr = 1; ivto = 1;								fr = 1; to1 = 1;								if(ORr.CurncyCode!=curcode)then begin									ivfr = ORr.FrRate;									ivto = ORr.ToRateB1;									if(ivfr==0 or ivto==0)then begin										ivfr = 1;	ivto = 1;									end;									tempcur = curcode;									GetFullCurncyRate(tempcur,ORr.OrdDate,fr,to1,to2,br1,br2);									if(fr==0 or to1==0)then begin										fr = 1;	to1 = 1;									end;								end;								if(ORrw.Invd>ORrw.Shipd2)then begin									ORrw.Invd=ORrw.Shipd2;								end;								qtynotpay = qtynotpay - (ORrw.Shipd2-ORrw.Invd)*(IHr.Qty/ORrw.Shipd2-ORrw.Invd)*ORrw.Sum/ORrw.Quant/ivfr*ivto*fr/to1;//Edit-------------------Vitalii 15:33 23.12.2015							end;						end;								Retr.SerNr=IHr.TransNr;								ReadFirstMain(Retr,1,true);								if(left(Retr.CustCode,3)=="FOB") then begin									ivshtotsum[0] = ivshtotsum[0] - ihcost;								end else begin										ivshtotsum[1] = ivshtotsum[1] - ihcost;								end;	            totcosted = totcosted + ihcost;          case "RetPUVc":          	retpu = retpu + ihcost;            totcosted = totcosted + (-ihcost);        end;        //logtext(0,"e " & IHr.ArtCode & " " & IHr.SerNr & " " & totcostsd);      end;    end;  end;  return;end;globalprocedure SumCostByPeriodRn(record RcVc RepSpec)begin  record INVc INr,IN2r;  Date sd,ed;  string 20 curgr,curgr1;  integer rownr,qty;  val totcostsd,ivtotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,retsum,qtynotpay,retpu;  array val totals,putotsum,ivshtotsum,ivshpricesum;  record DIVc DIr;  string 100 tstr,location,category;  boolean calc;  array val sdcost,sdtotal;  record StandProblemVc SPr;   integer spi,j;  val inpo,totalinpo;  integer gi;  val rate,coef,fr,to1,to2,br1,br2,srval,srvalsum;	string 10 curcode;	record BaseCurBlock BCBb;	string 20 tempcur,tempdi;	Boolean checkctypef; //Edit***************************Sasha2,11:37 09.02.2016	val prevcostsd,sqty,eqty,prevcosted,allprevcost;	record ItemStatusVc ISr;	boolean ISrTrHs,tstfl;    if (CompanyIsJWLikeCompany(currentcompany)) then begin    checkctypef = true; //Edit***************************Sasha2,11:38 09.02.2016  end;  spi = 1;  location = uppercase(RepSpec.f1);    rate = 1;	//Edit--start------------------------------------------Dima  03.02.2015	BlockLoad(BCBb);	curcode = RepSpec.f3;	if (blank(curcode)) then begin			curcode = BCBb.BaseCur1;				end;  fr = 1; to1 = 1;  tempcur = curcode;	GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);		if(fr==0 or to1==0)then begin			fr = 1;	to1 = 1;	end;	coef = fr/to1;	if (rate==1) then begin		rate = rate * coef;	end;	rate = 1;// Edit ************************** Thursday, 8 October 2015 13:44:44	//Edit----end-------------------------------------------Dima  03.02.2015  //SetLangMode(LangRussian,"RUS",0); //Edit***************************Sasha2,15:17 09.12.2014    StartReportNoHeaderJob(USetStr(31100));  //IF(blank(RepSpec.f2) and currentcompany!=1)THEN BEGIN  IF(false)THEN BEGIN// Edit ************************** Monday, 17 August 2015 12:24:46    StartFormat(15);      OutString(0,0,USetStr(31101),false);    EndFormat;  end else begin      sd = RepSpec.sStartDate;      ed = RepSpec.sEndDate;          if blankdate(sd) then begin        StartFormat(15);        OutString(0,0,USetStr(31088),false);        EndFormat;      end else begin         StartFormat(15);        OutString(0,0,USetStr(31100),false);        EndFormat;              StartFormat(15);            OutString(0,0,USetStr(31102),false);            OutString(100,0,RepSpec.sStartDate & ":" & RepSpec.sEndDate,false);        endformat;        if(nonblank(location))then begin          StartFormat(15);              OutString(0,0,USetStr(31103),false);              OutString(100,0,location,false);          endformat;        end else begin            StartFormat(15);              OutString(0,0,USetStr(31103),false);              OutString(100,0,USetStr(31104),false);          endformat;        end;      	OutString(0,0,USetStr(31309) & curcode,false);	//Edit----------------------Dima  03.02.2015      	endformat;              gray_divider(0,1);              StartFormat(15);        OutString(0,0,USetStr(31105),false);        if(currentcompany==9)then begin					outstring(0,0,USetStr(9131),false);					//Edit----------------------Dima  20.03.2015				end;        OutString(45,0,USetStr(31081),false);        OutString(70,0,USetStr(31106),false);        OutString(90,0,USetStr(1828),false);        OutString(135,0,USetStr(31082),false);        OutString(180,0,USetStr(31091),false);        OutString(200,0,USetStr(31107),false);        OutString(225,0,USetStr(31108),false);        OutString(270,0,USetStr(31109),false);        OutString(315,0,USetStr(31085),false);        OutString(360,0,USetStr(17167),false);        OutString(370,0,USetStr(31110),false);        OutString(380,0,USetStr(31111),false);        OutString(385,0,USetStr(9651),false);// Edit ************************** Friday, 26 December 2014 13:34:10        SPr.Code = "";        while(loopmain(SPr,1,true)) begin            OutString(390,0,SPr.ShortDesc,false);            spi=spi+1;        end;        OutString(405,0,USetStr(31086),false);        EndFormat;        qty=0;        IN2r.DispGroups = "";        if (ReadLastKey("MyDispGroups",IN2r,1,false)) then begin          //curgr=IN2r.DispGroups;          if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {            gi=0;            tempdi = "";            curgr1 = "";            ExtractObj(IN2r.DispGroups,gi,curgr);            while (NonBlank(curgr)) begin              DIr.Code = curgr;              if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin                if (currentcompany==9 and DIr.CType=="BRAND") then begin                  curgr1 = DIr.Code;                end;                if (Blank(tempdi)) then begin                  tempdi = curgr;                 end;                         end;              ExtractObj(IN2r.DispGroups,gi,curgr);            end;            curgr = tempdi;          end else begin //Edit***************************Sasha2,11:38 09.02.2016 }            gi=0;            ExtractObj(IN2r.DispGroups,gi,curgr);            if(currentcompany==9)then begin              ExtractObj(INr.DispGroups,gi,curgr1);              DIr.Code = curgr1;              if(readfirstmain(DIr,1,true))then begin                if(DIr.CType!="BRAND")then begin                  curgr1 = "";                                end;              end;            end;          end;        end;        curgr = "";        rownr = 1;        totcostsd = 0;        allprevcost = 0;        ivtotsum = 0;        ivshtotsum[0] = 0;				ivshtotsum[1] = 0;        ivshpricesum[0] = 0;				ivshpricesum[1] = 0;        putotsum[0] = 0;				putotsum[1]=0;        sdtotsum = 0;        smpozitivtotsum = 0;        smnegativtotsum = 0;        totcosted = 0;        retsum = 0;        qtynotpay = 0;        retpu = 0;        inpo = 0;        srval = 0;        INr.DispGroups = "";        calc = true;        while (LoopKey("MyDispGroups",INr,1,true)) begin                	//if(setinset("KAUFFMAN",INr.DispGroups))then begin// Edit ************************** Monday, 2 October 2017 17:08:15					//if((currentuser=="SA" and setinset("V&B_CL",INr.DispGroups))or(currentuser!="SA"))then begin// Edit ************************** Tuesday, 3 October 2017 17:09:24					if(true)then begin						if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {							gi=0;							tempdi = "";							ExtractObj(INr.DispGroups,gi,curgr1);							while (NonBlank(curgr1)) begin								DIr.Code = curgr1;								if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin									tempdi = curgr1;									gi = len(INr.DispGroups);                								end;								ExtractObj(INr.DispGroups,gi,curgr1);							end;							curgr1 = tempdi;						end else begin //Edit***************************Sasha2,11:38 09.02.2016 }							gi=0;							ExtractObj(INr.DispGroups,gi,curgr1);							if(currentcompany==9)then begin								ExtractObj(INr.DispGroups,gi,curgr1);								DIr.Code = curgr1;								if(readfirstmain(DIr,1,true))then begin									if(DIr.CType!="BRAND")then begin										curgr1 = "";                									end;								end;							end;						end; 						if (curgr!=curgr1) then begin          							calc = false;						end;						if(calc==false)then begin							StartFormat(15);          							tstr = "";							if(nonblank(curgr))then begin								DIr.Code = curgr;								if(readfirstmain(DIr,1,true))then begin 									tstr = DIr.Name; 								end else begin									tstr = "Classification with no card" & "(" & curgr & ")";								end;							end else begin								tstr = "---";							end;							if(tstr=="---")then begin								//messagebox(0,INr.Code & "  1  " & ivshpricesum);							end;							//OutString(15,0,curgr,false);							OutString(0,0,tstr,false);							if ((currentcompany==9) and (DIr.CType=="BRAND")) then begin				//Edit----------------------Dima  20.03.2015									OutString(40,0,DIr.CCat,false);								end;	          							OutString(45,0,totcostsd*rate,false);           							OutString(70,0,inpo,false);							totalinpo = totalinpo + inpo;							totals[0] = totals[0] + totcostsd*rate;							OutString(90,0,(putotsum[0]+putotsum[1])*rate,false);							totals[1] = totals[1] + (putotsum[0]+putotsum[1])*rate;							OutString(135,0,smpozitivtotsum*rate,false);							totals[2] = totals[2] + smpozitivtotsum*rate;							OutString(180,0,ivtotsum*rate,false);							OutString(200,0,retsum*rate,false);// Edit ************************** Monday, 8 October 2012 10:21:45							totals[3] = totals[3] + ivtotsum*rate;							totals[9] = totals[9] + retsum*rate;							OutString(225,0,(ivshtotsum[0]+ivshtotsum[1])*rate,false);							totals[4] = totals[4] + (ivshtotsum[0]+ivshtotsum[1])*rate;							OutString(270,0,(ivshpricesum[0]+ivshpricesum[1])*rate,false);							totals[5] = totals[5] + (ivshpricesum[0]+ivshpricesum[1])*rate;							OutString(315,0,smnegativtotsum*rate,false);							totals[6] = totals[6] + smnegativtotsum*rate;							OutString(360,0,sdcost[0]*rate,false);         							totals[7] = totals[7] + sdcost[0]*rate;							OutString(370,0,qtynotpay*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51 							totals[8] = totals[8] + qtynotpay*rate;							OutString(380,0,retpu*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51 							totals[11] = totals[11] + retpu*rate;							OutString(385,0,srval*rate,false); // Edit ************************** Friday, 26 December 2014 13:31:59							totals[12] = totals[12] + srval*rate;																		//if(curcode!=BCBb.BaseCur1)then begin							//	totcosted = allprevcost + totcosted;// Edit ************************** Tuesday, 10 October 2017 12:19:14							//end else begin								//totcosted = totcosted + totcostsd;							//end;														for(j=1;j<spi;j=j+1) begin								OutString(390,0,sdcost[j]*rate,false);// Edit ************************** Wednesday, 31 October 2012 13:57:36								sdtotal[j] = sdtotal[j] + sdcost[j]*rate;							end;							OutString(405,0,totcosted*rate,false);							totals[10] = totals[10] + totcosted*rate;							EndFormat;							totcostsd = 0;							allprevcost = 0;							ivtotsum = 0;							ivshtotsum[0] = 0;							ivshtotsum[1] = 0;							ivshpricesum[0] = 0;							ivshpricesum[1] = 0;							putotsum[0] = 0;							putotsum[1] = 0;							sdtotsum = 0;							smpozitivtotsum = 0;							smnegativtotsum = 0;							totcosted = 0;							qtynotpay = 0;// Edit ************************** Monday, 13 January 2014 13:37:23							retsum = 0;							inpo = 0;							retpu = 0;							srval = 0;							rownr = rownr + 1;							for(j=0;j<spi;j=j+1) begin									sdcost[j]=0;							end;							calc = true;							//curgr = INr.DispGroups;							if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {								gi=0;								tempdi = "";								ExtractObj(INr.DispGroups,gi,curgr);								while (NonBlank(curgr)) begin									DIr.Code = curgr;									if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin										tempdi = curgr;										gi = len(INr.DispGroups);                									end;									ExtractObj(INr.DispGroups,gi,curgr);								end;								curgr = tempdi;								if(currentcompany==9)then begin									DIr.Code = curgr1;									if(readfirstmain(DIr,1,true) and DIr.CType!="BRAND")then begin										curgr1 = "";                 									end;								end;							end else begin //Edit***************************Sasha2,11:38 09.02.2016 }								gi=0;								ExtractObj(INr.DispGroups,gi,curgr);								if(currentcompany==9)then begin									ExtractObj(INr.DispGroups,gi,curgr);									DIr.Code = curgr1;									if(readfirstmain(DIr,1,true))then begin										if(DIr.CType!="BRAND")then begin											curgr1 = "";                 										end;									end;								end;  							end;						end;          						if(calc)then begin							if(curcode==BCBb.BaseCur1)then begin								GroupCostIHSerch(INr.Code,sd,ed,sqty,eqty,totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,location,retsum,qty,sdcost,inpo,qtynotpay,retpu,srval,curcode,BCBb.BaseCur1);							end else begin								ISrTrHs = true;								ISr.Code = INr.Code;								//ISr.Location = location;// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:51:05								while(loopmain(ISr,1,ISrTrHs))begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:51:04									tstfl = true;									prevcostsd = totcostsd;									prevcosted = totcosted;									sqty = blankval;									eqty = blankval;																	if(ISr.Code!=INr.Code)then begin ISrTrHs = false; end;									//if(nonblank(location) and ISr.Location!=location)then begin ISrTrHs = false; end;									if(nonblank(location) and (!setinset(ISr.Location,location)))then begin tstfl = false; end;																		if(tstfl)then begin										if(ISrTrHs and ISr.Location!=";;;")then begin											//if(ItemQtyPerDateGlob(INr.Code,sd,ISr.Location)>0 or ItemQtyPerDateGlob(INr.Code,ed,ISr.Location)>0)then begin												GroupCostIHSerch(INr.Code,sd,ed,sqty,eqty,totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,ISr.Location,retsum,qty,sdcost,inpo,qtynotpay,retpu,srval,curcode,BCBb.BaseCur1);											//end;										end;																		if(curcode!=BCBb.BaseCur1)then begin											if(eqty<=0)then begin												totcosted = prevcosted;  											end;											if(sqty<=0)then begin												totcostsd = prevcostsd;    											end;																				end;										if(currentuser=="SA")then begin											if(sqty>0)then begin												//logtext(0,INr.Code & " " & totcostsd-prevcostsd & " " & totcosted-prevcosted);											end;										end;									end;								end;								resetloop(ISr);							end;						end;          end;        end;               StartFormat(15);          tstr = "";          if(nonblank(curgr))then begin            DIr.Code = curgr;            if(readfirstmain(DIr,1,true))then begin tstr = DIr.Name; end;          end else begin            tstr = "---";          end;          if(tstr=="---")then begin            //messagebox(0,INr.Code & "  2  " & ivshpricesum);          end;          //OutString(15,0,curgr,false);          OutString(0,0,tstr,false);					if ((currentcompany==9) and (DIr.CType=="BRAND")) then begin				//Edit----------------------Dima  20.03.2015							OutString(40,0,DIr.CCat,false);						end;						          OutString(45,0,totcostsd*rate,false);          OutString(70,0,inpo,false);          totalinpo = totalinpo + inpo;          totals[0] = totals[0] + totcostsd*rate;          OutString(90,0,(putotsum[0]+putotsum[1])*rate,false);          totals[1] = totals[1] + (putotsum[0]+putotsum[1])*rate;          OutString(135,0,smpozitivtotsum*rate,false);          totals[2] = totals[2] + smpozitivtotsum*rate;          OutString(180,0,ivtotsum*rate,false);          OutString(200,0,retsum*rate,false);// Edit ************************** Monday, 8 October 2012 10:21:45          totals[3] = totals[3] + ivtotsum*rate;          totals[9] = totals[9] + retsum*rate;          OutString(225,0,(ivshtotsum[0]+ivshtotsum[1])*rate,false);          totals[4] = totals[4] + (ivshtotsum[0]+ivshtotsum[1])*rate;          OutString(270,0,(ivshpricesum[0]+ivshpricesum[1])*rate,false);          totals[5] = totals[5] + (ivshpricesum[0]+ivshpricesum[1])*rate;          OutString(315,0,smnegativtotsum*rate,false);          totals[6] = totals[6] + smnegativtotsum*rate;          OutString(360,0,sdcost[0]*rate,false);          totals[7] = totals[7] + sdcost[0]*rate;          OutString(370,0,qtynotpay*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51           totals[8] = totals[8] + qtynotpay*rate;          OutString(380,0,retpu*rate,false);          totals[11] = totals[11] + retpu*rate;          OutString(385,0,srval*rate,false);          totals[12] = totals[12] + srval*rate;          //          //if(curcode!=BCBb.BaseCur1)then begin						//totcosted = allprevcost + totcosted;// Edit ************************** Tuesday, 10 October 2017 12:19:05					//end else begin						//totcosted = totcosted + totcostsd;					//end;                    for(j=1;j<spi;j=j+1) begin            OutString(390,0,sdcost[j]*rate,false);// Edit ************************** Wednesday, 31 October 2012 13:57:36            sdtotal[j] = sdtotal[j] + sdcost[j]*rate;          end;        	          OutString(405,0,totcosted*rate,false);          totals[10] = totals[10] + totcosted*rate;        EndFormat;        totcostsd = 0;        ivtotsum = 0;        ivshtotsum[0] = 0;				ivshtotsum[1] = 0;				ivshpricesum[0] = 0;				ivshpricesum[1] = 0;        putotsum[0] = 0;				putotsum[1] = 0;        sdtotsum = 0;        smpozitivtotsum = 0;        smnegativtotsum = 0;        totcosted = 0;        retsum = 0;        retpu = 0;        rownr = rownr + 1;        calc = true;        //curgr = INr.DispGroups;        if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {          gi=0;          tempdi = "";          ExtractObj(INr.DispGroups,gi,curgr);          while (NonBlank(curgr)) begin            DIr.Code = curgr;            if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin              tempdi = curgr;              gi = len(INr.DispGroups);                            end;            ExtractObj(INr.DispGroups,gi,curgr);          end;          curgr = tempdi;          if(currentcompany==9)then begin            DIr.Code = curgr1;            if(readfirstmain(DIr,1,true) and DIr.CType!="BRAND")then begin              curgr1 = "";                             end;          end;          end else begin //Edit***************************Sasha2,11:38 09.02.2016 }          gi=0;          ExtractObj(INr.DispGroups,gi,curgr);          if(currentcompany==9)then begin            ExtractObj(INr.DispGroups,gi,curgr);            DIr.Code = curgr1;            if(readfirstmain(DIr,1,true))then begin              if(DIr.CType!="BRAND")then begin                curgr1 = "";                                end;            end;          end;          end;        inpo = 0;                Black_Divider(0,1);              StartFormat(15);          OutString(0,0,USetStr(23659),false);          if(currentcompany==9)then begin  						outstring(40,0,"",false);					//Edit----------------------Dima  20.03.2015  				end;                  //OutString(15,0,"",false);          OutString(45,0,totals[0],false);          OutString(70,0,totalinpo,false);          OutString(90,0,totals[1],false);          OutString(135,0,totals[2],false);          OutString(180,0,totals[3],false);          OutString(200,0,totals[9],false);// Edit ************************** Monday, 8 October 2012 10:22:20          OutString(225,0,totals[4],false);          OutString(270,0,totals[5],false);          OutString(315,0,totals[6],false);          OutString(360,0,totals[7],false);          OutString(370,0,totals[8],false);          OutString(380,0,totals[11],false);          OutString(385,0,totals[12],false);          for(j=1;j<spi;j=j+1) begin            OutString(390,0,sdtotal[j],false);// Edit ************************** Wednesday, 31 October 2012 13:57:36          end;          OutString(405,0,totals[10],false);        EndFormat;              StartFormat(15);          OutString(0,0,USetStr(31112),false);          if(currentcompany==9)then begin  						outstring(40,0,"",false);					//Edit----------------------Dima  20.03.2015  				end;            OutString(15,0,"",false);          OutString(45,0,"",false);          OutString(90,0,"",false);          OutString(135,0,"",false);          OutString(180,0,"",false);          OutString(200,0,"",false);// Edit ************************** Monday, 8 October 2012 10:22:20          OutString(225,0,"",false);          OutString(270,0,totals[5]-totals[9],false);          OutString(315,0,"",false);          OutString(360,0,"",false);          OutString(370,0,"",false);          OutString(380,0,"",false);          OutString(385,0,"",false);          OutString(405,0,"",false);        EndFormat;                end;       end;    EndJob;  return;end;globalprocedure NewSumCostByPeriodRn(record RcVc RepSpec)begin  record INVc INr,IN2r;  Date sd,ed;  string 20 curgr,curgr1;  integer rownr,qty;  val totcostsd,ivtotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,retsum,qtynotpay,retpu;  array val totals,ivshtotsum,ivshpricesum;  record DIVc DIr;  string 100 tstr,location,category;  boolean calc;  array val sdcost,sdtotal,putotsum;  record StandProblemVc SPr;   integer spi,j;  val inpo,totalinpo;  integer gi;  val rate,coef,fr,to1,to2,br1,br2,srval,srvalsum;	string 10 curcode;	record BaseCurBlock BCBb;	string 20 tempcur,tempdi;	Boolean checkctypef; //Edit***************************Sasha2,11:37 09.02.2016	val prevcostsd,sqty,eqty,prevcosted,allprevcost;	record ItemStatusVc ISr;	boolean ISrTrHs,tstfl;	Vector val totvec;	vector string 200 vecname;  record BPIBrandVc BBr;	record PUVc PUr;	record ItemHistVc IHr;  if (CompanyIsJWLikeCompany(currentcompany)) then begin    checkctypef = true; //Edit***************************Sasha2,11:38 09.02.2016  end;  spi = 1;  location = uppercase(RepSpec.f1);    rate = 1;	//Edit--start------------------------------------------Dima  03.02.2015	BlockLoad(BCBb);	curcode = RepSpec.f3;	if (blank(curcode)) then begin			curcode = BCBb.BaseCur1;				end;  fr = 1; to1 = 1;  tempcur = curcode;	GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);		if(fr==0 or to1==0)then begin			fr = 1;	to1 = 1;	end;	coef = fr/to1;	if (rate==1) then begin		rate = rate * coef;	end;	rate = 1;// Edit ************************** Thursday, 8 October 2015 13:44:44	//Edit----end-------------------------------------------Dima  03.02.2015  //SetLangMode(LangRussian,"RUS",0); //Edit***************************Sasha2,15:17 09.12.2014    StartReportNoHeaderJob(USetStr(31100));  //IF(blank(RepSpec.f2) and currentcompany!=1)THEN BEGIN  IF(false)THEN BEGIN// Edit ************************** Monday, 17 August 2015 12:24:46    StartFormat(15);      OutString(0,0,USetStr(31101),false);    EndFormat;  end else begin      sd = RepSpec.sStartDate;      ed = RepSpec.sEndDate;          if blankdate(sd) then begin        StartFormat(15);        OutString(0,0,USetStr(31088),false);        EndFormat;      end else begin         StartFormat(15);        OutString(0,0,USetStr(31100),false);        EndFormat;              StartFormat(15);            OutString(0,0,USetStr(31102),false);            OutString(100,0,RepSpec.sStartDate & ":" & RepSpec.sEndDate,false);        endformat;        if(nonblank(location))then begin          StartFormat(15);              OutString(0,0,USetStr(31103),false);              OutString(100,0,location,false);          endformat;        end else begin            StartFormat(15);              OutString(0,0,USetStr(31103),false);              OutString(100,0,USetStr(31104),false);          endformat;        end;      	OutString(0,0,USetStr(31309) & curcode,false);	//Edit----------------------Dima  03.02.2015      	endformat;              gray_divider(0,1);              StartFormat(15);        OutString(0,0,USetStr(31105),false);        if(currentcompany==9)then begin					outstring(0,0,USetStr(9131),false);					//Edit----------------------Dima  20.03.2015				end;        OutString(45,0,USetStr(31081),false);        OutString(70,0,USetStr(31106),false);        OutString(90,0,USetStr(1828),false);				OutString(90,0,USetStr(1828)&" FOB",false);        OutString(135,0,USetStr(31082),false);        OutString(180,0,USetStr(31091),false);        OutString(200,0,USetStr(31107),false);        OutString(225,0,USetStr(31108),false);        OutString(270,0,USetStr(31109),false);				OutString(225,0,USetStr(31108)&" FOB",false);        OutString(270,0,USetStr(31109)&" FOB",false);        OutString(315,0,USetStr(31085),false);        OutString(360,0,USetStr(17167),false);        OutString(370,0,USetStr(31110),false);        OutString(380,0,USetStr(31111),false);        OutString(385,0,USetStr(9651),false);// Edit ************************** Friday, 26 December 2014 13:34:10        SPr.Code = "";        while(loopmain(SPr,1,true)) begin            OutString(390,0,SPr.ShortDesc,false);            spi=spi+1;        end;        OutString(405,0,USetStr(31086),false);        EndFormat;        qty=0;        IN2r.Code = "";        if (ReadLastKey("Code",IN2r,1,false)) then begin          //curgr=IN2r.DispGroups;          if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {            gi=0;            tempdi = "";            curgr1 = "";                  curgr1 = INr.BPIBrand;          end else begin //Edit***************************Sasha2,11:38 09.02.2016 }                  curgr1 = "";                          end;        end;        curgr = "";        rownr = 1;        totcostsd = 0;        allprevcost = 0;        ivtotsum = 0;        ivshtotsum[0] = 0;        ivshpricesum[0] = 0;				ivshtotsum[1] = 0;        ivshpricesum[1] = 0;        putotsum[0] = 0;				putotsum[1] = 0;         sdtotsum = 0;        smpozitivtotsum = 0;        smnegativtotsum = 0;        totcosted = 0;        retsum = 0;        qtynotpay = 0;        retpu = 0;        inpo = 0;        srval = 0;        INr.Code = "";        calc = true;        while (LoopMain(INr,1,true)) begin                	//if(setinset("KAUFFMAN",INr.DispGroups))then begin// Edit ************************** Monday, 2 October 2017 17:08:15					//if((currentuser=="SA" and setinset("V&B_CL",INr.DispGroups))or(currentuser!="SA"))then begin// Edit ************************** Tuesday, 3 October 2017 17:09:24					if(true)then begin						if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {							gi=0;									tempdi = INr.BPIBrand;						end else begin //Edit***************************Sasha2,11:38 09.02.2016 }										curgr1 = "";                						end; 						if (curgr!=curgr1) then begin          							calc = false;						end;						if(calc==false)then begin							StartFormat(15);   							if(nonblank(INr.BPIBrand)) then begin										tstr = BPICodeToName(INr.BPIBrand); 							end else begin								tstr = "---";							end;							if(tstr=="---")then begin								//messagebox(0,INr.Code & "  1  " & ivshpricesum);							end;							//OutString(15,0,curgr,false);       							//OutString(45,0,totcostsd*rate,false);           							//OutString(70,0,inpo,false);							totalinpo = totalinpo + inpo;							totals[0] = totals[0] + totcostsd*rate;							//OutString(90,0,putotsum*rate,false);							totals[1] = totals[1] + (putotsum[0]+putotsum[1]) *rate;							//OutString(135,0,smpozitivtotsum*rate,false);							totals[2] = totals[2] + smpozitivtotsum*rate;							//OutString(180,0,ivtotsum*rate,false);							//OutString(200,0,retsum*rate,false);// Edit ************************** Monday, 8 October 2012 10:21:45							totals[3] = totals[3] + ivtotsum*rate;							totals[9] = totals[9] + retsum*rate;							//OutString(225,0,ivshtotsum*rate,false);							totals[4] = totals[4] + (ivshtotsum[0]+ivshtotsum[1])*rate;							//OutString(270,0,ivshpricesum*rate,false);							totals[5] = totals[5] + (ivshpricesum[0]+ivshpricesum[1])*rate;							//OutString(315,0,smnegativtotsum*rate,false);							totals[6] = totals[6] + smnegativtotsum*rate;							//OutString(360,0,sdcost[0]*rate,false);         							totals[7] = totals[7] + sdcost[0]*rate;							//OutString(370,0,qtynotpay*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51 							totals[8] = totals[8] + qtynotpay*rate;							//OutString(380,0,retpu*rate,false); // Edit ************************** Monday, 13 January 2014 13:36:51 							totals[11] = totals[11] + retpu*rate;							//OutString(385,0,srval*rate,false); // Edit ************************** Friday, 26 December 2014 13:31:59							totals[12] = totals[12] + srval*rate;																		//if(curcode!=BCBb.BaseCur1)then begin							//	totcosted = allprevcost + totcosted;// Edit ************************** Tuesday, 10 October 2017 12:19:14							//end else begin								//totcosted = totcosted + totcostsd;							//end;														for(j=1;j<spi;j=j+1) begin								//OutString(390,0,sdcost[j]*rate,false);// Edit ************************** Wednesday, 31 October 2012 13:57:36								sdtotal[j] = sdtotal[j] + sdcost[j]*rate;							end;							//OutString(405,0,totcosted*rate,false);							totals[10] = totals[10] + totcosted*rate;							EndFormat;							totcostsd = 0;							allprevcost = 0;							ivtotsum = 0;							ivshtotsum[0] = 0;							ivshpricesum[0] = 0;							ivshtotsum[1] = 0;							ivshpricesum[1] = 0;							putotsum[0] = 0;							putotsum[1] = 1; 							sdtotsum = 0;							smpozitivtotsum = 0;							smnegativtotsum = 0;							totcosted = 0;							qtynotpay = 0;// Edit ************************** Monday, 13 January 2014 13:37:23							retsum = 0;							inpo = 0;							retpu = 0;							srval = 0;							rownr = rownr + 1;							for(j=0;j<spi;j=j+1) begin									sdcost[j]=0;							end;							calc = true;							//curgr = INr.DispGroups;							if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {								gi=0;								tempdi = "";								ExtractObj(INr.DispGroups,gi,curgr);								while (NonBlank(curgr)) begin									DIr.Code = curgr;									if(readfirstmain(DIr,1,true) and (DIr.CType=="BRAND" or DIr.CType=="MODEL"))then begin										tempdi = curgr;										gi = len(INr.DispGroups);                									end;									ExtractObj(INr.DispGroups,gi,curgr);								end;								curgr = tempdi;								if(currentcompany==9)then begin									DIr.Code = curgr1;									if(readfirstmain(DIr,1,true) and DIr.CType!="BRAND")then begin										curgr1 = "";                 									end;								end;							end else begin //Edit***************************Sasha2,11:38 09.02.2016 }								gi=0;								ExtractObj(INr.DispGroups,gi,curgr);								if(currentcompany==9)then begin									ExtractObj(INr.DispGroups,gi,curgr);									DIr.Code = curgr1;									if(readfirstmain(DIr,1,true))then begin										if(DIr.CType!="BRAND")then begin											curgr1 = "";                 										end;									end;								end;  							end;						end;          						if(calc)then begin							if(curcode==BCBb.BaseCur1)then begin								GroupCostIHSerch(INr.Code,sd,ed,sqty,eqty,totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,location,retsum,qty,sdcost,inpo,qtynotpay,retpu,srval,curcode,BCBb.BaseCur1);							end else begin								ISrTrHs = true;								ISr.Code = INr.Code;								//ISr.Location = location;// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:51:05								while(loopmain(ISr,1,ISrTrHs))begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 5 June 2018 17:51:04									tstfl = true;									prevcostsd = totcostsd;									prevcosted = totcosted;									sqty = blankval;									eqty = blankval;																	if(ISr.Code!=INr.Code)then begin ISrTrHs = false; end;									//if(nonblank(location) and ISr.Location!=location)then begin ISrTrHs = false; end;									if(nonblank(location) and (!setinset(ISr.Location,location)))then begin tstfl = false; end;																		if(tstfl)then begin										if(ISrTrHs and ISr.Location!=";;;")then begin											//if(ItemQtyPerDateGlob(INr.Code,sd,ISr.Location)>0 or ItemQtyPerDateGlob(INr.Code,ed,ISr.Location)>0)then begin												GroupCostIHSerch(INr.Code,sd,ed,sqty,eqty,totcostsd,ivtotsum,ivshtotsum,ivshpricesum,putotsum,sdtotsum,smpozitivtotsum,smnegativtotsum,totcosted,ISr.Location,retsum,qty,sdcost,inpo,qtynotpay,retpu,srval,curcode,BCBb.BaseCur1);											//end;										end;																		if(curcode!=BCBb.BaseCur1)then begin											if(eqty<=0)then begin												totcosted = prevcosted;  											end;											if(sqty<=0)then begin												totcostsd = prevcostsd;    											end;																				end;										if(currentuser=="SA")then begin											if(sqty>0)then begin												//logtext(0,INr.Code & " " & totcostsd-prevcostsd & " " & totcosted-prevcosted);											end;										end;									end;								end;								resetloop(ISr);							end;						end;          end; 						//StartFormat(15);						tstr = "";            if(nonblank(INr.BPIBrand))then begin tstr = BPICodeToName(INr.BPIBrand);           end else begin            tstr = "---";						INr.BPIBrand="---";          end;          if(tstr=="---")then begin            //messagebox(0,INr.Code & "  2  " & ivshpricesum);          end;          //OutString(15,0,curgr,false);					If(nonblank(INr.BPIBrand)) then begin						vecname[INr.BPIBrand] = tstr;								totvec[INr.BPIBrand]=totcostsd;						totvec[INr.BPIBrand & "INP"] = totvec[INr.BPIBrand & "INP"] + inpo;						totvec[INr.BPIBrand & "0"] = totvec[INr.BPIBrand & "0"] + totcostsd*rate;							totvec[INr.BPIBrand & "1fob"] = totvec[INr.BPIBrand & "1fob"] + putotsum[0]*rate;							totvec[INr.BPIBrand & "1"] = totvec[INr.BPIBrand & "1"] + putotsum[1]*rate;							totvec[INr.BPIBrand & "2"] = totvec[INr.BPIBrand & "2"] + smpozitivtotsum*rate;						totvec[INr.BPIBrand & "3"] = totvec[INr.BPIBrand & "3"] + ivtotsum*rate;						totvec[INr.BPIBrand & "9"] = totvec[INr.BPIBrand & "9"] + retsum*rate;						totvec[INr.BPIBrand & "4"] = totvec[INr.BPIBrand & "4"] + ivshtotsum[1]*rate;						totvec[INr.BPIBrand & "5"] = totvec[INr.BPIBrand & "5"] + ivshpricesum[1]*rate;						totvec[INr.BPIBrand & "4fob"] = totvec[INr.BPIBrand & "4fob"] + ivshtotsum[0]*rate;						totvec[INr.BPIBrand & "5fob"] = totvec[INr.BPIBrand & "5fob"] + ivshpricesum[0]*rate;						totvec[INr.BPIBrand & "6"] = totvec[INr.BPIBrand & "6"] + smnegativtotsum*rate;						totvec[INr.BPIBrand & "7"] = totvec[INr.BPIBrand & "7"] + sdcost[0]*rate;						totvec[INr.BPIBrand & "8"] = totvec[INr.BPIBrand & "8"] + qtynotpay*rate;						totvec[INr.BPIBrand & "11"] = totvec[INr.BPIBrand & "11"] + retpu*rate;						totvec[INr.BPIBrand & "12"] = totvec[INr.BPIBrand & "12"] + srval*rate;							totalinpo = totalinpo + inpo;							totals[0] = totals[0] + totcostsd*rate;								totals[13] = totals[13] + putotsum[0]*rate;								totals[1] = totals[1] + putotsum[1]*rate;							totals[2] = totals[2] + smpozitivtotsum*rate;							totals[3] = totals[3] + ivtotsum*rate;							totals[9] = totals[9] + retsum*rate;							totals[4] = totals[4] + ivshtotsum[1]*rate;							totals[5] = totals[5] + ivshpricesum[1]*rate;							totals[14] = totals[14] + ivshtotsum[0]*rate;							totals[15] = totals[15] + ivshpricesum[0]*rate;							totals[6] = totals[6] + smnegativtotsum*rate;         							totals[7] = totals[7] + sdcost[0]*rate;							totals[8] = totals[8] + qtynotpay*rate;							totals[11] = totals[11] + retpu*rate;							totals[12] = totals[12] + srval*rate;          //          //if(curcode!=BCBb.BaseCur1)then begin						//totcosted = allprevcost + totcosted;// Edit ************************** Tuesday, 10 October 2017 12:19:05					//end else begin						//totcosted = totcosted + totcostsd;					//end;           for(j=1;j<spi;j=j+1) begin            OutString(390,0,sdcost[j]*rate,false);// Edit ************************** Wednesday, 31 October 2012 13:57:36            sdtotal[j] = sdtotal[j] + sdcost[j]*rate;          end;        	totals[10] = totals[10] +  totcosted*rate;          totvec[INr.BPIBrand & "10"] = totvec[INr.BPIBrand & "10"] + totcosted*rate;					end;					        //EndFormat;        rownr = 1;        totcostsd = 0;        allprevcost = 0;        ivtotsum = 0;        ivshtotsum[0] = 0;        ivshpricesum[1] = 0;				ivshtotsum[1] = 0;        ivshpricesum[0] = 0;        putotsum[0] = 0;				putotsum[1] = 0;        sdtotsum = 0;        smpozitivtotsum = 0;        smnegativtotsum = 0;        totcosted = 0;        retsum = 0;        qtynotpay = 0;        retpu = 0;        inpo = 0;				sdcost[0]=0;        srval = 0;        calc = true;				end;        //curgr = INr.DispGroups;        if (checkctypef) then begin //Edit***************************Sasha2,11:38 09.02.2016 {          gi=0;          tempdi = "";          if(NonBlank(INr.BPIBrand)) then begin              tempdi = INr.BPIBrand;					end;		                 end;        inpo = 0;        Black_Divider(0,1);        BBr.Code="";				While(LoopMain(BBr,1,true)) begin					StartFormat(15);						//OutString(0,0,USetStr(23659),false);						if(currentcompany==9)then begin								outstring(40,0,"",false);					//Edit----------------------Dima  20.03.2015						end; 						if(nonblank(vecname[BBr.Code])) then begin 						//OutString(15,0,"",false);							OutString(45,0,vecname[BBr.Code],false);							OutString(45,0,totvec[BBr.Code & "0"],false);							OutString(70,0,totvec[BBr.Code & "INP"],false);							OutString(90,0,totvec[BBr.Code & "1"],false);							OutString(90,0,totvec[BBr.Code & "1fob"],false);							OutString(135,0,totvec[BBr.Code & "2"],false);							OutString(180,0,totvec[BBr.Code & "3"],false);							OutString(200,0,totvec[BBr.Code & "9"],false);// Edit ************************** Monday, 8 October 2012 10:22:20							OutString(225,0,totvec[BBr.Code & "4"],false);							OutString(270,0,totvec[BBr.Code & "5"],false);							OutString(225,0,totvec[BBr.Code & "4fob"],false);							OutString(270,0,totvec[BBr.Code & "5fob"],false);							OutString(315,0,totvec[BBr.Code & "6"],false);							OutString(360,0,totvec[BBr.Code & "7"],false);							OutString(370,0,totvec[BBr.Code & "8"],false);							OutString(380,0,totvec[BBr.Code & "11"],false);							OutString(385,0,totvec[BBr.Code & "12"],false);							for(j=1;j<spi;j=j+1) begin								OutString(390,0,sdtotal[j],false);// Edit ************************** Wednesday, 31 October 2012 13:57:36							end;							OutString(405,0,totvec[BBr.Code & "10"],false);						EndFormat;						end;        end;					StartFormat(15);					BBr.Code="---";					OutString(45,0,vecname[BBr.Code],false);							OutString(45,0,totvec[BBr.Code & "0"],false);							OutString(70,0,totvec[BBr.Code & "INP"],false);							OutString(90,0,totvec[BBr.Code & "1"],false);							OutString(90,0,totvec[BBr.Code & "1fob"],false);							OutString(135,0,totvec[BBr.Code & "2"],false);							OutString(180,0,totvec[BBr.Code & "3"],false);							OutString(200,0,totvec[BBr.Code & "9"],false);// Edit ************************** Monday, 8 October 2012 10:22:20							OutString(225,0,totvec[BBr.Code & "4"],false);							OutString(270,0,totvec[BBr.Code & "5"],false);							OutString(225,0,totvec[BBr.Code & "4fob"],false);							OutString(270,0,totvec[BBr.Code & "5fob"],false);							OutString(315,0,totvec[BBr.Code & "6"],false);							OutString(360,0,totvec[BBr.Code & "7"],false);							OutString(370,0,totvec[BBr.Code & "8"],false);							OutString(380,0,totvec[BBr.Code & "11"],false);							OutString(385,0,totvec[BBr.Code & "12"],false);							for(j=1;j<spi;j=j+1) begin								OutString(390,0,sdtotal[j],false);// Edit ************************** Wednesday, 31 October 2012 13:57:36							end;							OutString(405,0,totvec[BBr.Code & "10"],false);						EndFormat;				StartFormat(15);				 	OutString(0,0,USetStr(23659),false);					 OutString(45,0,totals[0],false);          OutString(70,0,totalinpo,false);          OutString(90,0,totals[1],false);					OutString(90,0,totals[13],false);          OutString(135,0,totals[2],false);          OutString(180,0,totals[3],false);          OutString(200,0,totals[9],false);// Edit ************************** Monday, 8 October 2012 10:22:20          OutString(225,0,totals[4],false);          OutString(270,0,totals[5],false);					OutString(225,0,totals[14],false);          OutString(270,0,totals[15],false);          OutString(315,0,totals[6],false);          OutString(360,0,totals[7],false);          OutString(370,0,totals[8],false);          OutString(380,0,totals[11],false);          OutString(385,0,totals[12],false);					for(j=1;j<spi;j=j+1) begin            OutString(390,0,sdtotal[j],false);// Edit ************************** Wednesday, 31 October 2012 13:57:36          end;          OutString(405,0,totals[10],false);				EndFormat;        StartFormat(15);          OutString(0,0,USetStr(31112),false);          if(currentcompany==9)then begin  						outstring(40,0,"",false);					//Edit----------------------Dima  20.03.2015  				end;            OutString(15,0,"",false);          OutString(45,0,"",false);          OutString(90,0,"",false);          OutString(135,0,"",false);          OutString(180,0,"",false);          OutString(200,0,"",false);// Edit ************************** Monday, 8 October 2012 10:22:20          OutString(225,0,"",false);					OutString(225,0,"",false);          OutString(270,0,totals[5]+totals[15]-totals[9],false);          OutString(315,0,"",false);          OutString(360,0,"",false);          OutString(370,0,"",false);          OutString(380,0,"",false);          OutString(385,0,"",false);          OutString(405,0,"",false);        EndFormat;                end;       end;    EndJob;  return;end;
