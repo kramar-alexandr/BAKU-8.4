@@ -5,6 +5,7 @@ external procedure POVc_PasteQuant(var record POVc,Integer);// Edit ************
 external function Boolean POVc_PasteVECode(var record POVc,Boolean);
 external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
 remote function boolean CompanyIsJWLikeCompany(Integer);
+external updating procedure ECPUFromPODsm(var record POVc);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -260,6 +261,98 @@ begin
 
 return;
 end;
+
+
+
+
+global updating procedure CreateECPOfromLocalOR(record SHVc SHr)
+begin
+	integer mtrw,i,j,k,pos,rownum,OldComp;
+	record ORVc ORr;
+	row ORVc ORrw;
+	Record POVc POr;
+	row POVc POrw;
+	string 50 ostr;
+	array string 100 class,artcode;
+	record INVc INr;
+	boolean foundf,TrHs,testf;
+	record CUVc CUr;
+	record DIVc DIr;
+	string 200 vendor;
+	vector string 255 ECCodes;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBrw;
+	
+	BlockLoad(CBb);
+	
+	ORr.SerNr = SHr.OrderNr;
+	if(ReadFirstMain(ORr,1,true))then begin
+		mtrw = matrowcnt(ORr);
+		For(i=0;i<mtrw;i=i+1) begin
+			matrowget(ORr,i,ORrw); 
+			ECCodes[ORrw.GlobalItemArtCode] = "Y";
+		end;
+	end;
+	
+	OldComp = CurrentCompany;
+	
+	if(SetCompany(29,false))then begin
+		TrHs = true;
+		i = 0;
+		INr.Code = "";
+		while (loopmain(INr,1,TrHs))begin
+			if(ECCodes[INr.GlobalArtCode]=="Y")then begin
+				ECCodes[INr.GlobalArtCode] = INr.Code;
+				i=i+1;
+			end;
+			if(i==mtrw)then begin TrHs = false; end;
+		end;
+		resetloop(INr);
+		
+		
+		
+	
+		mtrw = matrowcnt(ORr);
+		For(i=0;i<mtrw;i=i+1) begin
+			matrowget(ORr,i,ORrw); 
+			if(nonblank(ORrw.GlobalItemArtCode))then begin
+				INr.Code = ECCodes[ORrw.GlobalItemArtCode];
+				if(readfirstmain(INr,1,true))then begin
+					vendor = INr.BPIBrand;
+					
+					
+					POrw.ArtCode = ECCodes[ORrw.GlobalItemArtCode];
+					matrowput(POr,rownum,POrw);
+					POVc_PasteArtCode(POr,rownum,false);
+					matrowget(POr,rownum,POrw);
+					POrw.Quant = ORrw.Quant;
+					POrw.Spec = ORrw.Spec;
+					POrw.OrdRow = i;
+					matrowput(POr,rownum,POrw);
+					POVc_PasteQuant(POr,rownum);
+					rownum = rownum + 1;
+						
+				end;
+			end;
+		end;
+		matrowget(CBb,OldComp-1,CBrw);
+		POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
+		POr.VECode = CBrw.ShortName;
+		POr.Addr0 = CBrw.CompName;
+		POr.TransDate = CurrentDate;
+		POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");   
+		POr.OKFlag = 1;
+		recordStore(POr,false);
+		createrecordlink(POr,CurrentCompany,SHr,OldComp);
+		createrecordlink(SHr,OldComp,POr,CurrentCompany);
+		ECPUFromPODsm(POr);
+	end;
+	ResetCompany(OldComp);
+
+return;
+end;
+
+
 
 
 
