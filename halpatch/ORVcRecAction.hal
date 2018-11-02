@@ -419,6 +419,7 @@ begin
 	record INVc INr;
 	vector string 255 vComdItemLocation;
 	
+	
 	OldComp = CurrentCompany;
 	res = 0;
 	BlockLoad(Compb);
@@ -433,58 +434,83 @@ begin
 		end;
 	end;
 	
+	
+	
+	
 	rwcnt = MatRowCnt(Compb);
 	for (i=0;i<rwcnt;i=i+1) begin
 		matrowget(Compb,i,Comprw);
-		if(Comprw.ActiveStatus==0)then begin
-			if(SetCompany(i+1,false))then begin
-				for (j=0;j<orrwcnt;j=j+1) begin
-					ItemDuplicate[ArtCodes[j] & i+1] = 0;
-				end;
-				Compf[i+1] = false;
-				BlockLoad(WRSb);
-				pos = 0;
-				ExtractObj(WRSb.ResStockSet,pos,strlc);
-				while (nonblank(strlc)) begin
-					for (j=0;j<orrwcnt;j=j+1) begin
-						testf = true;
-						INr.Code = ArtCodes[j];
-						if(ReadfirstMain(INr,1,true))then begin
-							if(INr.BPIBrand!=ItemBrands[j])then begin testf = false; end;
-							if(testf)then begin
-								ISr.Location = strlc;
-								ISr.Code = ArtCodes[j];
-								if(readfirstmain(ISr,2,true))then begin
-									ItemInStocks[ArtCodes[j] & j] = 0;
-									if((ISr.Instock-ISr.RsrvQty-ItemDuplicate[ArtCodes[j] & i+1])>0)then begin
-										if(ItemSearchf[ArtCodes[j] & j])then begin
-											if(ItemInStocks[ArtCodes[j] & j]<NeedItQty[ArtCodes[j] & j] and (ISr.Instock-ISr.RsrvQty-ItemDuplicate[ArtCodes[j] & i+1])<=(NeedItQty[ArtCodes[j] & j]-ItemInStocks[ArtCodes[j] & j]))then begin
-												vItemCompQty[j & "_" & i+1] = ISr.Instock-ISr.RsrvQty-ItemDuplicate[ArtCodes[j] & i+1];
+		if(ItemSearchf[ArtCodes[i] & i])then begin
+			if(Comprw.ActiveStatus==0)then begin
+				if(SetCompany(i+1,false))then begin
+					BlockLoad(WRSb);
+					pos = 0;
+					ExtractObj(WRSb.ResStockSet,pos,strlc);
+					while (nonblank(strlc)) begin
+						for (j=0;j<orrwcnt;j=j+1) begin
+							ItemDuplicate[ArtCodes[j] & i+1 & strlc] = 0;
+						end;
+						ExtractObj(WRSb.ResStockSet,pos,strlc);
+					end;
+					pos = 0;
+					ExtractObj(WRSb.ResStockSet,pos,strlc);
+					while (nonblank(strlc)) begin
+						Compf[(i+1) & strlc] = false;
+						for (j=0;j<orrwcnt;j=j+1) begin
+							testf = true;
+							INr.Code = ArtCodes[j];
+							if(ReadfirstMain(INr,1,true))then begin
+								if(INr.BPIBrand!=ItemBrands[j])then begin testf = false; end;
+								if(testf)then begin
+									ISr.Location = strlc;
+									ISr.Code = ArtCodes[j];
+									if(readfirstmain(ISr,2,true))then begin
+										logtext(0,ISr.Instock-ISr.RsrvQty-ItemDuplicate[ArtCodes[j] & i+1 & strlc]);
+										if(ISr.Instock-ISr.RsrvQty-ItemDuplicate[ArtCodes[j] & i+1 & strlc]>0)then begin
+											if(NeedItQty[ArtCodes[i] & i]<(ISr.Instock - ItemDuplicate[ArtCodes[j] & i+1 & strlc] - ISr.RsrvQty))then begin
+												ItemDuplicate[ArtCodes[j] & i+1 & strlc] = NeedItQty[ArtCodes[i] & i];
+												vItemCompQty[j & "_" & i+1 & "_" & strlc] = NeedItQty[ArtCodes[i] & i];
+												NeedItQty[ArtCodes[i] & i] = 0;
 												Compf[i+1] = true;
-												vComdItemLocation [j & "_" & i+1] = ISr.Location;
-											end;
-											if(ItemInStocks[ISr.Code]<NeedItQty[ArtCodes[j] & j] and (ISr.Instock-ISr.RsrvQty-ItemDuplicate[ArtCodes[j] & i+1])>(NeedItQty[ArtCodes[j] & j]-ItemInStocks[ArtCodes[j] & j]))then begin
-												vItemCompQty[j & "_" & i+1] = NeedItQty[ArtCodes[j] & j] - ItemInStocks[ArtCodes[j] & j];
+												if(nonblank(vComdItemLocation[(i+1)]))then begin
+													vComdItemLocation[(i+1)] = vComdItemLocation[(i+1)] & "," & strlc;
+												end else begin
+													vComdItemLocation[(i+1)] = strlc;
+												end;
+											end else begin
+												vItemCompQty[j & "_" & i+1 & "_" & strlc] = ISr.Instock - ItemDuplicate[ArtCodes[j] & i+1 & strlc] - ISr.RsrvQty;
+												NeedItQty[ArtCodes[i] & i] = NeedItQty[ArtCodes[i] & i] - (ISr.Instock - ItemDuplicate[ArtCodes[j] & i+1 & strlc] - ISr.RsrvQty);
+												ItemDuplicate[ArtCodes[j] & i+1 & strlc] = ISr.Instock - ItemDuplicate[ArtCodes[j] & i+1 & strlc] - ISr.RsrvQty;
+												logtext(0,NeedItQty[ArtCodes[i] & i]);
 												Compf[i+1] = true;
-												vComdItemLocation [j & "_" & i+1] = ISr.Location;
+												if(nonblank(vComdItemLocation[(i+1)]))then begin
+													vComdItemLocation[(i+1)] = vComdItemLocation[(i+1)] & "," & strlc;
+												end else begin
+													vComdItemLocation[(i+1)] = strlc;
+												end;
 											end;
-											ItemDuplicate[ArtCodes[j] & i+1] = ItemDuplicate[ArtCodes[j] & i+1] + vItemCompQty[j & "_" & i+1];
-											ItemInStocks[ArtCodes[j] & j] = ItemInStocks[ArtCodes[j] & j] + vItemCompQty[j & "_" & i+1];
-											if(ItemInStocks[ArtCodes[j] & j]>=NeedItQty[ArtCodes[j] & j])then begin 
-												ItemSearchf[ArtCodes[j] & j] = false;
+											if(NeedItQty[ArtCodes[i] & i]==0)then begin
+												ItemSearchf[ArtCodes[i] & i] = false;
 											end;
 										end;
 									end;
 								end;
 							end;
 						end;
+						ExtractObj(WRSb.ResStockSet,pos,strlc);
 					end;
-					ExtractObj(WRSb.ResStockSet,pos,strlc);
 				end;
 			end;
 		end;
 	end;
 	ResetCompany(OldComp);
+	
+	
+	
+	
+	
+	
+	
 
 	for (i=0;i<orrwcnt;i=i+1)begin
 		if(ItemSearchf[ArtCodes[i] & i])then begin
@@ -529,22 +555,27 @@ begin
 				j = 0;
 				for (i=0;i<orrwcnt;i=i+1) begin
 					MatRowGet(ORr,i,ORrw);
-					if(vItemCompQty[i & "_" & c]>0)then begin
-						LocORrw.ArtCode = mid(ORrw.GlobalItemArtCode,9,len(ORrw.GlobalItemArtCode)-9);
-						LocORrw.Quant = vItemCompQty[i & "_" & c];
-						LocORrw.Spec = ORrw.Spec;
-						LocORrw.Price = ORrw.Price;
-						LocORrw.vRebate = ORrw.vRebate;
-						LocORrw.BasePrice = ORrw.BasePrice;
-						LocORrw.SerialNr = ORrw.SerialNr;
-						LocORrw.PlanShipRow = ORrw.PlanShipRow;
-						LocORrw.GlobalItemArtCode = ORrw.GlobalItemArtCode;
-						LocORrw.Objects = ORrw.Objects;
-						LocORrw.Sum = ORrw.Sum;
-						LocORrw.Location = vComdItemLocation[i & "_" & c];
-						LocORr.Location = LocORrw.Location;
-						MatRowPut(LocORr,j,LocORrw);
-						j=j+1;
+					pos = 0;
+					ExtractObj(vComdItemLocation[c],pos,strlc);
+					while (nonblank(strlc)) begin
+						if(vItemCompQty[i & "_" & c & "_" & strlc]>0)then begin
+							LocORrw.ArtCode = mid(ORrw.GlobalItemArtCode,9,len(ORrw.GlobalItemArtCode)-9);
+							LocORrw.Quant = vItemCompQty[i & "_" & c & "_" & strlc];
+							LocORrw.Spec = ORrw.Spec;
+							LocORrw.Price = ORrw.Price;
+							LocORrw.vRebate = ORrw.vRebate;
+							LocORrw.BasePrice = ORrw.BasePrice;
+							LocORrw.SerialNr = ORrw.SerialNr;
+							LocORrw.PlanShipRow = ORrw.PlanShipRow;
+							LocORrw.GlobalItemArtCode = ORrw.GlobalItemArtCode;
+							LocORrw.Objects = ORrw.Objects;
+							LocORrw.Sum = ORrw.Sum;
+							LocORrw.Location = strlc;
+							LocORr.Location = LocORrw.Location;
+							MatRowPut(LocORr,j,LocORrw);
+							j=j+1;
+						end;
+						ExtractObj(vComdItemLocation[c],pos,strlc);
 					end;
 				end;
 				if (Insertf)then begin
@@ -580,6 +611,37 @@ end;//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 17:56 22.10.2018
 
 
 
+global 
+updating function longint CreateLocalIVandSHFromWebOR (var record ORVc ORr)
+begin
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	integer i,mtrw,OldComp,res;
+	record ORVc LocORr;
+	
+	OldComp = CurrentCompany;
+	BlockLoad(Compb);
+	res = 0;
+	mtrw = matrowcnt(Compb);
+	for (i=0;i<mtrw;i=i+1)begin
+		matrowget(Compb,i,Comprw);
+		if(Comprw.ActiveStatus==0)then begin
+			if(Setcompany(i+1,false))then begin
+				logtext(0,"Enter");
+				LocORr.OfficialSerNr = "EC_" & ORr.SerNr;
+				if(Readfirstkey("OfficialSerNr",LocORr,1,true))then begin
+					res = IVFromLocWEBORDsm(LocORr);
+					res = SHFromLocWEBORDsm(LocORr);
+				end;
+			end;
+		end;
+	end;
+
+	
+	ResetCompany(OldComp);
+	CreateLocalIVandSHFromWebOR = res;
+return;
+end;
 
 
 
@@ -1645,7 +1707,7 @@ LORVcRecordRowCheck:;
   
 	if(CurrentCompany==29)then begin
 		PasteglobalIteminIN(ORr);
-		if(ORr.WEBReservOnStock==1)then begin
+		if(ORr.WEBReservOnStock==1 and OR2r.WEBReservOnStock!=1)then begin
 			res = CreateLocalORFromWebOR(ORr);
 		end;
 		if(OR2r.WEBReservOnStock==1 and ORr.WEBReservOnStock==0)then begin
@@ -1667,6 +1729,9 @@ LORVcRecordRowCheck:;
 					goto LORVcRecordCheck;
 				end;
 			end;
+		end;
+		if(ORr.WEBReservOnStock==1 and ORr.OrderConfirmed==1 and OR2r.OrderConfirmed==0)then begin
+			CreateLocalIVandSHFromWebOR(ORr);
 		end;
 	end;
 	
