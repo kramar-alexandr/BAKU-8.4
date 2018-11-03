@@ -85,7 +85,7 @@ begin
   string 100 tstr;
   string 50 uloc,brand,brandcode,pricecur;
   integer pos,cnt,SQi,TSi,i,Ccntr,Scntr,rowcnt,mtrw,curcomp;
-  boolean TrHs,testf,test2f,f;
+  boolean TrHs,testf,test2f,f,testf1;
   val price;
   vector boolean stockInArr;
   vector integer stockQty;
@@ -141,378 +141,387 @@ begin
     
     INr.Code = "";
     while (loopmain(INr,1,true)) begin
-      ClearStocksStuff(SQi,stockInArr,stocks,stockQty);
-      ClearClassifStuff(TSi,typeClassif,classif);
-//collect stocks
-			For(i=0;i<mtrw;i=i+1) begin
-				setcompany(i+1,false);
-        ISr.Code = INr.Code;
-        TrHs = true;
-        while (loopmain(ISr,1,TrHs)) begin
-          testf = true;
-          if (ISr.Code!=INr.Code) then begin testf = false; TrHs = false; end;
-          if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
-          if (ISr.Location==";;;") then begin testf = false; end;
-          if (ISr.Instock==0) then begin testf = false; end;
-          if (testf) then begin
-            if !stockInArr[ISr.Location] then begin
-              stockInArr[ISr.Location] = true;
-              stocks[SQi] = ISr.Location;
-              SQi = SQi + 1;
-            end;
-            stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
-          end;
-        end;
-        resetloop(ISr);
-			end; 
-      resetcompany(curcomp);
-      if nonblank(stocks[0]) then begin
-//find brand and collect classifications
-        brand = "";
-        pos = 0;
-        uloc = "";
-        ExtractObj(INr.DispGroups,pos,uloc); 
-        while (nonblank(uloc)) begin
-          DIr.Code = uloc;
-          readfirstmain(DIr,1,true);
-          if (DIr.CType!="BRAND")then begin
-            CTyper.Code = DIr.CType;
-            readfirstmain(CTyper,1,true);
-            typeClassif[TSi] = CTyper.Comment;
-            classif[TSi] = DIr.Name;
-            TSi = TSi + 1;
-          end else begin
-            brand = DIr.Name;
-            brandcode = DIr.Code;
-          end;
-          ExtractObj(INr.DispGroups,pos,uloc);
-        end;
-        if ((brandcode==RepSpec.f1) or blank(RepSpec.f1)) and ((INr.Group==RepSpec.f3) or blank(RepSpec.f3)) then begin
-//find price
-          cnt = 0;
-          price = 0;
-          PLr.ArtCode = INr.Code;
-          PLr.PLCode = "RRP";
-          while (loopmain(PLr,2,(PLr.ArtCode==INr.Code))) begin
-            if(PLr.ArtCode==INr.Code)then begin
-              price = price + PLr.ExVatPrice;
-              cnt = cnt + 1;
-              if(nonblank(PLr.CurncyCode))then begin
-                pricecur = PLr.CurncyCode;
-              end else begin
-                PLDefr.Code = "RRP";
-                readfirstmain(PLDefr,1,true);
-                pricecur = PLDefr.CurncyCode;
-              end;
-            end;
-          end;
-          resetloop(PLr);
-          price = price/cnt;
-//path to image
-          FindAndStoreINVcImgLink(INr,currentcompany,pathToImg,tstr);
-          Ccntr = 0;
-          Scntr = 0;
-          rowcnt = 0;
-          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-            colnum = 2;
-            style = 5;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.Code,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 1;
-            qtyOfEmpStr = 2;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            style = 8;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.BarCode,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 16;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Тип класификации",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 17;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Класификация",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-          EndRow(sheetnum,fileToSave,rownum);
-          rowcnt = rowcnt + 1;
-          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-            colnum = 2;
-            style = 6;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,brand,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 2;
-            qtyOfEmpStr = 1;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            style = 9;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.Name,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 2;
-            qtyOfEmpStr = 1;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            f = false;
-            if (Ccntr<typeClassif.length) then begin
-              if (nonblank(typeClassif[Ccntr])) then begin
-                style = 10;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                style = 11;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                Ccntr = Ccntr + 1;
-                f = true;
-              end;
-            end;
-            if (!f) then begin
-              style = 20;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              style = 22;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            end;
-          EndRow(sheetnum,fileToSave,rownum);
-          rowcnt = rowcnt + 1;
-          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-            colnum = 2;
-            style = 6;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Ритейл:",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 4;
-            NumericCell(sheetnum,fileToSave,colnum,rownum,style,price);
-            style = 2;
-            qtyOfEmpStr = 2;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            f = false;
-            if (Ccntr<typeClassif.length) then begin
-              if (nonblank(typeClassif[Ccntr])) then begin
-                style = 10;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                style = 11;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                Ccntr = Ccntr + 1;
-                f = true;
-              end;
-            end;
-            if (!f) then begin
-              style = 20;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              style = 22;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            end;
-      
-          EndRow(sheetnum,fileToSave,rownum);
-          rowcnt = rowcnt + 1;
-          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-            colnum = 2;
-            style = 6;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Себестоимость:",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 4;
-            NumericCell(sheetnum,fileToSave,colnum,rownum,style,INr.LastPurchPrice2);
-            style = 2;
-            qtyOfEmpStr = 2;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            f = false;
-            if (Ccntr<typeClassif.length) then begin
-              if (nonblank(typeClassif[Ccntr])) then begin
-                style = 10;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                style = 11;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                Ccntr = Ccntr + 1;
-                f = true;
-              end;
-            end;
-            if (!f) then begin
-              style = 20;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              style = 22;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            end;
-          EndRow(sheetnum,fileToSave,rownum);
-          rowcnt = rowcnt + 1;
-          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-            colnum = 2;
-            style = 6;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Валюта:",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 7;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,pricecur,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 2;
-            qtyOfEmpStr = 2;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            f = false;
-            if (Ccntr<typeClassif.length) then begin
-              if (nonblank(typeClassif[Ccntr])) then begin
-                style = 10;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                style = 11;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                Ccntr = Ccntr + 1;
-                f = true;
-              end;
-            end;
-            if (!f) then begin
-              style = 20;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              style = 22;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            end;
-          EndRow(sheetnum,fileToSave,rownum);
-          rowcnt = rowcnt + 1;
-          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-            colnum = 2;
-            style = 6;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,"Дата посл. поступления:",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 7;
-            StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.LastPriceChange,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-            style = 2;
-            qtyOfEmpStr = 2;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            f = false;
-            if (Ccntr<typeClassif.length) then begin
-              if (nonblank(typeClassif[Ccntr])) then begin
-                style = 10;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                style = 11;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                Ccntr = Ccntr + 1;
-                f = true;
-              end;
-            end;
-            if (!f) then begin
-              style = 20;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              style = 22;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            end;
-          EndRow(sheetnum,fileToSave,rownum);
-          rowcnt = rowcnt + 1;
-          
-          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-            colnum = 2;
-            style = 3;
-            qtyOfEmpStr = 1;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            style = 2;
-            qtyOfEmpStr = 3;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            f = false;
-            if (Ccntr<typeClassif.length) then begin
-              if (nonblank(typeClassif[Ccntr])) then begin
-                style = 10;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                style = 11;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                Ccntr = Ccntr + 1;
-                f = true;
-              end;
-            end;
-            if (!f) then begin
-              style = 20;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              style = 22;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            end;
-            
-          EndRow(sheetnum,fileToSave,rownum);
-          rowcnt = rowcnt + 1;
-          BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-            colnum = 2;
-            f = false;
-            if (Scntr<stocks.length) then begin
-              if (nonblank(stocks[Scntr])) then begin
-                style = 12;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,"Склад",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                style = 13;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол-во",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-              end;
-            end;
-            if (!f) then begin
-              style = 3;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              style = 2;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            end;
-            style = 2;
-            qtyOfEmpStr = 2;
-            EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            f = false;
-            if (Ccntr<typeClassif.length) then begin
-              if (nonblank(typeClassif[Ccntr])) then begin
-                style = 10;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                style = 11;
-                StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                Ccntr = Ccntr + 1;
-                f = true;
-              end;
-            end;
-            if (!f) then begin
-              style = 20;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              style = 22;
-              qtyOfEmpStr = 1;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-            end;
-          EndRow(sheetnum,fileToSave,rownum);
-          rowcnt = rowcnt + 1;
-          test2f = true;
-          while (test2f) begin
-            BeginRow(sheetnum,fileToSave,rownum,0,blankval);
-              colnum = 2;
-              f = false;
-              if (Scntr<stocks.length) then begin
-                if (nonblank(stocks[Scntr])) then begin
-                  style = 14;
-                  StringCell(sheetnum,fileToSave,colnum,rownum,style,stocks[Scntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                  style = 15;
-                  StringCell(sheetnum,fileToSave,colnum,rownum,style,stockQty[stocks[Scntr]],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                  Scntr = Scntr + 1;
-                end;
-              end;
-              if (!f) then begin
-                style = 3;
-                qtyOfEmpStr = 1;
-                EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-                style = 2;
-                qtyOfEmpStr = 1;
-                EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              end;
-              style = 2;
-              qtyOfEmpStr = 2;
-              EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              f = false;
-              if (Ccntr<typeClassif.length) then begin
-                if (nonblank(typeClassif[Ccntr])) then begin
-                  style = 10;
-                  StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                  style = 11;
-                  StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
-                  Ccntr = Ccntr + 1;
-                  f = true;
-                end;
-              end;
-              if (!f) then begin
-                style = 20;
-                qtyOfEmpStr = 1;
-                EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-                style = 22;
-                qtyOfEmpStr = 1;
-                EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
-              end;
-            EndRow(sheetnum,fileToSave,rownum);
-            rowcnt = rowcnt + 1;
-            
-            test2f = false;
-            if rowcnt<11 then begin test2f = true; end;
-            if (Scntr<stocks.length) then begin if (nonblank(stocks[Scntr])) then begin test2f = true; end; end;
-            if (Ccntr<typeClassif.length) then begin if (nonblank(typeClassif[Ccntr])) then begin test2f = true; end; end;
-          end;
-          imgCounter = imgCounter + 1;
-          AddImageOnCurrentSheet(sheetnum,fileToSave,pathToImg,imgCounter,fromcol,tocol,fromrow,torow,fromcoloff,tocoloff,fromrowoff,torowoff,2,0,0);
-          fromrow = fromrow + rowcnt;
-          torow = torow + rowcnt;
-        end;
+    	testf1 = true;
+    	if(nonblank(RepSpec.f4) and !setinset(RepSpec.f4,INr.DispGroups))then begin testf1 = false; end;
+    	if(nonblank(RepSpec.f5) and !setinset(RepSpec.f5,INr.DispGroups) and RepSpec.f5!=INr.BPIBrand)then begin testf1 = false; end;
+			if(nonblank(RepSpec.f6) and !setinset(RepSpec.f6,INr.DispGroups) and RepSpec.f6!=INr.BPICollection)then begin testf1 = false; end;
+			if(nonblank(RepSpec.f7) and !setinset(RepSpec.f7,INr.DispGroups) and RepSpec.f7!=INr.BPISubGroup)then begin testf1 = false; end;
+			if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,INr.OldDispGroups))then begin testf1 = false; end;
+    	
+    	if(testf1)then begin
+				ClearStocksStuff(SQi,stockInArr,stocks,stockQty);
+				ClearClassifStuff(TSi,typeClassif,classif);
+	//collect stocks
+				For(i=0;i<mtrw;i=i+1) begin
+					setcompany(i+1,false);
+					ISr.Code = INr.Code;
+					TrHs = true;
+					while (loopmain(ISr,1,TrHs)) begin
+						testf = true;
+						if (ISr.Code!=INr.Code) then begin testf = false; TrHs = false; end;
+						if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
+						if (ISr.Location==";;;") then begin testf = false; end;
+						if (ISr.Instock==0) then begin testf = false; end;
+						if (testf) then begin
+							if !stockInArr[ISr.Location] then begin
+								stockInArr[ISr.Location] = true;
+								stocks[SQi] = ISr.Location;
+								SQi = SQi + 1;
+							end;
+							stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
+						end;
+					end;
+					resetloop(ISr);
+				end; 
+				resetcompany(curcomp);
+				if nonblank(stocks[0]) then begin
+	//find brand and collect classifications
+					brand = "";
+					pos = 0;
+					uloc = "";
+					ExtractObj(INr.DispGroups,pos,uloc); 
+					while (nonblank(uloc)) begin
+						DIr.Code = uloc;
+						readfirstmain(DIr,1,true);
+						if (DIr.CType!="BRAND")then begin
+							CTyper.Code = DIr.CType;
+							readfirstmain(CTyper,1,true);
+							typeClassif[TSi] = CTyper.Comment;
+							classif[TSi] = DIr.Name;
+							TSi = TSi + 1;
+						end else begin
+							brand = DIr.Name;
+							brandcode = DIr.Code;
+						end;
+						ExtractObj(INr.DispGroups,pos,uloc);
+					end;
+					if ((brandcode==RepSpec.f1) or blank(RepSpec.f1)) and ((INr.Group==RepSpec.f3) or blank(RepSpec.f3)) then begin
+	//find price
+						cnt = 0;
+						price = 0;
+						PLr.ArtCode = INr.Code;
+						PLr.PLCode = "RRP";
+						while (loopmain(PLr,2,(PLr.ArtCode==INr.Code))) begin
+							if(PLr.ArtCode==INr.Code)then begin
+								price = price + PLr.ExVatPrice;
+								cnt = cnt + 1;
+								if(nonblank(PLr.CurncyCode))then begin
+									pricecur = PLr.CurncyCode;
+								end else begin
+									PLDefr.Code = "RRP";
+									readfirstmain(PLDefr,1,true);
+									pricecur = PLDefr.CurncyCode;
+								end;
+							end;
+						end;
+						resetloop(PLr);
+						price = price/cnt;
+	//path to image
+						FindAndStoreINVcImgLink(INr,currentcompany,pathToImg,tstr);
+						Ccntr = 0;
+						Scntr = 0;
+						rowcnt = 0;
+						BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+							colnum = 2;
+							style = 5;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.Code,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 1;
+							qtyOfEmpStr = 2;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							style = 8;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.BarCode,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 16;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,"Тип класификации",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 17;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,"Класификация",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+						EndRow(sheetnum,fileToSave,rownum);
+						rowcnt = rowcnt + 1;
+						BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+							colnum = 2;
+							style = 6;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,brand,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 2;
+							qtyOfEmpStr = 1;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							style = 9;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.Name,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 2;
+							qtyOfEmpStr = 1;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							f = false;
+							if (Ccntr<typeClassif.length) then begin
+								if (nonblank(typeClassif[Ccntr])) then begin
+									style = 10;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									style = 11;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									Ccntr = Ccntr + 1;
+									f = true;
+								end;
+							end;
+							if (!f) then begin
+								style = 20;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								style = 22;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							end;
+						EndRow(sheetnum,fileToSave,rownum);
+						rowcnt = rowcnt + 1;
+						BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+							colnum = 2;
+							style = 6;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,"Ритейл:",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 4;
+							NumericCell(sheetnum,fileToSave,colnum,rownum,style,price);
+							style = 2;
+							qtyOfEmpStr = 2;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							f = false;
+							if (Ccntr<typeClassif.length) then begin
+								if (nonblank(typeClassif[Ccntr])) then begin
+									style = 10;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									style = 11;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									Ccntr = Ccntr + 1;
+									f = true;
+								end;
+							end;
+							if (!f) then begin
+								style = 20;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								style = 22;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							end;
+			
+						EndRow(sheetnum,fileToSave,rownum);
+						rowcnt = rowcnt + 1;
+						BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+							colnum = 2;
+							style = 6;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,"Себестоимость:",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 4;
+							NumericCell(sheetnum,fileToSave,colnum,rownum,style,INr.LastPurchPrice2);
+							style = 2;
+							qtyOfEmpStr = 2;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							f = false;
+							if (Ccntr<typeClassif.length) then begin
+								if (nonblank(typeClassif[Ccntr])) then begin
+									style = 10;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									style = 11;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									Ccntr = Ccntr + 1;
+									f = true;
+								end;
+							end;
+							if (!f) then begin
+								style = 20;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								style = 22;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							end;
+						EndRow(sheetnum,fileToSave,rownum);
+						rowcnt = rowcnt + 1;
+						BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+							colnum = 2;
+							style = 6;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,"Валюта:",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 7;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,pricecur,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 2;
+							qtyOfEmpStr = 2;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							f = false;
+							if (Ccntr<typeClassif.length) then begin
+								if (nonblank(typeClassif[Ccntr])) then begin
+									style = 10;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									style = 11;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									Ccntr = Ccntr + 1;
+									f = true;
+								end;
+							end;
+							if (!f) then begin
+								style = 20;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								style = 22;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							end;
+						EndRow(sheetnum,fileToSave,rownum);
+						rowcnt = rowcnt + 1;
+						BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+							colnum = 2;
+							style = 6;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,"Дата посл. поступления:",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 7;
+							StringCell(sheetnum,fileToSave,colnum,rownum,style,INr.LastPriceChange,SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+							style = 2;
+							qtyOfEmpStr = 2;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							f = false;
+							if (Ccntr<typeClassif.length) then begin
+								if (nonblank(typeClassif[Ccntr])) then begin
+									style = 10;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									style = 11;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									Ccntr = Ccntr + 1;
+									f = true;
+								end;
+							end;
+							if (!f) then begin
+								style = 20;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								style = 22;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							end;
+						EndRow(sheetnum,fileToSave,rownum);
+						rowcnt = rowcnt + 1;
+					
+						BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+							colnum = 2;
+							style = 3;
+							qtyOfEmpStr = 1;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							style = 2;
+							qtyOfEmpStr = 3;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							f = false;
+							if (Ccntr<typeClassif.length) then begin
+								if (nonblank(typeClassif[Ccntr])) then begin
+									style = 10;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									style = 11;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									Ccntr = Ccntr + 1;
+									f = true;
+								end;
+							end;
+							if (!f) then begin
+								style = 20;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								style = 22;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							end;
+						
+						EndRow(sheetnum,fileToSave,rownum);
+						rowcnt = rowcnt + 1;
+						BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+							colnum = 2;
+							f = false;
+							if (Scntr<stocks.length) then begin
+								if (nonblank(stocks[Scntr])) then begin
+									style = 12;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,"Склад",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									style = 13;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол-во",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+								end;
+							end;
+							if (!f) then begin
+								style = 3;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								style = 2;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							end;
+							style = 2;
+							qtyOfEmpStr = 2;
+							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							f = false;
+							if (Ccntr<typeClassif.length) then begin
+								if (nonblank(typeClassif[Ccntr])) then begin
+									style = 10;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									style = 11;
+									StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									Ccntr = Ccntr + 1;
+									f = true;
+								end;
+							end;
+							if (!f) then begin
+								style = 20;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								style = 22;
+								qtyOfEmpStr = 1;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							end;
+						EndRow(sheetnum,fileToSave,rownum);
+						rowcnt = rowcnt + 1;
+						test2f = true;
+						while (test2f) begin
+							BeginRow(sheetnum,fileToSave,rownum,0,blankval);
+								colnum = 2;
+								f = false;
+								if (Scntr<stocks.length) then begin
+									if (nonblank(stocks[Scntr])) then begin
+										style = 14;
+										StringCell(sheetnum,fileToSave,colnum,rownum,style,stocks[Scntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+										style = 15;
+										StringCell(sheetnum,fileToSave,colnum,rownum,style,stockQty[stocks[Scntr]],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+										Scntr = Scntr + 1;
+									end;
+								end;
+								if (!f) then begin
+									style = 3;
+									qtyOfEmpStr = 1;
+									EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+									style = 2;
+									qtyOfEmpStr = 1;
+									EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								end;
+								style = 2;
+								qtyOfEmpStr = 2;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								f = false;
+								if (Ccntr<typeClassif.length) then begin
+									if (nonblank(typeClassif[Ccntr])) then begin
+										style = 10;
+										StringCell(sheetnum,fileToSave,colnum,rownum,style,typeClassif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+										style = 11;
+										StringCell(sheetnum,fileToSave,colnum,rownum,style,classif[Ccntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+										Ccntr = Ccntr + 1;
+										f = true;
+									end;
+								end;
+								if (!f) then begin
+									style = 20;
+									qtyOfEmpStr = 1;
+									EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+									style = 22;
+									qtyOfEmpStr = 1;
+									EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								end;
+							EndRow(sheetnum,fileToSave,rownum);
+							rowcnt = rowcnt + 1;
+						
+							test2f = false;
+							if rowcnt<11 then begin test2f = true; end;
+							if (Scntr<stocks.length) then begin if (nonblank(stocks[Scntr])) then begin test2f = true; end; end;
+							if (Ccntr<typeClassif.length) then begin if (nonblank(typeClassif[Ccntr])) then begin test2f = true; end; end;
+						end;
+						imgCounter = imgCounter + 1;
+						AddImageOnCurrentSheet(sheetnum,fileToSave,pathToImg,imgCounter,fromcol,tocol,fromrow,torow,fromcoloff,tocoloff,fromrowoff,torowoff,2,0,0);
+						fromrow = fromrow + rowcnt;
+						torow = torow + rowcnt;
+					end;
+				end;
       end;
     end;
     if rowcnt<>0 then begin
