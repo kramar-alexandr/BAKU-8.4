@@ -1,0 +1,212 @@
+external procedure ExtractObj(string,var Integer,var string);
+remote procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+external function Boolean SetInSet2(string,string);
+external function roundmode SetRoundMode(Integer,Integer,Integer,Integer);
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+remote function boolean CompanyIsJWLikeCompany(Integer);
+external function string 255 StrReplace(string,string,string);// Edit ************************** Tuesday, 3 October 2017 17:25:37
+external function string 255 imgStrReplace(string);// Edit ************************** Tuesday, 10 October 2017 15:20:55
+external procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var string);
+external  function string 100 BPICodeToName(string);
+
+
+//SetLangMode(LangRussian,"RUS",0); //Edit***************************Sasha2,18:20 11.12.2014
+
+global procedure ItemStockStatExtWebNewRn(record RcVc RepSpec,var area webpage1,string serverip)
+begin
+  record ItemStatusVc ISr;
+  record PLVc PLr;
+  string 100 item,location,findkey,class,filename,tstr;
+  record INVc INr;
+  boolean TrHs,testf,TrHs1,testf1,TrHs2,testf2;
+  record DIVc DIr;
+  integer findint;
+  record UserVc User;
+  boolean userlocation;
+  integer pos,i;
+  string 50 uloc;
+  record SerBalVc SBr;
+  date todate;
+  string 200 classfind,model,brand;
+  roundmode rnd; //Edit***************************Sasha2,15:45 21.04.2015
+  record BaseCurBlock bcur; //Edit***************************Sasha2,14:02 27.04.2015
+  integer oldcompany;
+  array integer companies;
+  integer acnt;
+  vector val cqty,ccost;
+  array string 10 acur;
+  string 10 brandcur;
+  
+	if (RepSpec.UsedOnly == 1) then begin
+		companies[0] = CurrentCompany;
+	end else begin			//All J&W companies
+		companies[0] = 3;
+		companies[1] = 17;
+		companies[2] = 19;
+		companies[3] = 20;
+		companies[4] = 21;
+		companies[5] = 22;
+	end;
+	
+	oldcompany = CurrentCompany;  
+  
+  item = RepSpec.f1;
+  location = RepSpec.f2;
+  todate = RepSpec.d1;
+  
+  if(blank(todate))then begin
+  	todate = currentdate;
+  end;
+
+  
+  BlockLoad(bcur); //Edit***************************Sasha2,14:03 27.04.2015
+  rnd = DefaultValRoundoff; //Edit***************************Sasha2,15:47 21.04.2015
+  rnd.decimals = 0; //Edit***************************Sasha2,15:47 21.04.2015
+	rnd.mode = kRoundingModeHalfUp; //Edit***************************Sasha2,15:47 21.04.2015
+  
+  userlocation = false;
+	
+	
+	
+ExportString("<!DOCTYPE html>"); newline;
+ExportString("<html lang=\"en\">"); newline;
+ExportString("<head>"); newline;
+ExportString("<meta charset=\"UTF-8\">"); newline;
+ExportString("<script src=\"https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js\"></script>"); newline;
+ExportString("<link rel=\"stylesheet\" type=\"text/css\" href=\"https://cdn.datatables.net/1.10.19/css/jquery.dataTables.css\">"); newline;
+ExportString("<script type=\"text/javascript\" charset=\"utf8\" src=\"https://cdn.datatables.net/1.10.19/js/jquery.dataTables.js\"></script>"); newline;
+ExportString("<style>"); newline;
+ExportString("body {"); newline;
+ExportString("font-size: 0.9rem;"); newline;
+ExportString("}"); newline;
+ExportString(".dataTable thead th, .dataTable thead td {"); newline;
+ExportString("padding: 15px 0.2vw !important;"); newline;
+ExportString("border: 1px solid #eeeeee !important;"); newline;
+ExportString("}"); newline;
+ExportString(".profile {"); newline;
+ExportString("width: 80%;"); newline;
+ExportString("margin: auto;"); newline;
+ExportString("margin-top: 67px;"); newline;
+ExportString("}"); newline;
+ExportString("</style>"); newline;
+ExportString("<title>" & USetStr(31168) & "</title>"); newline;
+ExportString("</head>"); newline;
+  
+  if(userlocation)then begin
+  	startformat(15);
+			messagebox(0,USetStr(31014));
+  	endformat;
+  end else begin
+		ExportString("<body class=\"profile\">"); newline;
+		ExportString("<table id=\"table_id\" class=\"display\">"); newline;
+		ExportString("<thead>"); newline;
+		ExportString("<tr>"); newline;
+		ExportString("<th> code_for_system_hansa </th>"); newline;
+		ExportString("<th> code_for_system_hansa_two </th>"); newline;
+		ExportString("<th> BAR_EAN_Code </th>"); newline;
+		ExportString("<th> stock </th>"); newline;
+		ExportString("<th> Product_Group </th>"); newline;
+		ExportString("<th> CC_Collection </th>"); newline;
+		ExportString("<th> brand </th>"); newline;
+		ExportString("<th> model </th>"); newline;
+		ExportString("<th> name </th>"); newline;
+		ExportString("<th> serial_number </th>"); newline;
+		ExportString("<th> cost </th>"); newline;
+		ExportString("<th> riteil_on_item_brand </th>"); newline;
+		ExportString("<th> Price_AZN </th>"); newline;
+		ExportString("<th> currency </th>"); newline;
+		ExportString("<th> picture </th>"); newline;
+		ExportString("</tr>"); newline;
+		ExportString("</thead>"); newline;
+		ExportString("</table>"); newline;
+		ExportString("<script>"); newline;
+		
+		ExportString("let json = '[");
+		
+		if(nonblank(item))then begin
+		
+			
+			INr.DispGroups = "";//= RepSpec.f3;
+			class = RepSpec.f3;
+			TrHs1 = true;
+			while(loopkey("MyDispGroups",INr,1,TrHs1)) begin
+				testf1 = true;
+				if(INr.Terminated!=0)then begin testf1 = false; end;
+				if(testf1)then begin
+					if(nonblank(RepSpec.f4) or nonblank(RepSpec.f5))then begin
+						if(nonblank(RepSpec.f4) and INr.BPIBrand!=RepSpec.f4)then begin
+							testf1 = false;
+						end;
+						if(nonblank(RepSpec.f5) and INr.BPICollection!=RepSpec.f5)then begin
+							testf1 = false;
+						end;
+					end;
+				end;
+				if(nonblank(RepSpec.f7) and RepSpec.f7!=INr.Group)then begin testf1 = false; end;//Edit-------------------Vitalii 17:26 07.12.2017
+				if(testf1)then begin
+				
+					ExportString("\"code_for_system_hansa\":\"" & INr.Code & "\","); newline;
+					ExportString("\"code_for_system_hansa_two\":\"" & INr.AlternativeCode & "\","); newline;
+					ExportString("\"BAR_EAN_Code\":\"" & INr.BarCode & "\","); newline;
+					ExportString("\"stock\":\"" & ISr.Location & "\","); newline;
+					ExportString("\"Product_Group\":\"" & INr.MainDisp & "\","); newline;
+					ExportString("\"CC_Collection\":\"" & INr.BPICollection & "\","); newline;
+					ExportString("\"brand\":\"" & INr.BPIBrand & "\","); newline;
+					ExportString("\"model\":\"" & INr.BPICollection & "\","); newline;
+					ExportString("\"name\":\"" & INr.Name & "\","); newline;
+					ExportString("\"currency\":\"" & INr.LastPurchCurncyCode & "\","); newline;
+					ExportString("\"Price_AZN\":\"" & 0 & "\","); newline;
+					ExportString("\"currency\":\"" & "AZN" & "\","); newline;
+					filename = "";
+					FindAndStoreINVcImgLink(INr,currentcompany,tstr,filename);
+					filename = "http://" & serverip & "/" & filename;
+					if(nonblank(filename))then begin
+						filename = "<img src=\\\"" & filename & "?rnd=" & random(1,1000) & "\\\" width=\"100%\\\" height=\\\"100%\\\"/>";
+						ExportString("\"picture\":\"" & filename & "\","); newline;
+					end else begin
+						ExportString("\"picture\":\"Image not found\","); newline;
+					end;
+		
+				
+				end;
+			end;
+			resetloop(INr);
+		end;
+		
+ExportString("$('#table_id').DataTable( {"); newline;
+ExportString("data: JSON.parse(json),"); newline;
+ExportString("pageLength: 1000000,"); newline;
+ExportString("info: false,"); newline;
+ExportString("select: false,"); newline;
+ExportString("bLengthChange: false,"); newline;
+ExportString("bPaginate: false,"); newline;
+ExportString("columns: ["); newline;
+ExportString("{ data: 'code_for_system_hansa' },"); newline;
+ExportString("{ data: 'code_for_system_hansa_two' },"); newline;
+ExportString("{ data: 'BAR_EAN_Code' },"); newline;
+ExportString("{ data: 'stock' },"); newline;
+ExportString("{ data: 'Product_Group' },"); newline;
+ExportString("{ data: 'CC_Collection' },"); newline;
+ExportString("{ data: 'brand' },"); newline;
+ExportString("{ data: 'model' },"); newline;
+ExportString("{ data: 'name' },"); newline;
+ExportString("{ data: 'serial_number' },"); newline;
+ExportString("{ data: 'cost' },"); newline;
+ExportString("{ data: 'riteil_on_item_brand' },"); newline;
+ExportString("{ data: 'Price_AZN' },"); newline;
+ExportString("{ data: 'currency' },"); newline;
+ExportString("{ data: 'picture' }"); newline;
+ExportString("]"); newline;
+ExportString("})"); newline;
+		
+		ExportString("]';"); newline;
+		
+		ExportString("</script>"); newline;
+		ExportString("</body>"); newline;
+		ExportString("</html>"); newline;
+  end;
+  
+  LItemStockStatExtWebNewRn:;
+  
+return;
+end;
