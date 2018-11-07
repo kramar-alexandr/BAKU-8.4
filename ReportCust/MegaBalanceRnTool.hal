@@ -10,6 +10,8 @@ forward procedure PrintStockSD32(record RcVc,integer,date,date,string,array stri
 external procedure ExtractObj(string,var Integer,var string);
 external function Boolean GetPMRow(string,var row PMBlock);
 external procedure ExtractObjectsByType(string, string, var array string, var integer);
+external function val ItemQtyPerDateGlob(string, date,string);
+external procedure CalcCostInCurncyOldDate(record ItemHistVc,var val, string,integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -68,7 +70,7 @@ begin
 	string 10 incurncy;
 	integer sign;
 	integer br;
-	val totrow;
+	val totrow,curcost2;
 
 	startformat(15);
 		outstring(0,0,"1",false);
@@ -116,11 +118,20 @@ begin
 		if(setinset("33",INr.DispGroups))then begin foundf = false; end;
 		if(setinset("34",INr.DispGroups))then begin foundf = false; end;
 		if(setinset("35",INr.DispGroups))then begin foundf = false; end;
+			
+		if(foundf)then begin
+			if(ItemQtyPerDateGlob(INr.Code,addday(ed,1),location)<=0)then begin
+				foundf = false;
+			end;
+		end;
 				
 		IHr.TransDate = "";
 		IHr.ArtCode = INr.Code;
 		TrHs = foundf;
 		curdate = "";
+		
+		
+		
 		while(loopkey("ArtCode",IHr,2,TrHs))begin
 			testf = true;
 			if(IHr.TransDate>ed)then begin testf = false; TrHs = false; end;
@@ -136,15 +147,22 @@ begin
 					sign = -1;
 				end;	
 				
+				if(IHr.CurncyCode=="" or IHr.CurncyCode=="AZN")then begin
+					if(INr.LastPurchCurncyCode!="AZN" and INr.LastPurchCurncyCode!="")then begin
+						curcost2 = blankval;
+						CalcCostInCurncyOldDate(IHr,curcost2,INr.LastPurchCurncyCode,sign);
+					end;
+				end;
+				
 				switch(IHr.ConsigStock)begin
 					case 0:
 						if(INr.ConsgType==0)then begin
+							if(br==19)then begin
+								logtext(0,chr(9) & INr.Code & chr(9) & IHr.TotCostPriceCurncy * sign);
+							end;
 							switch(IHr.CurncyCode)begin
 								case"EUR":aBrandsBalEUR[br] = aBrandsBalEUR[br] + IHr.TotCostPriceCurncy * sign;
 								case"CHF":aBrandsBalCHF[br] = aBrandsBalCHF[br] + IHr.TotCostPriceCurncy * sign;
-													if(br==5)then begin	
-													logtext(0,chr(9) & br & chr(9) & INr.Code & chr(9) & IHr.TotCostPriceCurncy * sign);
-												end;
 								case"USD":aBrandsBalUSD[br] = aBrandsBalUSD[br] + IHr.TotCostPriceCurncy * sign;
 								case"GBP":aBrandsBalGBP[br] = aBrandsBalGBP[br] + IHr.TotCostPriceCurncy * sign;
 								case"AZN":aBrandsBalAZN[br] = aBrandsBalAZN[br] + IHr.TotCostPriceCurncy * sign;												
