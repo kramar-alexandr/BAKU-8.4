@@ -282,6 +282,8 @@ begin
 	vector string 255 ECCodes;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
+	vector boolean vArtCodeRepeat;
+	vector integer vArtCodeQTY;
 	
 	BlockLoad(CBb);
 	
@@ -291,6 +293,11 @@ begin
 		For(i=0;i<mtrw;i=i+1) begin
 			matrowget(ORr,i,ORrw); 
 			ECCodes[ORrw.GlobalItemArtCode] = "Y";
+			if(nonblank(vArtCodeQTY[ORrw.GlobalItemArtCode]))then begin
+				vArtCodeQTY[ORrw.GlobalItemArtCode] = vArtCodeQTY[ORrw.GlobalItemArtCode] + ORrw.Quant;
+			end else begin
+				vArtCodeQTY[ORrw.GlobalItemArtCode] = ORrw.Quant;
+			end;
 		end;
 	end;
 	
@@ -303,6 +310,7 @@ begin
 		while (loopmain(INr,1,TrHs))begin
 			if(ECCodes[INr.GlobalArtCode]=="Y")then begin
 				ECCodes[INr.GlobalArtCode] = INr.Code;
+				vArtCodeRepeat[INr.Code] = true;
 				i=i+1;
 			end;
 			if(i==mtrw)then begin TrHs = false; end;
@@ -320,17 +328,19 @@ begin
 				if(readfirstmain(INr,1,true))then begin
 					vendor = INr.BPIBrand;
 					
-					
-					POrw.ArtCode = ECCodes[ORrw.GlobalItemArtCode];
-					matrowput(POr,rownum,POrw);
-					POVc_PasteArtCode(POr,rownum,false);
-					matrowget(POr,rownum,POrw);
-					POrw.Quant = ORrw.Quant;
-					POrw.Spec = ORrw.Spec;
-					POrw.OrdRow = i;
-					matrowput(POr,rownum,POrw);
-					POVc_PasteQuant(POr,rownum);
-					rownum = rownum + 1;
+					if(vArtCodeRepeat[ECCodes[ORrw.GlobalItemArtCode]])then begin
+						vArtCodeRepeat[ECCodes[ORrw.GlobalItemArtCode]] = false;
+						POrw.ArtCode = ECCodes[ORrw.GlobalItemArtCode];
+						matrowput(POr,rownum,POrw);
+						POVc_PasteArtCode(POr,rownum,false);
+						matrowget(POr,rownum,POrw);
+						POrw.Quant = vArtCodeQTY[ORrw.GlobalItemArtCode];
+						POrw.Spec = ORrw.Spec;
+						POrw.OrdRow = i;
+						matrowput(POr,rownum,POrw);
+						POVc_PasteQuant(POr,rownum);
+						rownum = rownum + 1;
+					end;
 						
 				end;
 			end;
