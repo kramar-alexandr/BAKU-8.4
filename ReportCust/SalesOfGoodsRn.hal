@@ -109,7 +109,7 @@ begin
   row POVc POrw;
   row ORVc ORrw;
   integer i,j,rwcnt,rwcnt2;
-  boolean updst,giftf,found,notprint,nocoef,nopcppr,pofound,TrHs,difbrandcur,fifofound;
+  boolean updst,giftf,found,notprint,nocoef,nopcppr,pofound,TrHs,difbrandcur,fifofound,ivfound;
   val recivedmoneybrandcur,sumbase,sumbrandcur,retailbase,retailbrandcur,fifobase,fifobrandcur,printedrm,printedrmb,planfifobase,planfifobrandcur,tmp,tmp2,itemsum,qty,coef;
   string 10 prevbrandcur,brandcur,tstr,store;
   vector val currencyBalances; //Edit***************************Sasha2,15:49 13.09.2017
@@ -367,29 +367,42 @@ begin
           rwcnt2 = matrowcnt(tIVr);
           fifobase = 0;
           itemsum = 0;
+          ivfound = true;
+          if(IVp.InvDate>stringtodate("06/11/2018"))then begin
+          	ivfound = false;
+          end;
           for (j=0;j<rwcnt2;j=j+1) begin
             matrowget(tIVr,j,tIVrw);
-            if (tIVrw.stp==kInvoiceRowTypeNormal) then begin
-              itemsum = itemsum + tIVrw.Sum;
-              tmp = 0;
-              tmp2 = 0;
-              if (tIVr.UpdStockFlag>0 and tIVr.OrderNr<0) then begin
-                updst = true;
-              end else begin
-                updst = false;
-              end;
-              FindFIFOOrigValAndCurncyIV(tIVr.SerNr,j,tmp2,brandcur,tmp,updst,addCurs,currencyBalances,false,fifofound); //Edit***************************Sasha2,14:03 14.09.2017
-              if (tIVrw.CurncyCode=="AZN") then begin
-                tmp = tmp*aznfr/aznto;
-              end;
-              tmp = round(tmp,SetRoundModeD(2));
-              fifobase = fifobase + tmp;
-              fifobrandcur = fifobrandcur + tmp2;
-            end;
+          	if(tIVrw.stp==kInvoiceRowTypeGiftVoucherPayment and tIVrw.GCNr==GCRr.GCSSerNr)then begin
+          		ivfound = true;
+          	end;
           end;
-          if (IVrw.Sum<itemsum) then begin
-            fifobase = round(IVrw.Sum/itemsum*fifobase*qty,SetRoundModeD(2));
-            fifobrandcur = round(IVrw.Sum/itemsum*fifobrandcur*qty,SetRoundModeD(2));
+          
+          if(ivfound)then begin
+						for (j=0;j<rwcnt2;j=j+1) begin
+							matrowget(tIVr,j,tIVrw);
+							if (tIVrw.stp==kInvoiceRowTypeNormal) then begin
+								itemsum = itemsum + tIVrw.Sum;
+								tmp = 0;
+								tmp2 = 0;
+								if (tIVr.UpdStockFlag>0 and tIVr.OrderNr<0) then begin
+									updst = true;
+								end else begin
+									updst = false;
+								end;
+								FindFIFOOrigValAndCurncyIV(tIVr.SerNr,j,tmp2,brandcur,tmp,updst,addCurs,currencyBalances,false,fifofound); //Edit***************************Sasha2,14:03 14.09.2017
+								if (tIVrw.CurncyCode=="AZN") then begin
+									tmp = tmp*aznfr/aznto;
+								end;
+								tmp = round(tmp,SetRoundModeD(2));
+								fifobase = fifobase + tmp;
+								fifobrandcur = fifobrandcur + tmp2;
+							end;
+						end;
+						if (IVrw.Sum<itemsum) then begin
+							fifobase = round(IVrw.Sum/itemsum*fifobase*qty,SetRoundModeD(2));
+							fifobrandcur = round(IVrw.Sum/itemsum*fifobrandcur*qty,SetRoundModeD(2));
+						end;
           end;
         end;
         tstr = brandcur;
@@ -407,7 +420,7 @@ begin
           Base1ToOther(brandcur,planfifobase,fr,to1,to2,br1,br2,planfifobrandcur,DefaultCurRoundOff);
         end;
         retailbase = IVToBaseMy(IVp,IVrw,IVrw.Sum/qty);
-        retailworebatetot = retailworebatetot + IVToBaseMy(IVp,IVrw,IVrw.Price*qty)*percent;
+        //retailworebatetot = retailworebatetot + IVToBaseMy(IVp,IVrw,IVrw.Price*qty)*percent;// Edit ************************** BPI Ukraine - KramarAlexandr - Thursday, 8 November 2018 17:23:08
         Base1ToOther(brandcur,retailbase,fr,to1,to2,br1,br2,retailbrandcur,DefaultCurRoundOff);
         giftf = false;
         for (j=0;j<rwcnt;j=j+1) begin
@@ -418,6 +431,7 @@ begin
           end;
         end;
         if (!giftf) then begin
+        	retailworebatetot = retailworebatetot + IVrw.Sum;// Edit ************************** BPI Ukraine - KramarAlexandr - Thursday, 8 November 2018 17:23:10
           if (i==rwcnt-1) then begin
             sumbase = recivedmoneybase - printedrmb;
             if (difbrandcur) then begin
