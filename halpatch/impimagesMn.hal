@@ -8834,29 +8834,62 @@ end;
 
 
 
-/*
 
 
 
 
-global updating procedure POQtyResetMn(RcVc RepSpec)
+global updating procedure POQtyResetMn(record RcVc RepSpec)
 begin
 	record ItemStatusVc ISr;
 	record POVc POr;
 	row POVc POrw;
-	vector longint UnOkPOQty, POQty;
+	vector integer UnOkPOQty, POQty;
+	boolean testf;
+	integer i, mtrw;
 	
-	POr.SerNr = "-1"
+	POr.SerNr = -1;
 	while (loopmain(POr,1,true))begin
-		
+		testf = true;
+		if(POr.TransDate<AddYear(CurrentDate,-1) and POr.OKFlag==0)then begin
+			POr.Closed = 1;
+			testf = false;
+			if(RecordStore(POr,true))then begin
+				//logtext(0,Chr(9) & POr.SerNr & Chr(9) & POr.TransDate & Chr(9) & "Closed by \"POQtyResetMn\"");
+			end;
+		end;
+		if(testf)then begin
+			mtrw = matrowcnt(POr);
+			for (i=0;i<mtrw;i=i+1)begin
+				matrowget(POr,i,POrw);
+				UnOkPOQty[POrw.ArtCode & "_" & POr.Location] = UnOkPOQty[POrw.ArtCode & "_" & POr.Location] + (POrw.Quant - POrw.Shipd2);
+				UnOkPOQty[POrw.ArtCode & "_" & ";;;"] = UnOkPOQty[POrw.ArtCode & "_" & ";;;"] + (POrw.Quant - POrw.Shipd2);
+				if(POr.OKFlag==1)then begin
+					POQty[POrw.ArtCode & "_" & POr.Location] = POQty[POrw.ArtCode & "_" & POr.Location] + (POrw.Quant - POrw.Shipd2);
+					POQty[POrw.ArtCode & "_" & ";;;"] = POQty[POrw.ArtCode & "_" & ";;;"] + (POrw.Quant - POrw.Shipd2);
+				end;
+			end;
+		end;
 	end;
-	
-	
-	
+	resetloop(POr);
+	ISr.Code = "";
+	while (LoopMain(ISr,1,true)) begin
+		ISr.POQty = 0;
+		ISr.POUnOKQty = 0;
+		if(POQty[ISr.Code & "_" & ISr.Location]>0)then begin
+			ISr.POQty = POQty[ISr.Code & "_" & ISr.Location];
+		end;
+		if(UnOkPOQty[ISr.Code & "_" & ISr.Location]>0)then begin
+			ISr.POUnOKQty = UnOkPOQty[ISr.Code & "_" & ISr.Location];
+		end;
+		if(RecordStore(ISr,true))then begin
+			//logtext(0,Chr(9) & ISr.Code & Chr(9) & ISr.POQty & Chr(9) & ISr.POUnOKQty & Chr(9) & ISr.Location);
+		end;
+	end;
+	ResetLoop(ISr);
 return;
 end;
 
-*/
+
 
 
 
