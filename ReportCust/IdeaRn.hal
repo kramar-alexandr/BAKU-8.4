@@ -1,3 +1,7 @@
+external  function string 100 BPICodeToName(string);
+external procedure ExtractObj(string,var Integer,var string);
+
+
 SetLangMode(LangRussian,"RUS",0);
 
 global procedure IdeaCURepRn(record RcVc RepSpec)
@@ -104,17 +108,19 @@ begin
 	record ItemStatusVc ISr;
 	boolean TrHs,testf;
 	array integer tab;
-	integer i,j,lccnt,mtrw;
+	integer i,j,lccnt,mtrw,pos;
 	record LocationVc Locr;
 	array string 255 aLocations, aLocCodes;
 	record INVc INr;
 	row INVc INrw;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
-	string 255 vCompName,Position;
+	string 255 vCompName,Position,clstr;
 	record PISVc PISr;
 	vector val vPosit;
 	integer vs, b;
+	record DIVc DIr;
+	vector string 255 vClassif;
 	
 	tab[1] = 0;
   tab[2] = 20;
@@ -201,19 +207,40 @@ begin
 		end else begin
 			testf = false;
 		end;
-		if(nonblank(RepSpec.f1) and INr.BPIBrand!=RepSpec.f1)then begin testf = false; end;
-		if(nonblank(RepSpec.f2) and INr.BPICollection!=RepSpec.f2)then begin testf = false; end;
+		if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups)/*INr.BPIBrand!=RepSpec.f1*/)then begin testf = false; end;
+		if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups)/*INr.BPICollection!=RepSpec.f2*/)then begin testf = false; end;
+		
 		if(testf)then begin
+			vClassif["BRAND"] = "";
+			vClassif["MODEL"] = "";
+			vClassif["COLOUR"] = "";
+			pos = 0;
+			ExtractObj(INr.DispGroups,pos,clstr);
+			while (nonblank(clstr)) begin
+				DIr.Code = clstr;
+				if(ReadFirstMain(DIr,1,true))then begin
+					if(DIr.CType=="BRAND")then begin
+						vClassif["BRAND"] = DIr.Name;
+					end;
+					if(DIr.CType=="MODEL")then begin
+						vClassif["MODEL"] = DIr.Name;
+					end;
+					if(DIr.CType=="COLOUR")then begin
+						vClassif["COLOUR"] = DIr.Name;
+					end;
+				end;
+				ExtractObj(INr.DispGroups,pos,clstr);
+			end;
 			startformat(15);
 			outstring(tab[1],0,vCompName,false);
-			outstring(tab[2],0,INr.BPIBrand,false);
+			outstring(tab[2],0,vClassif["BRAND"],false);
 			outstring(tab[3],0,INr.SN,false);
 			outstring(tab[4],0,INr.Name,false);
 			outstring(tab[5],0,INr.AlternativeCode,false);
 			MatRowGet(INr,0,INrw);
 			outstring(tab[6],0,INrw.Text,false);
-			outstring(tab[7],0,INr.BPICollection,false);
-			outstring(tab[8],0,INr.BPIColor,false);
+			outstring(tab[7],0,vClassif["MODEL"],false);
+			outstring(tab[8],0,vClassif["COLOUR"],false);
 			outstring(tab[9],0,INr.Unittext,false);
 			outstring(tab[10],0,mid(ValToString(ISr.Instock,M4Val,"","",1),0,len(ValToString(ISr.Instock,M4Val,"","",1))-2),false);
 			for (i=0;i<lccnt;i=i+1)begin
