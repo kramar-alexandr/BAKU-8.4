@@ -752,16 +752,17 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	record WEBReservStock WRSb;
-	longint i,j,rwcnt,orrwcnt,res,itemsincomp,OldComp,NxtSerNr,c;
+	longint i,j,rwcnt,orrwcnt,res,itemsincomp,OldComp,NxtSerNr,c,GIrwcnt,l,lc;
 	vector boolean ORItemToLocalOR, ItemSearchf, Compf; 	
-	vector integer ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate;
-	array string 255 ArtCodes, ItemBrands;
-	string 255 strlc, HansaArtCode,Store;
-	integer pos;
+	vector integer ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate, ResStockQuant, StockPrioryty;
+	array string 255 ArtCodes, ItemBrands, PriorityStock;
+	string 255 strlc,HansaArtCode,Store,strlc2;
+	integer pos, pos2, p, maxp;
 	boolean testf,TrHs,Insertf;
 	record INVc INr;
-	vector string 255 vComdItemLocation, vstrlc;
-	record GlobalItemVc GIr;
+	vector string 255 vComdItemLocation, vstrlc, ResStockSet;
+	record GlobalItemVc GIr, GI2r;
+	row GlobalItemVc GIrw, GI2rw;
 	
 	
 	OldComp = CurrentCompany;
@@ -787,28 +788,48 @@ begin
 		if(Comprw.ActiveStatus==0)then begin
 			if(SetCompany(i+1,false))then begin
 				BlockLoad(WRSb);
-				pos = 0;
-				ExtractObj(WRSb.ResStockSet,pos,strlc);
-				while (nonblank(strlc)) begin
-					for (j=0;j<orrwcnt;j=j+1) begin
-						
-					
-					
-						if(blank(vstrlc[j & "_" & i+1]))then begin
-							
-						end else begin
-							/*if()then begin
-							
-							end;*/
+				for (j=0;j<orrwcnt;j=j+1) begin
+					GIr.HansaCode = ArtCodes[j];
+					if(Readfirstkey("HansaCode",GIr,1,true))then begin 
+						GIrwcnt = matrowcnt(GIr);
+						maxp = 0;
+						for (l=0;l<GIrwcnt;l=l+1)begin
+							p = 1;
+							matrowget(GIr,l,GIrw);
+							if(SetInSet(GIrw.Location,WRSb.ResStockSet))then begin
+								GI2r.HansaCode = ArtCodes[j];
+								if(Readfirstkey("HansaCode",GI2r,1,true))then begin 
+									for (lc=0;lc<GIrwcnt;lc=lc+1)begin
+										matrowget(GI2r,lc,GI2rw);
+										if(SetInSet(GI2rw.Location,WRSb.ResStockSet))then begin
+											if(GIrw.Instock>GI2rw.Instock and GIrw.Location!=GI2rw.Location)then begin
+												p = p + 1;
+											end;
+										end;
+									end;
+								end;
+								if(nonblank(PriorityStock[p]))then begin
+									PriorityStock[p] = PriorityStock[p] & "," & GIrw.Location;
+								end else begin
+									PriorityStock[p] = GIrw.Location;
+								end;
+								if(maxp<p)then begin maxp = p; end;
+								logtext(0,PriorityStock[p] & Chr(9) & p);
+							end;
 						end;
-						//ItemDuplicate[ArtCodes[j] & i+1 & strlc] = 0;
+						for(lc=maxp;lc>0;lc=lc-1)begin
+							if(blank(ResStockSet[(i+1) & "_" & j]))then begin
+								ResStockSet[(i+1) & "_" & j] = PriorityStock[lc];
+								//logtext(0,PriorityStock[lc] & Chr(9) & lc);
+							end else begin
+								ResStockSet[(i+1) & "_" & j] = ResStockSet[(i+1) & "_" & j] & "," & PriorityStock[lc];
+							end;
+						end;
 					end;
-					ExtractObj(WRSb.ResStockSet,pos,strlc);
 				end;
-				
 				for (j=0;j<orrwcnt;j=j+1) begin
 					pos = 0;
-					ExtractObj(WRSb.ResStockSet,pos,strlc);
+					ExtractObj(ResStockSet[(i+1) & "_" & j],pos,strlc);
 					while (nonblank(strlc)) begin
 						Compf[(i+1) & strlc] = false;
 						if(ItemSearchf[ArtCodes[j] & j])then begin
@@ -853,7 +874,7 @@ begin
 								end;
 							end;
 						end;
-						ExtractObj(WRSb.ResStockSet,pos,strlc);
+						ExtractObj(ResStockSet[(i+1) & "_" & j],pos,strlc);
 					end;
 				end;
 			end;
