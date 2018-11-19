@@ -408,12 +408,12 @@ global
 updating function LongInt ORVcRecordCheck(record ORVc ORr,record ORVc OR2r,LongInt stat,LongInt check)
 begin
   LongInt res;
-  Integer insertmode,updatemode;
+  Integer insertmode,updatemode,o,OldComp;
   record CreditLimitBlock CLb;
   record AccBlock ARAccRec;
   record SRBlock SRRec;
   record AccVc Accr;
-  record ORVc lORr;
+  record ORVc lORr, ORlinkr;
   record CUVc CUr;
   record INVc INr;
   record PRVc PRr;
@@ -440,7 +440,7 @@ begin
   val ordqty;
   string 60 comment;
   record UserVc User,User2;
-  Boolean closingf;
+  Boolean closingf, rsrvchf;
   record TaxTemplateVc TTr;
   record LegalInvNrBlock LINrb;
   row LegalInvNrBlock LINrbrw;
@@ -1263,19 +1263,24 @@ begin
                       end;
                     end;
                   end;
-                  if ((orsrv)>(ISr.Instock-ISr.RsrvQty+orsrved) and left(ORr.OfficialSerNr,3)!="EC_") then begin // StockRsrvQty ?
+									o = 0;
+									rsrvchf = true;
+									while (ReadRecordLink(OR2r,o,ORlinkr,RLr))begin
+										if(StringToLongInt(right(OR2r.OfficialSerNr,len(OR2r.OfficialSerNr)-3))==ORlinkr.SerNr and left(OR2r.OfficialSerNr,3)=="EC_")then begin
+											OldComp = CurrentCompany;
+											SetCompany(29,false);
+											if(ReadFirstMain(ORlinkr,1,true))then begin
+												rsrvchf = false;
+											end;
+											ResetCompany(OldComp);
+										end;
+										o = o + 1;
+									end;
+                  if ((orsrv)>(ISr.Instock-ISr.RsrvQty+orsrved) and rsrvchf) then begin // StockRsrvQty ?
                     RecordCheckError(20011,"",i,"Quant");      
                     res = -1;
                     goto LORVcRecordCheck;
                   end;
-									
-									if ((orsrv)>(ISr.Instock-ISr.RsrvQty) and left(ORr.OfficialSerNr,3)=="EC_") then begin // StockRsrvQty ?
-                    RecordCheckError(20011,"",i,"Quant");      
-                    res = -1;
-                    goto LORVcRecordCheck;
-                  end;
-									
-									
                 case 2:
 //                  checkit
               end;
