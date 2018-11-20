@@ -24,7 +24,8 @@ begin
   array date dates;
   array val curQty;
   integer step,i;
-
+	record IVVc IVrr;
+	record PUVc PUr;
 	
 	qty_start[anum] = 0;
 	pu_qty[anum] = 0;
@@ -66,28 +67,36 @@ begin
     if (testf) then begin
       switch (IHr.FileName) begin
 				case "IVVc":
-					if(IHr.TransDate<sd)then begin
-						if (IHr.StockAffectf==1) then begin
-								qty_start[anum] = qty_start[anum] + IHr.Qty;
-						end;
+					IVrr.SerNr = IHr.TransNr;
+					if(readfirstmain(IVrr,1,true)) then begin
 					end else begin
-						if (IHr.StockAffectf==1) then begin
-							if IHr.Qty>0 then begin
-								iv_poz_qty[anum] = iv_poz_qty[anum] + IHr.Qty;
-								qty_end[anum] = qty_end[anum] + IHr.Qty;
-							end else begin
-								iv_neg_qty[anum] = iv_neg_qty[anum] + (-IHr.Qty);
-								qty_end[anum] = qty_end[anum] + IHr.Qty;
+						if(IHr.TransDate<sd)then begin
+							if (IHr.StockAffectf==1) then begin
+									qty_start[anum] = qty_start[anum] + IHr.Qty;
+							end;
+						end else begin
+							if (IHr.StockAffectf==1) then begin
+								if IHr.Qty>0 then begin
+									iv_poz_qty[anum] = iv_poz_qty[anum] + IHr.Qty;
+									qty_end[anum] = qty_end[anum] + IHr.Qty;
+								end else begin
+									iv_neg_qty[anum] = iv_neg_qty[anum] + (-IHr.Qty);
+									qty_end[anum] = qty_end[anum] + IHr.Qty;
+								end;
 							end;
 						end;
-					end;
+					end;	
 				case "PUVc":
-					if(IHr.TransDate<sd)then begin
-						qty_start[anum] = qty_start[anum] + IHr.Qty;
+					PUr.SerNr = IHr.TransNr;
+					if(readfirstmain(PUr,1,true)) then begin
 					end else begin
-						pu_qty[anum] = pu_qty[anum] + IHr.Qty;
-						qty_end[anum] = qty_end[anum] + IHr.Qty;
-					end;
+						if(IHr.TransDate<sd)then begin
+							qty_start[anum] = qty_start[anum] + IHr.Qty;
+						end else begin
+							pu_qty[anum] = pu_qty[anum] + IHr.Qty;
+							qty_end[anum] = qty_end[anum] + IHr.Qty;
+						end;
+					end;	
 				case "SHVc":
 					if(IHr.TransDate<sd)then begin
 						qty_start[anum] = qty_start[anum] + IHr.Qty;
@@ -544,6 +553,9 @@ begin
 		
 		locations = "C.COIN_MOS,C.COIN_NIZ,C.COIN_MAL,C.CO_MOS2,STADION";  
     StartReportNoHeaderJob(USetStr(31080));
+		startformat(15);
+		OutString(0,0,"Исключены все поступления и продажи FOB",false);
+		EndFormat;
     startformat(15);
     	OutString(0,0,"",false);
     	OutString(0,0,"",false);
@@ -674,11 +686,12 @@ begin
     	if(nonblank(RepSpec.f3) and INr.BPIBrand!=RepSpec.f3)then begin testf = false; end;
 			if(nonblank(RepSpec.f4) and INr.BPICollection!=RepSpec.f4)then begin testf = false; end;
 			if(nonblank(RepSpec.f5) and INr.BPISubGroup!=RepSpec.f5)then begin testf = false; end;
-    	
+  
     	if(testf)then begin
 				pos = 0;
 				acnt = 0;
     		ExtractObjWithSeparator(",",locations,true,pos,curloc);
+				
     		while(nonblank(curloc))begin    		
       		ItemStockIHSerch(INr.Code,curloc,sd,ed,qty_start,pu_qty,sm_poz_qty,sm_neg_qty,iv_poz_qty,iv_neg_qty,sd_qty,qty_end,days,acnt);
       		total_qty_start[acnt] = total_qty_start[acnt] + qty_start[acnt];
