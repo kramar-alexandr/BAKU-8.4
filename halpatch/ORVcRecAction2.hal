@@ -752,17 +752,18 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	record WEBReservStock WRSb;
-	longint i,j,rwcnt,orrwcnt,res,itemsincomp,OldComp,NxtSerNr,c,GIrwcnt,l,lc;
+	longint i,j,rwcnt,orrwcnt,res,itemsincomp,OldComp,NxtSerNr,c,GIrwcnt,l,lc,mtrw;
 	vector boolean ORItemToLocalOR, ItemSearchf, Compf; 	
-	vector integer ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate, ResStockQuant, StockPrioryty;
+	vector integer ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate, ResStockQuant, StockPrioryty, vItemComp, DeSellComp;
 	array string 255 ArtCodes, ItemBrands, PriorityStock;
 	string 255 strlc,HansaArtCode,Store,strlc2;
-	integer pos, pos2, p, maxp;
+	integer pos, pos2, p, maxp, qtyItpos;
 	boolean testf,TrHs,Insertf;
 	record INVc INr;
-	vector string 255 vComdItemLocation, vstrlc, ResStockSet;
+	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock;
 	record GlobalItemVc GIr, GI2r;
 	row GlobalItemVc GIrw, GI2rw;
+	record RLinkVc RLr;
 	
 	
 	OldComp = CurrentCompany;
@@ -776,6 +777,8 @@ begin
 			ItemBrands[i] = left(ORrw.GlobalItemArtCode,8);
 			ItemSearchf[ArtCodes[i] & i] = true;
 			NeedItQty[ArtCodes[i] & i] = ORrw.Quant;
+			DeSellComp[ArtCodes[i]] = ORrw.ECReservComp;
+			DeSellStock[ArtCodes[i]] = ORrw.ECReservStock;
 		end;
 	end;
 	
@@ -814,7 +817,7 @@ begin
 									PriorityStock[p] = GIrw.Location;
 								end;
 								if(maxp<p)then begin maxp = p; end;
-								logtext(0,PriorityStock[p] & Chr(9) & p);
+								//logtext(0,PriorityStock[p] & Chr(9) & p);
 							end;
 						end;
 						for(lc=maxp;lc>0;lc=lc-1)begin
@@ -891,7 +894,7 @@ begin
 
 	for (i=0;i<orrwcnt;i=i+1)begin
 		if(ItemSearchf[ArtCodes[i] & i])then begin
-			MessageBox(0,"Not enough goods in warehouses: " & ArtCodes[i]);
+			MessageBox(20011,"Not enough goods in warehouses: " & ArtCodes[i]);
 			res = -1;
 			goto LCreateLocalORFromWebOR;
 		end else begin
@@ -900,6 +903,7 @@ begin
 			MatRowPut(ORr,i,ORrw);
 		end;
 	end;
+	
 	
 	
 	for (c=1;c<30;c=c+1)begin
@@ -937,6 +941,7 @@ begin
 					while (nonblank(strlc)) begin
 						if(vItemCompQty[i & "_" & c & "_" & strlc]>0)then begin
 							LocORrw.ArtCode = mid(ORrw.GlobalItemArtCode,9,len(ORrw.GlobalItemArtCode)-9);
+							vItemComp[LocORrw.ArtCode] = CurrentCompany;
 							LocORrw.Quant = vItemCompQty[i & "_" & c & "_" & strlc];
 							LocORrw.Spec = ORrw.Spec;
 							LocORrw.Price = ORrw.Price;
@@ -975,8 +980,36 @@ begin
 			end;
 		end;
 	end;
-
 	ResetCompany(OldComp);
+	
+	
+	
+	i = 1;
+	pos = 0;
+	while (ReadRecordLink(ORr,i,LocORr,RLr))begin
+		mtrw = MatRowCnt(LocORr);
+		for (j=0;j<mtrw;j=j+1)begin
+			matrowget(LocORr,j,LocORrw);
+			qtyItpos = LocORrw.Quant;
+			for (l=0;l<qtyItpos;l=l+1)begin
+				ORrw.ArtCode = right(LocORrw.SerialNr,8);
+				ORrw.Quant = 1;
+				ORrw.Spec = LocORrw.Spec;
+				ORrw.Price = LocORrw.Price;
+				ORrw.vRebate = LocORrw.vRebate;
+				ORrw.BasePrice = LocORrw.BasePrice;
+				ORrw.SerialNr = LocORrw.SerialNr;
+				ORrw.PlanShipRow = LocORrw.PlanShipRow;
+				ORrw.GlobalItemArtCode = LocORrw.GlobalItemArtCode;
+				ORrw.Sum = ORrw.Sum;
+				ORrw.ECReservStock = LocORrw.Location;
+				ORrw.ECReservComp = vItemComp[LocORrw.ArtCode];
+				MatRowPut(ORr,pos,ORrw);
+				pos = pos + 1;
+			end;
+		end;
+		i = i + 1;
+	end;
 	
 	
 	
@@ -1003,7 +1036,6 @@ begin
 		matrowget(Compb,i,Comprw);
 		if(Comprw.ActiveStatus==0)then begin
 			if(Setcompany(i+1,false))then begin
-				logtext(0,"Enter");
 				LocORr.OfficialSerNr = "EC_" & ORr.SerNr;
 				if(Readfirstkey("OfficialSerNr",LocORr,1,true))then begin
 					res = IVFromLocWEBORDsm(LocORr);
