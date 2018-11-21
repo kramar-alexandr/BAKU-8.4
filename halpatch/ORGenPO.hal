@@ -276,9 +276,10 @@ end;
 
 global updating procedure CreateECPOfromLocalOR(record SHVc SHr)
 begin
-	integer mtrw,i,j,k,pos,rownum,OldComp;
+	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw;
 	record ORVc ORr;
 	row ORVc ORrw;
+	row SHVc SHrw;
 	Record POVc POr;
 	row POVc POrw;
 	string 50 ostr;
@@ -287,12 +288,12 @@ begin
 	boolean foundf,TrHs,testf;
 	record CUVc CUr;
 	record DIVc DIr;
-	string 200 vendor;
+	string 200 vendor,loccode;
 	vector string 255 ECCodes;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
 	vector boolean vArtCodeRepeat;
-	vector integer vArtCodeQTY;
+	vector integer vArtCodeQTY, ECArt;
 	record VIVc VIr;
 	record RcVc RepSpec;
 	longint r;
@@ -302,13 +303,17 @@ begin
 	ORr.SerNr = SHr.OrderNr;
 	if(ReadFirstMain(ORr,1,true))then begin
 		mtrw = matrowcnt(ORr);
+		shmtrw = matrowcnt(SHr);
+		loccode = SHr.Location;
+		for(i=0;i<shmtrw;i=i+1) begin
+			matrowget(SHr,i,SHrw);
+			ECArt[SHrw.ArtCode] = SHrw.Ordered;
+		end;
 		For(i=0;i<mtrw;i=i+1) begin
 			matrowget(ORr,i,ORrw); 
-			ECCodes[ORrw.GlobalItemArtCode] = "Y";
-			if(nonblank(vArtCodeQTY[ORrw.GlobalItemArtCode]))then begin
-				vArtCodeQTY[ORrw.GlobalItemArtCode] = vArtCodeQTY[ORrw.GlobalItemArtCode] + ORrw.Quant;
-			end else begin
-				vArtCodeQTY[ORrw.GlobalItemArtCode] = ORrw.Quant;
+			if(ECArt[ORrw.ArtCode]>0)then begin
+				ECCodes[ORrw.GlobalItemArtCode] = "Y";
+				vArtCodeQTY[ORrw.GlobalItemArtCode] = ECArt[ORrw.ArtCode];
 			end;
 		end;
 	end;
@@ -360,6 +365,7 @@ begin
 		matrowget(CBb,OldComp-1,CBrw);
 		POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
 		POr.VECode = CBrw.ShortName;
+		POr.Objects = loccode;
 		POr.Addr0 = CBrw.CompName;
 		POr.TransDate = CurrentDate;
 		POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");   
