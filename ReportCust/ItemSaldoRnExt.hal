@@ -4,7 +4,218 @@ external function longint DateDiff2(date,date);
 external  function string 100 BPICodeToName(string);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 SetLangMode(LangRussian,"RUS",0);
+procedure ItemStockIHSerchFOB(string item,string location,date sd,date ed,var array val qty_start,var array val pu_qty,
+                           var array val sm_poz_qty,var array val sm_neg_qty,var array val iv_poz_qty,
+                           var array val iv_neg_qty,var array val sd_qty,var array val qty_end,var array integer days,integer anum,var array val pu_qtyFB,var array val iv_neg_qtyFB)
+begin
+  record ItemHistVc IHr;
+  record StockMovVc SMr;
+  row StockMovVc SMrw;  
+  record IVVc IVr;
+  row IVVc IVrw;
+  Boolean TrHs,testf,testf1,testf2;
+  string 100 oldartcode,oldfilename;
+	longint oldsernr;
+  integer oldrow,oldinvalid;
+  date startPeriod,endPeriod;
+  boolean periodContinue;
+  array date dates;
+  array val curQty;
+  integer step,i;
+	record IVVc IVrr;
+	record PUVc PUr;
+	
+	pu_qtyFB[anum] = 0;
+	iv_neg_qtyFB[anum] = 0;
+	qty_start[anum] = 0;
+	pu_qty[anum] = 0;
+	sm_poz_qty[anum] = 0;
+	sm_neg_qty[anum] = 0;
+	iv_poz_qty[anum] = 0;
+	iv_neg_qty[anum] = 0;
+	sd_qty[anum] = 0;
+	qty_end[anum] = 0;
+	startPeriod = "";
+	endPeriod = "";
+	step = 1;
+	curQty[0] = -1;//total items quantity per date
+	dates[0] = sd;	
+	
+  IHr.ArtCode = item;
+  IHr.Location = location;
+  IHr.TransDate = "1/1/2000";
+  TrHs = true;
+  while (LoopKey("ArtCodeLoc",IHr,3,TrHs)) begin
+    testf = true;
+    if (IHr.ArtCode!=item or IHr.Location!=location or IHr.TransDate>ed) then begin testf = false; TrHs = false; end;
+    if (IHr.Invalid!=0) then begin testf = false; end;
+    
+    testf1 = true;
+    if(IHr.FileName=="IVVc" and oldartcode==IHr.ArtCode and oldsernr==IHr.TransNr and oldrow==IHr.Row  and oldfilename==IHr.FileName)then begin
+      if(oldinvalid!=0)then begin
+      	testf = false;
+      end;
+    end;
+    
+    oldartcode = IHr.ArtCode;
+    oldsernr = IHr.TransNr;
+    oldrow = IHr.Row;
+    oldinvalid = IHr.Invalid;
+    oldfilename = IHr.FileName;
+    
+    
+    if (testf) then begin
+      switch (IHr.FileName) begin
+				case "IVVc":
+					testf2=true;
+					if(currentCompany == 25) then begin
+						IVrr.SerNr = IHr.TransNr;
+						if(readfirstmain(IVrr,1,true)) then begin	
+							if(Left(IVrr.CustCode,3)=="FOB") then begin testf2 = false; end;
+						end;
+					end;	
+						if(testf2) then begin
+							if(IHr.TransDate<sd)then begin
+								if (IHr.StockAffectf==1) then begin
+									qty_start[anum] = qty_start[anum] + IHr.Qty;
+								end;
+							end else begin
+								if (IHr.StockAffectf==1) then begin
+									if IHr.Qty>0 then begin
+										iv_poz_qty[anum] = iv_poz_qty[anum] + IHr.Qty;
+										qty_end[anum] = qty_end[anum] + IHr.Qty;
+									end else begin
+										iv_neg_qty[anum] = iv_neg_qty[anum] + (-IHr.Qty);
+										qty_end[anum] = qty_end[anum] + IHr.Qty;
+									end;
+								end;
+							end;	
+						end else begin	
+							if(IHr.TransDate<sd)then begin
+								if (IHr.StockAffectf==1) then begin
+									qty_start[anum] = qty_start[anum] + IHr.Qty;
+								end;
+							end else begin
+								if (IHr.StockAffectf==1) then begin
+									iv_neg_qtyFB[anum] = iv_neg_qtyFB[anum] + (-IHr.Qty);
+									qty_end[anum] = qty_end[anum] + IHr.Qty;
+								end;
+							end;	
+						end;	
+				case "PUVc":
+					testf2=true;
+					if(CurrentCompany == 25) then begin
+						PUr.SerNr = IHr.TransNr;
+						if(readfirstmain(PUr,1,true)) then begin
+							if(left(UpperCase(PUr.VECode),3)=="FOB") then begin testf2 = false; end;
+						end;
+					end;
+					if (testf2) then begin	
+						if(IHr.TransDate<sd)then begin
+							qty_start[anum] = qty_start[anum] + IHr.Qty;
+						end else begin
+							pu_qty[anum] = pu_qty[anum] + IHr.Qty;
+							qty_end[anum] = qty_end[anum] + IHr.Qty;
+						end;
+					end else begin
+						if(IHr.TransDate<sd)then begin
+							qty_start[anum] = qty_start[anum] + IHr.Qty;
+						end else begin
+							pu_qtyFB[anum] = pu_qtyFB[anum] + IHr.Qty;
+							qty_end[anum] = qty_end[anum] + IHr.Qty;
+						end;
+					end;	
+				case "SHVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start[anum] = qty_start[anum] + IHr.Qty;
+					end else begin
+						iv_neg_qty[anum] = iv_neg_qty[anum] + (-IHr.Qty);
+						qty_end[anum] = qty_end[anum] + IHr.Qty;
+					end;
+				case "SDVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start[anum] = qty_start[anum] + IHr.Qty;
+					end else begin
+						sd_qty[anum] = sd_qty[anum] + (-IHr.Qty);
+						qty_end[anum] = qty_end[anum] + IHr.Qty;
+					end;
+				case "StockMovVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start[anum] = qty_start[anum] + IHr.Qty;
+					end else begin
+						if IHr.Qty>0 then begin
+							sm_poz_qty[anum] = sm_poz_qty[anum] + IHr.Qty;
+							qty_end[anum] = qty_end[anum] + IHr.Qty;
+						end else begin
+							sm_neg_qty[anum] = sm_neg_qty[anum] + (-IHr.Qty);
+							qty_end[anum] = qty_end[anum] + IHr.Qty;
+						end;
+					end;
+				case "RetVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start[anum] = qty_start[anum] + IHr.Qty;
+					end else begin
+						iv_poz_qty[anum] = iv_poz_qty[anum] + IHr.Qty;
+						qty_end[anum] = qty_end[anum] + IHr.Qty;
+					end;
+				case "RetPUVc":
+					if(IHr.TransDate<sd)then begin
+						qty_start[anum] = qty_start[anum] + IHr.Qty;
+					end else begin
+						sd_qty[anum] = sd_qty[anum] + (-IHr.Qty);
+						qty_end[anum] = qty_end[anum] + IHr.Qty;
+					end;
+			end;
+			
 
+			if (IHr.TransDate>=sd) then begin	//Edit----------------------Dima  29.05.2015
+				curQty[step] = qty_end[anum];
+				dates[step] = IHr.TransDate;
+				step=step+1;	
+			end;
+						
+		end;
+  end; // while
+  
+  qty_end[anum] = qty_start[anum] + qty_end[anum]; 
+  
+	//Edit--start-------------------------------------------------Dima  29.05.2015
+	curQty[0] = qty_start[anum];
+	dates[0] = sd;
+	for(i=1;i<step;i=i+1) begin
+		curQty[i] = curQty[i]+curQty[0];		 
+	end; 
+	
+	if (curQty[0]>0) then begin
+		periodContinue = true; //periodContinue - the flag when total quantity > 0 during date period
+		startPeriod = sd;
+	end else begin
+		periodContinue = false;
+	end;
+	
+	for(i=0;i<step;i=i+1) begin
+		if ((curQty[i]==0) and (periodContinue)) then begin
+			periodContinue = false;
+			endPeriod = dates[i];
+		end;
+		if ((curQty[i]>0) and (periodContinue==false)) then begin
+			periodContinue = true;
+			startPeriod = dates[i];
+		end;
+	end; 
+	
+  if ((qty_end[anum]>0) and (periodContinue)) then begin
+			endPeriod = ed;
+	end;
+	
+	if (blank(startPeriod) and blank(endPeriod))	then begin
+		days[anum] = 0;
+	end else begin
+		days[anum] = DateDiff2(endPeriod,startPeriod);
+	end; 
+	//Edit--end----------------------------------------------------Dima  29.05.2015  
+  return;
+end;
 
 procedure ItemStockIHSerch(string item,string location,date sd,date ed,var array val qty_start,var array val pu_qty,
                            var array val sm_poz_qty,var array val sm_neg_qty,var array val iv_poz_qty,
@@ -26,6 +237,7 @@ begin
   integer step,i;
 	record IVVc IVrr;
 	record PUVc PUr;
+	
 	
 	qty_start[anum] = 0;
 	pu_qty[anum] = 0;
@@ -210,10 +422,10 @@ begin
   string 200 locations;
   string 20 curloc,classification;
   integer pos,acnt,i;
-  array val qty_start,pu_qty,sm_poz_qty,sm_neg_qty,iv_poz_qty,iv_neg_qty,sd_qty,qty_end;
+  array val qty_start,pu_qty,sm_poz_qty,sm_neg_qty,iv_poz_qty,iv_neg_qty,sd_qty,qty_end,iv_poz_qtyFB;
   array val total_qty_start,total_pu_qty,total_sm_poz_qty,total_sm_neg_qty,total_iv_poz_qty,total_iv_neg_qty,total_sd_qty,total_qty_end;
   array integer days;
-  val subtotal_qty_start,subtotal_pu_qty,subtotal_sm_poz_qty,subtotal_sm_neg_qty,subtotal_iv_poz_qty,subtotal_iv_neg_qty,subtotal_sd_qty,subtotal_qty_end;
+  val subtotal_qty_start,subtotal_qty_startFB,subtotal_pu_qty,subtotal_pu_qtyFB,subtotal_sm_poz_qty,subtotal_sm_neg_qty,subtotal_iv_poz_qty,subtotal_iv_poz_qtyFB,subtotal_iv_neg_qty,subtotal_iv_neg_qtyFB,subtotal_sd_qty,subtotal_qty_end,subtotal_qty_endFB;
 	string 200 class,model,tstr;
 	string 50 key,item;
 			
@@ -332,7 +544,7 @@ begin
 				pos = 0;
 				acnt = 0;
     		ExtractObjWithSeparator(",",locations,true,pos,curloc);
-    		while(nonblank(curloc))begin    		
+    		while(nonblank(curloc))begin  
       		ItemStockIHSerch(INr.Code,curloc,sd,ed,qty_start,pu_qty,sm_poz_qty,sm_neg_qty,iv_poz_qty,iv_neg_qty,sd_qty,qty_end,days,acnt);
       		total_qty_start[acnt] = total_qty_start[acnt] + qty_start[acnt];
       		total_pu_qty[acnt] = total_pu_qty[acnt] + pu_qty[acnt];
@@ -550,14 +762,14 @@ begin
   record DIVc DIr;
   Date sd,ed;
 	record ItemStatusVc ISr;
-  boolean testf,TrHs,nonzerro;
+  boolean testf,TrHs,nonzerro,nonzerroFB;
   string 255 locations;
   string 20 curloc,classification;
   integer pos,acnt,i;
-  array val qty_start,pu_qty,sm_poz_qty,sm_neg_qty,iv_poz_qty,iv_neg_qty,sd_qty,qty_end;
-  array val total_qty_start,total_pu_qty,total_sm_poz_qty,total_sm_neg_qty,total_iv_poz_qty,total_iv_neg_qty,total_sd_qty,total_qty_end;
+  array val qty_start,pu_qty,sm_poz_qty,sm_neg_qty,iv_poz_qty,iv_neg_qty,sd_qty,qty_end,qty_startFB,pu_qtyFB,qty_endFB,iv_poz_qtyFB,iv_neg_qtyFB;
+  array val total_qty_start,total_qty_startFB,total_pu_qty,total_pu_qtyFB,total_sm_poz_qty,total_sm_neg_qty,total_iv_poz_qty,total_iv_poz_qtyFB,total_iv_neg_qty,total_iv_neg_qtyFB,total_sd_qty,total_qty_end,total_qty_endFB;
   array integer days;
-  val subtotal_qty_start,subtotal_pu_qty,subtotal_sm_poz_qty,subtotal_sm_neg_qty,subtotal_iv_poz_qty,subtotal_iv_neg_qty,subtotal_sd_qty,subtotal_qty_end;
+  val subtotal_qty_start,subtotal_qty_startFB,subtotal_pu_qty,subtotal_pu_qtyFB,subtotal_sm_poz_qty,subtotal_sm_neg_qty,subtotal_iv_poz_qty,subtotal_iv_poz_qtyFB,subtotal_iv_neg_qty,subtotal_iv_neg_qtyFB,subtotal_sd_qty,subtotal_qty_end,subtotal_qty_endFB;
 	string 200 class,model,tstr;
 	string 50 key,item;
 		
@@ -640,6 +852,20 @@ begin
     	OutString(0,0,"",false);
 			OutString(0,0,"",false);
     	
+			//OutString(0,0,"",false);
+    	OutString(0,0,"Поступило FOB",false);
+    	OutString(0,0,"",false);
+			OutString(0,0,"",false);
+    	OutString(0,0,"",false);
+    	OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			
+			OutString(0,0,"Отпущено FOB",false);
+    	OutString(0,0,"",false);
+			OutString(0,0,"",false);
+    	OutString(0,0,"",false);
+    	OutString(0,0,"",false);
+			OutString(0,0,"",false);
 			
     	//OutString(0,0,"",false);
     	OutString(0,0,USetStr(31086),false);
@@ -705,13 +931,15 @@ begin
     		ExtractObjWithSeparator(",",locations,true,pos,curloc);
 				
     		while(nonblank(curloc))begin    		
-      		ItemStockIHSerch(INr.Code,curloc,sd,ed,qty_start,pu_qty,sm_poz_qty,sm_neg_qty,iv_poz_qty,iv_neg_qty,sd_qty,qty_end,days,acnt);
+      		ItemStockIHSerchFOB(INr.Code,curloc,sd,ed,qty_start,pu_qty,sm_poz_qty,sm_neg_qty,iv_poz_qty,iv_neg_qty,sd_qty,qty_end,days,acnt,pu_qtyFB,iv_neg_qtyFB);
       		total_qty_start[acnt] = total_qty_start[acnt] + qty_start[acnt];
       		total_pu_qty[acnt] = total_pu_qty[acnt] + pu_qty[acnt];
+					total_pu_qtyFB[acnt] = total_pu_qtyFB[acnt] + pu_qtyFB[acnt];
       		total_sm_poz_qty[acnt] = total_sm_poz_qty[acnt] + sm_poz_qty[acnt];
       		total_sm_neg_qty[acnt] = total_sm_neg_qty[acnt] + sm_neg_qty[acnt];
       		total_iv_poz_qty[acnt] = total_iv_poz_qty[acnt] + iv_poz_qty[acnt];
       		total_iv_neg_qty[acnt] = total_iv_neg_qty[acnt] + iv_neg_qty[acnt];
+					total_iv_neg_qtyFB[acnt] = total_iv_neg_qtyFB[acnt] + iv_neg_qtyFB[acnt];
       		total_sd_qty[acnt] = total_sd_qty[acnt] + sd_qty[acnt];
       		total_qty_end[acnt] = total_qty_end[acnt] + qty_end[acnt];
       		
@@ -721,10 +949,11 @@ begin
     		
     		nonzerro = false;
     		For(i=0;i<acnt;i=i+1) begin
-	  			if(qty_start[i]!=0 or pu_qty[i]!=0 or sm_poz_qty[i]!=0 or sm_neg_qty[i]!=0 or iv_poz_qty[i]!=0 or iv_neg_qty[i]!=0 or sd_qty[i]!=0 or qty_end[i]!=0)then begin
+	  			if(qty_start[i]!=0 or pu_qty[i]!=0 or sm_poz_qty[i]!=0 or sm_neg_qty[i]!=0 or iv_poz_qty[i]!=0 or iv_neg_qty[i]!=0 or sd_qty[i]!=0 or qty_end[i]!=0
+					or qty_startFB[i]!=0 or pu_qtyFB[i]!=0 or iv_poz_qtyFB[i]!=0 or iv_neg_qtyFB[i]!=0 or qty_endFB[i]!=0)then begin
 	  				nonzerro = true;
 	  			end;
-				end; 
+				end;  
 				
 				pos = 0;
 				classification = "";
@@ -746,9 +975,8 @@ begin
 				if (ReadFirstMain(DIr,1,true)) then begin
 					classification = DIr.Name;
 				end;*/
-    		
     		If(nonzerro)then begin
-					startformat(15);
+						startformat(15);
 						outstring(0,0,INr.Code,false);
 						outstring(0,0,INr.Name,false);
 						outstring(0,0,BPICodeToName(INr.BPIBrand),false);
@@ -789,24 +1017,34 @@ begin
 						end; 
 						outstring(0,0,"",false);
 						For(i=0;i<acnt;i=i+1) begin
+							outstring(0,0,pu_qtyFB[i],false);//PU
+						end; 
+						outstring(0,0,"",false);
+						For(i=0;i<acnt;i=i+1) begin
+							outstring(0,0,iv_neg_qtyFB[i],false);//IV-
+						end; 
+						outstring(0,0,"",false);
+						for(i=0;i<acnt;i=i+1) begin
 							outstring(0,0,qty_end[i],false);//End
 						end; 
 						outstring(0,0,"",false);
 						For(i=0;i<acnt;i=i+1) begin
 							outstring(0,0,days[i],false);
-						end;						
-					endformat;
+						end;	
+						endformat;	
 				end;
 	   	end;
     end;
     For(i=0;i<acnt;i=i+1) begin
 			subtotal_qty_start = subtotal_qty_start + total_qty_start[i];
 			subtotal_pu_qty = subtotal_pu_qty + total_pu_qty[i];
+			subtotal_pu_qtyFB = subtotal_pu_qtyFB + total_pu_qtyFB[i];
 			subtotal_sm_poz_qty = subtotal_sm_poz_qty + total_sm_poz_qty[i];
 			subtotal_sm_neg_qty = subtotal_sm_neg_qty + total_sm_neg_qty[i];
 			subtotal_iv_poz_qty = subtotal_iv_poz_qty + total_iv_poz_qty[i];
 			subtotal_iv_neg_qty = subtotal_iv_neg_qty + total_iv_neg_qty[i];
 			subtotal_sd_qty = subtotal_sd_qty + total_sd_qty[i];
+			subtotal_iv_neg_qtyFB = subtotal_iv_neg_qtyFB + total_iv_neg_qtyFB[i];
 			subtotal_qty_end = subtotal_qty_end + total_qty_end[i];
 		end; 
 		startformat(15);
@@ -846,8 +1084,17 @@ begin
 			end; 
 			outstring(0,0,"",false);
 			For(i=0;i<acnt;i=i+1) begin
-				outstring(0,0,total_qty_end[i],false);//End
+				outstring(0,0,total_pu_qtyFB[i],false);//PU
 			end; 
+			outstring(0,0,"",false);
+			For(i=0;i<acnt;i=i+1) begin
+				outstring(0,0,total_iv_neg_qtyFB[i],false);//IV-
+			end; 
+			outstring(0,0,"",false);
+			For(i=0;i<acnt;i=i+1) begin
+				outstring(0,0,total_qty_end[i],false);//End
+			end;  
+			outstring(0,0,"",false);
 		endformat;
 		startformat(15);
     	OutString(0,0,"",false);
@@ -926,8 +1173,20 @@ begin
 			OutString(0,0,"",false);
     	OutString(0,0,"",false);
 			OutString(0,0,"",false);
-  
-
+			OutString(0,0,USetStr(31211) & " " & "Поступило Fob",false);
+			
+    	OutString(0,0,subtotal_pu_qtyFB,false);
+    	OutString(0,0,"",false);
+			OutString(0,0,"",false);
+    	OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,USetStr(31211) & " " & "Отпущено Fob",false);
+			
+    	OutString(0,0,subtotal_iv_neg_qtyFB,false);
+    	OutString(0,0,"",false);
+			OutString(0,0,"",false);
+    	OutString(0,0,"",false);
+			OutString(0,0,"",false);
 			//OutString(0,0,"",false);
     	OutString(0,0,USetStr(31211) & " " & USetStr(31086),false);
     	OutString(0,0,subtotal_qty_end,false);
