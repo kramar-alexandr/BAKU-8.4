@@ -31,7 +31,10 @@ external procedure NextM4Number(string,var string);
 remote updating procedure UnReservLinkedFromWebORVc(var record ORVc,Boolean);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:17 22.10.2018
 external updating function longint IVFromLocWEBORDsm(record ORVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:14 13.11.2018
 external updating function longint SHFromLocWEBORDsm(record ORVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:14 13.11.2018
-external procedure ExtractObj(string,var Integer,var string);																							
+external procedure ExtractObj(string,var Integer,var string);		
+remote function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
+remote function Boolean PasteCustInOrder(var record ORVc,string,string,var string,var string);		
+remote procedure ORVc_PasteLocation(var record ORVc,Integer);													
 																								
 																								
 global
@@ -752,13 +755,13 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	record WEBReservStock WRSb;
-	longint i,j,rwcnt,orrwcnt,res,itemsincomp,OldComp,NxtSerNr,c,GIrwcnt,l,lc,mtrw;
+	longint i,j,rwcnt,orrwcnt,res,itemsincomp,OldComp,NxtSerNr,c,GIrwcnt,l,lc,mtrw,prcnt;
 	vector boolean ORItemToLocalOR, ItemSearchf, Compf, PasteItemGroupf; 	
-	vector integer ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate, ResStockQuant, StockPrioryty, vItemComp, DeSellComp, ItemGroup;
+	vector integer ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate, ResStockQuant, StockPrioryty, vItemComp, DeSellComp, ItemGroup, PriceQuant;
 	array string 255 ArtCodes, ItemBrands, PriorityStock;
-	string 255 strlc,HansaArtCode,Store,strlc2, rowkey;
+	string 255 strlc,HansaArtCode,Store,strlc2, rowkey, inwarn, war;
 	integer pos, pos2, p, maxp, qtyItpos;
-	boolean testf,TrHs,Insertf;
+	boolean testf,TrHs,Insertf,warf;
 	record INVc INr;
 	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock;
 	record GlobalItemVc GIr, GI2r;
@@ -778,13 +781,11 @@ begin
 			MatRowDelete(ORr,0);
 		end;
 	end;
-	
+	prcnt = 0;
 	for (i=0;i<orrwcnt;i=i+1)begin
 		matrowget(ORGroupr,i,ORGrouprw);
 		rowkey = ORGrouprw.ArtCode & "_";
 		rowkey = rowkey & ORGrouprw.Spec & "_";
-		rowkey = rowkey & ORGrouprw.Price & "_";
-		rowkey = rowkey & ORGrouprw.vRebate & "_";
 		rowkey = rowkey & ORGrouprw.BasePrice & "_";
 		rowkey = rowkey & ORGrouprw.SerialNr & "_";
 		rowkey = rowkey & ORGrouprw.PlanShipRow & "_";
@@ -792,16 +793,19 @@ begin
 		rowkey = rowkey & ORGrouprw.ECReservStock & "_";
 		rowkey = rowkey & ORGrouprw.ECReservComp;
 		PasteItemGroupf[rowkey] = true;
+		if(ItemRowPrice[ORGrouprw.ArtCode & "_" & prcnt]>0 and ItemRowPrice[ORGrouprw.ArtCode & "_" & prcnt]!=ORGrouprw.Price)then begin  prcnt = prcnt + 1; end;
+		ItemRowPrice[ORGrouprw.ArtCode & "_" & prcnt] = ORGrouprw.Price;
+		PriceQuant[ORGrouprw.ArtCode & "_" & prcnt] = PriceQuant[ORGrouprw.ArtCode & "_" & prcnt] + ORGrouprw.Quant;
+		ItemRowRebate[ORGrouprw.ArtCode & "_" & prcnt] = ORGrouprw.vRebate;
 		ItemGroup[rowkey] = ItemGroup[rowkey] + ORGrouprw.Quant;
 	end;
+	
 	
 	j = 0;
 	for (i=0;i<orrwcnt;i=i+1)begin
 		matrowget(ORGroupr,i,ORGrouprw);
 		rowkey = ORGrouprw.ArtCode & "_";
 		rowkey = rowkey & ORGrouprw.Spec & "_";
-		rowkey = rowkey & ORGrouprw.Price & "_";
-		rowkey = rowkey & ORGrouprw.vRebate & "_";
 		rowkey = rowkey & ORGrouprw.BasePrice & "_";
 		rowkey = rowkey & ORGrouprw.SerialNr & "_";
 		rowkey = rowkey & ORGrouprw.PlanShipRow & "_";
@@ -814,8 +818,6 @@ begin
 			ORrw.Quant = ItemGroup[rowkey];
 			ORrw.Spec = ORGrouprw.Spec;
 			ORrw.Price = ORGrouprw.Price;
-			ItemRowPrice[ORrw.ArtCode & "_" & j] = ORGrouprw.Price;
-			ItemRowRebate[ORrw.ArtCode & "_" & j] = ORGrouprw.vRebate;
 			ORrw.vRebate = ORGrouprw.vRebate;
 			ORrw.BasePrice = ORGrouprw.BasePrice;
 			ORrw.SerialNr = ORGrouprw.SerialNr;
@@ -992,19 +994,20 @@ begin
 				LocORr.OrdDate = currentdate;
 				LocORr.Reserved = 1;
 				LocORr.CustCode = "FOBE_COMMERCE";
-				LocORr.Addr0 = "FOBE_Commerce";
+				//LocORr.Addr0 = "FOBE_Commerce";
+				warf = PasteCustInOrder(LocORr,LocORr.CustCode,LocORr.CustCode,inwarn,war);
 				LocORr.PayDeal = ORr.PayDeal;
 				LocORr.PlanShipDate = ORr.PlanShipDate;
 				LocORr.DespatchDate = ORr.DespatchDate;
-				LocORr.OurContact = ORr.OurContact;
-				LocORr.PriceList = "FOB36";
-				LocORr.CustOrdNr = ORr.CustOrdNr;
-				LocORr.OrderClass = ORr.OrderClass;
+				//LocORr.OurContact = ORr.OurContact;
+				//LocORr.PriceList = "FOB36";
+				//LocORr.CustOrdNr = ORr.CustOrdNr;
+				//LocORr.OrderClass = ORr.OrderClass;
 				LocORr.OfficialSerNr = "EC_" & ORr.SerNr;
-				LocORr.CurncyCode = ORr.CurncyCode;
+				//LocORr.CurncyCode = ORr.CurncyCode;
 				LocORr.Comment = ORr.Comment;
-				LocORr.Objects = ORr.Objects;
-				LocORr.OKFlag = ORr.OKFlag;
+				//LocORr.Objects = ORr.Objects;
+				//LocORr.OKFlag = ORr.OKFlag;
 				j = 0;
 				for (i=0;i<orrwcnt;i=i+1) begin
 					MatRowGet(ORr,i,ORrw);
@@ -1015,22 +1018,29 @@ begin
 							LocORrw.ArtCode = mid(ORrw.GlobalItemArtCode,9,len(ORrw.GlobalItemArtCode)-9);
 							vItemComp[LocORrw.ArtCode] = CurrentCompany;
 							LocORrw.Quant = vItemCompQty[i & "_" & c & "_" & strlc];
+							MatRowPut(LocORr,j,LocORrw);
+							warf = ORVc_PasteArtCode(LocORr,j,inwarn,war,warf);
+							MatRowGet(LocORr,j,LocORrw);
+							logtext(0,inwarn & "_" & war & "_" & warf);
 							LocORrw.Spec = ORrw.Spec;
-							PLr.PLCode = "FOB36";
+							/*PLr.PLCode = "FOB36";
 							PLr.ArtCode = LocORrw.ArtCode;
 							if(ReadFirstMain(PLr,2,true))then begin
 								LocORrw.Sum = PLr.ExVatPrice * LocORrw.Quant;
 								LocORrw.Price = PLr.ExVatPrice;
-							end;
+							end;*/
 							//LocORrw.vRebate = ORrw.vRebate;
-							LocORrw.BasePrice = ORrw.BasePrice;
+							//LocORrw.BasePrice = ORrw.BasePrice;
 							LocORrw.SerialNr = ORrw.SerialNr;
 							LocORrw.PlanShipRow = ORrw.PlanShipRow;
 							LocORrw.GlobalItemArtCode = ORrw.GlobalItemArtCode;
-							LocORrw.Objects = ORrw.Objects;
+							//LocORrw.Objects = ORrw.Objects;
 							LocORrw.Location = strlc;
-							LocORrw.VATCode = ORrw.VATCode;
+							//LocORrw.VATCode = ORrw.VATCode;
 							LocORr.Location = LocORrw.Location;
+							MatRowPut(LocORr,j,LocORrw);
+							ORVc_PasteLocation(LocORr,j);
+							MatRowGet(LocORr,j,LocORrw);
 							MatRowPut(LocORr,j,LocORrw);
 							j=j+1;
 						end;
@@ -1075,9 +1085,14 @@ begin
 				ORrw.ArtCode = right(LocORrw.SerialNr,8);
 				ORrw.Quant = 1;
 				ORrw.Spec = LocORrw.Spec;
-				ORrw.Price = ItemRowPrice[ORrw.ArtCode & "_" & pos];
-				ORrw.vRebate = ItemRowRebate[ORrw.ArtCode & "_" & j];
-				ORrw.BasePrice = LocORrw.BasePrice;
+				for (lc=0;lc<=prcnt;lc=lc+1)begin
+					if(PriceQuant[ORrw.ArtCode & "_" & lc]>0)then begin
+						ORrw.Price = ItemRowPrice[ORrw.ArtCode & "_" & lc];
+						ORrw.vRebate = ItemRowRebate[ORrw.ArtCode & "_" & lc];
+						PriceQuant[ORrw.ArtCode & "_" & lc] = PriceQuant[ORrw.ArtCode & "_" & lc] - 1;
+						lc = prcnt + 1;
+					end;
+				end;
 				ORrw.SerialNr = LocORrw.SerialNr;
 				ORrw.PlanShipRow = LocORrw.PlanShipRow;
 				ORrw.GlobalItemArtCode = LocORrw.GlobalItemArtCode;
