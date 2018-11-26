@@ -484,8 +484,18 @@ begin
 		matrowget(CBb,OldComp-1,CBrw);
 		POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
 		ECORr.SerNr = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
-		if(ReadFirstMain(ECORr,1,true))then begin end;
-		ECCreatePOfromOR(ECORr,POr);
+		if(ReadFirstMain(ECORr,1,true))then begin 
+			mtrw = matrowcnt(ECORr);
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(ECORr,i,ECORrw);
+				logtext(0,ECORrw.Price);
+				if(ItemPrice[ECORrw.ArtCode]==0)then begin
+					ItemPrice[ECORrw.ArtCode] = ECORrw.Price;
+					ItemRebate[ECORrw.ArtCode] = ECORrw.vRebate;
+				end;
+			end;
+		end;
+		
 		POr.VECode = CBrw.ShortName;
 		POr.Objects = loccode;
 		POr.Addr0 = CBrw.CompName;
@@ -493,16 +503,8 @@ begin
 		POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");   
 		POr.OKFlag = 1;
 		
-		mtrw = matrowcnt(ORr);
-		For(i=0;i<mtrw;i=i+1) begin
-			matrowget(ORr,0,ORrw); 
-			if(ItemPrice[ORrw.ArtCode]==blankval)then begin
-				ItemPrice[ORrw.ArtCode] = ORrw.Price;
-				ItemRebate[ORrw.ArtCode] = ORrw.vRebate;
-			end;
-			matrowdelete(ORr,0);
-		end;
 		
+		mtrw = matrowcnt(ORr);
 		For(i=0;i<mtrw;i=i+1) begin
 			matrowget(ORr,i,ORrw); 
 			if(nonblank(ORrw.GlobalItemArtCode))then begin
@@ -519,8 +521,9 @@ begin
 						POrw.Quant = vArtCodeQTY[ORrw.GlobalItemArtCode];
 						POrw.Spec = ORrw.Spec;
 						POrw.OrdRow = i;
-						POrw.Price = ItemPrice[ORrw.ArtCode];
-						POrw.Sum = ItemPrice[ORrw.ArtCode] * POrw.Quant * ((100 - ItemRebate[ORrw.ArtCode])*0.01);
+						POrw.Price = ItemPrice[POrw.ArtCode];
+						POrw.vRebate = ItemRebate[POrw.ArtCode];
+						POrw.Sum = ItemPrice[POrw.ArtCode] * POrw.Quant * ((100 - ItemRebate[POrw.ArtCode])*0.01);
 						matrowput(POr,rownum,POrw);
 						POVc_PasteQuant(POr,rownum);
 						rownum = rownum + 1;
@@ -534,9 +537,12 @@ begin
 		POr.VECode = CBrw.ShortName;
 		POr.Objects = loccode;
 		POr.Addr0 = CBrw.CompName;
+		POr.CurncyCode = "AZN";
+		POr.CheckCurncyCode = "AZN";
 		POr.TransDate = CurrentDate;
 		POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");   
 		POr.OKFlag = 1;
+		
 		recordStore(POr,false);
 		createrecordlink(POr,CurrentCompany,SHr,OldComp);
 		createrecordlink(SHr,OldComp,POr,CurrentCompany);
