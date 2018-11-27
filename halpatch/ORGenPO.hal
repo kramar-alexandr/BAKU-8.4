@@ -5,8 +5,13 @@ external procedure POVc_PasteQuant(var record POVc,Integer);// Edit ************
 external function Boolean POVc_PasteVECode(var record POVc,Boolean);
 external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
 remote function boolean CompanyIsJWLikeCompany(Integer);
-external updating procedure ECPUFromPODsm(var record POVc);
+external updating procedure ECPUFromPODsm(var record POVc,var record PUVc);
 external updating function Integer CreateVIFromPO(LongInt,record RcVc,var record VIVc);
+remote procedure CreatePufromIVforPLHandle(record RcVc,integer,var string);
+remote updating function LongInt RecordAction_raPastePUInVI(record PUVc,var record VIVc,var string);
+remote function Boolean VIVc_PasteAccNumber(var record VIVc,string,Boolean,Integer);
+external procedure VISumup(record VIVc,var val);
+remote procedure VICalcVals(var record VIVc);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -422,39 +427,63 @@ end;
 
 global updating procedure CreateECPOfromLocalOR(record SHVc SHr)
 begin
-	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw;
+	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c;
 	record ORVc ORr, ECORr;
 	row ORVc ORrw, ECORrw;
 	row SHVc SHrw;
 	Record POVc POr;
 	row POVc POrw;
 	string 50 ostr;
-	array string 100 class,artcode;
+	array string 100 class,artcode,itemcurrency;
 	record INVc INr;
-	boolean foundf,TrHs,testf;
+	boolean foundf,TrHs,testf,cuf;
 	record CUVc CUr;
 	record DIVc DIr;
-	string 200 vendor,loccode;
-	vector string 255 ECCodes;
+	string 200 vendor,loccode,errmsg;
+	vector string 255 ECCodes, vItemCurrency, OldNewArt;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
 	vector boolean vArtCodeRepeat;
 	vector integer vArtCodeQTY, ECArt;
-	vector val ItemPrice, ItemRebate;
+	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo;
 	record VIVc VIr;
+	row VIVc VIrw;
 	record RcVc RepSpec;
 	longint r;
+	record IVVc IVr;
+	record RLinkVc RLinkr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	val ct, SumFO;
 	
 	BlockLoad(CBb);
 	
+	
 	ORr.SerNr = SHr.OrderNr;
 	if(ReadFirstMain(ORr,1,true))then begin
+		cucnt = 0;
 		mtrw = matrowcnt(ORr);
 		shmtrw = matrowcnt(SHr);
 		loccode = SHr.Location;
 		for(i=0;i<shmtrw;i=i+1) begin
+			cuf = true;
 			matrowget(SHr,i,SHrw);
 			ECArt[SHrw.ArtCode] = SHrw.Ordered;
+			INr.Code = SHrw.ArtCode;
+			if(ReadFirstMain(INr,1,true))then begin
+				for(j=0;j<cucnt;j=j+1)begin
+					if(INr.LastPurchCurncyCode==itemcurrency[j])then begin
+						cuf = false;
+					end;
+				end;
+				vItemCurrency[SHrw.ArtCode] = INr.LastPurchCurncyCode;
+				vItemPrice[SHrw.ArtCode] = SHrw.BasePrice;
+				vItemFifo[SHrw.ArtCode] = SHrw.FIFORowVal;
+				if(cuf)then begin
+					itemcurrency[j] = INr.LastPurchCurncyCode;
+					cucnt = cucnt + 1;
+				end;
+			end;
 		end;
 		For(i=0;i<mtrw;i=i+1) begin
 			matrowget(ORr,i,ORrw); 
@@ -468,106 +497,143 @@ begin
 	OldComp = CurrentCompany;
 	
 	if(SetCompany(29,false))then begin
-		TrHs = true;
-		i = 0;
-		INr.Code = "";
-		while (loopmain(INr,1,TrHs))begin
-			if(ECCodes[INr.GlobalArtCode]=="Y")then begin
-				ECCodes[INr.GlobalArtCode] = INr.Code;
-				vArtCodeRepeat[INr.Code] = true;
-				i=i+1;
-			end;
-			if(i==mtrw)then begin TrHs = false; end;
-		end;
-		resetloop(INr);
-		
-		matrowget(CBb,OldComp-1,CBrw);
-		POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
-		ECORr.SerNr = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
-		if(ReadFirstMain(ECORr,1,true))then begin 
-			mtrw = matrowcnt(ECORr);
-			For(i=0;i<mtrw;i=i+1) begin
-				matrowget(ECORr,i,ECORrw);
-				logtext(0,ECORrw.Price);
-				if(ItemPrice[ECORrw.ArtCode]==0)then begin
-					ItemPrice[ECORrw.ArtCode] = ECORrw.Price;
-					ItemRebate[ECORrw.ArtCode] = ECORrw.vRebate;
+		for(c=0;c<cucnt;c=c+1)begin
+			TrHs = true;
+			i = 0;
+			INr.Code = "";
+			while (loopmain(INr,1,TrHs))begin
+				if(ECCodes[INr.GlobalArtCode]=="Y")then begin
+					ECCodes[INr.GlobalArtCode] = INr.Code;
+					vArtCodeRepeat[INr.Code] = true;
+					i=i+1;
 				end;
+				if(i==mtrw)then begin TrHs = false; end;
 			end;
-		end;
-		
-		POr.VECode = CBrw.ShortName;
-		POr.Objects = loccode;
-		POr.Addr0 = CBrw.CompName;
-		POr.TransDate = CurrentDate;
-		POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");   
-		POr.OKFlag = 1;
-		
-		
-		mtrw = matrowcnt(ORr);
-		For(i=0;i<mtrw;i=i+1) begin
-			matrowget(ORr,i,ORrw); 
-			if(nonblank(ORrw.GlobalItemArtCode))then begin
-				INr.Code = ECCodes[ORrw.GlobalItemArtCode];
-				if(readfirstmain(INr,1,true))then begin
-					vendor = INr.BPIBrand;
-					
-					if(vArtCodeRepeat[ECCodes[ORrw.GlobalItemArtCode]])then begin
-						vArtCodeRepeat[ECCodes[ORrw.GlobalItemArtCode]] = false;
-						POrw.ArtCode = ECCodes[ORrw.GlobalItemArtCode];
-						matrowput(POr,rownum,POrw);
-						POVc_PasteArtCode(POr,rownum,false);
-						matrowget(POr,rownum,POrw);
-						POrw.Quant = vArtCodeQTY[ORrw.GlobalItemArtCode];
-						POrw.Spec = ORrw.Spec;
-						POrw.OrdRow = i;
-						POrw.Price = ItemPrice[POrw.ArtCode];
-						POrw.vRebate = ItemRebate[POrw.ArtCode];
-						POrw.Sum = ItemPrice[POrw.ArtCode] * POrw.Quant * ((100 - ItemRebate[POrw.ArtCode])*0.01);
-						matrowput(POr,rownum,POrw);
-						POVc_PasteQuant(POr,rownum);
-						rownum = rownum + 1;
+			resetloop(INr);
+			
+			matrowget(CBb,OldComp-1,CBrw);
+			POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
+			ECORr.SerNr = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
+			if(ReadFirstMain(ECORr,1,true))then begin 
+				mtrw = matrowcnt(ECORr);
+				For(i=0;i<mtrw;i=i+1) begin
+					matrowget(ECORr,i,ECORrw);
+					if(ItemPrice[ECORrw.ArtCode]==0)then begin
+						ItemPrice[ECORrw.ArtCode] = ECORrw.Price;
+						ItemRebate[ECORrw.ArtCode] = ECORrw.vRebate;
 					end;
-						
 				end;
 			end;
+			
+			POr.VECode = "FOB_" & CBrw.ShortName;
+			POr.Objects = loccode;
+			POr.Addr0 = "FOB_" & CBrw.CompName;
+			POr.TransDate = CurrentDate;
+			POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");   
+			POr.OKFlag = 1;
+			
+			
+			mtrw = matrowcnt(ORr);
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(ORr,i,ORrw); 
+				if(nonblank(ORrw.GlobalItemArtCode))then begin
+					INr.Code = ECCodes[ORrw.GlobalItemArtCode];
+					if(readfirstmain(INr,1,true))then begin
+						vendor = INr.BPIBrand;
+						
+						if(vArtCodeRepeat[ECCodes[ORrw.GlobalItemArtCode]] and vItemCurrency[right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9)]==itemcurrency[c])then begin
+							OldNewArt[ECCodes[ORrw.GlobalItemArtCode]] = right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9);
+							vArtCodeRepeat[ECCodes[ORrw.GlobalItemArtCode]] = false;
+							POrw.ArtCode = ECCodes[ORrw.GlobalItemArtCode];
+							matrowput(POr,rownum,POrw);
+							POVc_PasteArtCode(POr,rownum,false);
+							matrowget(POr,rownum,POrw);
+							POrw.Quant = vArtCodeQTY[ORrw.GlobalItemArtCode];
+							POrw.Spec = ORrw.Spec;
+							POrw.OrdRow = i;
+							POrw.Price = ItemPrice[POrw.ArtCode];
+							POrw.vRebate = ItemRebate[POrw.ArtCode];
+							POrw.Sum = ItemPrice[POrw.ArtCode] * POrw.Quant * ((100 - ItemRebate[POrw.ArtCode])*0.01);
+							matrowput(POr,rownum,POrw);
+							POVc_PasteQuant(POr,rownum);
+							rownum = rownum + 1;
+						end;
+							
+					end;
+				end;
+			end;
+			matrowget(CBb,OldComp-1,CBrw);
+			POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
+			POr.VECode = CBrw.ShortName;
+			POr.Objects = loccode;
+			POr.Addr0 = CBrw.CompName;
+			POr.CurncyCode = itemcurrency[c];
+			POr.CheckCurncyCode = itemcurrency[c];
+			POr.TransDate = CurrentDate;
+			POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");   
+			POr.OKFlag = 1;
+			
+			recordStore(POr,false);
+			ECPUFromPODsm(POr,PUr);
+			matrowcnt(PUr);
+			for (i=0;i<mtrw;i=i+1)begin
+				matrowget(PUr,i,PURw); 
+				PURw.UPrice = vItemPrice[OldNewArt[ECCodes[ORrw.GlobalItemArtCode]]];
+				PURw.CostPrice = vItemFifo[OldNewArt[ECCodes[ORrw.GlobalItemArtCode]]];
+				PURw.Sum = vItemPrice[OldNewArt[ECCodes[ORrw.GlobalItemArtCode]]] * PURw.Quant;
+				matrowput(PUr,i,PURw); 
+			end;
+			if(RecordStore(PUr,true))then begin 
+				r = RecordAction_raPastePUInVI(PUr,VIr,errmsg);
+				if(r==0)then begin
+					if(ReadFirstMain(VIr,1,true))then begin
+						VIr.OKFlag = 1;
+						VIrw.stp = 1;
+						VIrw.AccNumber = "76";
+						MatRowput(VIr,1,VIrw);
+						VIVc_PasteAccNumber(VIr,"76",1,1);
+						MatRowGet(VIr,1,VIrw);
+						MatRowPut(VIr,1,VIrw);
+						MatRowGet(VIr,0,VIrw);
+						SumFO = VIrw.Sum*0.36;
+						MatRowGet(VIr,1,VIrw);
+						VIrw.Sum = SumFO;
+						MatRowPut(VIr,1,VIrw);
+						VICalcVals(VIr);
+						VISumup(VIr,ct);
+						
+						if(RecordStore(VIr,true))then begin 
+							CreateRecordLink(PUr,CurrentCompany,VIr,CurrentCompany);  
+							CreateRecordLink(VIr,CurrentCompany,PUr,CurrentCompany);  
+						end;
+					end;
+				end;
+			end;
+			createrecordlink(PUr,CurrentCompany,SHr,OldComp);
+			createrecordlink(SHr,OldComp,PUr,CurrentCompany);
+			RecordDelete(POr);
+			/*RepSpec.FirstVer = POr.SerNr;
+			RepSpec.f1 = POr.VECode;
+			ReportDefaults(RepSpec,"VIFromPOVClass");
+			RepSpec.flags[0] = 1;
+			RepSpec.flags[1] = 1;
+			RepSpec.flags[2] = 1;
+			RepSpec.flags[3] = 1;
+			RepSpec.flags[4] = 1;
+			RepSpec.flags[5] = 1;
+			RepSpec.flags[6] = 1;
+			RepSpec.flags[7] = 1;
+			r = CreateVIFromPO(POr.SerNr,RepSpec,VIr);
+			if(r==0)then begin
+				VIr.OKFlag = 1;
+				if(RecordStore(VIr,true))then begin end;
+			end else begin
+				logtext(0,"Not created: " & r);
+			end;*/
 		end;
-		matrowget(CBb,OldComp-1,CBrw);
-		POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
-		POr.VECode = CBrw.ShortName;
-		POr.Objects = loccode;
-		POr.Addr0 = CBrw.CompName;
-		POr.CurncyCode = "AZN";
-		POr.CheckCurncyCode = "AZN";
-		POr.TransDate = CurrentDate;
-		POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");   
-		POr.OKFlag = 1;
-		
-		recordStore(POr,false);
-		createrecordlink(POr,CurrentCompany,SHr,OldComp);
-		createrecordlink(SHr,OldComp,POr,CurrentCompany);
-		ECPUFromPODsm(POr);
-		/*RepSpec.FirstVer = POr.SerNr;
-		RepSpec.f1 = POr.VECode;
-		ReportDefaults(RepSpec,"VIFromPOVClass");
-		RepSpec.flags[0] = 1;
-		RepSpec.flags[1] = 1;
-		RepSpec.flags[2] = 1;
-		RepSpec.flags[3] = 1;
-		RepSpec.flags[4] = 1;
-		RepSpec.flags[5] = 1;
-		RepSpec.flags[6] = 1;
-		RepSpec.flags[7] = 1;
-		r = CreateVIFromPO(POr.SerNr,RepSpec,VIr);
-		if(r==0)then begin
-			VIr.OKFlag = 1;
-			if(RecordStore(VIr,true))then begin end;
-		end else begin
-			logtext(0,"Not created: " & r);
-		end;*/
 	end;
 	ResetCompany(OldComp);
-
+	
 return;
 end;
 
