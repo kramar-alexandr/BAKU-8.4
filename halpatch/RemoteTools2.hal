@@ -829,6 +829,85 @@ LRecordAction_raPasteRetInInv:;
   RETURN;
 END;
 
+
+
+
+global
+updating function Integer RecordAction_raPasteRetInInv2(var record IVVc IVp,LongInt retnr)
+BEGIN
+  record SRBlock SRb;
+  record RetVc Retr;
+  record RetVc oldRetr;
+  Integer res;
+  LongInt newnr;
+  string 255 tstr;
+  Boolean nousersernr;
+  record CUVc CUr;
+  
+  res = -1;
+  RecordNew(IVp);
+  IVp.SerNr = -1;
+  IVp.UpdStockFlag = 0;
+  Retr.SerNr = retnr;
+  if (ReadFirstMain(Retr,1,true)) then begin end;
+  RecordCopy(oldRetr,Retr);
+  if (PasteRetInInv(IVp,Retr,false)) then begin
+    if (IVp.SerNr==-1) then begin
+      BlockLoad(SRb);
+      if ((IVp.InvType==kInvoiceTypeCredit or IVp.InvType==kInvoiceTypeCreditSpecialSales) and (SRb.LastCredInvNr!=-1))  then begin
+        newnr = GetCurUserLastNr("CreditIVVc");
+        if (newnr<=0) then begin
+          newnr = SRb.LastCredInvNr;
+        end;
+        nousersernr = true;
+      end else begin
+        if ((IVp.InvType==kInvoiceTypeCash or IVp.InvType==kInvoiceTypeCashInvoiceReceiptPRT) and (SRb.LastCashInvNr!=-1))  then begin
+          newnr = SRb.LastCashInvNr;
+          nousersernr = true;
+          if (newnr==-1) then begin
+            newnr = GetCurUserLastNr("IVVc");
+            nousersernr = false;
+          end;
+        end else begin
+          newnr = GetCurUserLastNr("IVVc");
+          if (newnr<=0) then begin
+            newnr = SRb.LastInvNr;
+          end;
+        end;
+      end;
+    end;
+    IVp.SerNr = NextSerNr("IVVc",IVp.TransDate,newnr,true,"");
+    if (IVp.SerNr==-1) then begin
+      res = 1747;
+      goto LRecordAction_raPasteRetInInv;
+    end;
+//    CUr.Code = IVp.CustCode;
+//    if (ReadFirstMain(CUr,1,true)) then begin end;
+//    IVp.OfficialSerNr = FindNextLegalSerNr(IVp,CUr.Classification);  //POSN
+    if ((MatRowCnt(IVp)>1) and (IVp.SerNr!=-1)) then begin
+      IVSumup(IVp,true);
+      if (RecordInsert(IVp,false)) then begin
+//        IVUpdateWSIVVc(IVp);
+        res = 1;
+//        Retr.InvoiceNr = IVp.SerNr;
+//        RecordUpdate(oldRetr,Retr,false);
+//moved to OnSaveInvoice
+        CreateRecordLink(IVp,CurrentCompany,Retr,CurrentCompany);  
+        CreateRecordLink(Retr,CurrentCompany,IVp,CurrentCompany);  
+      end;
+    end;
+  end else begin
+    res = -2;
+  end;  
+LRecordAction_raPasteRetInInv:;
+  RecordAction_raPasteRetInInv2 = res;
+  RETURN;
+END;
+
+
+
+
+
 global
 updating function Boolean BatchStat(record IVVc IVp,Boolean negflag,Boolean unokf)
 BEGIN

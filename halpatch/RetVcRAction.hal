@@ -79,6 +79,9 @@ external function LongInt GetCurUserLastNr(string);
 remote function Boolean DenyOperationsWithBlockedCustomer(record CUVc,string); //Edit***************************Sasha2,11:15 08.09.2017
 remote updating function Integer PasteSHInRet(var record SHVc,var record RetVc,string);
 external function LongInt PastePUInRetPU(record PUVc,var record RetPUVc);
+remote updating function Integer RecordAction_raPasteRetInInv(var record IVVc,LongInt);
+remote updating function Integer RecordAction_raPasteRetPUInVI(var record VIVc,LongInt);
+remote updating function Integer CreateCreditNoteVI(record VIVc,var record VIVc);
 
 function Integer ValidateBulkSerialNoRow(record SerNrTrackBlock SNrb,record RetVc Retr,row RetVc Retrw,Integer currow,var string gotofield,var Integer gotorow)
 begin
@@ -168,6 +171,9 @@ record PUVc PUr;
 row PUVc PUrw;
 record RetPUVc RetPUr;
 row RetPUVc RetPUrw;
+record IVVc IVr;
+record VIVc VIr, credVIr;
+row VIVc credVIrw;
 
 
 	rwcnt = matrowcnt(Retr);
@@ -256,6 +262,9 @@ row RetPUVc RetPUrw;
 									CreateRecordLink(LocRetr,CurrentCompany,Retr,29);
 									CreateRecordLink(Retr,29,LocRetr,CurrentCompany);
 									vLocSHf[j] = false;
+									r = RecordAction_raPasteRetInInv(IVr,LocRetr.SerNr);
+									IVr.PayDeal = "CN";
+									RecordStore(IVr,true);
 								end;
 							end;
 						end;
@@ -293,6 +302,22 @@ row RetPUVc RetPUrw;
 						CreateRecordLink(PUr,CurrentCompany,RetPUr,CurrentCompany);
 						CreateRecordLink(RetPUr,CurrentCompany,PUr,CurrentCompany);
 					end;
+				end;
+				j = 1;
+				while (ReadRecordLink(PUr,j,VIr,RLr))begin
+					r = CreateCreditNoteVI(VIr,credVIr);
+					matrowget(credVIr,0,credVIrw);
+					credVIrw.Sum = RetPUr.SumCostPrice;
+					matrowput(credVIr,0,credVIrw);
+					matrowget(credVIr,1,credVIrw);
+					credVIrw.Sum = RetPUr.SumCostPrice * 0.36;
+					matrowput(credVIr,1,credVIrw);
+					credVIr.PayDeal = "CN";
+					if(RecordStore(credVIr,true))then begin
+						CreateRecordLink(VIr,CurrentCompany,credVIr,CurrentCompany);  
+						CreateRecordLink(credVIr,CurrentCompany,VIr,CurrentCompany);  
+					end;
+					j = j + 1;
 				end;
 			end;
 		end;
