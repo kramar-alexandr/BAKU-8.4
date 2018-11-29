@@ -77,6 +77,7 @@ external function Boolean Date2Test(string,Date,string,Integer);
 external function Boolean SerNrTestRetVc(LongInt,Date,var Boolean);
 external function LongInt GetCurUserLastNr(string);
 remote function Boolean DenyOperationsWithBlockedCustomer(record CUVc,string); //Edit***************************Sasha2,11:15 08.09.2017
+remote updating function Integer PasteSHInRet(var record SHVc,var record RetVc,string);
 
 function Integer ValidateBulkSerialNoRow(record SerNrTrackBlock SNrb,record RetVc Retr,row RetVc Retrw,Integer currow,var string gotofield,var Integer gotorow)
 begin
@@ -139,6 +140,112 @@ LValidateBulkSerialNoRow:;
   ValidateBulkSerialNoRow = res;
   return;
 end;
+
+
+
+global
+updating function Integer CreateLocalRetFromECRet(record RetVc Retr)
+begin
+integer rwcnt,i,j,y,ORrwcnt,locshcnt,mtrw,l;
+row RetVc Retrw, locRetrw;
+record RLinkVc RLr, RL2r;
+record ORVc ORr, LocORr;
+row ORVc ORrw, LocORrw;
+vector integer vRetItemsQuant, vLocRetItemsQuant, vLocRetItemCompany;
+vector string 255 vLocRetItemStock;
+array longint aLocOr, aLocSH;
+vector boolean vLocCompanys;
+integer MaxNumComp;
+record SHVc SHr;
+row SHVc SHrw;
+boolean testf;
+longint r;
+record LocalMachineBlock LMb;
+record RetVc LocRetr;
+
+	rwcnt = matrowcnt(Retr);
+	for (i=0;i<rwcnt;i=i+1)begin
+		matrowget(Retr,i,Retrw);
+		vRetItemsQuant[Retrw.ArtCode] = Retrw.Quant;
+	end;
+
+	ORr.SerNr = Retr.OrdNr;
+	if(ReadFirstMain(ORr,1,true))then begin
+		j = 1;
+		locshcnt = 0;
+		while (ReadRecordLink(ORr,j,LocORr,RLr))begin
+			aLocOr[j-1] = LocORr.SerNr;
+			i = 1;
+			matrowget(LocORr,0,LocORrw);
+			if(SetCompany(LocORrw.ECReservComp,true))then begin
+				while (ReadRecordLink(LocORr,i,SHr,RL2r))begin
+					aLocSH[locshcnt] = SHr.SerNr;
+					locshcnt = locshcnt + 1;
+					i = i + 1;
+				end;
+			end;
+			j=j+1;
+		end;
+		MaxNumComp = 0;
+		ORrwcnt = matrowcnt(ORr);
+		for (i=0;i<ORrwcnt;i=i+1)begin
+			matrowget(ORr,i,ORrw);
+			if(vRetItemsQuant[ORrw.ArtCode]>0)then begin
+				vLocRetItemsQuant[right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9)] = vLocRetItemsQuant[right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9)] + vRetItemsQuant[ORrw.ArtCode];
+				vLocRetItemCompany[right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9)] = ORrw.ECReservComp;
+				vLocRetItemStock[right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9)] = ORrw.ECReservStock;
+				vLocCompanys[ORrw.ECReservComp] = true;
+				if(MaxNumComp<ORrw.ECReservComp)then begin MaxNumComp = ORrw.ECReservComp; end;
+			end;
+		end;
+		for (i=0;i<MaxNumComp;i=i+1)begin
+			if(vLocCompanys[i+1] and SetCompany(i+1,false))then begin
+				for (j=0;j<locshcnt;j=j+1) begin
+					SHr.SerNr = aLocSH[j];
+					if(ReadFirstMain(SHr,1,true))then begin
+						testf = false;
+						rwcnt = matrowcnt(SHr);
+						for (y=0;y<rwcnt;y=y+1)begin
+							matrowget(SHr,y,SHrw);
+							if(StringToLongInt(mid(SHrw.SerialNr,3,len(SHrw.SerialNr)-12))==Retr.OrdNr and vLocRetItemsQuant[SHrw.ArtCode]>0)then begin
+								testf = true;
+							end;
+							if(testf)then begin
+								BlockLoad(LMb);
+								r = PasteSHInRet(SHr,LocRetr,LMb.DefReturnLocation);
+								mtrw = matrowcnt(LocRetr);
+								for (l=mtrw;l>=0;l=l+1)begin
+									matrowget(LocRetr,l,LocRetrw);
+									if(vLocRetItemsQuant[LocRetrw.ArtCode]>0)then begin
+										if(vLocRetItemsQuant[LocRetrw.ArtCode]<LocRetrw.Quant)then begin
+											LocRetrw.Quant = vLocRetItemsQuant[LocRetrw.ArtCode];
+											vLocRetItemsQuant[LocRetrw.ArtCode] = 0;
+											matrowput(LocRetr,l,LocRetrw);
+										end else begin
+											vLocRetItemsQuant[LocRetrw.ArtCode] = vLocRetItemsQuant[LocRetrw.ArtCode] - LocRetrw.Quant;
+										end;
+									end else begin
+										matrowdelete(LocRetr,l);
+									end;
+								end;
+								if(RecordStore(LocRetr,true))then begin
+									CreateRecordLink(LocRetr,CurrentCompany,Retr,29);
+									CreateRecordLink(Retr,29,LocRetr,CurrentCompany);
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+		ResetCompany(29);
+	end;
+
+
+	return;
+end;
+
+
 
 global
 updating function LongInt RetVcRecordCheck(var record RetVc Retp,record RetVc Ret2p,LongInt stat,LongInt check)
@@ -817,6 +924,9 @@ LRetVcRecordCheck_GenTrans:;
       end;
     end;    
   end;
+	if(currentcompany==29 and Retp.OKFlag==1)then begin
+		CreateLocalRetFromECRet(Retp);
+	end;
 LRetVcRecordCheck:;  
   if (res!=0) then begin
     Retp.SerNr = oldnr;
