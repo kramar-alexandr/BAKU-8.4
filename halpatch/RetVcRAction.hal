@@ -82,6 +82,7 @@ external function LongInt PastePUInRetPU(record PUVc,var record RetPUVc);
 remote updating function Integer RecordAction_raPasteRetInInv(var record IVVc,LongInt);
 remote updating function Integer RecordAction_raPasteRetPUInVI(var record VIVc,LongInt);
 remote updating function Integer CreateCreditNoteVI(record VIVc,var record VIVc);
+remote function Boolean PasteRetInInv2(var record IVVc,record RetVc,Boolean);
 
 function Integer ValidateBulkSerialNoRow(record SerNrTrackBlock SNrb,record RetVc Retr,row RetVc Retrw,Integer currow,var string gotofield,var Integer gotorow)
 begin
@@ -174,6 +175,11 @@ row RetPUVc RetPUrw;
 record IVVc IVr;
 record VIVc VIr, credVIr;
 row VIVc credVIrw;
+record SRBlock SRb;
+LongInt newnr;
+string 255 tstr;
+Boolean nousersernr;
+record CUVc CUr;
 
 
 	rwcnt = matrowcnt(Retr);
@@ -194,7 +200,6 @@ row VIVc credVIrw;
 				while (ReadRecordLink(LocORr,i,SHr,RL2r))begin
 					aLocSH[locshcnt] = SHr.SerNr;
 					vLocSHf[locshcnt] = true;
-					logtext(0,locshcnt);
 					locshcnt = locshcnt + 1;
 					i = i + 1;
 				end;
@@ -262,9 +267,40 @@ row VIVc credVIrw;
 									CreateRecordLink(LocRetr,CurrentCompany,Retr,29);
 									CreateRecordLink(Retr,29,LocRetr,CurrentCompany);
 									vLocSHf[j] = false;
-									r = RecordAction_raPasteRetInInv(IVr,LocRetr.SerNr);
-									IVr.PayDeal = "CN";
-									RecordStore(IVr,true);
+									RecordNew(IVr);
+									IVr.SerNr = -1;
+									IVr.UpdStockFlag = 0;
+									if(PasteRetInInv2(IVr,LocRetr,false))then begin
+										if (IVr.SerNr==-1) then begin
+										BlockLoad(SRb);
+											if ((IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales) and (SRb.LastCredInvNr!=-1))  then begin
+												newnr = GetCurUserLastNr("CreditIVVc");
+												if (newnr<=0) then begin
+													newnr = SRb.LastCredInvNr;
+												end;
+												nousersernr = true;
+											end else begin
+												if ((IVr.InvType==kInvoiceTypeCash or IVr.InvType==kInvoiceTypeCashInvoiceReceiptPRT) and (SRb.LastCashInvNr!=-1))  then begin
+													newnr = SRb.LastCashInvNr;
+													nousersernr = true;
+													if (newnr==-1) then begin
+														newnr = GetCurUserLastNr("IVVc");
+														nousersernr = false;
+													end;
+												end else begin
+													newnr = GetCurUserLastNr("IVVc");
+													if (newnr<=0) then begin
+														newnr = SRb.LastInvNr;
+													end;
+												end;
+											end;
+										end;
+										IVr.SerNr = NextSerNr("IVVc",IVr.TransDate,newnr,true,"");
+										IVr.PayDeal = "CN";
+										RecordInsert(IVr,true);
+										CreateRecordLink(IVr,CurrentCompany,LocRetr,CurrentCompany);  
+										CreateRecordLink(LocRetr,CurrentCompany,IVr,CurrentCompany);  
+									end;
 								end;
 							end;
 						end;
@@ -274,7 +310,6 @@ row VIVc credVIrw;
 		end;
 		ResetCompany(29);
 		for (i=0;i<pucnt;i=i+1)begin
-			logtext(0,vPUNr[i]);
 			PUr.SerNr = vPUNr[i];
 			if (ReadFirstMain(PUr,1,true))then begin
 				RecordNew(RetPUr);
@@ -301,23 +336,17 @@ row VIVc credVIrw;
 					if(MatRowCnt(RetPUr)>0)then begin
 						CreateRecordLink(PUr,CurrentCompany,RetPUr,CurrentCompany);
 						CreateRecordLink(RetPUr,CurrentCompany,PUr,CurrentCompany);
+						j = 1;
+						while (ReadRecordLink(PUr,j,VIr,RLr))begin
+							r = CreateCreditNoteVI(VIr,credVIr);
+							credVIr.PayDeal = "CN";
+							if(RecordStore(credVIr,true))then begin
+								CreateRecordLink(RetPUr,CurrentCompany,credVIr,CurrentCompany);  
+								CreateRecordLink(credVIr,CurrentCompany,RetPUr,CurrentCompany);  
+							end;
+							j = j + 1;
+						end;
 					end;
-				end;
-				j = 1;
-				while (ReadRecordLink(PUr,j,VIr,RLr))begin
-					r = CreateCreditNoteVI(VIr,credVIr);
-					matrowget(credVIr,0,credVIrw);
-					credVIrw.Sum = RetPUr.SumCostPrice;
-					matrowput(credVIr,0,credVIrw);
-					matrowget(credVIr,1,credVIrw);
-					credVIrw.Sum = RetPUr.SumCostPrice * 0.36;
-					matrowput(credVIr,1,credVIrw);
-					credVIr.PayDeal = "CN";
-					if(RecordStore(credVIr,true))then begin
-						CreateRecordLink(VIr,CurrentCompany,credVIr,CurrentCompany);  
-						CreateRecordLink(credVIr,CurrentCompany,VIr,CurrentCompany);  
-					end;
-					j = j + 1;
 				end;
 			end;
 		end;

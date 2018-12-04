@@ -14,6 +14,9 @@ external procedure VISumup(record VIVc,var val);
 remote procedure VICalcVals(var record VIVc);
 external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
 external procedure PUSumUp(var record PUVc);
+remote procedure PUVc_PasteCostPrice(var record PUVc,Integer);
+remote function Boolean VIDClassSumEFAfter(Integer,Integer,Integer);
+external function val CalculateVINettVal(record VIVc,Boolean);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -429,7 +432,7 @@ end;
 
 global updating procedure CreateECPOfromLocalOR(record SHVc SHr)
 begin
-	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c;
+	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c,vimtrw,vii;
 	record ORVc ORr, ECORr;
 	row ORVc ORrw, ECORrw;
 	record SHVc SH2r;
@@ -439,16 +442,16 @@ begin
 	string 50 ostr;
 	array string 100 class,artcode,itemcurrency;
 	record INVc INr;
-	boolean foundf,TrHs,testf,cuf;
+	boolean foundf,TrHs,testf,cuf,chsum;
 	record CUVc CUr;
 	record DIVc DIr;
 	string 200 vendor,loccode,errmsg;
-	vector string 255 ECCodes, vItemCurrency, OldNewArt;
+	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
 	vector boolean vArtCodeRepeat;
-	vector integer vArtCodeQTY, ECArt;
-	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant;
+	vector integer vArtCodeQTY, ECArt,priceinorcnt;
+	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant, vItemHTotCostPr, ItemORPriseWRebate;
 	record VIVc VIr;
 	row VIVc VIrw;
 	record RcVc RepSpec;
@@ -457,8 +460,8 @@ begin
 	record RLinkVc RLinkr;
 	record PUVc PUr;
 	row PUVc PUrw;
-	val ct, SumFO;
-	val fr,to1,to2,br1,br2,TotfifoRowSum;
+	val ct, SumFO, itemtotcost;
+	val fr,to1,to2,br1,br2,totivsum;
 	record ItemHistVc IHr;
 	
 	BlockLoad(CBb);
@@ -476,6 +479,7 @@ begin
 			ECArt[SHrw.ArtCode] = SHrw.Ordered;
 			INr.Code = SHrw.ArtCode;
 			if(ReadFirstMain(INr,1,true))then begin
+				vBarCode[INr.Code] = INr.BarCode;
 				SH2r.SerNr = SHr.SerNr;
 				if(ReadfirstMain(SH2r,1,true))then begin end;
 				for(j=0;j<cucnt;j=j+1)begin
@@ -491,12 +495,13 @@ begin
 					IHr.Row = j;
 					if (ReadFirstKey("FNTransNr",IHr,3,true))then begin
 						vItemRowCostCurrPrice[SH2rw.ArtCode] = vItemRowCostCurrPrice[SH2rw.ArtCode] + IHr.TotCostPriceCurncy;
+						vItemHTotCostPr[SHrw.ArtCode] = vItemHTotCostPr[SHrw.ArtCode] + IHr.TotCostPrice;
 						vItemRowQuant[SH2rw.ArtCode] = vItemRowQuant[SH2rw.ArtCode] - IHr.Qty;
 					end;
 				end;
 				
 				vItemPrice[SHrw.ArtCode] = vItemRowCostCurrPrice[SHrw.ArtCode] / vItemRowQuant[SHrw.ArtCode];
-				vItemFifo[SHrw.ArtCode] = SHrw.FIFORowVal / vItemRowQuant[SHrw.ArtCode];
+				vItemFifo[SHrw.ArtCode] = vItemHTotCostPr[SHrw.ArtCode] / vItemRowQuant[SHrw.ArtCode];
 				if(cuf)then begin
 					itemcurrency[cucnt] = INr.LastPurchCurncyCode;
 					cucnt = cucnt + 1;
@@ -505,6 +510,7 @@ begin
 		end;
 		For(i=0;i<mtrw;i=i+1) begin
 			matrowget(ORr,i,ORrw); 
+			ItemORPriseWRebate[ORrw.ArtCode & "_" & ORrw.Price] = ORrw.Price - ((ORrw.Price / 100) * ORrw.vRebate);
 			if(ECArt[ORrw.ArtCode]>0)then begin
 				ECCodes[ORrw.GlobalItemArtCode] = "Y";
 				vArtCodeQTY[ORrw.GlobalItemArtCode] = ECArt[ORrw.ArtCode];
@@ -513,6 +519,8 @@ begin
 	end;
 	
 	OldComp = CurrentCompany;
+	
+	
 	
 	if(SetCompany(29,false))then begin
 		for(c=0;c<cucnt;c=c+1)begin
@@ -544,7 +552,6 @@ begin
 			end;
 			
 			POr.VECode = "FOB_" & CBrw.ShortName;
-			POr.Objects = loccode;
 			POr.Addr0 = "FOB_" & CBrw.CompName;
 			POr.TransDate = CurrentDate;
 			POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");   
@@ -558,11 +565,11 @@ begin
 					INr.Code = ECCodes[ORrw.GlobalItemArtCode];
 					if(readfirstmain(INr,1,true))then begin
 						vendor = INr.BPIBrand;
-						
 						if(vArtCodeRepeat[ECCodes[ORrw.GlobalItemArtCode]] and vItemCurrency[right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9)]==itemcurrency[c])then begin
 							OldNewArt[ECCodes[ORrw.GlobalItemArtCode]] = right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9);
 							vArtCodeRepeat[ECCodes[ORrw.GlobalItemArtCode]] = false;
 							POrw.ArtCode = ECCodes[ORrw.GlobalItemArtCode];
+							itemtotcost = itemtotcost + ItemORPriseWRebate[ORrw.ArtCode & "_" & ORrw.Price];
 							matrowput(POr,rownum,POrw);
 							POVc_PasteArtCode(POr,rownum,false);
 							matrowget(POr,rownum,POrw);
@@ -576,14 +583,13 @@ begin
 							POVc_PasteQuant(POr,rownum);
 							rownum = rownum + 1;
 						end;
-							
 					end;
 				end;
 			end;
 			matrowget(CBb,OldComp-1,CBrw);
 			POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
 			POr.VECode = "FOB_" & CBrw.ShortName;
-			POr.Objects = loccode;
+			POr.Comment = loccode;
 			POr.Addr0 = "FOB_" & CBrw.CompName;
 			POr.CurncyCode = itemcurrency[c];
 			POr.CheckCurncyCode = itemcurrency[c];
@@ -599,9 +605,13 @@ begin
 			mtrw = matrowcnt(PUr);
 			for (i=0;i<mtrw;i=i+1)begin
 				matrowget(PUr,i,PURw); 
-				PURw.UPrice = vItemPrice[OldNewArt[ECCodes[ORrw.GlobalItemArtCode]]];
-				PURw.CostPrice = vItemFifo[OldNewArt[ECCodes[ORrw.GlobalItemArtCode]]];
-				PURw.Sum = vItemPrice[OldNewArt[ECCodes[ORrw.GlobalItemArtCode]]] * PURw.Quant;
+				PURw.UPrice = vItemPrice[OldNewArt[PURw.ArtCode]];
+				PURw.CostPrice = vItemFifo[OldNewArt[PURw.ArtCode]];
+				PUrw.ECCSTItCode = OldNewArt[PURw.ArtCode];
+				PUrw.ECCSTItBarCode = vBarCode[OldNewArt[PURw.ArtCode]];
+				matrowput(PUr,i,PURw); 
+				PUVc_PasteCostPrice(PUr,i);
+				matrowget(PUr,i,PURw); 
 				matrowput(PUr,i,PURw); 
 				PUSumUp(PUr);
 			end;
@@ -610,20 +620,36 @@ begin
 				if(r==0)then begin
 					if(ReadFirstMain(VIr,1,true))then begin
 						VIr.OKFlag = 1;
-						VIrw.stp = 1;
+						vimtrw = matrowcnt(VIr);
+						for (vii=vimtrw;vii>=0;vii=vii-1)begin
+							matrowdelete(VIr,vii);
+						end;
+						vimtrw = matrowcnt(PUr);
+						for (vii=0;vii<mtrw;vii=vii+1)begin
+							VIrw.AccNumber = "41/01";
+							matrowput(VIr,vii,VIrw);
+							VIVc_PasteAccNumber(VIr,"41/01",true,vii);
+							matrowget(VIr,vii,VIrw);
+							matrowget(PUr,vii,PUrw);
+							VIrw.Sum = PUrw.CostPrice * PUrw.Quant;
+							VIrw.Item = PUrw.ArtCode;
+							VIrw.qty = PUrw.Quant;
+							VIrw.SerialNr = PUrw.SerialNr;
+							matrowput(VIr,vii,VIrw);
+						end;
+						VIr.PayVal = CalculateVINettVal(VIr,true);
 						VIrw.AccNumber = "76";
-						MatRowput(VIr,1,VIrw);
-						VIVc_PasteAccNumber(VIr,"76",1,1);
-						MatRowGet(VIr,1,VIrw);
-						MatRowPut(VIr,1,VIrw);
-						MatRowGet(VIr,0,VIrw);
-						SumFO = VIrw.Sum*0.36;
-						MatRowGet(VIr,1,VIrw);
-						VIrw.Sum = SumFO;
-						MatRowPut(VIr,1,VIrw);
-						VICalcVals(VIr);
-						VISumup(VIr,ct);
-						MatRowGet(VIr,1,VIrw);
+						matrowput(VIr,mtrw,VIrw);
+						VIVc_PasteAccNumber(VIr,"41/01",true,mtrw);
+						matrowget(VIr,mtrw,VIrw);
+						VIrw.Sum = VIr.PayVal * 0.36;
+						VIrw.Item = "";
+						VIrw.qty = blankval;
+						VIrw.SerialNr = "";
+						matrowput(VIr,mtrw,VIrw);
+						VIr.PayVal = CalculateVINettVal(VIr,true);
+						VIr.CurncyCode = "AZN";
+						matrowget(PUr,mtrw,PUrw);
 						if(RecordStore(VIr,true))then begin 
 							CreateRecordLink(PUr,CurrentCompany,VIr,CurrentCompany);  
 							CreateRecordLink(VIr,CurrentCompany,PUr,CurrentCompany);  
@@ -634,24 +660,6 @@ begin
 			createrecordlink(PUr,CurrentCompany,SHr,OldComp);
 			createrecordlink(SHr,OldComp,PUr,CurrentCompany);
 			RecordDelete(POr);
-			/*RepSpec.FirstVer = POr.SerNr;
-			RepSpec.f1 = POr.VECode;
-			ReportDefaults(RepSpec,"VIFromPOVClass");
-			RepSpec.flags[0] = 1;
-			RepSpec.flags[1] = 1;
-			RepSpec.flags[2] = 1;
-			RepSpec.flags[3] = 1;
-			RepSpec.flags[4] = 1;
-			RepSpec.flags[5] = 1;
-			RepSpec.flags[6] = 1;
-			RepSpec.flags[7] = 1;
-			r = CreateVIFromPO(POr.SerNr,RepSpec,VIr);
-			if(r==0)then begin
-				VIr.OKFlag = 1;
-				if(RecordStore(VIr,true))then begin end;
-			end else begin
-				logtext(0,"Not created: " & r);
-			end;*/
 		end;
 	end;
 	ResetCompany(OldComp);
