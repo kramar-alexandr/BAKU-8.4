@@ -774,7 +774,7 @@ begin
   row IVVc IV2rw;
   row RetVc Retrw;
   Integer i,ivcnt;
-  Integer j,rtcnt;
+  Integer j,rtcnt,lcnt,SHcnt;
   Integer cnt,sernrf;
   LongInt sernr;
   Boolean found,infound,credinvf;
@@ -786,208 +786,306 @@ begin
   record GeneralOptionBlock GenOptRec;
   record CostAccBlock CostAccRec;
   Date blankd;
+	record ORVc ORr;
+	record SHVc SHr;
+	record RLinkVc RLr;
 
   BlockLoad(GenOptRec);
   BlockLoad(CostAccRec);
   res = true;
-  BlockLoad(ARAccRec);          
-  if (Retp.OrdNr>0) then begin
-    IVr.SerNr = -1;  
-    found = true;
-    IVr.OrderNr = Retp.OrdNr;
-    while (LoopBackKey("OrderNr",IVr,1,found)) begin
-      if (IVr.OrderNr!=Retp.OrdNr) then begin 
-        found = false;
-      end;
-      if (found and IVr.InvType<>kInvoiceTypeCredit) then begin
-        if (ivfound) then begin
-          morethanoneinf = true;
-          found = false;
-        end;
-        ivfound = true;
-      end;    
-    end;
-    ResetLoop(IVr);  
-    IVr.SerNr = -1;  
-    found = true;
-    IVr.OrderNr = Retp.OrdNr;
-    while (LoopBackKey("OrderNr",IVr,1,found)) begin
-      if (IVr.OrderNr!=Retp.OrdNr) then begin 
-        found = false;
-      end;
-      if (found) then begin
-        rtcnt = MatRowCnt(Retp);
-        ivcnt = MatRowCnt(IVr);
-        for (j=0;j<rtcnt;j=j+1) begin
-          MatRowGet(Retp,j,Retrw);
-          if (vremqf[j]==false) then begin
-            vremq[j] = Retrw.Quant;
-            vremqf[j] = true;
-          end;
-					logtext(0,Retrw.OrdRow);
-          if ((vremq[j]!=0) and (Retrw.OrdRow!=-1)) then begin
-            ivcnt = MatRowCnt(IVr);
-            for (i=0;i<ivcnt;i=i+1) begin
-              MatRowGet(IVr,i,IVrw);
-              if ((Retrw.ArtCode==IVrw.ArtCode) and (Retrw.OrdRow==IVrw.OrdRow)) then begin
-                if (credinvf==false) then begin
-                  NewCreditNote(credIVr,IVr,ARAccRec,Retp,morethanoneinf,false);
-                  cnt = MatRowCnt(credIVr);
-                  credinvf = true;
-                end;
-                ClearRow(credIVr,IV2rw,1);
-                IV2rw.stp = 1;
-                CopyRow(credIVr,IVrw,IV2rw);
-                IV2rw.RetRow = j;
-  //              IV2rw.Quant = Retrw.Quant;
-                IV2rw.Quant = RetVc_FindQtyToBeCredited(Retp.OrdNr,Retrw.OrdRow);
-                if (IV2rw.Quant>vremq[j]) then begin
-                  IV2rw.Quant = vremq[j];
-                end;
-                vremq[j] = vremq[j] - IV2rw.Quant;
-                if (IV2rw.Quant<=0) then begin 
-                  goto L77PasteRetInInvRow;
-                end;
-                
-                IV2rw.Location = Retrw.Location;
-                IV2rw.FIFO = Retrw.UPrice;
-                IV2rw.FIFORowVal = IV2rw.Quant*IV2rw.FIFO;
-                if (IV2rw.Quant!=0) then begin
-                  IV2rw.Sum = (IVrw.Sum/IVrw.Quant)*IV2rw.Quant;
-                end;
-                IV2rw.SerialNr = Retrw.SerialNr;
-                infound = ReadFirstItem(IVrw.ArtCode,INr,true,false);
-                IV2rw.Perceptions = INr.Perceptions;
-                MatRowPut(credIVr,cnt,IV2rw);
-                IVDchsum(credIVr,cnt);
-                cnt = cnt + 1;
-                if (infound) then begin
-                  if (nonblank(INr.InvRecepy)) then begin
-                    if (IV2rw.Price==0) then begin
-                      IV2rw.Price = INr.UPrice1;
-                      CalcSum(IV2rw.Quant,IV2rw.Price,INr.PriceFactor,IV2rw.vRebate,t,GenOptRec.UseDiscount);
-                      IV2rw.Sum = t;
-                      MatRowPut(credIVr,cnt-1,IV2rw);
-                    end;  
-                    Do_InvoiceRecepy(credIVr,INr,cnt);
-                    cnt = MatRowCnt(credIVr);
-                  end;
-                end;              
-L77PasteRetInInvRow:;              
-  //              found = false;//???????
-                goto L77PasteRetInInv;
-              end;
-            end;   
-          end;
-L77PasteRetInInv:;
-        end;
-      end;
-L88PasteRetInInv:;
-    end;
-  end else begin
-    ResetLoop(IVr);  
-    IVr.SerNr = -1;  
-    found = true;
-    IVr.SVONr = Retp.SVONr;
-    while (LoopBackKey("SVONr",IVr,1,found)) begin
-      if (IVr.SVONr!=Retp.SVONr) then begin 
-        found = false;
-      end;
-      if (found and IVr.InvType<>kInvoiceTypeCredit) then begin
-        if (ivfound) then begin
-          morethanoneinf = true;
-          found = false;
-        end;
-        ivfound = true;
-      end;    
-    end;
-    if (ivfound) then begin
-      ResetLoop(IVr);  
-      IVr.SerNr = -1;  
-      found = true;
-      IVr.SVONr = Retp.SVONr;
-      while (LoopBackKey("SVONr",IVr,1,found)) begin
-        if (IVr.SVONr!=Retp.SVONr) then begin 
-          found = false;
-        end;
-        if (found) then begin
-          rtcnt = MatRowCnt(Retp);
-          ivcnt = MatRowCnt(IVr);
-          for (j=0;j<rtcnt;j=j+1) begin
-            MatRowGet(Retp,j,Retrw);
-            if (vremqf[j]==false) then begin
-              vremq[j] = Retrw.Quant;
-              vremqf[j] = true;
-            end;
-            if ((vremq[j]!=0) and (Retrw.WSRow!=-1)) then begin
-              ivcnt = MatRowCnt(IVr);
-              for (i=0;i<ivcnt;i=i+1) begin
-                MatRowGet(IVr,i,IVrw);
-//                if ((Retrw.ArtCode==IVrw.ArtCode) and (Retrw.SVORow==IVrw.OrdRow)) then begin
-                if (Retrw.ArtCode==IVrw.ArtCode) then begin
-                  if (credinvf==false) then begin
-                    NewCreditNote(credIVr,IVr,ARAccRec,Retp,morethanoneinf,false);
-                    cnt = MatRowCnt(credIVr);
-                    credinvf = true;
-                  end;
-                  ClearRow(credIVr,IV2rw,1);
-                  IV2rw.stp = 1;
-                  CopyRow(credIVr,IVrw,IV2rw);
-                  IV2rw.RetRow = j;
-                  IV2rw.Quant = Retrw.Quant;
-//                  IV2rw.Quant = RetVc_FindQtyToBeCredited(Retp.OrdNr,Retrw.OrdRow);
-                  if (IV2rw.Quant>vremq[j]) then begin
-                    IV2rw.Quant = vremq[j];
-                  end;
-                  vremq[j] = vremq[j] - IV2rw.Quant;
-                  if (IV2rw.Quant<=0) then begin 
-                    goto L77PasteRetInInvSVORow;
-                  end;
-                  
-                  IV2rw.Location = Retrw.Location;
-                  IV2rw.FIFO = Retrw.UPrice;
-                  IV2rw.FIFORowVal = IV2rw.Quant*IV2rw.FIFO;
-                  if (IV2rw.Quant!=0) then begin
-                    IV2rw.Sum = (IVrw.Sum/IVrw.Quant)*IV2rw.Quant;
-                  end;
-                  IV2rw.SerialNr = Retrw.SerialNr;
-                  infound = ReadFirstItem(IVrw.ArtCode,INr,true,false);
-                  IV2rw.Perceptions = INr.Perceptions;
-                  MatRowPut(credIVr,cnt,IV2rw);
-                  IVDchsum(credIVr,cnt);
-                  cnt = cnt + 1;
-                  if (infound) then begin
-                    if (nonblank(INr.InvRecepy)) then begin
-                      if (IV2rw.Price==0) then begin
-                        IV2rw.Price = INr.UPrice1;
-                        CalcSum(IV2rw.Quant,IV2rw.Price,INr.PriceFactor,IV2rw.vRebate,t,GenOptRec.UseDiscount);
-                        IV2rw.Sum = t;
-                        MatRowPut(credIVr,cnt-1,IV2rw);
-                      end;  
-                      Do_InvoiceRecepy(credIVr,INr,cnt);
-                      cnt = MatRowCnt(credIVr);
-                    end;
-                  end;              
-  L77PasteRetInInvSVORow:;              
-    //              found = false;//???????
-                  goto L77PasteRetInInvSVO;
-                end;
-              end;   
-            end;
-  L77PasteRetInInvSVO:;
-          end;
-        end;
-L88PasteRetInInvSVO:;
-      end;
-    end;
-  end;
+  BlockLoad(ARAccRec);   
+	if(Retp.CustCode=="FOBE_COMMERCE")then begin
+		ORr.SerNr = Retp.OrdNr;
+		if(ReadfirstMain(ORr,1,true))then begin
+			lcnt = 1;
+			while (ReadRecordLink(ORr,lcnt,SHr,RLr))begin
+				if(SHr.SerNr==Retp.SHNr)then begin
+					SHcnt = lcnt;
+					logtext(0,SHcnt);
+				end;
+				lcnt = lcnt + 1;
+			end;
+			found = true;
+			if (ReadRecordLink(ORr,SHcnt,IVr,RLr))then begin
+				if (found and IVr.InvType<>kInvoiceTypeCredit) then begin
+					if (ivfound) then begin
+						morethanoneinf = true;
+						found = false;
+					end;
+					ivfound = true;
+				end;    
+			end;
+			IVr.SerNr = -1;  
+			found = true;
+			IVr.OrderNr = Retp.OrdNr;
+			if (ReadRecordLink(ORr,SHcnt,IVr,RLr))then begin
+				if (found) then begin
+					rtcnt = MatRowCnt(Retp);
+					ivcnt = MatRowCnt(IVr);
+					for (j=0;j<rtcnt;j=j+1) begin
+						MatRowGet(Retp,j,Retrw);
+						if (vremqf[j]==false) then begin
+							vremq[j] = Retrw.Quant;
+							vremqf[j] = true;
+						end;
+						logtext(0,Retrw.OrdRow);
+						if ((vremq[j]!=0) and (Retrw.OrdRow!=-1)) then begin
+							ivcnt = MatRowCnt(IVr);
+							for (i=0;i<ivcnt;i=i+1) begin
+								MatRowGet(IVr,i,IVrw);
+								if ((Retrw.ArtCode==IVrw.ArtCode) and (Retrw.OrdRow==IVrw.OrdRow)) then begin
+									if (credinvf==false) then begin
+										NewCreditNote(credIVr,IVr,ARAccRec,Retp,morethanoneinf,false);
+										cnt = MatRowCnt(credIVr);
+										credinvf = true;
+									end;
+									ClearRow(credIVr,IV2rw,1);
+									IV2rw.stp = 1;
+									CopyRow(credIVr,IVrw,IV2rw);
+									IV2rw.RetRow = j;
+		//              IV2rw.Quant = Retrw.Quant;
+									IV2rw.Quant = RetVc_FindQtyToBeCredited(Retp.OrdNr,Retrw.OrdRow);
+									if (IV2rw.Quant>vremq[j]) then begin
+										IV2rw.Quant = vremq[j];
+									end;
+									vremq[j] = vremq[j] - IV2rw.Quant;
+									if (IV2rw.Quant<=0) then begin 
+										goto L77PasteRetInInvRow;
+									end;
+									
+									IV2rw.Location = Retrw.Location;
+									IV2rw.FIFO = Retrw.UPrice;
+									IV2rw.FIFORowVal = IV2rw.Quant*IV2rw.FIFO;
+									if (IV2rw.Quant!=0) then begin
+										IV2rw.Sum = (IVrw.Sum/IVrw.Quant)*IV2rw.Quant;
+									end;
+									IV2rw.SerialNr = Retrw.SerialNr;
+									infound = ReadFirstItem(IVrw.ArtCode,INr,true,false);
+									IV2rw.Perceptions = INr.Perceptions;
+									MatRowPut(credIVr,cnt,IV2rw);
+									IVDchsum(credIVr,cnt);
+									cnt = cnt + 1;
+									if (infound) then begin
+										if (nonblank(INr.InvRecepy)) then begin
+											if (IV2rw.Price==0) then begin
+												IV2rw.Price = INr.UPrice1;
+												CalcSum(IV2rw.Quant,IV2rw.Price,INr.PriceFactor,IV2rw.vRebate,t,GenOptRec.UseDiscount);
+												IV2rw.Sum = t;
+												MatRowPut(credIVr,cnt-1,IV2rw);
+											end;  
+											Do_InvoiceRecepy(credIVr,INr,cnt);
+											cnt = MatRowCnt(credIVr);
+										end;
+									end;              
+	L77PasteRetInInvRow:;              
+		//              found = false;//???????
+									goto L77PasteRetInInv;
+								end;
+							end;   
+						end;
+	L77PasteRetInInv:;
+					end;
+				end;
+	L88PasteRetInInv:;
+			end;
+		end;
+	end else begin
+		if (Retp.OrdNr>0) then begin
+			IVr.SerNr = -1;  
+			found = true;
+			IVr.OrderNr = Retp.OrdNr;
+			while (LoopBackKey("OrderNr",IVr,1,found)) begin
+				if (IVr.OrderNr!=Retp.OrdNr) then begin 
+					found = false;
+				end;
+				if (found and IVr.InvType<>kInvoiceTypeCredit) then begin
+					if (ivfound) then begin
+						morethanoneinf = true;
+						found = false;
+					end;
+					ivfound = true;
+				end;    
+			end;
+			ResetLoop(IVr);  
+			IVr.SerNr = -1;  
+			found = true;
+			IVr.OrderNr = Retp.OrdNr;
+			while (LoopBackKey("OrderNr",IVr,1,found)) begin
+				if (IVr.OrderNr!=Retp.OrdNr) then begin 
+					found = false;
+				end;
+				if (found) then begin
+					rtcnt = MatRowCnt(Retp);
+					ivcnt = MatRowCnt(IVr);
+					for (j=0;j<rtcnt;j=j+1) begin
+						MatRowGet(Retp,j,Retrw);
+						if (vremqf[j]==false) then begin
+							vremq[j] = Retrw.Quant;
+							vremqf[j] = true;
+						end;
+						logtext(0,Retrw.OrdRow);
+						if ((vremq[j]!=0) and (Retrw.OrdRow!=-1)) then begin
+							ivcnt = MatRowCnt(IVr);
+							for (i=0;i<ivcnt;i=i+1) begin
+								MatRowGet(IVr,i,IVrw);
+								if ((Retrw.ArtCode==IVrw.ArtCode) and (Retrw.OrdRow==IVrw.OrdRow)) then begin
+									if (credinvf==false) then begin
+										NewCreditNote(credIVr,IVr,ARAccRec,Retp,morethanoneinf,false);
+										cnt = MatRowCnt(credIVr);
+										credinvf = true;
+									end;
+									ClearRow(credIVr,IV2rw,1);
+									IV2rw.stp = 1;
+									CopyRow(credIVr,IVrw,IV2rw);
+									IV2rw.RetRow = j;
+		//              IV2rw.Quant = Retrw.Quant;
+									IV2rw.Quant = RetVc_FindQtyToBeCredited(Retp.OrdNr,Retrw.OrdRow);
+									if (IV2rw.Quant>vremq[j]) then begin
+										IV2rw.Quant = vremq[j];
+									end;
+									vremq[j] = vremq[j] - IV2rw.Quant;
+									if (IV2rw.Quant<=0) then begin 
+										goto L77PasteRetInInvRow;
+									end;
+									
+									IV2rw.Location = Retrw.Location;
+									IV2rw.FIFO = Retrw.UPrice;
+									IV2rw.FIFORowVal = IV2rw.Quant*IV2rw.FIFO;
+									if (IV2rw.Quant!=0) then begin
+										IV2rw.Sum = (IVrw.Sum/IVrw.Quant)*IV2rw.Quant;
+									end;
+									IV2rw.SerialNr = Retrw.SerialNr;
+									infound = ReadFirstItem(IVrw.ArtCode,INr,true,false);
+									IV2rw.Perceptions = INr.Perceptions;
+									MatRowPut(credIVr,cnt,IV2rw);
+									IVDchsum(credIVr,cnt);
+									cnt = cnt + 1;
+									if (infound) then begin
+										if (nonblank(INr.InvRecepy)) then begin
+											if (IV2rw.Price==0) then begin
+												IV2rw.Price = INr.UPrice1;
+												CalcSum(IV2rw.Quant,IV2rw.Price,INr.PriceFactor,IV2rw.vRebate,t,GenOptRec.UseDiscount);
+												IV2rw.Sum = t;
+												MatRowPut(credIVr,cnt-1,IV2rw);
+											end;  
+											Do_InvoiceRecepy(credIVr,INr,cnt);
+											cnt = MatRowCnt(credIVr);
+										end;
+									end;              
+	L77PasteRetInInvRow:;              
+		//              found = false;//???????
+									goto L77PasteRetInInv;
+								end;
+							end;   
+						end;
+	L77PasteRetInInv:;
+					end;
+				end;
+	L88PasteRetInInv:;
+			end;
+		end else begin
+			ResetLoop(IVr);  
+			IVr.SerNr = -1;  
+			found = true;
+			IVr.SVONr = Retp.SVONr;
+			while (LoopBackKey("SVONr",IVr,1,found)) begin
+				if (IVr.SVONr!=Retp.SVONr) then begin 
+					found = false;
+				end;
+				if (found and IVr.InvType<>kInvoiceTypeCredit) then begin
+					if (ivfound) then begin
+						morethanoneinf = true;
+						found = false;
+					end;
+					ivfound = true;
+				end;    
+			end;
+			if (ivfound) then begin
+				ResetLoop(IVr);  
+				IVr.SerNr = -1;  
+				found = true;
+				IVr.SVONr = Retp.SVONr;
+				while (LoopBackKey("SVONr",IVr,1,found)) begin
+					if (IVr.SVONr!=Retp.SVONr) then begin 
+						found = false;
+					end;
+					if (found) then begin
+						rtcnt = MatRowCnt(Retp);
+						ivcnt = MatRowCnt(IVr);
+						for (j=0;j<rtcnt;j=j+1) begin
+							MatRowGet(Retp,j,Retrw);
+							if (vremqf[j]==false) then begin
+								vremq[j] = Retrw.Quant;
+								vremqf[j] = true;
+							end;
+							if ((vremq[j]!=0) and (Retrw.WSRow!=-1)) then begin
+								ivcnt = MatRowCnt(IVr);
+								for (i=0;i<ivcnt;i=i+1) begin
+									MatRowGet(IVr,i,IVrw);
+	//                if ((Retrw.ArtCode==IVrw.ArtCode) and (Retrw.SVORow==IVrw.OrdRow)) then begin
+									if (Retrw.ArtCode==IVrw.ArtCode) then begin
+										if (credinvf==false) then begin
+											NewCreditNote(credIVr,IVr,ARAccRec,Retp,morethanoneinf,false);
+											cnt = MatRowCnt(credIVr);
+											credinvf = true;
+										end;
+										ClearRow(credIVr,IV2rw,1);
+										IV2rw.stp = 1;
+										CopyRow(credIVr,IVrw,IV2rw);
+										IV2rw.RetRow = j;
+										IV2rw.Quant = Retrw.Quant;
+	//                  IV2rw.Quant = RetVc_FindQtyToBeCredited(Retp.OrdNr,Retrw.OrdRow);
+										if (IV2rw.Quant>vremq[j]) then begin
+											IV2rw.Quant = vremq[j];
+										end;
+										vremq[j] = vremq[j] - IV2rw.Quant;
+										if (IV2rw.Quant<=0) then begin 
+											goto L77PasteRetInInvSVORow;
+										end;
+										
+										IV2rw.Location = Retrw.Location;
+										IV2rw.FIFO = Retrw.UPrice;
+										IV2rw.FIFORowVal = IV2rw.Quant*IV2rw.FIFO;
+										if (IV2rw.Quant!=0) then begin
+											IV2rw.Sum = (IVrw.Sum/IVrw.Quant)*IV2rw.Quant;
+										end;
+										IV2rw.SerialNr = Retrw.SerialNr;
+										infound = ReadFirstItem(IVrw.ArtCode,INr,true,false);
+										IV2rw.Perceptions = INr.Perceptions;
+										MatRowPut(credIVr,cnt,IV2rw);
+										IVDchsum(credIVr,cnt);
+										cnt = cnt + 1;
+										if (infound) then begin
+											if (nonblank(INr.InvRecepy)) then begin
+												if (IV2rw.Price==0) then begin
+													IV2rw.Price = INr.UPrice1;
+													CalcSum(IV2rw.Quant,IV2rw.Price,INr.PriceFactor,IV2rw.vRebate,t,GenOptRec.UseDiscount);
+													IV2rw.Sum = t;
+													MatRowPut(credIVr,cnt-1,IV2rw);
+												end;  
+												Do_InvoiceRecepy(credIVr,INr,cnt);
+												cnt = MatRowCnt(credIVr);
+											end;
+										end;              
+		L77PasteRetInInvSVORow:;              
+			//              found = false;//???????
+										goto L77PasteRetInInvSVO;
+									end;
+								end;   
+							end;
+		L77PasteRetInInvSVO:;
+						end;
+					end;
+	L88PasteRetInInvSVO:;
+				end;
+			end;
+		end;
+	end;
 
   rtcnt = MatRowCnt(Retp);
   for (j=0;j<rtcnt;j=j+1) begin
     MatRowGet(Retp,j,Retrw);
-		logtext(0,"Enater01");
     if ((Retrw.OrdRow==-1) and (Retrw.SHRow==-1) and (Retrw.WSRow==-1)) then begin
-			logtext(0,"Enater1");
       if (credinvf==false) then begin
         RecordClear(IVr);
         NewCreditNote(credIVr,IVr,ARAccRec,Retp,true,true);
