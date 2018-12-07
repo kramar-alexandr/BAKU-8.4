@@ -2781,18 +2781,36 @@ begin
 	row SHVc SHrw;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
-	integer OldComp,i,mtrw,shmtrw,j;
+	integer OldComp,i,mtrw,shmtrw,j,LocComp,gORcnt,k;
 	string 255 CompName, Location;
 	Boolean TrHs,testf;
-	record ORVc ORr;
+	record ORVc ORr, GlobORr;
+	row	ORVc ORrw, GlobORrw;
+	array integer tab;
+	val ECItSum;
 	
+	LocComp = CurrentCompany;
 	blockload(Compb);
 	
 	OldComp = CurrentCompany;
 	
 	startreportnoheaderjob("Все Товары");
+	tab[0] = 20;
+	tab[1] = 60;
+	tab[2] = 120;
+	tab[3] = 170;
+	tab[4] = 220;
+	tab[5] = 270;
+	tab[6] = 320;
+	//tab[1] = 
+	//tab[1] = 
+	tab[7] = 420;
 	
-	
+	StartFormat(15);
+		outstring(20,0,"Date:",false);
+		outstring(20,0,CurrentDate,false);
+		outstring(20,0,CurrentTime,false);
+	endformat;
 	StartFormat(15);
 	
 		outstring(20,0,"Company",false);
@@ -2800,6 +2818,11 @@ begin
 		outstring(220,0,"Serial Nr",false);
 		outstring(320,0,"Official ORNr",false);
 		outstring(420,0,"Date",false);
+		outstring(420,0,"Item Name",false);
+		outstring(420,0,"Item Code",false);
+		outstring(420,0,"Quant",false);
+		outstring(420,0,"Sum",false);
+		
 
 	
 	endformat;
@@ -2813,6 +2836,7 @@ begin
 		if(Comprw.ActiveStatus==0)then begin
 			CompName = Comprw.CompName;
 			SetCompany(i+1,false);
+			LocComp = i+1;
 			TrHs = true;
 			SHr.SerNr = "";
 			SHr.Sorting = "COMPLETED";
@@ -2827,7 +2851,7 @@ begin
 						outstring(20,0,CompName,false);
 						shmtrw = matrowcnt(SHr);
 						for(j=0;j<shmtrw;j=j+1)begin
-							matrowget(SHr,j,SHrw)
+							matrowget(SHr,j,SHrw);
 							if(nonblank(Location) and !SetInSet(SHrw.Location,Location))then begin
 								Location = Location & ", " & SHrw.Location;
 							end;
@@ -2845,13 +2869,47 @@ begin
 							outstring(320,0,ORr.OfficialSerNr,false);
 						end;
 						outstring(420,0,SHr.ShipDate,false);
+						shmtrw = matrowcnt(SHr);
 					endformat;
+					for(j=0;j<shmtrw;j=j+1)begin
+						matrowget(SHr,j,SHrw);
+						StartFormat(15);
+							outstring(420,0,"",false);
+							outstring(420,0,"",false);
+							outstring(420,0,"",false);
+							outstring(420,0,"",false);
+							outstring(420,0,"",false);
+							outstring(420,0,SHrw.Spec,false);
+							outstring(420,0,SHrw.ArtCode,false);
+							outstring(420,0,SHrw.Ordered,false);
+							ECItSum = 0;
+							if(setcompany(29,false))then begin
+								GlobORr.SerNr = mid(SHrw.SerialNr,3,len(SHrw.SerialNr)-12);
+								if(ReadFirstMain(GlobORr,1,true))then begin
+									gORcnt = matrowcnt(GlobORr);
+									for (k=0;k<gORcnt;k=k+1)begin
+										matrowget(GlobORr,k,GlobORrw);
+										if(GlobORrw.ArtCode==right(SHrw.SerialNr,8))then begin
+											ECItSum = GlobORrw.Sum;
+											k = gORcnt;
+										end;
+									end;
+								end;
+							end;
+							outstring(460,0,ECItSum*SHrw.Ordered,false);
+						endformat;
+						ResetCompany(LocComp);
+					end;
 				end;
 			end;
 		end;
 	end;
 	
 	ResetCompany(OldComp);
+	
+	StartFormat(15);
+		outstring(20,0,"Курьер 1:",false);
+	endformat;
 	
 	EndJob;
 	
