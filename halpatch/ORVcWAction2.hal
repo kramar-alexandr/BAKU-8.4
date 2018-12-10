@@ -63,6 +63,7 @@ remote function Boolean ORVc_AllowSales(record ORVc,var Integer,var LongInt);
 external function Boolean UserCanChangePendingRecord(Integer);
 external procedure RoundBelCash(string,var val);
 external procedure ORSumupFrMat(var record ORVc);
+remote updating function Boolean MakeActFromIV(var record IVVc,var record ActVc);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -437,6 +438,10 @@ BEGIN
 	row ORVc ORrw;
 	integer mtrw,j;
 	array string 255 aORLocations;
+	record ActVc Actr, oldActr;
+	
+	
+	
 	testf = true;
 	mtrw = MatRowCnt(ORr);
 	j = 0;
@@ -463,7 +468,20 @@ BEGIN
 				IVr.UpdStockFlag = 1;
 				IVr.OrderNr = ORr.SerNr;
 				RecordUpdate(OldIVr,IVr,false)
-				
+				RecordNew(Actr);
+				ActVcRecordDefClient(Actr);
+				if (MakeActFromIV(IVr,Actr)) then begin 	
+					RecordCopy(oldActr,Actr);
+					Actr.Comment = "‘оздан заказ на сборку " & ORr.SerNr;
+					Actr.TodoFlag = 1;
+					Actr.CalTimeFlag = kCalTimeFlagTime;
+					Actr.AlarmType = 1;
+					Actr.SymbNr = 3;
+					if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+						CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
+						CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
+					end;
+				end;
 			end;
 		end;
 	end;
