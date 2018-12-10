@@ -840,7 +840,7 @@ begin
 	string 255 type, outdisps, mes;	
 	record BackOrderBlock BOb;
 	vector integer vItQty;
-	record ORVc ORr;
+	record ORVc ORr, OldORr;
 	row ORVc ORrw;
 	string 255 PUlocation;
 	
@@ -1523,7 +1523,7 @@ begin
                 end;
               end;
               if (PUrw.Quant!=0) then begin
-                if (SerialNrAvail2(PUrw.ArtCode,PUrw.SerialNr,PUrw.Quant)) then begin
+                if (SerialNrAvail2(PUrw.ArtCode,PUrw.SerialNr,PUrw.Quant) and currentcompany!=29) then begin
                   RecordCheckError(1243,"",i,"SerialNr");      
                   res = -1;
                   goto L99PUVcRecordCheck;
@@ -1566,7 +1566,7 @@ begin
                   end;
               end;
             end;
-            if (FIFOPerSerialNr(INr,CAb)!=0) then begin//otherwise cost price on deliveries is completely wrong
+            if (FIFOPerSerialNr(INr,CAb)!=0 and currentcompany!=29) then begin//otherwise cost price on deliveries is completely wrong
               if (SerialNrAvail2(PUrw.ArtCode,PUrw.SerialNr,1)) then begin
                 RecordCheckError(1243,"",i,"SerialNr");      
                 res = -1;
@@ -1692,21 +1692,24 @@ LPUVcRecordCheck_GenTrans:;
 			PUlocation = PUr.Comment;
 			ORr.SerNr = mid(PUrw.SerialNr,3,len(PUrw.SerialNr)-12);
 			if(ReadFirstMain(ORr,1,true))then begin
+				RecordCopy(OldORr,ORr);
 				mtrw = matrowcnt(ORr);
 				for(i=0;i<mtrw;i=i+1)begin
 					matrowget(ORr,i,ORrw);
 					if(SetInSet(ORrw.ECReservStock,PUlocation))then begin
 						if(vItQty[ORrw.ArtCode]<ORrw.Quant)then begin
+							Logtext(0,PUlocation & "<>" & vItQty[ORrw.ArtCode]);
 							ORrw.ECReceived = ORrw.ECReceived + vItQty[ORrw.ArtCode];
 							MatRowPut(ORr,i,ORrw);
 						end else begin
+							Logtext(0,PUlocation & "<>" & vItQty[ORrw.ArtCode]);
 							ORrw.ECReceived = ORrw.Quant;
 							vItQty[ORrw.ArtCode] = vItQty[ORrw.ArtCode] - ORrw.Quant;
 							MatRowPut(ORr,i,ORrw);
 						end;
 					end;
 				end;
-				if(RecordStore(ORr,true))then begin end;
+				if(RecordUpdate(OldORr,ORr,false)==0)then begin logtext(0,"Enter"); end;
 			end;
 		end;
 	end;
