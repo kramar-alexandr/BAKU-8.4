@@ -60,6 +60,10 @@ external procedure stripendingspaces	(	var string );
 external updating procedure UpdatePrice(record PLVc);
 external procedure ExtractObj(string,var Integer,var string);
 remote updating procedure UnReservLinkedFromWebORVc(var record ORVc,Boolean);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:43 06.12.2018
+remote function Boolean StockMovVc_PasteArtCode(var record StockMovVc,Integer,Integer,var array string);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 18:22 13.12.2018
+remote procedure StockMovVc_PasteSerialNr(var record StockMovVc,Integer,var array string);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 18:22 13.12.2018
+remote function Boolean StockMovVc_PasteQuant(var record StockMovVc,Integer);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 18:23 13.12.2018
+
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -9476,6 +9480,116 @@ begin
 	DelECOrLocReserves;
 return;
 end;
+
+
+
+
+
+
+
+
+global updating procedure CreateStockMvFromRetStock()
+begin
+	record ItemStatusVc ISr;
+	record ItemHistVc IHr;
+	integer ItQt,i;
+	boolean TrHs, TrHs2, testf, testf2;
+	string 255 Location;
+	vector integer vItQt;
+	array string 255 ItCode, ItSrNr, aWarning;
+	record StockMovVc StockMovr;
+  row StockMovVc StockMovrw;
+  row PUVc PUrw;
+  Integer rwcnt,smrwcnt;
+  record MainStockBlock MainRec;
+  string 20 toposcode,lastpalletitem;
+  record INVc INr;
+  record LocationVc LocRec;
+  Boolean storesmf, res;  
+	
+	
+	
+	Location = "RETURN";
+	
+	if(currentcompany==29)then begin
+		TrHs = true;
+		ISr.Location = Location;
+		while (loopkey("Location",ISr,1,TrHs)) begin
+			testf = true;
+			if(ISr.Location!=Location)then begin TrHs = false; testf = false; end;
+			if(ISr.Instock<=0)then begin testf = false; end;
+			if(testf)then begin
+				IHr.FileName = "RetVc";
+				IHr.ArtCode = ISr.Code;
+				IHr.TransDate = CurrentDate;
+				IHr.SerNr = "";
+				TrHs2 = true;
+				while (loopkey("FNArtCode",IHr,4,TrHs2)) begin
+					testf2 = true;
+					if(IHr.FileName!="RetVc")then begin TrHs2 = false; end;
+					if(IHr.ArtCode!=ISr.Code)then begin TrHs2 = false; end;
+					if(IHr.TransDate!=CurrentDate)then begin TrHs2 = false; end;
+					if(IHr.Location!=Location)then begin testf2 = false; end;
+					if(TrHs2 and testf2)then begin
+						ItCode[ItQt] = IHr.ArtCode;
+						ItSrNr[ItQt] = IHr.SerialNr;
+						vItQt[ItSrNr[ItQt]] = IHr.Qty;
+						ItQt = ItQt + 1;
+					end;
+				end;
+				resetloop(IHr);
+			end;
+		end;
+		if(ItQt>0)then begin
+			RecordNew(StockMovr);  
+			StockMovr.FrLocation = Location;
+			StockMovr.ToLocation = "MAIN";
+			StockMovr.TransDate = CurrentDate;
+			StockMovr.SerNr = NextSerNr("StockMovVc",StockMovr.TransDate,-1,false,"");
+
+			rwcnt = ItQt;
+			for (i=0;i<rwcnt;i=i+1) begin
+				StockMovrw.ArtCode = ItCode[i];
+				matrowput(StockMovr,i,StockMovrw);
+				StockMovVc_PasteArtCode(StockMovr,i,1,aWarning);
+				matrowget(StockMovr,i,StockMovrw);
+				matrowput(StockMovr,i,StockMovrw);
+				StockMovrw.SerialNr = ItSrNr[i];
+				matrowput(StockMovr,i,StockMovrw);
+				StockMovVc_PasteSerialNr(StockMovr,i,aWarning);
+				matrowget(StockMovr,i,StockMovrw);
+				matrowput(StockMovr,i,StockMovrw);
+				StockMovrw.Quant = vItQt[ItSrNr[i]];
+				matrowput(StockMovr,i,StockMovrw);
+				res = StockMovVc_PasteQuant(StockMovr,i);
+				matrowget(StockMovr,i,StockMovrw);
+				matrowput(StockMovr,i,StockMovrw);
+			end;
+			
+			if (RecordInsert(StockMovr,true)) then begin end;
+		end;
+	end;
+	
+	
+	
+return;
+end;
+
+
+
+global updating procedure CreateStockMvFromRetStockMn(record RcVc RepSpec)
+begin
+	CreateStockMvFromRetStock;
+return;
+end;
+
+
+
+
+
+
+
+
 
 
 
