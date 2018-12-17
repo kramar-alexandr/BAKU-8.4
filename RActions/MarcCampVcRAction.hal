@@ -2675,8 +2675,8 @@ begin
 	area getpost;
 	string 255 filename;
 	json datajson;
-	record ORVc ORr;
-	row ORVc ORrw;
+	record ORVc ORr,OldORr;
+	row ORVc ORrw,OldORrw;
 	string 255 uname,pn,ph,em,sn;
 	string 155 id,sum;
 	array string 255 prod,prodn,quant,suma;
@@ -2684,10 +2684,10 @@ begin
 	longint a;
 	string 255 hex,out,warning,errstr;
 	
-	SetCompany(1,false);
+	SetCompany(29,false);
 	logtext(0,"WebCreateOrder");
 	webgetpostdata(getpost);
-	AddfiletoArea("C:/Users/Anton/Desktop/Order20181213134127.txt",getpost,false);
+	//AddfiletoArea("C:/Users/Anton/Desktop/Order20181213134127.txt",getpost,false);
 	a = GetArealength(getpost);
 	datajson = ParseJsonArea(getpost);
 	filename = "Orders/Order" & datetostring(currentdate,"YYYYMMDD") & TimeToString(currenttime,"HHMMSS",false) & ".txt";
@@ -2712,23 +2712,27 @@ begin
 		suma[i] = JSONGet(datajson,"basket_items[0]/["  & i & "]/sum");
 	end;
 	RecordNew(ORr);
-	ORr.SerNr = NextSerNr("ORVc",CurrentDate,-1,false,""); 
+	ORr.SerNr = NextSerNr("ORVc",CurrentDate,-1,false,"");
 	ORr.Addr0 = uname & " " & pn & " " & sn;
 	ORr.Phone = ph;
 	ORr.eMail = em;
+	
 	for(i=0;i<JSONCountChildren(datajson,"basket_items");i=i+1) begin
 		ORrw.stp = 1;
-		ORrw.ArtCode = prod[i];
-		ORrw.Spec = prodn[i];
+		ORrw.GlobalItemArtCode = prod[i];
 		ORrw.Quant = StringToVal(quant[i],M4Val);
 		ORrw.Sum = StringToVal(suma[i],M4Val);
 		ORrw.Price = ORrw.Sum/ORrw.Quant;
 		MatRowPut(ORr,i,ORrw);
 	end;
-	wn = curwindow;
 	ORr.CustCode = "NONAME";
-	PasteCustInOrder(ORr,ORr.CustCode,WindEFstr(wn),warning,errstr);
-	RecordStore(ORr,true);
+	PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,warning,errstr);
+	ORr.PayDeal = "PP";
+	ORr.SalesMan = "TEST";
+	RecordInsert(ORr,true);
+	RecordCopy(OldORr,ORr);
+	ORr.WEBReservOnStock = 1;
+	RecordUpdate(OldORr,ORr,true);
 return;
 end;
 
