@@ -1706,3 +1706,170 @@ begin
 
 return;
 end;
+
+
+
+global
+function Boolean ORVc_PasteArtCode(var record ORVc ORr,Integer rownr,var string inwarning,var string warning,Boolean varf)
+begin
+  Boolean chsum,res;
+  Boolean chrqty;
+  record INVc INr;
+  row ORVc ORrw;
+  val t,s,price,vreb,baseprice,temp,tax2prc,tax2reb;
+  string 255 curitemname,salesacc,vatcode,tstr,tax2code,location,taxtemplatecode;
+  Boolean calcprice;
+  Boolean pritemf;
+  val UnitFactQuant,UnitFactPrice,Quant;
+  Date orddate;
+  Boolean dummyf,varf2;
+  LongInt ErrorCode;
+  record TaxMatrixVc TMr;
+  Time blankt;
+  string 60 sz,msk,mskrep;
+  string 200 varsubset;
+  record CUVc CUr;
+	record LoyaltyCardVc LoyaltyCardr;
+
+  chsum = false;
+  chrqty = false;
+  pritemf = true;
+  MatRowGet(ORr,rownr,ORrw);
+  ORrw.Price = BlankVal;
+  ORrw.vRebate = BlankVal;
+  ORrw.Sum = BlankVal;
+  ORrw.SerialNr = "";
+  location = ORrw.Location;
+  if (blank(location)) then begin
+    location = ORr.Location;
+  end;  
+  GetDatePriceBasedOn(ORr.CustCode,ORr.OrdDate,ORr.DespatchDate,ORr.PlanShip,orddate);
+  if (GetItemPriceDiscount3(ORrw.ArtCode,ORrw.Quant,INr,ORr.CurncyCode,
+                            ORr.FrRate,ORr.ToRateB1,ORr.ToRateB2,ORr.BaseRate1,ORr.BaseRate2,
+                            ORr.LangCode,ORr.CustCat,ORr.PriceList,ORr.RebCode,
+                            price,curitemname,vreb,vatcode,baseprice,salesacc,
+                            ORr.ExportFlag,calcprice,orddate,blankt,ORr.CustCode,true,dummyf,ORr.PayDeal,tax2code,tax2prc,ORr.Region,location,taxtemplatecode)) then begin
+    ORrw.TaxTemplateCode = FillupTaxMatrix(0,ORr.BranchID,ORr.CustCode,ORr.CustCat,ORr.DelAddrCode,taxtemplatecode,TMr);
+    CUr.Code = ORr.CustCode;
+    ReadFirstMain(CUr,1,true);
+    if (vreb==0) then begin
+      vreb = blankval;
+    end;
+		if(currentcompany==28 and nonblank(ORr.IDDiscCard))then begin
+			LoyaltyCardr.SerNr = ORr.IDDiscCard;
+			if(readfirstmain(LoyaltyCardr,1,true))then begin
+				if(LoyaltyCardr.CustCode!=ORr.CustCode)then begin
+					vreb = ORr.IDDiscount;
+				end;
+			end;
+		end;
+    if (nonblank(INr.WarnText1)) then begin
+      inwarning = INr.WarnText1;
+    end;
+    if (!INVc_AllowSales(INr,ErrorCode)) then begin
+      warning = USetStr(ErrorCode);
+    end;
+    ORrw.OrderType = kOrderTypeDefault;
+    ORrw.Price = price;
+    ORrw.Spec = curitemname;
+    ORrw.vRebate = vreb;
+    if (CUr.RvrsVAT!=0) then begin
+      ORrw.RvrsVATCode = INr.RvrsVATCode;
+    end;
+    ORrw.VATCode = vatcode;
+    ORrw.BasePrice = baseprice;
+    ORrw.SalesAcc = salesacc;
+    ORrw.ArtCode = INr.Code;
+    ORrw.Objects = FindINObjects(INr.Objects,INr.Group);
+    ORrw.UnitCode = INr.Unittext;
+    ORrw.UnitXval = INr.Width;
+    ORrw.UnitYval = INr.Height;
+    ORrw.UnitZval = INr.Depth;
+    ORrw.OrderType = INr.DefOrderType;
+    ORrw.Source = INr.DefaultSource;
+    ORrw.PriceFactor = INr.PriceFactor;
+    ORrw.Perceptions = INr.Perceptions;
+    ORrw.CustArtCode = CustArtCode(ORr.CustCode,ORrw.ArtCode);
+    GetTaxesDiscounts(ORr.CustCode,ORr.OrdDate,ORrw.VATCode,tax2code,t,tax2reb);
+    if (ORr.NoTax2==0) then begin
+      ORrw.TAX2Code = tax2code;
+      ORrw.TAX2Prc = tax2prc;
+      ORrw.TAX2Reb = tax2reb;
+      ORrw.TAX2Acc = GetTax2Acc(ORrw.TAX2Code);
+    end;
+    if (ORr.NoTax1==0) then begin
+      ORrw.TAX1Reb = t;
+    end;
+    if (nonblank(ORrw.UnitCode)) then begin
+      price = ORrw.Price;
+      Quant = ORrw.Quant;
+      chrqty = SetUnitFactor(ORrw.UnitCode,UnitFactQuant,ORrw.UnitXval,ORrw.UnitYval,ORrw.UnitZval,UnitFactPrice,Quant,price,ORrw.UnitComment,false);
+      if (chrqty) then begin
+        ORrw.UnitFactQuant = UnitFactQuant;
+        ORrw.UnitFactPrice = UnitFactPrice;
+        ORrw.Quant = Quant;
+        ORrw.Price = price;
+      end;
+    end;
+    if (nonblank(INr.DefLocation)) then begin
+      ORrw.Location = INr.DefLocation;
+    end;
+    if ((INr.ItemType==2) and (nonblank(INr.Recepy))) then begin
+      ORrw.Recepy = INr.Recepy;
+    end else begin 
+      ORrw.Recepy = "";
+    end;
+    if (nonblank(ORr.CustVATCode)) then begin
+      ORrw.VATCode = ORr.CustVATCode;
+    end;
+    if (calcprice) then begin
+      MatRowPut(ORr,rownr,ORrw);
+      temp = -1;
+      ORVcGetCalcItemPrice(INr,ORr,rownr,temp);
+      MatRowGet(ORr,rownr,ORrw);
+    end;
+    PackRowFieldMatrix(ORrw,"TaxMatrix",TMr);
+    MatRowPut(ORr,rownr,ORrw);
+
+//    if ((INr.ExplodeRec==0) or (blank(ORrw.Recepy))) and (varf==false) then begin
+//why
+      MatRowGet(ORr,rownr,ORrw);
+      ORMultiLineText(ORr,INr,ORr.LangCode,rownr);
+//    end;
+    
+    if (ORDchrsum(ORr,rownr)) then begin
+      ORDchsum(ORr,rownr);
+    end;
+    if (GuiType==kGuiiPhone or GuiType==kGuiAndroid or IsBooks) then begin
+      if (ORrw.Quant==0) then begin
+        if (FindItemVAR(INr.Code,sz,msk,mskrep,varsubset)) then begin//should be taken from GetItemPriceDiscount3
+          varf2 = true;
+        end;
+        if (varf2==false) then begin
+          MatRowGet(ORr,rownr,ORrw);
+          ORrw.Quant = 1;
+          MatRowPut(ORr,rownr,ORrw);
+          ORVc_PasteQuant(ORr,rownr,true,chsum);
+        end;
+      end;
+    end;
+    if (chrqty) then begin
+      chsum = ORDchrsum(ORr,rownr);
+      if (chsum) then begin
+        ORDchsum(ORr,rownr);
+      end;
+    end;
+    if (nonblank(INr.RvrsVATCode) and ORrw.Quant>0) then begin
+      ORPasteRvrsVATCode(ORr,false);
+    end;
+    ORSumup(ORr);
+    res = true;
+  end else begin
+    if (nonblank(ORrw.ArtCode)) then begin
+      warning = USetStr(1120) & ORrw.ArtCode;
+    end;
+  end;
+  ORVc_PasteArtCode = res;
+  return;
+end;
+
