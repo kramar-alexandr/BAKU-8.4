@@ -385,15 +385,30 @@ END;
 
 function Boolean OPDClassPrepayNrEFAfter(Integer wn,Integer rownr,Boolean changedf)
 BEGIN
-  Boolean res;
+  Boolean res,test,test2;
   record OPVc OPr;
-
-  res = true;
-  if (changedf) then begin
+	row OPVc OPr2w,OPrw;
+	integer cnt,i;
+	longint biggest;
+  res = false;
+	biggest = 0;
     GetWindowRecord(wn,OPr);
-    OPVc_PastePrepayNr(OPr,rownr);
-    PutWindowRecord(wn,OPr);
-  end;
+		matrowget(OPr,rownr,OPr2w);
+			if(OPr2w.InstNr==-1 and nonblank(OPr2w.VECode)) then begin test = true; end;
+		if(test) then begin
+			OPr2w.PrepayNr = NextSerNr("ARPayHistVc",CurrentDate,-1,false,"");
+			cnt = matrowcnt(OPr);
+			for(i = 0; i<cnt;i=i+1) begin
+				if(i!=rownr) then begin
+					matrowget(OPr,i,OPrw);
+					if(OPrw.PrepayNr==OPr2w.PrepayNr) then begin  test2 = true; end;
+					if(biggest<OPrw.PrepayNr) then begin biggest = OPrw.PrepayNr; end;
+				end;	
+			end;
+			if(test2) then begin OPr2w.PrepayNr = biggest + 1; end;
+			matrowput(OPr,rownr,OPr2w);
+			PutWindowRecord(wn,OPr);
+		end;	
   OPDClassPrepayNrEFAfter = res;
   RETURN;
 END;
@@ -453,7 +468,7 @@ BEGIN
     case "BankFeeVal": res = OPDClassBankFeeValEFAfter(wn,rownr,changed!=0);
     case "VATCode": res = OPDClassVATCodeEFAfter(wn,rownr,changed!=0);
     case "ChequeNr": res = OPDClassChequeNrEFAfter(wn,rownr,changed!=0);
-//    case "PrepayNr": res = OPDClassPrepayNrEFAfter(wn,rownr,changed!=0);//Mladen aint like it
+    case "PrepayNr": res = OPDClassPrepayNrEFAfter(wn,rownr,changed!=0);//Mladen aint like it
     case "OrderNr": res = OPDClassOrderNrEFAfter(wn,rownr,changed!=0);
     case "FrRateBankVal": res = OPDClassToRateB1BankValEFAfter(wn,rownr,changed!=0);
     case "ToRateB1BankVal": res = OPDClassToRateB1BankValEFAfter(wn,rownr,changed!=0);

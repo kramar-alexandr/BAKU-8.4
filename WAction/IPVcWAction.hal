@@ -309,15 +309,35 @@ END;
 
 function Boolean IPDClassCUPNrEFAfter(Integer wn,Integer rownr,Boolean changedf)
 BEGIN
-  Boolean res;
+  Boolean res,test,test2;
   record IPVc IPr;
-
-  res = true;
-  if (changedf) then begin
+	row IPVc IPr2w,IPrw;
+	integer cnt,i;
+	longint biggest;
+  res = false;
+	biggest = 0;
     GetWindowRecord(wn,IPr);
-    IPVc_PasteCUPNr(IPr,rownr);
-    PutWindowRecord(wn,IPr);
-  end;
+		matrowget(IPr,rownr,IPr2w);
+		if (HasLocalization("POL")) then begin 
+			if(blank(IPr2w.InvoiceOfficialSerNr) and nonblank(IPr2w.CustCode))then begin test = true; end;
+    end else begin
+			if(IPr2w.InvoiceNr==-1 and nonblank(IPr2w.CustCode)) then begin test = true; end;
+		end;
+		if(test) then begin
+			//IPVc_PasteCUPNr(IPr,rownr);
+			IPr2w.CUPNr = NextSerNr("ARPayHistVc",CurrentDate,-1,false,"");
+			cnt = matrowcnt(IPr);
+			for(i = 0; i<cnt;i=i+1) begin
+				if(i!=rownr) then begin
+					matrowget(IPr,i,IPrw);
+					if(IPrw.CUPNr==IPr2w.CUPNr) then begin  test2 = true; end;
+					if(biggest<IPrw.CUPNr) then begin biggest = IPrw.CUPNr; end;
+				end;	
+			end;
+			if(test2) then begin IPr2w.CUPNr = biggest + 1; end;
+			matrowput(IPr,rownr,IPr2w);
+			PutWindowRecord(wn,IPr);
+		end;	
   IPDClassCUPNrEFAfter = res;
   RETURN;
 END;
@@ -597,7 +617,7 @@ BEGIN
     case "CurPayVal": res = IPDClassCurPayValEFAfter(wn,changed!=0);
     
     case "Coef": res = IPDClassCoefEFAfter(wn,rownr,changed!=0);
-//    case "CUPNr": res = IPDClassCUPNrEFAfter(wn,rownr,changed!=0);//we have Order No. field , Mladen didnt like it
+    case "CUPNr": res = IPDClassCUPNrEFAfter(wn,rownr,changed!=0);//we have Order No. field , Mladen didnt like it
     case "OrderNr": res = IPDClassOrderNrEFAfter(wn,rownr,changed!=0);
     case "CustCode": res = IPDClassCustCodeEFAfter(wn,rownr,changed!=0);
     case "PayDate": res = IPDClassPayDateEFAfter(wn,rownr,changed!=0);
