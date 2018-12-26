@@ -38,7 +38,17 @@ remote procedure ORVc_PasteLocation(var record ORVc,Integer);
 remote updating function Integer RecordAction_raPasteOrdInInv(var record IVVc,LongInt,Boolean,var Integer);
 remote updating function LongInt RecordAction_raPasteOrdInShip2(var record SHVc,LongInt,var string);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:30 20.12.2018
 remote procedure IVSumup(var record IVVc,Boolean);
-																							
+external procedure ActVcRecordDefClient(var record ActVc);
+remote updating function Boolean MakeActFromIV(var record IVVc,var record ActVc);
+remote updating function Integer PasteSHInRet(var record SHVc,var record RetVc,string);
+remote function Boolean PasteRetInInv2(var record IVVc,record RetVc,Boolean);
+external function LongInt GetCurUserLastNr(string);
+remote function LongInt PastePUInRetPU(record PUVc,var record RetPUVc);
+remote updating function Integer CreateCreditNoteVI(record VIVc,var record VIVc);
+
+
+SetLangMode(LangRussian,"RUS",0);
+
 																								
 global
 updating procedure TestCustOR(record ORVc ORp)
@@ -744,6 +754,164 @@ begin
   ORCheckForSalesmanPrice = res;        
   return;
 end;  
+
+
+global 
+updating procedure UnConfirmLocalOR (var record ORVc ORr)//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:27 24.12.2018
+begin
+	record IVVc IVr, OldIVr;
+	record ORVc LocORr, OldLocORr;
+	row ORVc ORrw, LocORrw;
+	record SHVc SHr;
+	record PUVc PUr;
+	integer OldComp, MaxCompCode, rwcnt, i, j, PUcnt, y, LocComp;
+	vector boolean Compf;
+	record RLinkVc RLr;
+	vector boolean LocSHCompltdf;
+	record ActVc Actr, oldActr;
+	vector integer DeletedSH;
+	record LocalMachineBlock LMb;
+	record RetVc LocRetr;
+	record SRBlock SRb;
+	LongInt newnr;
+	string 255 tstr;
+	Boolean nousersernr;
+	record CUVc CUr;
+	longint r;
+	record RetPUVc RetPUr;
+	record VIVc VIr, credVIr;
+	
+	OldComp = CurrentCompany;
+	i=1;
+	while (ReadRecordLink(ORr,i,LocORr,RLr)) begin
+		if(matrowcnt(LocORr)>0)then begin
+			matrowget(LocORr,0,LocORrw);
+			if(SetCompany(LocORrw.ECReservComp,false))then begin
+				//logtext(0,"Local OR, company:" & LocORrw.ECReservComp);
+				if(ReadFirstMain(LocORr,1,true))then begin
+					j = 1;
+					while (ReadRecordLink(LocORr,j,SHr,RLr))begin
+						if (SHr.Sorting=="COMPLETED") then begin
+							LocSHCompltdf[j] = true;
+							BlockLoad(LMb);
+							r = PasteSHInRet(SHr,LocRetr,LMb.DefReturnLocation);
+							if(RecordStore(LocRetr,true))then begin 
+								RecordNew(IVr);
+								IVr.SerNr = -1;
+								IVr.UpdStockFlag = 0;
+								if(PasteRetInInv2(IVr,LocRetr,false))then begin
+									if (IVr.SerNr==-1) then begin
+										BlockLoad(SRb);
+										if ((IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales) and (SRb.LastCredInvNr!=-1)) then begin
+											newnr = GetCurUserLastNr("CreditIVVc");
+											if (newnr<=0) then begin
+												newnr = SRb.LastCredInvNr;
+											end;
+											nousersernr = true;
+										end else begin
+											if ((IVr.InvType==kInvoiceTypeCash or IVr.InvType==kInvoiceTypeCashInvoiceReceiptPRT) and (SRb.LastCashInvNr!=-1)) then begin
+												newnr = SRb.LastCashInvNr;
+												nousersernr = true;
+												if (newnr==-1) then begin
+													newnr = GetCurUserLastNr("IVVc");
+													nousersernr = false;
+												end;
+											end else begin
+												newnr = GetCurUserLastNr("IVVc");
+												if (newnr<=0) then begin
+													newnr = SRb.LastInvNr;
+												end;
+											end;
+										end;
+									end;
+									IVr.SerNr = NextSerNr("IVVc",IVr.TransDate,newnr,true,"");
+									IVr.PayDeal = "CN";
+									RecordInsert(IVr,true);
+									CreateRecordLink(IVr,CurrentCompany,LocRetr,CurrentCompany);  
+									CreateRecordLink(LocRetr,CurrentCompany,IVr,CurrentCompany);  
+								end;
+								PUcnt = 1;
+								LocComp = CurrentCompany;
+								while (ReadRecordLink(SHr,PUcnt,PUr,RLr))begin
+									if(SetCompany(OldComp,false))then begin end;
+									RecordNew(RetPUr);
+									r = PastePUInRetPU(PUr,RetPUr);
+									if (RetPUr.SerNr<=0) then begin
+										RetPUr.SerNr = NextSerNr("RetPUVc",RetPUr.TransDate,-1,false,"");
+									end;  
+										RetPUr.Location = "MAIN";
+										if(RecordStore(RetPUr,true))then begin 
+											if(MatRowCnt(RetPUr)>0)then begin
+												CreateRecordLink(PUr,CurrentCompany,RetPUr,CurrentCompany);
+												CreateRecordLink(RetPUr,CurrentCompany,PUr,CurrentCompany);
+												CreateRecordLink(ORr,CurrentCompany,RetPUr,CurrentCompany);
+												CreateRecordLink(RetPUr,CurrentCompany,ORr,CurrentCompany);	
+												y = 1;
+												while (ReadRecordLink(PUr,y,VIr,RLr))begin
+													r = CreateCreditNoteVI(VIr,credVIr);
+													if(r==0)then begin
+														credVIr.PayDeal = "CN";
+														if(RecordStore(credVIr,true))then begin
+															CreateRecordLink(RetPUr,CurrentCompany,credVIr,CurrentCompany);  
+															CreateRecordLink(credVIr,CurrentCompany,RetPUr,CurrentCompany);  
+															CreateRecordLink(ORr,CurrentCompany,credVIr,CurrentCompany);
+															CreateRecordLink(credVIr,CurrentCompany,ORr,CurrentCompany);
+														end;
+													end;
+													y = y + 1;
+												end;
+											end;
+										end;
+									PUcnt = PUcnt + 1;
+								end;
+								if(SetCompany(LocComp,false))then begin end;
+							end;
+						end else begin
+							DeletedSH[j] = SHr.SerNr;
+							RecordDelete(SHr);
+						end;
+						j = j + 1;
+					end;
+					j = 1;
+					while (ReadRecordLink(LocORr,j,IVr,RLr))begin
+						if(!LocSHCompltdf[j])then begin
+							RecordCopy(OldIVr,IVr);
+							IVr.OKFlag = 0;
+							RecordUpdate(OldIVr,IVr,true);
+							if(ReadRecordLink(IVr,1,Actr,RLr))then begin
+								RecordDelete(Actr);
+							end;
+							RecordNew(Actr);
+							ActVcRecordDefClient(Actr);
+							if (MakeActFromIV(IVr,Actr)) then begin 	
+								RecordCopy(oldActr,Actr);
+								Actr.Comment = "Заказ № " & LocORr.SerNr & " - отменен. Отгрузку № " & DeletedSH[j] & " нужно разукомплектовать (если комплектовалась).";
+								Actr.TodoFlag = 1;
+								Actr.CalTimeFlag = kCalTimeFlagTime;
+								Actr.AlarmType = 1;
+								Actr.SymbNr = 3;
+								if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+									CreateRecordLink(Actr,Currentcompany,LocORr,Currentcompany);
+									CreateRecordLink(LocORr,Currentcompany,Actr,Currentcompany);
+								end;
+							end;
+							RecordDelete(IVr);
+						end;
+						j = j + 1;
+					end;
+					RecordCopy(OldLocORr,LocORr);
+					LocORr.Reserved = 0;
+					if(RecordUpdate(OldLocORr,LocORr,true)==0)then begin end;
+				end;
+			end;
+		end;
+		i = i + 1;
+	end;
+	ResetCompany(OldComp);
+	return;
+end;  //Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:43 26.12.2018
+
+
 
 
 
