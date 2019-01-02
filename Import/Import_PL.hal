@@ -2288,7 +2288,7 @@ begin
   row PUVc PUrw;
 	record PosVc Posr;
   record LocationVc Locr;
-  string 50 location,curLoc, artcode, quant,binNr,sum;
+  string 50 location,curLoc, artcode, quant,binNr,sum1,sum2,sum;
   Integer pucnt;
   record INVc INr;
 	integer coefx;
@@ -2307,9 +2307,17 @@ begin
 		if ((location == curLoc) and (pucnt < 999) and nonblank(artcode)) then begin	//заполнение таблицы данными
 			binNr = ImportField;
 			quant = ImportField;
+
 			PUr.FrRate = 1;
-			PUr.ToRateB1 = 2;
+			PUr.ToRateB1 = 1.954;
 			INr.Code = artcode;
+			if(blank(serialNr[artcode])) then begin
+						Purw.SerialNr = "1";
+						serialNr[artcode] = "1";
+					end else begin 
+						serialNr[artcode] = ValToString((StringToVal(serialNr[artcode],M4UVal)+1), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+						Purw.SerialNr = ValToString((StringToVal(serialNr[artcode],M4UVal)), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+					end;
 			If(readfirstmain(INr,1,true))then begin
 				coefx = INr.Conversion1;
 				if(coefx<1)then begin
@@ -2321,11 +2329,151 @@ begin
 				PUrw.UPrice = INr.InPrice;
 				PUrw.CostPrice = INr.LastPurchPrice2;
 				Purw.Sum = INr.LastPurchPrice2 * PUrw.Quant ;
-				if(blank(serialNr[artcode])) then begin
-					Purw.SerialNr = "1";
-				end else begin 
-					Purw.SerialNr = ValToString((StringToVal(serialNr[artcode],M4UVal) + 1), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+		
+				MatRowPut(PUr,pucnt,PUrw);
+				PUVc_FillRow(PUr,pucnt);
+				pucnt= pucnt + 1;	
+			end else begin
+				INr.Code = artcode;
+				if(readfirstMain(INr,1,true))then begin
+					PUrw.ArtCode = INr.Code;
+					//PUrw.UPrice = StringToVal(price,M45Val);
+					PUrw.Quant = StringToVal(quant,M4UVal);
+					PUrw.Sum = StringToVal(sum,M4UVal);
+					PUrw.ToPosCode = binNr;
+					MatRowPut(PUr,pucnt,PUrw);
+					PUVc_FillRow(PUr,pucnt);
+					pucnt= pucnt + 1;	
 				end;
+			end;
+		end else begin			//создание новой PU записи
+			if (NonBlank(curLoc)) then begin			
+				PUSumUp(PUr);
+				RecordInsert(PUr,true);
+			end;
+
+			Locr.Code = location;
+
+			if (nonblank(location) and ReadFirstMain(Locr,1,true) and nonblank(artcode)) then begin			
+				logtext(0,location);
+				RecordNew(PUr);				
+  			PUr.SerNr = NextSerNr("PUVc",PUr.TransDate,-1,false,"");  		
+				pucnt = 0;
+				binNr	=	ImportField;
+				quant = ImportField;
+      		
+				PUr.Location = location;
+				PUr.FrRate = 1;
+				PUr.ToRateB1 = 1.954;
+				Posr.Code = binNr;
+			if(blank(serialNr[artcode])) then begin
+						Purw.SerialNr = "1";
+						serialNr[artcode] = "1";
+					end else begin 
+						serialNr[artcode] = ValToString((StringToVal(serialNr[artcode],M4UVal)+1), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+						Purw.SerialNr = ValToString((StringToVal(serialNr[artcode],M4UVal)), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+					end;
+				if(!ReadFirstMain(Posr,1,true)) then begin
+					RecordNew(Posr);
+					Posr.Code = binNr;
+					Posr.Location = Locr.Name;
+					RecordStore(Posr,true);
+					logtext(0,"new polochka " & Locr.Name);
+				end;
+				INr.Code = artcode;
+				If(readfirstmain(INr,1,true))then begin
+					coefx = INr.Conversion1;
+					if(coefx<1)then begin
+						coefx = 1;
+					end;
+					PUrw.ArtCode = artcode;
+					//PUrw.UPrice = StringToVal(price,M45Val);
+					PUrw.Quant = StringToVal(quant,M4UVal)*coefx;
+					PUrw.UPrice = INr.InPrice;
+					PUrw.CostPrice = INr.LastPurchPrice2;
+					Purw.Sum = INr.LastPurchPrice2 * PUrw.Quant;
+					PUrw.ToPosCode = binNr;
+					MatRowPut(PUr,pucnt,PUrw);
+					PUVc_FillRow(PUr,pucnt);
+					pucnt= pucnt + 1;	
+				end else begin
+					INr.Code = artcode;
+					if(readfirstMain(INr,1,true))then begin
+						PUrw.ArtCode = INr.Code;
+						//PUrw.UPrice = StringToVal(price,M45Val);
+						PUrw.Quant = StringToVal(quant,M4UVal);
+						MatRowPut(PUr,pucnt,PUrw);
+						PUVc_FillRow(PUr,pucnt);
+						pucnt= pucnt + 1;	
+					end;
+				end;
+								     		
+				curLoc = location;
+			end;			
+				
+		end;
+		
+		if (NextImportLine(true)) then begin end;
+	end;
+
+	if (pucnt>0) then begin	//добавление последней записи
+ 			PUSumUp(PUr);
+			RecordInsert(PUr,true);	
+	end;
+logtext(0,"end");
+return;
+end;
+
+global
+updating procedure PUImportIn2()//   Edit-------------------------------------------Dima    23.12.2014  
+begin
+  record PUVc PUr,PU2r;
+  row PUVc PUrw;
+	record PosVc Posr;
+  record LocationVc Locr;
+  string 50 location,curLoc, artcode, quant,binNr,sum1,sum2,sum;
+  Integer pucnt;
+  record INVc INr;
+	integer coefx;
+	vector string 50 serialNr;
+	record SysFormatBlock SysFormatRec;
+  
+  BlockLoad(SysFormatRec);
+	
+	pucnt =0;
+	logtext(0,"start");
+	while (TestEOF()==false) begin	
+		PUr.CurncyCode = "EUR";
+		artcode = ImportField;
+		location = ImportField;
+	
+		if ((location == curLoc) and (pucnt < 999) and nonblank(artcode)) then begin	//заполнение таблицы данными
+			binNr = ImportField;
+			quant = ImportField;
+			sum1 = ImportField;
+			sum2 = ImportField;
+			PUr.FrRate = 1;
+			PUr.ToRateB1 = 1.954;
+			INr.Code = artcode;
+			if(blank(serialNr[artcode])) then begin
+						Purw.SerialNr = "1";
+						serialNr[artcode] = "1";
+					end else begin 
+						serialNr[artcode] = ValToString((StringToVal(serialNr[artcode],M4UVal)+1), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+						Purw.SerialNr = ValToString((StringToVal(serialNr[artcode],M4UVal)), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+					end;
+			If(readfirstmain(INr,1,true))then begin
+				coefx = INr.Conversion1;
+				if(coefx<1)then begin
+					coefx = 1;
+				end;
+				PUrw.ArtCode = artcode;
+				//PUrw.UPrice = StringToVal(price,M45Val);
+				PUrw.Quant = StringToVal(quant,M4UVal)*coefx;
+				PUrw.UPrice = StringToVal(sum1,M4UVal);
+				PUrw.CostPrice = StringToVal(sum2,M4UVal);
+				PUrw.Sum = PUrw.CostPrice * PUrw.Quant ;
+				PUrw.ToPosCode = binNr;
 				MatRowPut(PUr,pucnt,PUrw);
 				PUVc_FillRow(PUr,pucnt);
 				pucnt= pucnt + 1;	
@@ -2357,11 +2505,19 @@ begin
 				pucnt = 0;
 				binNr	=	ImportField;
 				quant = ImportField;
-				        		
+      	sum1 = ImportField;
+				sum2 = ImportField;	
 				PUr.Location = location;
 				PUr.FrRate = 1;
-				PUr.ToRateB1 = 2;
+				PUr.ToRateB1 = 1.954;
 				Posr.Code = binNr;
+				if(blank(serialNr[artcode])) then begin
+						Purw.SerialNr = "1";
+						serialNr[artcode] = "1";
+					end else begin 
+						serialNr[artcode] = ValToString((StringToVal(serialNr[artcode],M4UVal)+1), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+						Purw.SerialNr = ValToString((StringToVal(serialNr[artcode],M4UVal)), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+					end;
 				if(!ReadFirstMain(Posr,1,true)) then begin
 					RecordNew(Posr);
 					Posr.Code = binNr;
@@ -2378,15 +2534,11 @@ begin
 					PUrw.ArtCode = artcode;
 					//PUrw.UPrice = StringToVal(price,M45Val);
 					PUrw.Quant = StringToVal(quant,M4UVal)*coefx;
-					PUrw.UPrice = INr.InPrice;
-					PUrw.CostPrice = INr.LastPurchPrice2;
-					Purw.Sum = INr.LastPurchPrice2 * PUrw.Quant;
+					PUrw.UPrice = StringToVal(sum1,M4UVal);
+					PUrw.CostPrice = StringToVal(sum2,M4UVal);
+					PUrw.Sum = PUrw.CostPrice * PUrw.Quant;
+					PUrw.ToPosCode = binNr;
 					logtext(0,PUrw.Sum);
-					if(blank(serialNr[artcode])) then begin
-						Purw.SerialNr = "1";
-					end else begin 
-						Purw.SerialNr = ValToString((StringToVal(serialNr[artcode],M4UVal)+1), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
-					end;
 					MatRowPut(PUr,pucnt,PUrw);
 					PUVc_FillRow(PUr,pucnt);
 					pucnt= pucnt + 1;	
