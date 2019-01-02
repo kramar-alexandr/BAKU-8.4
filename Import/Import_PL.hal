@@ -4,9 +4,167 @@ external procedure ExtractObj(string,var Integer,var string);
 remote procedure NextM4SerialNumber(string,var string);
 remote function boolean CompanyIsJWLikeCompany(Integer);
 external procedure StripSpace(var string,string); //Edit_________________ABR 16.10 10:10; 
-
+external procedure PUSumUp(var record PUVc);
+external function Boolean GetItemPurchasePriceDiscount(string,string,Date,string,string,val,string,string,string,string,Integer,Boolean,val,val,val,val,val,
+         var record INVc,var record PIVc,var Boolean,var val,var string,var val,var string,var string,var Boolean,var string);
+external function Boolean GetFirstPurchaseItem2(string,string,string,var record PIVc);
+external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
+external function val DivRateToBase1(string,val,val,val,val,val,val,roundmode);
+external procedure GetItemVATCode(string,Integer,var string,Boolean);
+ external function Boolean GetFirstPurchaseItem(string,string,string,var record PIVc);
+external function roundmode GetCostRoundMode(record RoundBlock);
+external function string 255 FillupTaxMatrix(Integer,string,string,string,string,string,var record TaxMatrixVc); 
+ external function string 255 FindINObjects(string,string);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external procedure PUCalcPerc(val,string,var val); 
+external procedure DivPIFactor(val,val,var val);
+ external procedure FindPUStockAcc(string,record CostAccBlock,string,string,string,record INVc,Integer,var string,var string,Boolean);
+ external procedure PUCalcCostPrice(string,val,Integer,Integer,string,string,
+                                   val,val,val,val,val,
+                                   val,val,val,val,val,val,
+                                   string,var val,val,var val,string,Integer); //Edit***************************Sasha2,13:04 08.04.2015
+																	 
 SetLangMode(LangRussian,"RUS",0);
 
+procedure PUVc_FillRow(var record PUVc PUr,Integer rownr)		//Edit-----------Dima 25.12.2014
+BEGIN
+  Boolean res;
+  record CostAccBlock CostAccRec;
+  record PIVc PIr;
+  record INVc INr;
+  row PUVc PUrw;
+  Boolean chrsum;
+  string 60 sz,msk,mskrep,pcstr,tstr;
+  val t,p,s,t2;
+  record SysFormatBlock SFb;
+  string 200 varsubset,location;
+  Boolean infoundf;
+  record RoundBlock Roundb;
+  string 20 stockacc,purchacc;
+  record LocationVc Locr;
+  record MainStockBlock MSb;
+  Boolean nomoreremotecalls,pifound;
+  record TaxMatrixVc TMr;
+  string 255 taxtemplatecode,vatcode,descstr;
+  val price,reb;
+  
+  MatRowGet(PUr,rownr,PUrw); 
+
+  infoundf = GetItemPurchasePriceDiscount(PUr.VECode,PUr.Location,PUr.TransDate,PUr.CurncyCode,PUrw.ArtCode,PUrw.Quant,
+                                   PUr.Location,"","","",0,true,
+                                   PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+                                   INr,PIr,pifound,price,descstr,reb,vatcode,purchacc,nomoreremotecalls,taxtemplatecode);
+  if (infoundf) then begin
+    BlockLoad(SFb);
+    BlockLoad(CostAccRec);    
+    BlockLoad(Roundb);    
+    BlockLoad(MSb);
+    Locr.Code = PUr.Location;
+    if (blank(Locr.Code)) then begin
+      Locr.Code = MSb.MainStock;
+    end;
+    ReadFirstMain(Locr,1,true);
+
+    pcstr = "";
+    if (GetFirstPurchaseItem(PUrw.ArtCode,PUr.Location,PUr.VECode,PIr)) then begin
+      if (PIr.CurncyCode==PUr.CurncyCode) then begin
+		if (blank(PUrw.UPrice)) then begin
+     	   PUrw.UPrice = PIr.PurPrice;
+		   p = PIr.PurPrice;
+		end else begin
+		   p =  PUrw.UPrice;
+		end;
+        
+      end else begin
+        CurValToOtherCur(PUr.TransDate,PIr.CurncyCode,PIr.PurPrice,PUr.CurncyCode,t,GetCostRoundMode(Roundb));
+        PUrw.UPrice = t;  
+        p = PUrw.UPrice;
+      end;          
+      PUrw.CountryOfOrg = PIr.OrgCountry;
+      PUrw.CustomsCost = PIr.PurchaseCost;
+      PUrw.VEItemCode = PIr.VEItemCode;
+      PUrw.VEUnit = PIr.VEUnit;
+      PUrw.CountryOfOrg = PIr.OrgCountry;
+      if (INr.PriceFactor!=0) then begin
+        p = p/INr.PriceFactor;
+      end;
+    end else begin
+      PUrw.Spec = INr.Name;
+		if (blank(PUrw.UPrice)) then begin
+		      PUrw.UPrice = INr.InPrice;
+			 p = INr.InPrice;
+		end else begin
+		      p = PUrw.UPrice;
+		end;
+      if (INr.PriceFactor!=0) then begin
+        p = p/INr.PriceFactor;
+      end;
+      p = DivRateToBase1(PUr.CurncyCode,p,PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,GetCostRoundMode(Roundb));
+    end; 
+    PUrw.VATCode = PUr.VEVATCode;    
+    if (blank(PUrw.VATCode)) then begin
+      GetItemVATCode(PUrw.ArtCode,PUr.ExportFlag,tstr,false);
+      PUrw.VATCode = tstr;
+    end;
+    PUrw.TaxTemplateCode = FillupTaxMatrix(1,PUr.BranchID,PUr.VECode,"","",taxtemplatecode,TMr);
+    PUrw.Coefficient = INr.UnitCoefficient;
+    PUrw.InPrice = INr.InPrice;
+    PUrw.ArtCode = INr.Code;
+    PUrw.Spec = INr.Name;
+    PUrw.Objects = FindINObjects(INr.Objects,INr.Group);
+    PUrw.UPrice = p;
+    PUrw.UnitXval = INr.Width;
+    PUrw.UnitYval = INr.Height;
+    PUrw.UnitZval = INr.Depth;
+    PUrw.UnitCode = INr.Unittext;
+    location = PUrw.Location;
+    if (blank(location)) then begin
+      location = PUr.Location;
+    end;
+    if (Locr.RequirePos!=0) then begin
+      PUrw.PosCode = Locr.WHMDefPUPosCode;
+    end;
+
+    t2 = MulRateToBase1(PUr.CurncyCode,p,PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,GetCostRoundMode(Roundb));
+    PUCalcPerc(t2,PUrw.CustomsCost,t2);
+    pcstr = ValToString(t2,M45Val,SFb.thousSep,SFb.decimalPt,0);
+    PUrw.CustomsCost = pcstr;
+    PUrw.BasePrice = INr.UPrice1;
+    tstr = INr.ExtraCost;
+    PUrw.Extra = tstr;
+    PUrw.PIFactor = PIr.PIFactor;
+    PUrw.StockType = PIr.DefStockType;
+    if (PUrw.PIFactor!=0) then begin
+      PUrw.UPrice = PUrw.UPrice/PUrw.PIFactor;
+    end;
+    DivPIFactor(PUrw.Quant,PUrw.PIFactor,t);
+    PUrw.VEQuant = t;
+    
+    if (blank(PUrw.Location)) then begin
+      FindPUStockAcc(PUr.VECode,CostAccRec,PUrw.CostAcc,PUrw.CredAcc,PUr.Location,INr,PUrw.StockType,stockacc,purchacc,true);
+    end else begin
+      FindPUStockAcc(PUr.VECode,CostAccRec,PUrw.CostAcc,PUrw.CredAcc,PUrw.Location,INr,PUrw.StockType,stockacc,purchacc,true);
+    end;
+    PUrw.CostAcc = stockacc;
+    PUrw.CredAcc = purchacc;
+
+    PackRowFieldMatrix(PUrw,"TaxMatrix",TMr);
+    MatRowPut(PUr,rownr,PUrw);
+    chrsum = true;
+    res = true;
+  end;
+  if (chrsum) then begin
+    PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
+                    PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+                    PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+                    PUrw.CustomsCost,p,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+    PUrw.CostPrice = p;
+    PUrw.Sum = s;
+  end;
+  MatRowPut(PUr,rownr,PUrw);    
+
+  RETURN;
+END;
 Global updating procedure ImportPLIn()
 begin
 	record PLVc PLr;
@@ -668,7 +826,6 @@ begin
 		sfield13 = ImportField;
 		INr.Code = sfield0;
 		if(ReadFirstMain(INr,1,true))then begin
-			logtext();
 			RecordCopy(OldInr,INr);
 			INr.SN = sfield0;
 			INr.SNOne = sfield1;
@@ -2124,4 +2281,137 @@ begin
 return;
 end;
 
+global
+updating procedure PUImportIn()//   Edit-------------------------------------------Dima    23.12.2014  
+begin
+  record PUVc PUr,PU2r;
+  row PUVc PUrw;
+	record PosVc Posr;
+  record LocationVc Locr;
+  string 50 location,curLoc, artcode, quant,binNr,sum;
+  Integer pucnt;
+  record INVc INr;
+	integer coefx;
+	vector string 50 serialNr;
+	record SysFormatBlock SysFormatRec;
+  
+  BlockLoad(SysFormatRec);
+	
+	pucnt =0;
+	logtext(0,"start");
+	while (TestEOF()==false) begin	
+		PUr.CurncyCode = "EUR";
+		artcode = ImportField;
+		location = ImportField;
+	
+		if ((location == curLoc) and (pucnt < 999) and nonblank(artcode)) then begin	//заполнение таблицы данными
+			binNr = ImportField;
+			quant = ImportField;
+			
+			INr.Code = artcode;
+			If(readfirstmain(INr,1,true))then begin
+				coefx = INr.Conversion1;
+				if(coefx<1)then begin
+					coefx = 1;
+				end;
+				PUrw.ArtCode = artcode;
+				//PUrw.UPrice = StringToVal(price,M45Val);
+				PUrw.Quant = StringToVal(quant,M4UVal)*coefx;
+				PUrw.UPrice = INr.InPrice;
+				PUrw.CostPrice = INr.LastPurchPrice2;
+				Purw.Sum = INr.LastPurchPrice2 * PUrw.Quant ;
+				if(blank(serialNr[artcode])) then begin
+					Purw.SerialNr = "1";
+				end else begin 
+					Purw.SerialNr = ValToString((StringToVal(serialNr[artcode],M4UVal) + 1), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+				end;
+				MatRowPut(PUr,pucnt,PUrw);
+				PUVc_FillRow(PUr,pucnt);
+				pucnt= pucnt + 1;	
+			end else begin
+				INr.Code = artcode;
+				if(readfirstMain(INr,1,true))then begin
+					PUrw.ArtCode = INr.Code;
+					//PUrw.UPrice = StringToVal(price,M45Val);
+					PUrw.Quant = StringToVal(quant,M4UVal);
+					PUrw.Sum = StringToVal(sum,M4UVal);
+					logtext(0,PUrw.Sum);
+					MatRowPut(PUr,pucnt,PUrw);
+					PUVc_FillRow(PUr,pucnt);
+					pucnt= pucnt + 1;	
+				end;
+			end;
+		end else begin			//создание новой PU записи
+			if (NonBlank(curLoc)) then begin			
+				PUSumUp(PUr);
+				RecordInsert(PUr,true);
+			end;
+
+			Locr.Code = location;
+
+			if (nonblank(location) and ReadFirstMain(Locr,1,true) and nonblank(artcode)) then begin			
+				logtext(0,location);
+				RecordNew(PUr);				
+  			PUr.SerNr = NextSerNr("PUVc",PUr.TransDate,-1,false,"");  		
+				pucnt = 0;
+				binNr	=	ImportField;
+				quant = ImportField;
+				        		
+				PUr.Location = location;
+				Posr.Code = binNr;
+				if(!ReadFirstMain(Posr,1,true)) then begin
+					RecordNew(Posr);
+					Posr.Code = binNr;
+					Posr.Location = Locr.Name;
+					RecordStore(Posr,true);
+					logtext(0,"new polochka " & Locr.Name);
+				end;
+				INr.Code = artcode;
+				If(readfirstmain(INr,1,true))then begin
+					coefx = INr.Conversion1;
+					if(coefx<1)then begin
+						coefx = 1;
+					end;
+					PUrw.ArtCode = artcode;
+					//PUrw.UPrice = StringToVal(price,M45Val);
+					PUrw.Quant = StringToVal(quant,M4UVal)*coefx;
+					PUrw.UPrice = INr.InPrice;
+					PUrw.CostPrice = INr.LastPurchPrice2;
+					Purw.Sum = INr.LastPurchPrice2 * PUrw.Quant;
+					logtext(0,PUrw.Sum);
+					if(blank(serialNr[artcode])) then begin
+						Purw.SerialNr = "1";
+					end else begin 
+						Purw.SerialNr = ValToString((StringToVal(serialNr[artcode],M4UVal)+1), M4UVal,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+					end;
+					MatRowPut(PUr,pucnt,PUrw);
+					PUVc_FillRow(PUr,pucnt);
+					pucnt= pucnt + 1;	
+				end else begin
+					INr.Code = artcode;
+					if(readfirstMain(INr,1,true))then begin
+						PUrw.ArtCode = INr.Code;
+						//PUrw.UPrice = StringToVal(price,M45Val);
+						PUrw.Quant = StringToVal(quant,M4UVal);
+						MatRowPut(PUr,pucnt,PUrw);
+						PUVc_FillRow(PUr,pucnt);
+						pucnt= pucnt + 1;	
+					end;
+				end;
+								     		
+				curLoc = location;
+			end;			
+				
+		end;
+		
+		if (NextImportLine(true)) then begin end;
+	end;
+
+	if (pucnt>0) then begin	//добавление последней записи
+ 			PUSumUp(PUr);
+			RecordInsert(PUr,true);	
+	end;
+logtext(0,"end");
+return;
+end;
 
