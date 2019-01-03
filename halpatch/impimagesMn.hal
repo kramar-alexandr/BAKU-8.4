@@ -10820,3 +10820,224 @@ begin
 	logtext(0,"end");
 return;
 end;
+
+global 
+updating procedure ImportBrandIn()
+begin
+string 50 code,brand,class,referense,color;
+integer pos;
+record INVc INr;
+record DIVc DIr,DIrC,DIrR;
+string 255 fullclass;
+boolean brandin,colorin,refin,TrHs;	
+	while (TestEOF()==false) begin
+		code = ImportField;
+		brand = ImportField;
+		referense = ImportField;
+		color = ImportField;
+		INr.Code = code;
+		if(ReadFirstMain(INr,1,true)) then begin
+			brandin = false;
+			colorin = false;
+			refin = false;
+			pos = 0;
+			class = "";
+			fullclass = "";
+			DIrR.Name = referense;
+			DIrC.Name = color;
+			TrHs = true;
+			while (LoopKey("Name",DIrR,1,TrHs))  begin
+				if(DIrR.CType == "MODEL") then begin
+					referense = DIrR.Code;
+					TrHs = false;
+				end;	
+			end;	
+			TrHs = true;
+			while (LoopKey("Name",DIrC,1,TrHs))  begin
+				if(DIrC.CType == "COLOUR") then begin
+					color = DIrC.Code;
+					TrHs = false;
+				end;	
+			end;
+				INr.Reference = referense;
+				INr.Colour = color;	
+			ExtractObj(INr.DispGroups,pos,class);
+			while(nonblank(class))begin
+				DIr.Code = class;
+				readfirstmain(DIr,1,true);
+				if(DIr.CType=="BRAND")then begin
+					brandin = true; 
+					if(blank(fullclass)) then begin
+						fullclass = brand;
+					end else begin
+						fullclass = fullclass & "," & brand;
+					end;	
+				end else begin	
+					if(DIr.CType=="COLOUR" and nonblank(color))then begin
+						colorin = true; 
+						if(blank(fullclass)) then begin
+							fullclass = color;
+						end else begin
+							fullclass = fullclass & "," & color;
+						end;					
+					end else begin
+						if(DIr.CType=="MODEL" and nonblank(referense))then begin
+							refin = true; 
+							if(blank(fullclass)) then begin
+								fullclass = referense;
+							end else begin
+								fullclass = fullclass & "," & referense;
+							end;	
+						end else begin		
+							if(blank(fullclass)) then begin
+								fullclass = class;
+							end else begin
+								fullclass = fullclass & "," & class;
+							end;	
+						end;
+					end;
+				end;	
+				ExtractObj(INr.DispGroups,pos,class);
+			end;
+			INr.DispGroups = fullclass;
+			if(blank(INr.DispGroups)) then begin
+					INr.DispGroups = brand & "," & referense & "," & color;
+				end else begin
+				if(!refin and nonblank(referense)) then begin
+					INr.DispGroups = INr.DispGroups & "," & referense;
+				end;	
+				if(!colorin and nonblank(color)) then begin
+					INr.DispGroups = INr.DispGroups & "," & color;
+				end;	
+				if(!brandin and nonblank(brand)) then begin
+					INr.DispGroups = INr.DispGroups & "," & brand;
+				end;	
+			end;	
+			logtext(0,INr.Code);
+			RecordStore(INr,true);
+			referense = "";
+			color = "";
+		end;
+		NextImportLine(true);
+	end;
+
+return;
+end;
+
+global 
+updating procedure ImportBrandIn2()
+begin
+string 50 code,brandName,brand,class,referense,color;
+integer pos,i;
+record INVc INr;
+record DIVc DIr,DIr2,DIrR,DIrC;
+string 255 fullclass;
+boolean TrHs,chisla,brandin, colorin,refin;	
+	while (TestEOF()==false) begin
+		code = ImportField;
+		brandName = ImportField;
+		referense = ImportField;
+		color = ImportField;
+		INr.Code = code;
+		if(ReadFirstMain(INr,1,true)) then begin
+			brand = "";
+			brandin = false;
+			colorin = false;
+			refin = false;
+			DIrR.Name = referense;
+			DIrC.Name = color;
+			TrHs = true;
+			while (LoopKey("Name",DIrR,1,TrHs))  begin
+				if(DIrR.CType == "MODEL") then begin
+					referense = DIrR.Code;
+					TrHs = false;
+				end;	
+			end;	
+			TrHs = true;
+			while (LoopKey("Name",DIrC,1,TrHs))  begin
+				if(DIrC.CType=="COLOUR") then begin
+					color = DIrC.Code;
+					TrHs = false;
+				end;	
+			end;
+				INr.Reference = referense;
+				INr.Colour = color;	
+			pos = 0;
+			class = "";
+			fullclass = "";
+			ExtractObj(INr.DispGroups,pos,class);
+				DIr2.Name = brandName;
+					TrHs = true;
+					while(LoopKey("Name",DIr2,1,TrHs)) begin
+						chisla = true;
+						for(i=0;i<len(DIr2.Name);i=i+1) begin
+							if(ASC(mid(DIr2.Name,i,1)) < 30 or ASC(mid(DIr2.Name,i,1)) > 39) begin
+								chisla = false;
+							end;
+						end;	
+						if(DIr2.Name == brandName and !chisla) then begin
+							TrHs = false;
+							brand = DIr2.Code;
+						end;
+					end;
+					ResetLoop(DIr2);
+			while(nonblank(class))begin
+				DIr.Code = class;
+				readfirstmain(DIr,1,true);
+				if(DIr.CType=="BRAND")then begin
+					brandin = true;
+					if(blank(fullclass)) then begin
+						fullclass = brand;
+					end else begin
+						if(nonblank(brand)) then begin
+							fullclass = fullclass & "," & brand;
+						end;	
+					end;
+				end else begin	
+					if(DIr.CType=="COLOUR" and nonblank(color))then begin
+						colorin = true; 
+						if(blank(fullclass)) then begin
+							fullclass = color;
+						end else begin
+							fullclass = fullclass & "," & color;
+						end;					
+					end else begin
+						if(DIr.CType=="MODEL" and nonblank(referense))then begin
+							refin = true; 
+							if(blank(fullclass)) then begin
+								fullclass = referense;
+							end else begin
+								fullclass = fullclass & "," & referense;
+							end;		
+						end else begin
+							if(blank(fullclass)) then begin
+								fullclass = class;
+							end else begin
+								fullclass = fullclass & "," & class;
+							end;		
+						end;
+					end;
+				end;	
+				ExtractObj(INr.DispGroups,pos,class);
+			end;
+			INr.DispGroups = fullclass;
+			if(blank(INr.DispGroups)) then begin
+					INr.DispGroups = brand & "," & referense & "," & color;
+			end else begin
+				if(!refin and nonblank(referense)) then begin
+					INr.DispGroups = INr.DispGroups & "," & referense;
+				end;	
+				if(!colorin and nonblank(color)) then begin
+					INr.DispGroups = INr.DispGroups & "," & color;
+				end;	
+				if(!brandin and nonblank(brand)) then begin
+					INr.DispGroups = INr.DispGroups & "," & brand;
+				end;	
+			end;			
+			RecordStore(INr,true);
+		end;
+		NextImportLine(true);
+	end;
+
+return;
+end;
