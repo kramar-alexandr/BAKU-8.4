@@ -572,6 +572,9 @@ begin
 		DIr.Name = sfield0;
 		if(!ReadFirstKey("Name",DIr,1,true))then begin
 			RecordNew(DIr);
+			if(blank(CFirstCode))then begin
+				CFirstCode = "CL00000";
+			end;
 			NextM4SerialNumber(CFirstCode,DIr.Code);
 			CFirstCode = DIr.Code;
 			DIr.CType = CType;
@@ -619,6 +622,9 @@ begin
 		DIr.Name = sfield0;
 		if(!ReadFirstKey("Name",DIr,1,true))then begin
 			RecordNew(DIr);
+			if(blank(CFirstCode))then begin
+				CFirstCode = "ML00000";
+			end;
 			NextM4SerialNumber(CFirstCode,DIr.Code);
 			CFirstCode = DIr.Code;
 			DIr.CType = CType;
@@ -648,6 +654,7 @@ begin
 	boolean TrHs, TrHs2;
 	string 255 CType, UNUPCName;
 	vector boolean NameCreatef;
+	string 255 CFirstCode;
 	
 	i = 0;
 	TrHs = true;
@@ -657,10 +664,20 @@ begin
 		UNUPCName = sfield0;
 		FormatUpperCaseCode(sfield0);
 		CType = "BRAND";
+		TrHs2 = true;
+		DIr.Code = "C999999999";
+		while(loopbackkey("Code",DIr,1,TrHs2))begin
+			if(nonblank(DIr.Code) and left(DIr.Code,2)=="C0")then begin CFirstCode = DIr.Code; /*logtext(0,DIr.Code & "Old Code");*/ end;
+			TrHs2 = false;
+		end;
 		DIr.Code = sfield0;
 		if(!ReadFirstMain(DIr,1,true))then begin
 			RecordNew(DIr);
-			DIr.Code = sfield0;
+			if(blank(CFirstCode))then begin
+				CFirstCode = "C000000000";
+			end;
+			NextM4SerialNumber(CFirstCode,DIr.Code);
+			CFirstCode = DIr.Code;
 			DIr.CType = CType;
 			Dir.Name = UNUPCName;
 			if(recordStore(DIr,True))then begin
@@ -676,7 +693,34 @@ begin
 end;
 
 
-
+global
+updating procedure CleanDIMn()
+begin
+record DIVc DIr;
+boolean TrHs;
+integer i;
+boolean chisla;
+	DIr.Code = "";
+	while (loopmain(DIr,1,true))begin
+		if(DIr.CType!="BRAND" and DIr.CType!="SIZE")then begin
+			RecordDelete(DIr);
+			StepBack(DIr);
+		end;
+		if(DIr.CType=="BRAND")then begin
+			chisla = true;
+			for(i=0;i<len(DIr.Code);i=i+1) begin
+				if(ASC(mid(DIr.Code,i,1))<48 or ASC(mid(DIr.Code,i,1))>57)then begin
+					chisla = false;
+				end;
+			end;
+			if(!chisla)then begin
+				RecordDelete(DIr);
+				StepBack(DIr);
+			end;
+		end;
+	end;
+	return;
+end;
 
 
 global updating procedure ImportNormCRTbrandIdeaIn()
