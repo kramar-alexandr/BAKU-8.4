@@ -7694,7 +7694,7 @@ begin
   record CompaniesBlock Compb;
   record INVc INr;
   row CompaniesBlock Comprw;
-  boolean TrHs,testf,insertf;
+  boolean TrHs,testf,insertf,SwarECRetf;
   record ItemHistVc IHr;
   string 100 tstr,artcode,compname,compnr;
   date todate;
@@ -7705,6 +7705,7 @@ begin
   artcode = SHr.DelAddrCode;
   todate = SHr.ShipDate;
   
+	
   INr.Code = artcode;
   testf = ReadFirstMain(INr,1,true);
   if (testf==false) then begin
@@ -7781,9 +7782,7 @@ begin
 						SHrw.BestBefore = IHr.TransDate;
 					end;
 					SHrw.Ship = SHrw.Ship + AbsoluteVal(IHr.Qty);
-					if(IVr.CustCode!="FOBE_COMMERCE" and CurrentCompany!=1)then begin
-						SHrw.BasePrice = IVrw.Price;
-					end else begin
+					if(IVr.CustCode=="FOBE_COMMERCE" and CurrentCompany==1)then begin
 						if(ReadRecordLink(IVr,1,ORr,RLr))then begin
 							if(ReadRecordLink(ORr,1,ECORr,RLr) and SetCompany(29,false) and ReadFirstMain(ECORr,1,true))then begin
 								if(ReadRecordLink(ECORr,1,ECIVr,RLr))then begin
@@ -7792,22 +7791,26 @@ begin
 										if(ECIVrw.SerialNr==IVrw.SerialNr)then begin
 											SHrw.BasePrice = ECIVrw.Price;
 											SHrw.TAX2Reb = SHrw.TAX2Reb + (ECIVrw.Sum/ECIVrw.Quant)*AbsoluteVal(IHr.Qty);
+											logtext(0,SHrw.BasePrice & " <> " & SHrw.TAX2Reb);
+											SwarECRetf = true;
 										end;
 									end;
 								end;
 								resetcompany(1);
 							end;
 						end;
+					end else begin
+						SHrw.BasePrice = IVrw.Price;
 					end;
 					if (IVrw.vRebate>0) then begin
 					  SHrw.PosCode = 0+IVrw.vRebate & "%";
 					end;
-					SHrw.TAX2Reb = SHrw.TAX2Reb + (IVrw.Sum/IVrw.Quant)*AbsoluteVal(IHr.Qty);
+					if(!SwarECRetf)then begin SHrw.TAX2Reb = SHrw.TAX2Reb + (IVrw.Sum/IVrw.Quant)*AbsoluteVal(IHr.Qty); end;
 					SHrw.Location = IHr.Location;
 					SHrw.CustArtCode = IVr.CustCode;
 					SHrw.Spec = IVr.Addr0;
 					SHrw.OrdRow = IHr.TransNr;
-					SHrw.FIFO = SHrw.FIFO + IHr.TotCostPrice;
+					if(!SwarECRetf)then begin SHrw.FIFO = SHrw.FIFO + IHr.TotCostPrice; end;
 					if (NonBlank(SHrw.TAX2Code) and SHrw.TAX2Code!=IHr.CurncyCode) then begin
 					  CurValToOtherCur(IHr.InDate,IHr.CurncyCode,IHr.TotCostPriceCurncy,SHrw.TAX2Code,tval,DefaultCurRoundOff);
 					  SHrw.FIFORowVal = SHrw.FIFORowVal + tval;
