@@ -7688,8 +7688,8 @@ end; //Edit***************************Sasha2,15:10 07.07.2017 }
 
 procedure MakeReItemsMatrixFind(var record SHVc SHr, Boolean clearRows)
 begin
-  record IVVc IVr;
-  row IVVc IVrw;
+  record IVVc IVr, ECIVr;
+  row IVVc IVrw, ECIVrw;
   row SHVc SHrw;
   record CompaniesBlock Compb;
   record INVc INr;
@@ -7698,9 +7698,10 @@ begin
   record ItemHistVc IHr;
   string 100 tstr,artcode,compname,compnr;
   date todate;
-  Integer rwcnt,lastRowPos,i;
+  Integer rwcnt,lastRowPos,i,ecIVcnt,j;
   val tval;
-
+	record ORVc ORr, ECORr;
+	record RLinkVc RLr;
   artcode = SHr.DelAddrCode;
   todate = SHr.ShipDate;
   
@@ -7780,7 +7781,24 @@ begin
 						SHrw.BestBefore = IHr.TransDate;
 					end;
 					SHrw.Ship = SHrw.Ship + AbsoluteVal(IHr.Qty);
-					SHrw.BasePrice = IVrw.Price;
+					if(IVr.CustCode!="FOBE_COMMERCE" and CurrentCompany!=1)then begin
+						SHrw.BasePrice = IVrw.Price;
+					end else begin
+						if(ReadRecordLink(IVr,1,ORr,RLr))then begin
+							if(ReadRecordLink(ORr,1,ECORr,RLr) and SetCompany(29,false) and ReadFirstMain(ECORr,1,true))then begin
+								if(ReadRecordLink(ECORr,1,ECIVr,RLr))then begin
+									ecIVcnt = matrowcnt(ECIVr);
+									for(j=0;j<ecIVcnt;j=j+1)begin
+										if(ECIVrw.SerialNr==IVrw.SerialNr)then begin
+											SHrw.BasePrice = ECIVrw.Price;
+											SHrw.TAX2Reb = SHrw.TAX2Reb + (ECIVrw.Sum/ECIVrw.Quant)*AbsoluteVal(IHr.Qty);
+										end;
+									end;
+								end;
+								resetcompany(1);
+							end;
+						end;
+					end;
 					if (IVrw.vRebate>0) then begin
 					  SHrw.PosCode = 0+IVrw.vRebate & "%";
 					end;
