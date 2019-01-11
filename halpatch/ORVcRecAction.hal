@@ -90,6 +90,10 @@ remote updating function longint CreateLocalORFromWebOR (var record ORVc);//Edit
 remote updating function longint CreateLocalIVandSHFromWebOR (var record ORVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:30 13.11.2018
 remote updating function longint CreateGlobalIVFromWebOR (var record ORVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:11 20.12.2018
 remote updating procedure UnConfirmLocalOR (var record ORVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:47 26.12.2018
+remote updating function Boolean MakeActFromOR(var record ORVc,var record ActVc);
+external procedure ActVcRecordDefClient(var record ActVc);
+
+ SetLangMode(LangRussian,"RUS",0);
 
 procedure SetORAcceptanceFlag(var record ORVc ORr,record ORVc prevORr,LongInt stat)
 begin
@@ -461,6 +465,7 @@ begin
 	record ORVc LocORr,OldORr;
 	record SHVc SHr;
 	record IVVc IVr;
+	record ActVc Actr, OldActr;
 	
 	logtext(0,"ORVcRecordCheck");
   
@@ -1587,6 +1592,7 @@ LORVcRecordRowCheck:;
 		if(RecordStore(OCr,true))then begin end;
 	end;
 	
+	
 LORVcRecordCheck:;
   if (res!=0) then begin 
     ORr.SerNr = oldnr; 
@@ -2136,7 +2142,11 @@ updating function LongInt ORVcRecordUpdateAfter(var record ORVc ORr,record ORVc 
 begin
   LongInt res;
   val bc1v;
-
+	integer notenr, i;
+	record RlinkVc RLr;
+	record ORVc LocORr;
+	record ActVc Actr, OldActr;
+	
 //  ORObjectStats(ORr,OR2r); it is stored only and not used ever
   UpdateVARItemsOR(ORr);
   UpdateStockResFromOR(ORr);
@@ -2155,6 +2165,36 @@ begin
   end;
 	if(ORr.OrderConfirmed==1 and OR2r.OrderConfirmed==0)then begin
 		CreateGlobalIVFromWebOR(ORr);
+	end;
+	if(ORr.Reserved==1 and OR2r.Reserved==0)then begin
+		if(nonblank(ORr.EndReserv) and ORr.EndReserv>=CurrentDate)then begin
+			RecordNew(Actr);
+			ActVcRecordDefClient(Actr);
+			MakeActFromOR(ORr,Actr);
+			RecordCopy(OldActr,Actr);
+			Actr.StartTime = CurrentTime;
+			Actr.EndTime = CurrentTime;
+			Actr.TransDate = ORr.EndReserv;
+			Actr.EndDate = addday(ORr.EndReserv,3);
+			Actr.Comment = "Истек срок резервирования товаров по счету клиента №: " & ORr.SerNr;
+			Actr.TodoFlag = 1;
+			Actr.CalTimeFlag = kCalTimeFlagTime;
+			Actr.AlarmType = 1;
+			Actr.SymbNr = 3;
+			if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+				CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
+				CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
+			end;
+		end;
+	end;
+	if(ORr.Reserved==0 and OR2r.Reserved==1)then begin
+		notenr = 0;
+		while(ReadRecordLink(ORr,notenr,Actr,RLr))begin
+			if(Actr.TransDate==ORr.EndReserv)then begin
+				recorddelete(Actr);
+			end;
+			notenr = notenr + 1;
+		end;
 	end;
   ORVcRecordUpdateAfter = res; 
   return;
@@ -2281,9 +2321,10 @@ begin
   LongInt res;
   string 255 autmsgfunciontags;
   record PDVc PDr;
-	integer notenr;
+	integer notenr, i;
 	record RlinkVc RLr;
 	record ORVc LocORr;
+	record ActVc Actr, OldActr;
 
 //  ORObjectStats(ORr,OR2r);it is stored only and not used ever
   CreateActFromOR(ORr);
@@ -2300,6 +2341,36 @@ begin
       autmsgfunciontags = AddStringToStringList(autmsgfunciontags,"HasModCL+SAVE_ORVc");
     end;
   end;
+	if(ORr.Reserved==1 and OR2r.Reserved==0)then begin
+		if(nonblank(ORr.EndReserv) and ORr.EndReserv>=CurrentDate)then begin
+			RecordNew(Actr);
+			ActVcRecordDefClient(Actr);
+			MakeActFromOR(ORr,Actr);
+			RecordCopy(OldActr,Actr);
+			Actr.StartTime = CurrentTime;
+			Actr.EndTime = CurrentTime;
+			Actr.TransDate = ORr.EndReserv;
+			Actr.EndDate = addday(ORr.EndReserv,3);
+			Actr.Comment = "Истек срок резервирования товаров по счету клиента №: " & ORr.SerNr;
+			Actr.TodoFlag = 1;
+			Actr.CalTimeFlag = kCalTimeFlagTime;
+			Actr.AlarmType = 1;
+			Actr.SymbNr = 3;
+			if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+				CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
+				CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
+			end;
+		end;
+	end;
+	if(ORr.Reserved==0 and OR2r.Reserved==1)then begin
+		notenr = 0;
+		while(ReadRecordLink(ORr,notenr,Actr,RLr))begin
+			if(Actr.TransDate==ORr.EndReserv)then begin
+				recorddelete(Actr);
+			end;
+			notenr = notenr + 1;
+		end;
+	end;
   AutomatedSales(autmsgfunciontags,kAutomatedSalesTagRandom);
   ORVcRecordSaveAfter = res; 
   return;
