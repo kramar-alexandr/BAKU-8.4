@@ -45,7 +45,8 @@ remote function Boolean PasteRetInInv2(var record IVVc,record RetVc,Boolean);
 external function LongInt GetCurUserLastNr(string);
 remote function LongInt PastePUInRetPU(record PUVc,var record RetPUVc);
 remote updating function Integer CreateCreditNoteVI(record VIVc,var record VIVc);
-
+remote updating function Boolean MakeActFromOR(var record ORVc,var record ActVc);
+external procedure ActVcRecordDefClient(var record ActVc);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -931,7 +932,7 @@ begin
 	vector integer ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate, ResStockQuant, StockPrioryty, vItemComp, DeSellComp, ItemGroup, PriceQuant;
 	array string 255 ArtCodes, ItemBrands;
 	string 255 strlc,HansaArtCode,Store,strlc2, rowkey, inwarn, war;
-	integer pos, pos2, p, maxp, qtyItpos;
+	integer pos, pos2, p, maxp, qtyItpos, rownr;
 	boolean testf,TrHs,Insertf,warf;
 	record INVc INr;
 	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock, PriorityStock;
@@ -941,8 +942,8 @@ begin
 	record PLVc PLr;
 	vector val ItemRowPrice, ItemRowRebate;
 	record LocationVc Lcr;
-	
-	
+	record ActVc Actr, OldActr;
+	string 255 items;
 	OldComp = CurrentCompany;
 	res = 0;
 	BlockLoad(Compb);
@@ -1207,15 +1208,50 @@ begin
 					RecordInsert(LocORr,true);
 					CreateRecordLink(LocORr,c,ORr,OldComp);
 					CreateRecordLink(ORr,OldComp,LocORr,c);
-					if(ORr.OrderConfirmed==1)then begin
+					if(LocORr.CustCode=="FOBE_COMMERCE" and LocORr.Reserved!=0) then begin
+						testf = false;
+						rownr = MatRowCnt(LocORr);
+						items = "";
+						for(i=0;i<rownr;i=i+1) begin
+							MatRowGet(LocORr,i,LocORrw);
+							ISr.Code = LocORrw.ArtCode;
+							if(ReadFIrstMain(ISr,1,true)) begin
+								if((ISr.Instock-ISr.RsrvQty-LocORrw.Quant)==0) then begin
+									items = items & LocORrw.ArtCode & ",";
+									testf = true;
+								end;	
+							end;	
+						end;
+						if(testf) then begin
+								items = left(items,len(items) - 1);
+								RecordNew(Actr);
+								ActVcRecordDefClient(Actr);
+								MakeActFromOR(LocORr,Actr);
+								RecordCopy(OldActr,Actr);
+								Actr.StartTime = CurrentTime;
+								Actr.EndTime = CurrentTime;
+								Actr.TransDate = LocORr.EndReserv;
+								Actr.EndDate = addday(LocORr.EndReserv,3);
+								Actr.Comment = "’овары счета клиента нужно убрать с полки - " & items; 
+								Actr.TodoFlag = 1;
+								Actr.CalTimeFlag = kCalTimeFlagTime;
+								Actr.AlarmType = 1;
+								Actr.SymbNr = 3;
+								if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+									CreateRecordLink(Actr,Currentcompany,LocORr,Currentcompany);
+									CreateRecordLink(LocORr,Currentcompany,Actr,Currentcompany);
+								end;
+						end;		
+					end;
+					if(LocORr.OrderConfirmed==1)then begin
 						res = IVFromLocWEBORDsm(LocORr);
 						res = SHFromLocWEBORDsm(LocORr);
 					end;
 				end else begin
 					RecordUpdate(OldLocORr,LocORr,true);
-					CreateRecordLink(LocORr,c,ORr,OldComp);
-					CreateRecordLink(ORr,OldComp,LocORr,c);
-					if(ORr.OrderConfirmed==1)then begin
+					CreateRecordLink(LocORr,c,LocORr,OldComp);
+					CreateRecordLink(LocORr,OldComp,LocORr,c);
+					if(LocORr.OrderConfirmed==1)then begin
 						res = IVFromLocWEBORDsm(LocORr);
 						res = SHFromLocWEBORDsm(LocORr);
 					end;
