@@ -418,20 +418,20 @@ begin
   record AccBlock ARAccRec;
   record SRBlock SRRec;
   record AccVc Accr;
-  record ORVc lORr, ORlinkr, ORCurWndr;
+  record ORVc lORr, ORlinkr, ORCurWndr,SORr;
   record CUVc CUr;
   record INVc INr;
   record PRVc PRr;
   record ItemStatusVc ISr;
   record MainStockBlock MSb;  
-  row ORVc ORrw;
+  row ORVc ORrw,SORrw;
   row ORVc OR2rw;
   Integer i,j,rwcnt,errcode,pt;
   LongInt oldnr,ErrorCode;
   LongInt newnr,l;
   val bal;
   val limit,rsrvd;
-  string 255 tstr,errstr;
+  string 255 tstr,errstr,items;
   Boolean gentrans,transf,unokf,testf,test2f;
   record OrdSettBlock OSb;
   string 20 location,oldOfficialSerNr;
@@ -455,12 +455,12 @@ begin
   val TotDownPaymentval;
   Array string 255 otcheckaccs;
   Array string 255 otcheckobjtyps;
-  Integer otcheckcnt;
+  Integer otcheckcnt,compnr;
   record OTCheckBlock OTCheckr;
   Boolean initotcheckf;  
   record CUUserLabelBlock CUUerLb;
   record CountryVc Countryr;
-	integer notenr,locnotenr;
+	integer notenr,locnotenr,rownr;
 	record RlinkVc RLr;
 	record ORVc LocORr,OldORr;
 	record SHVc SHr;
@@ -1588,6 +1588,33 @@ LORVcRecordRowCheck:;
 		end;
 	end;
 	
+		if(ORr.CustCode=="FOBE_COMMERCE" and ORr.Reserved!=0) then begin
+			RecordCopy(ORr,SORr);
+			SORr.Reserved = 1;
+			oldcomp = CurrentCompany;
+			rownr = MatRowCnt(SORr);
+			items = "";
+			for(i=0;i<rownr;i=i+1) begin
+				MatRowGet(SORr,i,SORrw);
+				ISr.Code = SORrw.ArtCode;
+				if(ReadFIrstMain(ISr,1,true)) begin
+					if(ISr.Instock - ISr.RsrvQty -  SORrw.Quant == 0) then begin
+						items = items & SORrw.ArtCode & ",";
+					end;	
+				end;	
+			end;
+			items = left(items,len(items) - 1);
+			for(compnr=1;compnr<29;compnr=compnr+1) begin
+				SetCompany(compnr,false);
+				if(RecordStore(SORr,true)) then begin	
+					MakeActFromOR(SORr,Actr);	
+					RecordCopy(oldActr,Actr);
+					oldActr.Comment = "’овары счета клиента нужно убрать с полки - " & items;
+					RecordUpdate(oldActr,Actr,true);
+				end;	
+			end;
+		end;
+		SetCompany(oldcomp,false);
 	if(currentcompany==28)then begin
 		if(RecordStore(OCr,true))then begin end;
 	end;
