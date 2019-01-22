@@ -4,7 +4,12 @@ external function roundmode SetRoundModeD(Integer);
 external procedure M4PadString(string,Integer,string,Boolean,var string);
 external procedure CalculateIVVcPoints(var record IVVc);
 external procedure ExtractObj(string,var Integer,var string);
-
+external function Boolean GetItemPriceDiscount3(string,val,var record INVc,string,val,val,val,val,val,string,string,string,string,
+                                                var val,var string,var val,var string,var val,var string,Integer,var Boolean,Date,Time,
+                                                string,Boolean,var Boolean,string,var string,var val,string,string,var string);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
+																								
 global
 procedure NextOfficialSerNr(string filename,LongInt sernr,Date td,string langcode,var string offserno)
 BEGIN
@@ -1707,3 +1712,107 @@ begin
   
   return;
 end;
+
+global 
+procedure GetPriceItem(string code,var val price,var val discount )
+begin
+record INVc INr;
+record PLVc PLr;
+record RebVc Rebr;
+record MyRebVc MRebr;
+row MyRebVc MRebrw;
+row RebVc Rebrw;
+boolean TrHs,testf;
+val disc1,disc2,disc3,disc1t,disc2t,disc3t,vipayval,td,fr,to1,to2,b1,b2;
+integer cnt,i;
+string 20 crn;
+
+	price = 0;
+	discount = 0;
+	PLr.ArtCode = code;
+	PLr.PLCode = "RRP";
+	if(ReadFirstMain(PLr,2,true)) then begin
+		if(nonblank(PLr.CurncyCode) and PLr.CurncyCode!="AZN") then begin
+			GetFullCurncyRate(PLr.CurncyCode,CurrentDate,fr,to1,to2,b1,b2);
+			price = MulRateToBase1(PLr.CurncyCode,PLr.ExVatPrice,fr,to1,to2,b1,b2,SetRoundModeD(0));
+		end else begin
+			price = PLr.ExVatPrice;
+		end;	
+	end;
+	TrHs = true;
+	testf = true;
+	INr.Code = code;
+	If(ReadFirstMain(INr,1,true)) then begin 
+		Rebr.Code = "0%";
+		While(LoopMain(Rebr,1,TrHs)) begin
+			if(Rebr.Code!="0%") then begin TrHs = false; testf = false; end;
+			if(blank(Rebr.ToDate) or DateInRange(CurrentDate,Rebr.FromDate,Rebr.ToDate)==true) then begin
+				if(testf) then begin
+					cnt = matrowcnt(Rebr);
+					for(i=0;i<cnt;i=i+1) begin
+						matrowget(Rebr,i,Rebrw);
+						if(Rebrw.ITCode==code)then begin
+							disc1 = Rebrw.vra0;
+						end;
+						if(Rebrw.ITCode==INr.Group)then begin
+							disc2 = Rebrw.vra0;
+						end;
+						if(Rebrw.ITCode==INr.RebGroup)then begin
+							disc3 = Rebrw.vra0;
+						end;
+					end;
+				end;
+			end;
+		end;	
+		TrHs = true;
+		testf = true;
+		MRebr.Code = "0%";
+		While(LoopMain(MRebr,1,TrHs)) begin
+			if(MRebr.Code!="0%") then begin TrHs = false; testf = false; end;
+			if(DateInRange(CurrentDate,MRebr.FromDate,MRebr.ToDate)==true) then begin
+				if(testf) then begin
+					cnt = matrowcnt(MRebr);
+					for(i=0;i<cnt;i=i+1) begin
+						matrowget(MRebr,i,MRebrw);
+						if(MRebrw.ITCode==code)then begin
+							disc1t = MRebrw.vra0;
+						end;
+						if(MRebrw.ITCode==INr.Group)then begin
+							disc2t = MRebrw.vra0;
+						end;
+						if(MRebrw.ITCode==INr.RebGroup)then begin
+							disc3t = MRebrw.vra0;
+						end;
+					end;
+				end;	
+			end;	
+		end;
+		if(blankval!=disc1t) then begin
+			discount = disc1t;
+		end else begin 
+			if(blankval!=disc2t) then begin
+				discount = disc2t;
+			end else begin 
+				if(blankval!=disc3t) then begin
+					discount = disc3t;
+				end else begin 
+					if(blankval!=disc1) then begin
+						discount = disc1;
+					end else begin 	
+						if(blankval!=disc2) then begin
+							discount = disc2;
+						end else begin 
+							if(blankval!=disc3) then begin
+								discount = disc3;
+							end else begin
+								discount = 0;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;		
+	end;
+return
+end;	
+ 
