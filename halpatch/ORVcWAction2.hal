@@ -64,6 +64,7 @@ external function Boolean UserCanChangePendingRecord(Integer);
 external procedure RoundBelCash(string,var val);
 external procedure ORSumupFrMat(var record ORVc);
 remote updating function Boolean MakeActFromIV(var record IVVc,var record ActVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 17:33 24.12.2018
+external procedure ExtractObj(string,var Integer,var string);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -447,10 +448,13 @@ BEGIN
   Boolean testf;
   LongInt ErrorCode, r;
 	row ORVc ORrw;
-	integer mtrw,j;
+	integer mtrw,j,pos;
 	array string 255 aORLocations;
 	record ActVc Actr, oldActr;
 	record ECommManUserBlock ECMUb;
+	record LocationVc Locr;
+	string 255 Objtsr, Obj;
+	record ObjVc Objr;
 	
 	BlockLoad(ECMUb);
 	
@@ -480,6 +484,19 @@ BEGIN
 				IVr.PriceList = "FOB36";
 				IVr.UpdStockFlag = 1;
 				IVr.OrderNr = ORr.SerNr;
+				Locr.Code = aORLocations[i];
+				if(readfirstmain(Locr,1,true))then begin
+					pos = 0;
+					ExtractObj(Locr.Objects,pos,Objtsr);
+					while (nonblank(Objtsr)) begin
+						Objr.Code = Objtsr;
+						if(ReadFirstMain(Objr,1,true) and Objr.OTCode=="STORE")then begin
+							Obj = Objr.Code;
+						end;
+						ExtractObj(Locr.Objects,pos,Objtsr);
+					end;
+				end;
+				IVr.Objects = IVr.Objects  & "," & Obj;
 				RecordUpdate(OldIVr,IVr,false)
 				RecordNew(Actr);
 				ActVcRecordDefClient(Actr);
@@ -685,7 +702,7 @@ global
 updating function longint SHFromLocWEBORDsm(record ORVc ORr)
 BEGIN
   record SHVc SHr, OldSHr;
-  Integer wn,nwn,i;
+  Integer wn,nwn,i,pos;
   Boolean testf;
   string 60 warning;
   LongInt r;
@@ -694,6 +711,9 @@ BEGIN
 	array string 255 aORLocations;
 	record ActVc Actr, OldActr;
 	record RLinkVc RLr;
+	record LocationVc Locr;
+	string 255 Objtsr, Obj;
+	record ObjVc Objr;
 	
 	
 	testf = true;
@@ -713,6 +733,20 @@ BEGIN
 	for (i=0;i<j;i=i+1)begin
 		if (testf) then begin  
 			r = RecordAction_raPasteOrdInShip3(SHr,ORr.SerNr,warning,aORLocations[i]);
+			Locr.Code = aORLocations[i];
+			if(readfirstmain(Locr,1,true))then begin
+				pos = 0;
+				ExtractObj(Locr.Objects,pos,Objtsr);
+				while (nonblank(Objtsr)) begin
+					Objr.Code = Objtsr;
+					if(ReadFirstMain(Objr,1,true) and Objr.OTCode=="STORE")then begin
+						Obj = Objr.Code;
+					end;
+					ExtractObj(Locr.Objects,pos,Objtsr);
+				end;
+			end;
+			SHr.Objects = SHr.Objects  & "," & Obj;
+			if(recordstore(SHr,true))then begin end;
 			logtext(0,"Link");
 			if(ReadRecordLink(ORr,i+1,Actr,RLr))then begin
 				logtext(0,"LinkCreated");
