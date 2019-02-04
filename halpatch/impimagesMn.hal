@@ -9473,37 +9473,99 @@ begin
 	record INVc INr;
 	integer i,pos;
 	string 100 class,tmp;
-	boolean TrHs,testf;
+	boolean TrHs,testf,Brndf;
 	
-	for(i=1; i<29;i=i+1) begin
-	if(!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3)	then begin
-		SetCompany(i,false);
-		logtext(0,"Comp:" & i);
-		INr.Code="";
-		while(LoopMain(INr,1,true)) begin
-		If(nonblank(INr.DispGroups) And nonblank(INr.BPIBrand)) then begin
-				pos = 0;
-				tmp="";
-				ExtractObj(INr.DispGroups,pos,class);
-				while(nonblank(class)) begin
-					DIr.Code = class;
-					if(readfirstmain(DIr,1,true)) then begin 
-						if(Dir.CType=="BRAND")then begin
-							tmp=tmp & INr.BPIBrand & ",";
-						end else begin 		
-							tmp=tmp & class & ","; 
-						end;
-					end;
+	for(i=1;i<29;i=i+1) begin
+		if(/*!CompanyIsJWLikeCompany(i) or */i==3)	then begin
+			SetCompany(i,false);
+			logtext(0,"Comp:" & i);
+			INr.Code="";
+			while(LoopMain(INr,1,true)) begin
+				If(nonblank(INr.DispGroups) And nonblank(INr.BPIBrand)) then begin
+					Brndf = false;
+					pos = 0;
+					tmp="";
 					ExtractObj(INr.DispGroups,pos,class);
-				end;
-				RecordStore(INr,true);
-			end;			
-		end;
-		ResetLoop(INr);
-	end;	
+					while(nonblank(class)) begin
+						DIr.Code = class;
+						if(readfirstmain(DIr,1,true)) then begin 
+							if(Dir.CType=="BRAND")then begin
+								tmp=tmp & INr.BPIBrand & ",";
+								Brndf = true;
+							end else begin 		
+								tmp=tmp & class & ","; 
+							end;
+						end;
+						ExtractObj(INr.DispGroups,pos,class);
+					end;
+					if(!Brndf)then begin
+						INr.DispGroups = INr.DispGroups & "," & INr.BPIBrand;
+					end;
+					RecordStore(INr,true);
+				end;	
+				if(blank(INr.DispGroups) And nonblank(INr.BPIBrand)) then begin
+					INr.DispGroups = INr.BPIBrand;
+					RecordStore(INr,true);
+				end;			
+			end;
+			ResetLoop(INr);
+		end;	
 	end;
 return
 end;	
+
+
+
+
+global updating procedure BPIBrandAddifEmptMn()
+begin
+	record BPIBrandVc BBr;
+	record DIVc DIr;
+	record INVc INr;
+	integer i,pos;
+	string 100 class,tmp;
+	boolean TrHs,testf,Brndf;
+	
+	for(i=1;i<29;i=i+1) begin
+		if(!CompanyIsJWLikeCompany(i) or i==3)	then begin
+			SetCompany(i,false);
+			logtext(0,"Comp:" & i);
+			INr.Code="";
+			while(LoopMain(INr,1,true)) begin
+				If(nonblank(INr.DispGroups) And nonblank(INr.BPIBrand)) then begin
+					Brndf = false;
+					pos = 0;
+					tmp="";
+					ExtractObj(INr.DispGroups,pos,class);
+					while(nonblank(class)) begin
+						DIr.Code = class;
+						if(readfirstmain(DIr,1,true)) then begin 
+							if(Dir.CType=="BRAND")then begin
+								tmp=tmp & INr.BPIBrand & ",";
+								Brndf = true;
+							end else begin 		
+								tmp=tmp & class & ","; 
+							end;
+						end;
+						ExtractObj(INr.DispGroups,pos,class);
+					end;
+					if(!Brndf)then begin
+						INr.DispGroups = INr.DispGroups & "," & INr.BPIBrand;
+					end;
+					RecordStore(INr,true);
+				end;	
+				if(blank(INr.DispGroups) And nonblank(INr.BPIBrand)) then begin
+					INr.DispGroups = INr.BPIBrand;
+					RecordStore(INr,true);
+				end;			
+			end;
+			ResetLoop(INr);
+		end;	
+	end;
+return
+end;	
+
+
 
 
 
@@ -11255,7 +11317,29 @@ boolean TrHs,brandin, colorin,refin;
 return;
 end;
 
+global
+updating procedure ActProveMn()
+begin
+record ActVc Acr;
+integer oldcomp,i;
+record ActTypeVc ATr;
 
+oldcomp = CurrentCompany;
+for(i=0;i<29;i=i+1) begin	
+SetCompany(i,false);
+		ATr.Code = "CUSRE";
+        if(ReadFirstMain(ATr,1,true)) then begin 
+		end else begin 
+			RecordNew(ATr);
+			ATr.Code = "CUSRE";
+			if(RecordStore(ATr,true)) then begin
+				logtext(0,"true");
+			end;	
+		end;
+end;	
+SetCompany(oldcomp,false);
+return;
+end;
 
 
 
@@ -11401,4 +11485,39 @@ global
 webpublic procedure WebPingServe()
 begin
 WebOutStringFormatNL("ok");
+end;
+
+global
+updating procedure RekalcPriceGlItemMn(record RcVc RepSpec)
+begin
+record PLVc PLr;
+record GlobalItemVc GIr;
+record RebVc Rebr;
+record MyRebVc MRebr;
+row MyRebVc MRebrw;
+row RebVc Rebrw;
+boolean TrHs,testf;
+val disc1,disc2,disc3,disc1t,disc2t,disc3t,vipayval,td,fr,to1,to2,b1,b2,price;
+integer cnt,i,oldcomp;
+string 20 crn;
+PLr.PLCode = ""; 
+price = 0;
+oldcomp = CurrentCompany;
+for(i=0;i<29;i=i+1) begin
+SetCompany(i,false);
+if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+while(LoopMain(PLr,1,true)) begin
+	GIr.HansaCode = PLr.ArtCode;
+	if(ReadFirstKey("HansaCode",GIr,1,true) and GIr.Price!=PLr.ExVatPrice) then begin
+		GetFullCurncyRate(PLr.CurncyCode,CurrentDate,fr,to1,to2,b1,b2);
+		price = MulRateToBase1(PLr.CurncyCode,PLr.ExVatPrice,fr,to1,to2,b1,b2,SetRoundModeD(0));
+		GIr.Price = price;
+		RecordStore(GIr,true);
+	end;
+end;	
+end;
+ResetLoop(PLr);
+end;
+SetCompany(oldcomp,false);
+return;	
 end;
