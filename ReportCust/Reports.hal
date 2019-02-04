@@ -2775,14 +2775,14 @@ end;
 
 
 
-global procedure SHCompletedRn()
+global procedure SHCompletedRn(record RcVc RepSpec)
 begin
   record SHVc SHr;
 	row SHVc SHrw;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	integer OldComp,i,mtrw,shmtrw,j,LocComp,gORcnt,k;
-	longint s;
+	longint s, lcnt, l;
 	string 255 CompName, Location;
 	Boolean TrHs,testf;
 	record ORVc ORr, GlobORr;
@@ -2793,7 +2793,8 @@ begin
 	vector val vQuant, vSum;
 	vector date vDate;
 	vector integer vQtySpec;
-	array string 255 SHarr;
+	array string 255 SHarr, Locarr;
+	vector boolean vLocf;
 	
 	LocComp = CurrentCompany;
 	blockload(Compb);
@@ -2831,7 +2832,7 @@ begin
 	
 	endformat;
 	
-	
+	lcnt = 0;
 	s = 0;
 	mtrw = matrowcnt(Compb);
 	for (i=0;i<mtrw;i=i+1) begin
@@ -2851,6 +2852,11 @@ begin
 				if(SHr.Sorting!="COMPLETED")then begin TrHs = false; testf = false; end;
 				if(SHr.OKFlag!=0)then begin testf = false; end;
 				if(testf)then begin
+					if(!vLocf[SHr.Location])then begin
+						Locarr[lcnt] = SHr.Location;
+						lcnt = lcnt + 1;
+						vLocf[SHr.Location] = true;
+					end;
 					SHarr[s] = SHr.SerNr & "-" & Comprw.CompName;
 					vComp[SHr.SerNr & "-" & Comprw.CompName] = Comprw.CompName;
 					shmtrw = matrowcnt(SHr);
@@ -2869,9 +2875,6 @@ begin
 					vStock[SHr.SerNr & "-" & Comprw.CompName] = SHr.Location;
 					vSerNr[SHr.SerNr & "-" & Comprw.CompName] = SHr.SerNr;
 					ORr.SerNr = SHr.OrderNr;
-					if(ReadFirstMain(ORr,1,true))then begin
-						vOffORNr[SHr.SerNr & "-" & Comprw.CompName] = ORr.CustOrdNr;
-					end;
 					vDate[SHr.SerNr & "-" & Comprw.CompName] = SHr.ShipDate;
 					shmtrw = matrowcnt(SHr);
 					vQtySpec[SHr.SerNr & "-" & Comprw.CompName] = shmtrw;
@@ -2884,6 +2887,7 @@ begin
 						if(setcompany(29,false))then begin
 							GlobORr.SerNr = mid(SHrw.SerialNr,3,len(SHrw.SerialNr)-12);
 							if(ReadFirstMain(GlobORr,1,true))then begin
+								vOffORNr[SHr.SerNr & "-" & Comprw.CompName] = GlobORr.CustOrdNr;
 								gORcnt = matrowcnt(GlobORr);
 								for (k=0;k<gORcnt;k=k+1)begin
 									matrowget(GlobORr,k,GlobORrw);
@@ -2906,40 +2910,36 @@ begin
 	
 	
 	
-	
-	
-	
-	for(i=0;i<s;i=i+1)begin
-		StartFormat(15);
-			outstring(20,0,vComp[SHarr[i]],false);
-			outstring(120,0,vStock[SHarr[i]],false);
-			outstring(220,0,vSerNr[SHarr[i]],false);
-			outstring(220,0,vOffORNr[SHarr[i]],false);
-			outstring(420,0,vDate[SHarr[i]],false);
-		endformat;
-		for(j=0;j<vQtySpec[SHarr[i]];j=j+1)begin
-			matrowget(SHr,j,SHrw);
-			StartFormat(15);
-				outstring(420,0,"",false);
-				outstring(420,0,"",false);
-				outstring(420,0,"",false);
-				outstring(420,0,"",false);
-				outstring(420,0,"",false);
-				outstring(420,0,vItemName[SHarr[i] & "-" & j],false);
-				outstring(420,0,vItemCode[SHarr[i] & "-" & j],false);
-				outstring(420,0,vQuant[SHarr[i] & "-" & j],false);
-				outstring(460,0,vSum[SHarr[i] & "-" & j],false);
-			endformat;
+	for(l=0;l<lcnt;l=l+1)begin
+		for(i=0;i<s;i=i+1)begin
+			testf = true;
+			if(Locarr[l]!=vStock[SHarr[i]])then begin testf = false; end; 
+			if(nonblank(RepSpec.f1) and Locarr[l]!=RepSpec.f1)then begin testf = false; end; 
+			if(testf)then begin
+				StartFormat(15);
+					outstring(20,0,vComp[SHarr[i]],false);
+					outstring(120,0,vStock[SHarr[i]],false);
+					outstring(220,0,vSerNr[SHarr[i]],false);
+					outstring(220,0,vOffORNr[SHarr[i]],false);
+					outstring(420,0,vDate[SHarr[i]],false);
+				endformat;
+				for(j=0;j<vQtySpec[SHarr[i]];j=j+1)begin
+					matrowget(SHr,j,SHrw);
+					StartFormat(15);
+						outstring(420,0,"",false);
+						outstring(420,0,"",false);
+						outstring(420,0,"",false);
+						outstring(420,0,"",false);
+						outstring(420,0,"",false);
+						outstring(420,0,vItemName[SHarr[i] & "-" & j],false);
+						outstring(420,0,vItemCode[SHarr[i] & "-" & j],false);
+						outstring(420,0,vQuant[SHarr[i] & "-" & j],false);
+						outstring(460,0,vSum[SHarr[i] & "-" & j],false);
+					endformat;
+				end;
+			end;
 		end;
 	end;
-	
-	
-	
-	
-	
-	
-	
-	
 	
 	
 	
