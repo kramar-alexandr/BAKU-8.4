@@ -97,7 +97,7 @@ external procedure OpenGCBCardckIssueTouchScreenDClass(); //Edit****************
 remote procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);// Edit ************************** Friday, 20 October 2017 15:15:28
 external function string 60 RemoveObjectFromObjectList(string,string);// Edit ************************** Friday, 14 November 2014 09:35:09
 remote procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var string);
-
+remote procedure LogTextOnServer(string);// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 23 January 2019 10:29:45
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -421,7 +421,7 @@ begin
         PutWindowString(wn,"touchscreenitemname",IVrw.Spec);
         PutWindowString(wn,"touchscreenitemqty",IVrw.Quant);
         PutWindowString(wn,"touchscreenitemprice",IVrw.Price);
-        PutWindowRecord(wn,IVr);    
+        PutWindowRecord(wn,IVr);  	
         IVDClass_RefreshStringList(wn,IVr);
         DisplayIVItem(IVr,rownr);
         PutWindowString(wn,"ivcashcommandlastitemsernrf","");
@@ -448,7 +448,7 @@ begin
   //      IVSumupSoftEditFields(wn,IVr);
 				//millisleep(1000);
         PutWindowRecord(wn,IVr);
-        IVDClass_RefreshStringList(wn,IVr);
+       IVDClass_RefreshStringList(wn,IVr);
         DisplayIVItem(IVr,rownr);
         PutWindowString(wn,"ivcashcommandlastitemsernrf","");
 
@@ -481,6 +481,113 @@ begin
   end;
 LIVDClasstouchscreenitemEFAfter:;  
   IVDClasstouchscreenitemEFAfter = true;
+  return;
+end;
+
+global
+function Boolean IVDClasstouchscreenitemEFAfter2(Integer wn,Integer pastewn,Boolean changedf)
+begin  
+  string 255 inwarning;
+  record IVVc prevIVr;
+  record IVVc IVr;
+  row IVVc IVrw;
+  string 255 location;
+  Integer rownr;
+  LongInt printrownr;
+  record LocalMachineBlock LMb;
+  Integer sernrf;
+  Integer nwn;
+  record RcVc RepSpec;
+  boolean res;
+  Integer suspended;
+  string 100 val001;// Edit ************************** Thursday, 11 October 2012 14:58:10
+  string 255 tstr; // edited by BPI
+  
+  res = true;
+  
+  if (changedf) then begin
+    BlockLoad(LMb);
+    suspended = StringToInt(GetWindowString(wn,"Suspended"));
+    val001 = GetWindowString(wn,"touchscreenitemserialnr");// Edit ************************** Thursday, 11 October 2012 14:58:09
+    GetWindowRecord(wn,IVr);
+    GetPrevWindowRecord(wn,prevIVr);
+    if (IVr.OKFlag!=0) then begin goto LIVDClasstouchscreenitemEFAfter; end;
+    if (IVr.Invalid!=0) then begin goto LIVDClasstouchscreenitemEFAfter; end;
+    IVr.Suspended = suspended;
+    ClearRow(IVr,IVrw,1);
+    if (GetWindowString(wn,"ivcashcommandlastitemsernrf")=="true") then begin
+      IVrw.SerialNr = GetWindowString(wn,"touchscreenitem");
+    end else begin
+      IVrw.ArtCode = GetWindowString(wn,"touchscreenitem");
+    end;    
+    rownr = MatRowCnt(IVr);
+    MatRowPut(IVr,rownr,IVrw);
+    if (GetWindowString(wn,"ivcashcommandlastitemsernrf")=="true") then begin
+      if (IVVc_PasteSerialNr(IVr,rownr,TouchScreenLook)) then begin
+        MatRowGet(IVr,rownr,IVrw);
+        PutWindowString(wn,"touchscreenitemname",IVrw.Spec);
+        PutWindowString(wn,"touchscreenitemqty",IVrw.Quant);
+        PutWindowString(wn,"touchscreenitemprice",IVrw.Price);
+        PutWindowRecord(wn,IVr);  	
+        //IVDClass_RefreshStringList(wn,IVr);
+        DisplayIVItem(IVr,rownr);
+        PutWindowString(wn,"ivcashcommandlastitemsernrf","");
+      end;
+    end else begin
+      if (IVVc_PasteArtCode(IVr,rownr,inwarning,inwarning,TouchScreenLook,sernrf)) then begin
+        if (nonblank(inwarning)) then begin
+          MessageBox(0,inwarning);
+        end;
+        MatRowGet(IVr,rownr,IVrw);
+        IVrw.Quant = 1;
+        IVrw.SerialNr = val001; // edited by BPI
+        MatRowPut(IVr,rownr,IVrw);
+        //tstr = SaboPromotion(IVr,"paste"); //Edit***************************Sasha2,13:36 01.06.2016 {
+        if (NonBlank(tstr)) then begin
+          MessageBox(0,tstr);
+        end; //Edit***************************Sasha2,13:36 01.06.2016 }
+        IVVc_PasteQuantity(IVr,rownr);
+        MatRowGet(IVr,rownr,IVrw);
+        PutWindowString(wn,"touchscreenitemname",IVrw.Spec);
+        PutWindowString(wn,"touchscreenitemqty",IVrw.Quant);
+        PutWindowString(wn,"touchscreenitemprice",IVrw.Price);
+        IVSumup(IVr,true);
+  //      IVSumupSoftEditFields(wn,IVr);
+				//millisleep(1000);
+        PutWindowRecord(wn,IVr);
+      // IVDClass_RefreshStringList(wn,IVr);
+        DisplayIVItem(IVr,rownr);
+        PutWindowString(wn,"ivcashcommandlastitemsernrf","");
+
+        if(IVrw.ArtCode=="GLOBALGIFTCARD")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 29 January 2018 16:44:46
+        	sernrf = 1;
+        end;
+        if(blank(val001))then begin // edited by BPI
+          if (sernrf==1) or (sernrf==2)  then begin
+            PutWindowString(wn,"ivcashcommandlastitemsernrf","true");
+            RepSpec.long1 = rownr;
+            res = false;
+            if (pastewn>0) then begin
+              // CloseWindow(pastewn);
+              // nwn = 
+              ReOpenWindow(pastewn,"SerialNoScanNPTSSClass",0,wn,"","",RepSpec);
+            end else begin
+              nwn = OpenWindow("SerialNoScanNPTSSClass",0,wn,"","",RepSpec);
+            end;
+            goto LIVDClasstouchscreenitemEFAfter;
+          end;
+        end; // edited by BPI
+        goto LIVDClasstouchscreenitemEFAfter;
+      end;
+    end;
+  end;
+  SetWindowNameArg(wn,IVrw.ArtCode & ":" & location);
+  if (TouchScreenLook) begin
+    //WindowFieldGoto(wn,IVr,-1,"ivcashcommand",false);
+    WindowFieldGotoForTouchScreen(wn,-1,"ivcashcommand",false); 
+  end;
+LIVDClasstouchscreenitemEFAfter:;  
+  IVDClasstouchscreenitemEFAfter2 = true;
   return;
 end;
 
