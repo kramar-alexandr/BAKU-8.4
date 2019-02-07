@@ -69,6 +69,7 @@ external function Boolean GetItemPriceDiscount3(string,val,var record INVc,strin
                                                 string,Boolean,var Boolean,string,var string,var val,string,string,var string);
 external function Boolean INVc_AllowSales(record INVc,var LongInt);
 external function val CollectItemsQtyBySameCode(record IVVc,row IVVc );	//Edit----------------------Dima  02.03.2016
+external function Boolean IVVc_PasteQuantity(var record IVVc,Integer);
 
 global
 function Integer VATCalcRule(string VATCode)
@@ -652,6 +653,238 @@ done below
 	// Edit End ---------------------------------------------- Edit End
 	
   IVVc_PasteArtCode = res;
+  RETURN;
+END;    
+
+global
+function Boolean IVVc_PasteArtCode2(var record IVVc IVr,Integer rownr,var string inwarning,var string warning,Boolean touchscreenf,var Integer sernrf)
+begin
+  Boolean chsum,res;
+  Boolean chrsum;
+  record INVc INr;
+  row IVVc IVrw;
+  val t,s,price,vreb,baseprice,temp,tax2prc,tax2reb;
+  string 255 curitemname,salesacc,vatcode,tax2code,tax2acc,taxtemplatecode;
+  Boolean calcprice;
+  Boolean pritemf;
+  val UnitFactQuant,UnitFactPrice,Quant;
+  Integer exportflag,rwcnt;
+  record INVc locINr;
+  Boolean dummyf,varf;
+  string 255 location;
+  LongInt ErrorCode;
+  record TaxMatrixVc TMr;
+  string 60 sz,msk,mskrep;
+  string 200 varsubset;
+  record AccVc Accr;
+  record CUVc CUr;
+  record ItemStatusVc ISr;// Edit ************************** Monday, 3 June 2013 11:43:19
+
+
+  pritemf = true;
+  MatRowGet(IVr,rownr,IVrw);  
+  IVrw.Price = BlankVal;
+  IVrw.vRebate = BlankVal;
+  IVrw.Sum = BlankVal;
+  location = IVrw.Location;
+  if (blank(location)) then begin
+    location = IVr.Location;
+  end;
+  if (touchscreenf) then begin
+    if (GetFirstItem(IVrw.ArtCode,INr)) then begin
+      IVrw.ArtCode = INr.Code;
+    end;
+  end;
+  exportflag = IVr.ExportFlag;
+  if (IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales) then begin
+    exportflag = exportflag + AddPortugueseType;
+  end;
+  if (GetItemPriceDiscount3(IVrw.ArtCode,IVrw.Quant,INr,IVr.CurncyCode,
+                            IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,
+                            IVr.LangCode,IVr.CustCat,IVr.PriceList,IVr.RebCode,
+                            price,curitemname,vreb,vatcode,baseprice,salesacc,
+                            exportflag,calcprice,IVr.TransDate,IVr.TransTime,IVr.CustCode,true,dummyf,IVr.PayDeal,
+                            tax2code,tax2prc,IVr.Region,location,taxtemplatecode)) then begin
+    IVrw.TaxTemplateCode = FillupTaxMatrix(0,IVr.BranchID,IVr.CustCode,IVr.CustCat,IVr.DelAddrCode,taxtemplatecode,TMr);
+    CUr.Code = IVr.CustCode;
+    ReadFirstMain(CUr,1,true);
+    if (vreb==0) then begin
+      vreb = blankval;
+    end;
+    inwarning = INr.WarnText1;
+    if (!INVc_AllowSales(INr,ErrorCode)) then begin
+      warning = USetStr(ErrorCode);
+    end;
+    IVrw.Price = price;
+    IVrw.Spec = curitemname;
+    IVrw.vRebate = vreb;
+    if (CUr.RvrsVAT!=0) then begin
+      IVrw.RvrsVATCode = INr.RvrsVATCode;
+    end;
+    IVrw.VATCode = vatcode;
+    IVrw.BasePrice = baseprice;
+    IVrw.BasePriceB2 = INr.InPriceB2;
+    IVrw.SalesAcc = salesacc;
+    Accr.AccNumber = IVrw.SalesAcc;
+    ReadFirstMain(Accr,1,true);
+    IVrw.PeriodCode = Accr.PeriodCode;
+    IVrw.ArtCode = INr.Code;
+    IVrw.Recepy = "";  
+    IVrw.CustArtCode = CustArtCode(IVr.CustCode,IVrw.ArtCode);
+    GetTaxesDiscounts(IVr.CustCode,IVr.TransDate,IVrw.VATCode,tax2code,t,tax2reb);
+    if (IVr.NoTax2==0) then begin
+      IVrw.TAX2Code = tax2code;
+      IVrw.TAX2Prc = tax2prc;
+      IVrw.TAX2Reb = tax2reb;
+      IVrw.TAX2Acc = GetTax2Acc(IVrw.TAX2Code);
+    end;
+    if (IVr.NoTax1==0) then begin
+      IVrw.TAX1Reb = t;
+    end;
+    if ((INr.ItemType==kItemTypeStructured) and (nonblank(INr.Recepy))) then begin
+      IVrw.Recepy = INr.Recepy;
+    end else begin
+      IVrw.Recepy = "";
+    end;
+    if (nonblank(IVr.CustVATCode)) then begin
+      IVrw.VATCode = IVr.CustVATCode;
+    end;
+//    IVrw.VATCalcRule = VATCalcRule(IVrw.VATCode);
+    if (calcprice) then begin
+      MatRowPut(IVr,rownr,IVrw);
+      temp = -1;
+      IVVcGetCalcItemPrice(INr,IVr,rownr,temp);
+      MatRowGet(IVr,rownr,IVrw);
+    end;
+    IVrw.Objects = FindINObjects(INr.Objects,INr.Group);
+    IVrw.UnitCode = INr.Unittext;
+    IVrw.UnitXval = INr.Width;
+    IVrw.UnitYval = INr.Height;
+    IVrw.UnitZval = INr.Depth;
+    IVrw.PriceFactor = INr.PriceFactor;
+    IVrw.Coefficient = INr.UnitCoefficient;
+    IVrw.RepaExVAT = CalcItemRepa(INr.RepaPricePerWeight,INr.Weight,IVrw.Quant,IVr.CurncyCode,
+                                  IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+    IVrw.Perceptions = INr.Perceptions;
+    if (nonblank(IVrw.UnitCode)) then begin
+      price = IVrw.Price;
+      Quant = IVrw.Quant;
+      chrsum = SetUnitFactor(IVrw.UnitCode,UnitFactQuant,IVrw.UnitXval,IVrw.UnitYval,IVrw.UnitZval,UnitFactPrice,Quant,price,IVrw.UnitComment,false);
+/*      
+      if (touchscreenf) then begin
+        if (ReadFirstItem(IVrw.ArtCode,locINr,true,true)) then begin
+          if (Quant==0) then begin
+            Quant = 1;
+          end;
+        end;
+      end;
+done below      
+*/      
+      if (chrsum) then begin
+        IVrw.UnitFactQuant = UnitFactQuant;
+        IVrw.UnitFactPrice = UnitFactPrice;
+        IVrw.Quant = Quant;
+        IVrw.Price = price;
+      end;
+    end;
+    t = IVrw.BasePrice;
+    chsum = CostPriceForGP(IVrw.ArtCode,IVrw.SerialNr,IVr.PriceList,IVr.CustCode,t);
+    IVrw.BasePrice = t;
+    
+//    if ((INr.ExplodeRec==0) or (blank(IVrw.Recepy))) then begin
+//why
+      MatRowPut(IVr,rownr,IVrw);
+      MatRowGet(IVr,rownr,IVrw);
+      //IVMultiLineText(IVr,INr,IVr.LangCode,rownr);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 20 February 2018 12:02:50
+//    end;
+    if ((INr.ExplodeRec==0) or (blank(IVrw.Recepy))) then begin
+      rwcnt = MatRowCnt(IVr);
+      //IVVcITMultiLineText(IVr,INr,IVr.LangCode,rwcnt+1);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 20 February 2018 12:03:32
+    end;    
+//      curitemname = IVrw.Spec;
+//      if (GetItemNameStr(1,curitemname,IVr.LangCode,INr.Name,INr.Code)) then begin end;
+    IVrw.Spec = curitemname;
+    PackRowFieldMatrix(IVrw,"TaxMatrix",TMr);
+    MatRowPut(IVr,rownr,IVrw);
+    if (INr.ExplodeRec!=0 and IVrw.Quant!=blankval) then begin
+      if (nonblank(IVrw.Recepy)) then begin
+        if (IVVc_ExplodeRecepy(INr,IVrw.Quant,IVr,IVrw.Recepy,rownr)) then begin
+          MatRowGet(IVr,rownr,IVrw);
+          IVrw.Recepy = "";
+          IVrw.BasePrice = blankval;
+          MatRowPut(IVr,rownr,IVrw);
+        end;
+      end else begin
+        IVVc_ChangeQuantityRecepy(IVrw.ArtCode,IVrw.Quant,rownr,IVr);
+      end;
+    end;
+    if (INInvRecepyExists(INr.InvRecepy)) then begin//moved to qty
+      Do_InvoiceRecepy(IVr,INr,rownr+1);
+      IVDUpdatePrices(IVr,false);
+    end;    
+    chrsum = true;
+    res = true;
+  end else begin
+    if (nonblank(IVrw.ArtCode)) then begin
+      if (INr.Terminated==1) then begin
+        warning = USetStr(1266) & IVrw.ArtCode;
+      end else begin
+        warning = USetStr(1120) & IVrw.ArtCode;
+      end;
+    end;
+  end;
+  if (touchscreenf or IsBooks) then begin
+    if (IVrw.Quant==0) then begin
+      if (FindItemVAR(INr.Code,sz,msk,mskrep,varsubset)) then begin//should be taken from GetItemPriceDiscount3
+        varf = true;
+      end;
+      if (varf==false) then begin
+        MatRowGet(IVr,rownr,IVrw);
+        IVrw.Quant = 1;
+        MatRowPut(IVr,rownr,IVrw);
+        IVVc_PasteQuant(IVr,rownr,true,chsum,"");
+		IVVc_PasteQuantity(IVr,rownr);
+		MatRowGet(IVr,rownr,IVrw);
+       // PutWindowString(wn,"touchscreenitemname",IVrw.Spec);
+        //PutWindowString(wn,"touchscreenitemqty",IVrw.Quant);
+        //PutWindowString(wn,"touchscreenitemprice",IVrw.Price);
+        IVSumup(IVr,true);
+      end;
+    end;
+  end;
+  if (chrsum) then begin
+    chsum = IVDchrsum(IVr,rownr);
+    if (chsum) then begin
+      IVDchsum(IVr,rownr);
+    end;
+  end;
+  sernrf = INr.SerNrf;
+  AddItemWithholdingTaxesRows_IVVc(IVr,rownr,INr);
+  AddMultiBuyDiscountItems_IVVc(IVr);
+  if (nonblank(INr.RvrsVATCode) and IVrw.Quant>0) then begin
+    IVPasteRvrsVATCode(IVr,false);
+  end;
+  IVApplyPromotions(IVr);
+  IVSumup(IVr,true); 
+	// Edit Start ---------------------------------------------- Edit Start
+	//Monday, 3 June 2013 11:42:48
+	
+	if ((INr.ItemType!=0) and (INr.ItemType!=3)) then begin
+  	if(currentcompany>2)then begin  
+  		matrowget(IVr,rownr,IVrw);
+  		ISr.Code = IVrw.ArtCode;
+  		ISr.Location = IVr.Location;
+  		readfirstmain(ISr,2,true);
+  		if(ISr.Instock<IVrw.Quant)then begin
+  		  
+  			messagebox(1247," " & IVr.Location);
+  		end;
+    end;
+	end;
+  
+	// Edit End ---------------------------------------------- Edit End
+	
+  IVVc_PasteArtCode2 = res;
   RETURN;
 END;    
 
