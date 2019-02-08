@@ -1467,7 +1467,10 @@ begin
   LongInt res,error;
   Boolean UnOKedCheckSerialf;
   string 255 errorstr,fieldstr;
-  integer rownr;
+  integer rownr, OldComp, ItQty, i, mtrw;
+	row SHVc SHrw;
+	record RLinkVc RLr;
+	record ORVc LORr, GORr;
   
   logtext(0,"SHVcRecordCheck");
   
@@ -1481,6 +1484,22 @@ begin
 		if(SH2p.OKFlag==0 and SHp.OKFlag==1 and SHp.Sorting!="COMPLETED" and res==0)then begin
 			RecordCheckError(36204,"",-1,"Sorting");   
 			res = -1; 
+		end;
+		if(SH2p.Sorting!="COMPLETED" and SHp.Sorting=="COMPLETED" and res==0)then begin
+			OldComp = CurrentCompany;
+			mtrw = matrowcnt(SHp);
+			ItQty = 0;
+			for(i=0;i<mtrw;i=i+1)begin
+				matrowget(SHp,i,SHrw);
+				ItQty = ItQty + SHrw.Ship;
+			end;
+			if(ReadRecordLink(SHp,1,LORr,RLr) and ReadRecordLink(LORr,1,GORr,RLr) and SetCompany(29,false))then begin
+				if(ReadFirstMain(GORr,1,true))then begin
+					GORr.ECORLocCompl = GORr.ECORLocCompl + ItQty;
+					if(RecordStore(GORr,true))then begin end;
+				end;
+				ResetCompany(OldComp);
+			end;
 		end;
 	end;
   SHVcRecordCheck = res;
