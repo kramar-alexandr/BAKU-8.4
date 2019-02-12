@@ -65,6 +65,7 @@ remote procedure StockMovVc_PasteSerialNr(var record StockMovVc,Integer,var arra
 remote function Boolean StockMovVc_PasteQuant(var record StockMovVc,Integer);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 18:23 13.12.2018
 remote procedure FormatUpperCaseCode(var string);
 external procedure GetPriceItem(string,var val,var val);//Edit_________________ABR 22.01.19
+external function Boolean PasteActTypeInAct(string,var record ActVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 15:46 12.02.2019
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -10023,7 +10024,53 @@ return;
 end;
 
 
+global
+updating function Boolean MakeECActFromSMRet(var record StockMovVc SMr,var record ActVc Actr)
+begin
+  Boolean res;
+  record ActTypeGrVc ATGRr;
+  record ActTypeVc ATr;
+  record ASTBlock ASTRec;
+  record UserVc USr;
+  record CUVc CUr;
+  Boolean savef;
+  Integer curcomp;
+	record ECommManUserBlock EUSTb;
 
+	blockload(EUSTb);
+	
+  curcomp = CurrentCompany;
+  BlockLoad(ASTRec);
+  Actr.TransDate = SMr.TransDate;
+  Actr.OKFlag = 0;
+  Actr.SerNr = NextSerNr("ActVc",Actr.TransDate,-1,false,"");
+  Actr.TodoFlag = 1;  
+  Actr.StartTime = CurrentTime;
+  Actr.ActType = ASTRec.GenSalesInv;
+  if (PasteActTypeInAct("",Actr)) then begin
+  end;
+  Actr.Comment = "На складе \"" & SMr.FrLocation & "\" есть товары для перемещения на склад \"" & SMr.ToLocation & "\". Перемещение №" & SMr.SerNr & ".";
+  Actr.MainPersons = EUSTb.UserStockSet;
+	Actr.TodoFlag = 1;
+	Actr.CalTimeFlag = kCalTimeFlagTime;
+	Actr.AlarmType = 1;
+	Actr.SymbNr = 3;
+  savef = true;
+LMakeActFromSubSys_IVVc:;
+  if (savef) then begin 
+    ATr.Code = Actr.ActType;
+    if (ReadFirstMain(ATr,1,true)) then begin
+      Actr.ItemCode = ATr.ItemCode;
+    end;  
+    if (RecordStore(Actr,false)) then begin
+      CreateRecordLink(Actr,curcomp,SMr,curcomp);  
+      CreateRecordLink(SMr,curcomp,Actr,curcomp);  
+      res = true;
+    end;
+  end;  
+  MakeECActFromSMRet = res;
+  return;
+end;
 
 
 
@@ -10047,7 +10094,7 @@ begin
   record INVc INr;
   record LocationVc LocRec;
   Boolean storesmf, res;  
-	
+	record ActVc Actr;
 	
 	
 	Location = "RETURN";
@@ -10107,7 +10154,9 @@ begin
 				matrowput(StockMovr,i,StockMovrw);
 			end;
 			
-			if (RecordInsert(StockMovr,true)) then begin end;
+			if (RecordInsert(StockMovr,true)) then begin
+				MakeECActFromSMRet(StockMovr,Actr);
+			end;
 		end;
 	end;
 	
