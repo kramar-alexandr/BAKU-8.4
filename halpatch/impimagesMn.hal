@@ -7674,21 +7674,34 @@ begin
   record LCCashbackLevelVc LCCBLevelr;
   row LCCashbackLevelVc LCCBLevelrw;
   row IVVc IVrw;
+  record IVVc IV2r;
   record LoyaltyCardVc LoyaltyCardr;
   record BaseCurBlock BCb;
   roundmode rnd;
   Boolean found;
-  Integer i,rwcnt;
-  val loyCardPointsBalance,cashbackPercent,paidViaPoints,sum;
+  Integer i,rwcnt,rowcnt;
+  val loyCardPointsBalance,cashbackPercent,paidViaPoints,sum,sumbal,percent,points;
   	
     BlockLoad(BCb);
+	sumbal = 0;
+	points = 0;
     LoyaltyCardr.SerNr = IVr.LoyaltyCardNr;
     if ((nonblank(IVr.LoyaltyCardNr) and ReadFirstMain(LoyaltyCardr,1,true)) or noCheck) then begin
       rnd = DefaultValRoundoff;
       rnd.decimals = 2;
       rnd.mode = kRoundingModeHalfUp;
       loyCardPointsBalance = LoyaltyCardr.CashbackLevelPoints;
-      
+		rowcnt = MatRowCnt(IVr);
+		for(i=0;i<rowcnt;i=i+1) begin
+			matrowget(IVr,i,IVrw);
+			if(IVrw.stp==kInvoiceRowTypeNormal and IVrw.Sum<0) then begin
+				IV2r.SerNr = IVrw.IVForRetNr;
+				ReadFirstMain(IV2r,1,true);
+				percent = IV2r.Points/IV2r.Sum4;
+				points = points +  Round((IVrw.Sum)*percent,rnd);
+				sumbal = sumbal + IVrw.Sum;
+			end;	
+		end;
       LCCBLevelr.LCMLevel = IVr.LCMLevel;
       found = ReadFirstMain(LCCBLevelr,1,true);
       if (found) then begin
@@ -7718,14 +7731,18 @@ begin
           if (IVr.CurncyCode!=BCb.BaseCur1) then begin
             sum = MulRateToBase1(IVr.CurncyCode,IVr.Sum4,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
           end;
+		  sum = sum - sumbal;
+		  logtext(0,"sum " & sum);
           IVr.Points = Round((sum - paidViaPoints)*cashbackPercent/100,rnd);
-          CheckForCashbackCorrection(IVr,cashbackPercent,paidViaPoints,rnd);
-        end;
+		  logtext(0,"Points " & IVr.Points);
+			CheckForCashbackCorrection(IVr,cashbackPercent,paidViaPoints,rnd);
+			IVr.Points = IVr.Points + points;
+		end;	
+		
       end;
     end;
-
-  return;
-end; //Edit***************************Sasha2,15:10 07.07.2017 }
+return;
+end;	
 
 procedure MakeReItemsMatrixFind(var record SHVc SHr, Boolean clearRows)
 begin
