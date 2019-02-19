@@ -33,7 +33,7 @@ remote procedure NewINBPIColorSClassArrayOnOpen(var Array string,var Integer,str
 remote procedure CompanySClassArrayOnOpen(var Array string,var Integer);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:47 22.11.2018
 remote procedure StockECSClassArrayOnOpen(var Array string,var Integer,string);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:47 22.11.2018
 remote procedure LoopNCSR(var record INVc);//Edit_________________ABR//Edit_________________ABR
-
+remote procedure CLOutSumup(var record CLOutVc);
 SetLangMode(LangRussian,"RUS",0);
 
 procedure CalcVolume(val w,val h,val d,var val vol)
@@ -3505,3 +3505,71 @@ end;
 
 
 
+global
+procedure BlankImportDsm()
+begin
+area afile;
+string 255 fname;
+xml fil;
+array string 20 obj;
+array string 50 exp;
+array string 255 comment;
+array string 50 sum;
+boolean one;
+integer i,cnt,cntdocs,j,cntrow,wn;
+array string 50 curcode;
+array string 100 acc;
+record CLOutVc CLOr;
+row CLOutVc CLOrw;
+Boolean testf;
+ string 255 xstr,tstr;
+cntdocs = 0;
+if (OpenFileDialog("xml",fname)) then begin
+	fil = ParseXMLFile(fname);
+	cnt = XmlCountChildren(fil,"Data");
+	for(i=0;i<cnt;i=i+1) begin
+		one=false;
+		for(j=0;j<curcode.length;j=j+1) begin
+			if(curcode[j]==XmlGet(fil,"Data/payment[" & i & "]/curency")) then begin
+				one = true;
+			end;
+		end;
+		if(!one) then begin
+			curcode[cntdocs] = XmlGet(fil,"Data/payment[" & i & "]/curency");
+			obj[cntdocs] = XmlGet(fil,"Data/payment[" & i & "]/store");
+			acc[cntdocs] = "T1";
+			cntdocs = cntdocs + 1;
+		end;	
+		exp[i] = XmlGet(fil,"Data/payment[" & i & "]/exp");
+		comment[i] = XmlGet(fil,"Data/payment[" & i & "]/comment");
+		sum[i] = XmlGet(fil,"Data/payment[" & i & "]/sum");
+	end;
+	
+	for(j=0;j<cntdocs;j=j+1) begin
+		cntrow = 0;
+		RecordNew(CLOr);
+		CLOr.Objects = obj[j];
+		CLOr.PayMode = acc[j];
+		CLOr.CurncyCode = curcode[j];
+		for(i=0;i<cnt;i=i+1) begin
+			if(XmlGet(fil,"Data/payment[" & i & "]/curency")==curcode[j]) then begin
+				CLOrw.Type = 0;
+				CLOrw.CorspCode = exp[i];
+				CLOrw.Comment = comment[i];
+				CLOrw.Sum = StringToVal(sum[i],M4Val);
+				CLOutSumup(CLOr);
+				matrowput(CLOr,cntrow,CLOrw);
+				cntrow = cntrow + 1;
+			end;
+		end;
+		wn = OpenWindow("CLOutDClass",1,0,"","",CLOr);
+	end;
+	
+  while (TestEOF==false) begin
+    xstr = ImportField;
+    testf = NextImportLine(true);     
+  end;        
+end;
+	
+return;
+end;
