@@ -7,7 +7,10 @@ external function string 50 TimeToString(time,string,boolean);
 external function LongInt POSNETHexToLong(string);
 remote function Boolean PasteCustInOrder(var record ORVc,string,string,var string,var string);//Edit_________________ABR 14.12.18 11:00
 external  function string 100 BPICodeToName(string);
-
+remote function Boolean GetItemPriceDiscount3CRM(string,val,var record INVc,string,val,val,val,val,val,string,string,string,string,
+                                                var val,var string,var val,var string,var val,var string,Integer,var Boolean,Date,Time,
+                                                string,Boolean,var Boolean,string,var string,var val,string,string,var string,var string);
+												
 SetLangMode(LangRussian,"RUS",0);
 
 global 
@@ -2197,6 +2200,7 @@ begin
   LongInt port,pos,mtrw;
   Area req,reply;
   string 255 ha1,ha2;
+  record MarcCampVc MCr;
   row MarcCampVc MCrw;
   integer i,cnt;
 	record LoyaltyCardVc LCr;
@@ -2209,6 +2213,46 @@ begin
 	boolean testf;
 	row IVVc IVrw;
 	record INVc INr;
+	 LongInt res;  
+  record CreditLimitBlock CLb; 
+  record MainStockBlock MSb;  
+  record AccBlock ARAccRec;  
+  record SRBlock SRb;  
+  record CashierDefBlock CDb;
+  record CYBlock CYb;
+  record ItemStatusVc ISr;  
+  record SHVc recSHr;
+  record AccVc Accr;
+  record LegalInvNrBlock LINrb;
+  row LegalInvNrBlock LINrbrw;
+  row SHVc SHrw2;
+  row IVCashVc IVCashrw;
+  row IVCashVc IVCash2rw;  
+  record IVCashVc locIVCashr;
+  Integer rwcnt,j,rwcnt2; 
+  LongInt newnr,oldnr;
+  Boolean gentrans,transf,unokf;
+  val limit,bal,quant,prev,cash;
+  string 255 tstr2,errstr,oldOfficialSerNr,c;
+  string 10 location;
+  Boolean isstruct;  
+  Boolean check;
+  Integer insertmode,updatemode;
+  Integer errcode;
+  LongInt sernr;
+  record LocalOffLineNrBlock LastRecNr;
+  Integer positivef;
+  val discountprice,price,vreb,baseprice,tax2prc;
+  string 255 curitemname,salesacc,vatcode,tax2code,taxtemplatecode;
+  Boolean calcpricef,dummyf;
+  Boolean test2f,remoteconnection;
+  LongInt l,dummyl;
+  Date td;
+  Integer programmode;
+  record ACPVc ACPr;
+  record HotelBlock Hotelb;
+  record JobVc Jobr;
+  string 50 CRMid;
 	logtext(0,"SendIVVisitToCRM");
 	
 	testf = true;
@@ -2336,7 +2380,15 @@ begin
 						addtexttoarea("\"subGroup\":\"" & INr.BPISubGroup & "\"," & chr(13) & chr(10) ,req);
 						addtexttoarea("\"hansaid\":\"" & INr.Code & "\"" & chr(13) & chr(10) ,req);
 						addtexttoarea("}," & chr(13) & chr(10),req);
-						addtexttoarea("\"campaign\":\"" & "" & "\"," & chr(13) & chr(10) ,req);
+						 if (GetItemPriceDiscount3CRM(IVrw.ArtCode,IVrw.Quant,INr,IVr.CurncyCode,
+                              IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,
+                              IVr.LangCode,IVr.CustCat,User.MinPLCode,IVr.RebCode,
+                              price,curitemname,vreb,vatcode,baseprice,salesacc,
+                              0,calcpricef,IVr.TransDate,IVr.TransTime,IVr.CustCode,true,dummyf,IVr.PayDeal,tax2code,tax2prc,IVr.Region,location,taxtemplatecode,CRMid)) then begin
+							addtexttoarea("\"campaign\":\"" & CRMid & "\"," & chr(13) & chr(10) ,req);
+						end else begin
+							addtexttoarea("\"campaign\":\"" & CRMid & "\"," & chr(13) & chr(10) ,req);
+						end;	
 						addtexttoarea("\"ñount\":\"" &  IVrw.Quant & "\"," & chr(13) & chr(10) ,req);
 						addtexttoarea("\"price\":\"" &  IVrw.Price & "\"," & chr(13) & chr(10) ,req);
 						addtexttoarea("\"salesDiscount\":\"" &  IVrw.vRebate & "\"" & chr(13) & chr(10) ,req);
@@ -2364,43 +2416,6 @@ begin
 		addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,reply);
 writeareatofile(reply,"CRMResponse.txt",1);
 	end;
-return;
-end;
-
-global updating procedure SendVisitstoCRM()
-begin
-	integer i;
-	record IVVc IVr;
-	record CompaniesBlock CBb;
-	boolean TrHs;
-	string 150 oldid;
-	
-	logtext(0,"SendVisitstoCRM");
-	
-	blockload(CBb);
-	
-	for(i=1;i<=matrowcnt(CBb);i=i+1)begin
-		setcompany(i,false);
-		IVr.InvDate = currentdate;
-		TrHs = true;
-		if(currentdate>stringtodate("18/10/2018"))then begin
-			while(loopkey("InvDate",IVr,1,TrHs))begin
-				if(TrHs and IVr.InvDate==currentdate)then begin
-					oldid = IVr.CRMid;
-					if(blank(oldid) and IVr.OKFlag==1)then begin
-						SendIVVisitToCRM(IVr);
-						if(nonblank(IVr.CRMid))then begin
-							recordstore(IVr,true);
-						end;
-					end;
-				end else begin
-					TrHs = false;
-				end;	
-			end;
-			resetloop(IVr);
-		end;
-	end;	
-
 return;
 end;
 
