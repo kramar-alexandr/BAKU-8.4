@@ -48,6 +48,8 @@ remote updating function Integer CreateCreditNoteVI(record VIVc,var record VIVc)
 remote updating function Boolean MakeActFromOR(var record ORVc,var record ActVc);
 external procedure ActVcRecordDefClient(var record ActVc);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+remote procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
+
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -960,7 +962,7 @@ begin
 	array string 255 ArtCodes, ItemBrands;
 	string 255 strlc,HansaArtCode,Store,strlc2, rowkey, inwarn, war;
 	integer pos, pos2, p, maxp, qtyItpos, rownr, allitemqty;
-	boolean testf,TrHs,Insertf,warf;
+	boolean testf,TrHs,Insertf,warf,chsum;
 	record INVc INr;
 	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock, PriorityStock;
 	record GlobalItemVc GIr, GI2r;
@@ -972,7 +974,7 @@ begin
 	record ActVc Actr, OldActr;
 	string 255 items;
 	record ECommManUserBlock ECMUb;
-	
+	vector integer ItemQuant, PUItQuant;
 	
 	BlockLoad(ECMUb);
 	
@@ -1374,6 +1376,33 @@ begin
 		end;
 		i = i + 1;
 	end;
+	
+	if(ORr.OrderConfirmed==1)then begin
+		mtrw = matrowcnt(ORr);
+		for (i=0;i<mtrw;i=i+1) begin
+			matrowget(ORr,i,ORrw);
+			ItemQuant[ORrw.ArtCode] = ItemQuant[ORrw.ArtCode] + ORrw.Quant;
+			PUItQuant[ORrw.ArtCode] = PUItQuant[ORrw.ArtCode] + ORrw.ECReceived;
+		end;
+		j = 0;
+		for (i=0;i<mtrw;i=i+1) begin
+			matrowget(ORr,i-j,ORrw);
+			if(ItemQuant[ORrw.ArtCode]>0)then begin
+				ORrw.Quant = ItemQuant[ORrw.ArtCode];
+				ORrw.ECReceived = PUItQuant[ORrw.ArtCode];
+				matrowput(ORr,i-j,ORrw);
+				ORVc_PasteQuant(ORr,i-j,true,chsum);
+				ItemQuant[ORrw.ArtCode] = 0;
+				PUItQuant[ORrw.ArtCode] = 0;
+			end else begin
+				matrowdelete(ORr,i-j);
+				j = j + 1;
+			end;
+		end;
+	end;
+	
+	
+	
 	LCreateLocalORFromWebOR:;
 	CreateLocalORFromWebOR = res;
 return;
