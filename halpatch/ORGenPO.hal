@@ -17,7 +17,7 @@ remote procedure PUVc_PasteCostPrice(var record PUVc,Integer);
 remote function Boolean VIDClassSumEFAfter(Integer,Integer,Integer);
 external function val CalculateVINettVal(record VIVc,Boolean);
 remote function Boolean POVc_PasteVECode(var record POVc,Boolean);
-
+external function roundmode SetRoundModeD(Integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -484,7 +484,7 @@ begin
 
 	if(VIcnt>0 and testf)then begin
 		for (i=0;i<VIcnt;i=i+1) begin
-			APr.InvoiceNr = VIrSerNr[i];
+			APr.SerNr = VIrSerNr[i];
 			if(ReadFirstMain(APr,1,true))then begin
 				testf = false;
 				i = VIcnt;
@@ -575,7 +575,7 @@ end;//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 14:52 21.02.2019
 
 global updating procedure CreateECPOfromLocalOR(record SHVc SHr)
 begin
-	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c,vimtrw,vii,ecvcnt,v,cmpnmb,VIOFFCnt;
+	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c,vimtrw,vii,ecvcnt,v,cmpnmb,VIOFFCnt,lcnt;
 	record ORVc ORr, ECORr;
 	row ORVc ORrw, ECORrw;
 	record SHVc SH2r;
@@ -589,7 +589,7 @@ begin
 	record CUVc CUr;
 	record DIVc DIr;
 	string 200 vendor,loccode,errmsg,OffserNr;
-	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode;
+	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode,vLocCashier;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
 	vector boolean vArtCodeRepeat;
@@ -612,9 +612,18 @@ begin
 	integer ItQty, it, smtrw;
 	record RLinkVc RLr;
 	record ORVc LORr, GORr;
+	record ECCasierDocSetBlock ECCDSb;
+	row ECCasierDocSetBlock ECCDSrw;
 	
 	BlockLoad(CBb);
 	BlockLoad(ECVFSBb);
+	BlockLoad(ECCDSb);
+	
+	lcnt = matrowcnt(ECCDSb);
+	for(i=0;i<lcnt;i=i+1)begin
+		matrowget(ECCDSb,i,ECCDSrw);
+		vLocCashier[ECCDSrw.LocCode] = ECCDSrw.CashierName;
+	end;
 	
 	
 	ORr.SerNr = SHr.OrderNr;
@@ -669,7 +678,9 @@ begin
 		end;
 		i=0;
 		while (ReadRecordLink(ORr,i,Actr,RLinkr))begin
-			recorddelete(Actr);
+			if(Actr.MainPersons==vLocCashier[loccode])then begin
+				recorddelete(Actr);
+			end;
 			i = i + 1;
 		end;
 	end;
@@ -813,7 +824,9 @@ begin
 							VIVc_PasteAccNumber(VIr,"41/01",true,vii);
 							matrowget(VIr,vii,VIrw);
 							matrowget(PUr,vii,PUrw);
+							//VIrw.Sum = Round(PUrw.CostPrice*PUrw.Quant,SetRoundModeD(2));
 							VIrw.Sum = PUrw.CostPrice * PUrw.Quant;
+							VIrw.Sum = Round(VIrw.Sum,SetRoundModeD(2));
 							VIrw.Item = PUrw.ArtCode;
 							VIrw.qty = PUrw.Quant;
 							VIrw.SerialNr = PUrw.SerialNr;
@@ -826,7 +839,9 @@ begin
 						matrowput(VIr,mtrw,VIrw);
 						VIVc_PasteAccNumber(VIr,"41/01",true,mtrw);
 						matrowget(VIr,mtrw,VIrw);
+						//VIrw.Sum = Round(VIr.PayVal*0.36,SetRoundModeD(2));
 						VIrw.Sum = VIr.PayVal * 0.36;
+						VIrw.Sum = Round(VIrw.Sum,SetRoundModeD(2));
 						VIrw.Item = "";
 						VIrw.qty = blankval;
 						VIrw.Objects = "128";
@@ -854,6 +869,7 @@ begin
 								VIr.InvoiceNr = VIr.POSerNr;
 							end;
 						end;
+						VIr.PayVal = Round(VIr.PayVal,SetRoundModeD(2));
 						matrowget(PUr,mtrw,PUrw);
 						if(RecordUpdate(OldVIr,VIr,true)==0)then begin 
 							CreateRecordLink(PUr,CurrentCompany,VIr,CurrentCompany);  
