@@ -9,7 +9,7 @@ remote function Boolean PasteCustInOrder(var record ORVc,string,string,var strin
 external  function string 100 BPICodeToName(string);
 external function Boolean GetItemPriceDiscount3CRM(string,val,var record INVc,string,val,val,val,val,val,string,string,string,string,
                                                 var val,var string,var val,var string,var val,var string,Integer,var Boolean,Date,Time,
-                                                string,Boolean,var Boolean,string,var string,var val,string,string,var string,var string);
+                                                string,Boolean,var Boolean,string,var string,var val,string,string,var string,var string,var record MarcCampVc);
 												
 SetLangMode(LangRussian,"RUS",0);
 
@@ -2198,7 +2198,7 @@ begin
 	integer err,noErr;
   string 255 host,tstr,nonce,opaque,page;
   LongInt port,pos,mtrw;
-  Area req,reply;
+  Area req,reply,idreq;
   string 255 ha1,ha2;
   record MarcCampVc MCr;
   row MarcCampVc MCrw;
@@ -2213,7 +2213,7 @@ begin
 	boolean testf;
 	row IVVc IVrw;
 	record INVc INr;
-	 LongInt res;  
+	LongInt res;  
   record CreditLimitBlock CLb; 
   record MainStockBlock MSb;  
   record AccBlock ARAccRec;  
@@ -2252,7 +2252,7 @@ begin
   record ACPVc ACPr;
   record HotelBlock Hotelb;
   record JobVc Jobr;
-  string 50 CRMid,campid;
+  string 50 CRMid,campid,currebcode;
   
   
 	logtext(0,"SendIVVisitToCRM");
@@ -2383,12 +2383,27 @@ begin
 						addtexttoarea("\"hansaid\":\"" & INr.Code & "\"" & chr(13) & chr(10) ,req);
 						addtexttoarea("}," & chr(13) & chr(10),req);
 						CRMid = "";
-						 if (GetItemPriceDiscount3CRM(IVrw.ArtCode,IVrw.Quant,INr,IVr.CurncyCode,
+						if (GetItemPriceDiscount3CRM(IVrw.ArtCode,IVrw.Quant,INr,IVr.CurncyCode,
                               IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,
                               IVr.LangCode,IVr.CustCat,User.MinPLCode,IVr.RebCode,
                               price,curitemname,vreb,vatcode,baseprice,salesacc,
-                              0,calcpricef,IVr.TransDate,IVr.TransTime,IVr.CustCode,true,dummyf,IVr.PayDeal,tax2code,tax2prc,IVr.Region,location,taxtemplatecode,CRMid)) then begin
+                              0,calcpricef,IVr.TransDate,IVr.TransTime,IVr.CustCode,true,dummyf,IVr.PayDeal,tax2code,tax2prc,IVr.Region,location,taxtemplatecode,CRMid,MCr)) then begin
 							campid = CRMid;
+							if(blank(MCr.CRMID))then begin
+								setareazerosize(idreq);
+								addtexttoarea("{" & chr(13) & chr(10),idreq);
+									addtexttoarea("\"proposedStartDate\":\"" & MCr.Code & "\"," & chr(13) & chr(10) ,req);
+									addtexttoarea("\"hansaId\":\"" & MCr.sDate & "\"," & chr(13) & chr(10) ,req);
+								addtexttoarea("}",idreq);
+								SendWebRequest(host,port,-1,false,"POST","/api/MarketingCampaign/GetCampaignId","application/json","",false,idreq,reply,5);
+								jsresponse = ParseJSONArea(reply);
+								if(nonblank(MyJSGet(jsresponse,"result")))then begin
+									MCr.CRMID = MyJSGet(jsresponse,"result");
+									campid = CRMid;
+									logtext(0,"MarketingCampaign MCr.CRMid " & MCr.CRMID);
+									recordstore(MCr,true);
+								end;
+							end;
 						end else begin
 							CRMid = "";
 							campid = "";
