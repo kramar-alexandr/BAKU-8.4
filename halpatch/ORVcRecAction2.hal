@@ -49,8 +49,6 @@ remote updating function Boolean MakeActFromOR(var record ORVc,var record ActVc)
 external procedure ActVcRecordDefClient(var record ActVc);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 remote procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
-remote procedure POSumup(var record POVc);
-remote updating procedure ECCreatePOfromOR(record ORVc, var record POVc);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -952,19 +950,19 @@ global
 updating function longint CreateLocalORFromWebOR (var record ORVc ORr) //Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 17:56 17.10.2018
 begin
 	row ORVc ORrw, ORGrouprw;
-	record ORVc LocORr, OldLocORr, ORGroupr, ORStItr;
-	row ORVc LocORrw, ORStItrw; 
+	record ORVc LocORr, OldLocORr, ORGroupr;
+	row ORVc LocORrw; 
 	record ItemStatusVc ISr;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	record WEBReservStock WRSb;
 	longint i,j,rwcnt,orrwcnt,res,itemsincomp,OldComp,NxtSerNr,c,GIrwcnt,l,lc,mtrw,prcnt;
-	vector boolean ORItemToLocalOR, ItemSearchf, Compf, PasteItemGroupf, ECStockedItems; 	
+	vector boolean ORItemToLocalOR, ItemSearchf, Compf, PasteItemGroupf; 	
 	vector integer ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate, ResStockQuant, StockPrioryty, vItemComp, DeSellComp, ItemGroup, PriceQuant;
 	array string 255 ArtCodes, ItemBrands;
 	string 255 strlc,HansaArtCode,Store,strlc2, rowkey, inwarn, war;
 	integer pos, pos2, p, maxp, qtyItpos, rownr, allitemqty;
-	boolean testf,TrHs,Insertf,warf,chsum,ECStItf;
+	boolean testf,TrHs,Insertf,warf,chsum;
 	record INVc INr;
 	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock, PriorityStock;
 	record GlobalItemVc GIr, GI2r;
@@ -977,8 +975,6 @@ begin
 	string 255 items;
 	record ECommManUserBlock ECMUb;
 	vector integer ItemQuant, PUItQuant;
-	record POVc POr, OldPOr;
-	row POVc POrw;
 	
 	BlockLoad(ECMUb);
 	
@@ -1181,16 +1177,10 @@ begin
 	for (i=0;i<orrwcnt;i=i+1)begin
 		MatRowGet(ORGroupr,i,ORGrouprw)
 		if(ItemSearchf[ArtCodes[i] & i])then begin
-			INr.Code = ArtCodes[i];
-			if(ReadFIrstMain(INr,1,true) and nonblank(INr.Group))then begin
-				ECStockedItems[INr.Code] = true;
-				ECStItf = true;
-			end else begin
-				MessageBox(20011,": " & ArtCodes[i]);
-				res = -1;
-				RecordCopy(ORr,ORGroupr);
-				goto LCreateLocalORFromWebOR;
-			end;
+			MessageBox(20011,": " & ArtCodes[i]);
+			res = -1;
+			RecordCopy(ORr,ORGroupr);
+			goto LCreateLocalORFromWebOR;
 		end else begin
 			MatRowGet(ORr,i,ORrw);
 			ORrw.SerialNr = "EC_" & ORr.SerNr & "_" & ORrw.ArtCode;
@@ -1411,27 +1401,6 @@ begin
 		end;
 	end;
 	
-	if(ECStItf and ORr.OrderConfirmed==1)then begin
-		mtrw = matrowcnt(ORr);
-    if(mtrw>0 and nonblank(ORr.OrderClass) and ORr.Closed==0)then begin
-    	ECCreatePOfromOR(ORr,POr);
-			RecordCopy(OldPOr,POr);
-			mtrw = matrowcnt(POr);
-			for (i=mtrw-1;i>=0;i=i+1) begin
-				matrowget(POr,i,POrw);
-				if(!ECStockedItems[INr.Code])then begin
-					matrowdelete(POr,i);
-				end;
-			end;
-			POSumup(POr);
-			RecordUpdate(OldPOr,POr,true);
-    end else begin
-    	Beep;
-    	if(blank(ORr.OrderClass))then begin
-    		messagebox(0,"“кажите вид счета клиента");
-    	end;
-    end;
-	end;
 	
 	
 	LCreateLocalORFromWebOR:;
