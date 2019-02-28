@@ -429,6 +429,157 @@ end;
 
 
 
+
+
+global updating procedure ECCreatestockItPOfromOR(record ORVc ORr, var record POVc POr)
+begin
+	integer mtrw,i,j,k,pos,rownum;
+	row ORVc ORrw;
+	row POVc POrw;
+	string 50 ostr;
+	array string 100 class,artcode;
+	record INVc INr;
+	boolean foundf,TrHs,testf;
+	record CUVc CUr;
+	record DIVc DIr;
+	string 200 vendor;
+	record ActVc Actr;
+	
+	
+	mtrw = matrowcnt(ORr);
+	For(i=0;i<mtrw;i=i+1) begin
+		matrowget(ORr,i,ORrw); 
+		if(nonblank(ORrw.ArtCode))then begin
+			INr.Code = ORrw.ArtCode;
+			if(readfirstmain(INr,1,true))then begin
+				if(INr.ItemType==1)then begin
+				
+					pos = 0;
+					ostr = "";
+					vendor = "";
+					ExtractObj(INr.DispGroups,pos,ostr);
+					while(nonblank(ostr))begin
+						if(nonblank(ostr))then begin
+							DIr.Code = ostr;
+							if(readfirstmain(DIr,1,true))then begin
+								if(DIr.CType=="BRAND")then begin
+									vendor = DIr.Name;
+								end;
+							end;
+							ExtractObj(INr.DispGroups,pos,ostr);
+						end;
+					end;
+					foundf = false;
+					For(j=0;j<k;j=j+1) begin
+	  				if(class[j]==vendor)then begin
+	  					foundf = true;
+	  				end;
+					end; 
+					if(!foundf)then begin
+						class[k]=vendor;
+						k=k+1;
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	For(j=0;j<k;j=j+1) begin
+		recordnew(POr);
+			rownum = 0;
+			POr.OrdNr = ORr.SerNr;
+			
+			POr.VECode = "";
+			CUr.Name = class[j];
+			TrHs = true;
+			while(loopkey("Name",CUr,1,TrHs))begin
+				testf = true;
+				if(CUr.Name!=class[j])then begin TrHs = true; testf = false; end;
+				//if(CUr.Code<"0009999" and CUr.Code>"0000001")then begin testf = false; end;
+        if ((CUr.VECat=="IDEA") and (currentcompany!=28))then begin testf = false; end;
+        if ((CUr.VECat!="IDEA") and (currentcompany==28))then begin testf = false; end;
+				
+				if(testf)then begin
+					POr.VECode = CUr.Code;
+					POVc_PasteVECode(POr,true);
+					TrHs = false;
+				end;
+			end;
+			resetloop(CUr);
+			
+			
+			/*if(readfirstkey("Name",CUr,1,true))then begin
+				POr.VECode = CUr.Code;
+				POVc_PasteVECode(POr,true);
+			end else begin
+				POr.VECode = "";
+			end;*/
+
+			POr.InvAddr4 = ORr.OrderClass & ORr.SerNr;
+			POr.PlanShip = addday(POr.TransDate,CUr.PlanShipDays);
+			
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(ORr,i,ORrw); 
+				if(nonblank(ORrw.ArtCode))then begin
+					INr.Code = ORrw.ArtCode;
+					if(readfirstmain(INr,1,true))then begin
+						if(INr.ItemType==1)then begin
+							pos = 0;
+							ostr = "";
+							vendor = "";
+							ExtractObj(INr.DispGroups,pos,ostr);
+							while(nonblank(ostr))begin
+								if(nonblank(ostr))then begin
+									DIr.Code = ostr;
+									if(readfirstmain(DIr,1,true))then begin
+										if(DIr.CType=="BRAND")then begin
+											vendor = DIr.Name;
+										end;
+									end;
+									ExtractObj(INr.DispGroups,pos,ostr);
+								end;
+							end;
+							ostr = vendor;
+							
+							
+							if(ostr==class[j])then begin
+								POrw.ArtCode = ORrw.ArtCode;
+								matrowput(POr,rownum,POrw);
+								POVc_PasteArtCode(POr,rownum,false);
+								matrowget(POr,rownum,POrw);
+								POrw.Quant = ORrw.Quant;
+								POrw.Spec = ORrw.Spec;
+								POrw.OrdRow = i;
+								matrowput(POr,rownum,POrw);
+								POVc_PasteQuant(POr,rownum);
+								rownum = rownum + 1;
+							end;
+						end;
+					end;
+				end;
+			end;
+		testf = true;
+		POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");     
+		For(i=0;i<mtrw;i=i+1) begin
+			matrowget(ORr,i,ORrw); 
+			INr.Code = ORrw.ArtCode;
+			if(ReadFirstMain(INr,1,true) and blank(INr.Group))then begin
+				testf = false;
+			end;
+		end;
+		if(testf)then begin
+			recordStore(POr,false);
+			createrecordlink(POr,CurrentCompany,ORr,CurrentCompany);
+			createrecordlink(ORr,CurrentCompany,POr,CurrentCompany);
+		end;
+	end; 
+
+
+return;
+end;
+
+
+
 global updating procedure ORLClassGreenColour(longint ORSerNr)//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 14:52 21.02.2019
 begin
 	record IVVc IVr;
