@@ -54,8 +54,8 @@ remote updating procedure ECCreatestockItPOfromOR(record ORVc, var record POVc);
 remote updating procedure ECCreatePOfromOR(record ORVc, var record POVc);
 remote function Boolean POVc_PasteVECode(var record POVc,Boolean);
 remote function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean);
-
-
+remote function Boolean PasteOrdInInv(var record IVVc,record ORVc,Boolean,string,record RcVc,var val,Boolean,Boolean,Boolean,
+                               var Integer,Boolean,array record XSrsVc,var Integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -1493,6 +1493,7 @@ global
 updating function longint CreateGlobalIVFromWebOR (var record ORVc ORr)
 begin
 	record CompaniesBlock Compb;
+	record ORVc PPORr;
 	row CompaniesBlock Comprw;
 	integer i,mtrw,OldComp,res;
 	record ORVc LocORr;
@@ -1506,12 +1507,39 @@ begin
   row IPVc IPrw;
   val tmpval;
   boolean tmpbool;
+	record RcVc RepSpec;
+  record SRBlock SRRec;
+  LongInt newnr;
+  Boolean testf,pof,testf2;
+  val t;
+  string 20 custcode;
+  record CUVc CUr;
+  record POVc POr;
+  array record XSrsVc aXSrsr;
+  Integer axsrscnt;
 	
 	if(ORr.OrderConfirmed==1 and ORr.PayDeal=="O")then begin
-		res = RecordAction_raPasteOrdInInv(IVr,ORr.SerNr,true,errcode);
+		ORr.PayDeal = "PP";
+		RecordNew(IVr);
+		IVr.SerNr = -1;
+		IVr.OrderNr = ORr.SerNr;
+		IVr.UpdStockFlag = 0;
+		IVr.OrderType = ORr.OrderType;
+		testf = PasteOrdInInv(IVr,ORr,false,"-1",RepSpec,t,true,true,true,res,false,aXSrsr,axsrscnt);
+		if (IVr.SerNr==-1) then begin
+			BlockLoad(SRRec);
+			newnr = GetCurUserLastNr("IVVc");
+			if (newnr!=-1) then begin
+				newnr = SRRec.LastInvNr;
+			end;
+			IVr.SerNr = NextSerNr("IVVc",IVr.TransDate,newnr,false,IVr.LangCode);
+			if (IVr.SerNr==-1) then begin
+				res = 1744;
+			end;
+		end;
+		IVr.OfficialSerNr = ORr.CustOrdNr;
 		logtext(0,res);
 		if(res==0)then begin
-			RecordCopy(oldIVr,IVr);
 			mtrw = matrowcnt(IVr);
 			IVr.PayDeal = "O1";
 			IVr.SalesMan = "ECOMMERCE";
@@ -1522,7 +1550,9 @@ begin
 			// IVSumUp(IVr,true);
 			IVr.OKFlag = 1;
 		end;
-		if(RecordUpdate(oldIVr,IVr,true)==0)then begin 
+		if(RecordInsert(IVr,true))then begin 
+			CreateRecordLink(IVr,CurrentCompany,ORr,CurrentCompany);  
+      CreateRecordLink(ORr,CurrentCompany,IVr,CurrentCompany);  
 			if (IVr.OKFlag==1) then begin
 				ARr.InvoiceNr = IVr.SerNr;
 				if (readfirstmain(ARr,1,true)) then begin
@@ -1532,9 +1562,9 @@ begin
 					PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
 					MatRowGet(IPr,0,IPrw);
 					IPr.MachineName = IVr.MachineName;
-					RecordCopy(OldIPr,IPr);
 					IPr.OKFlag = 1;
-					RecordUpdate(OldIPr,IPr,true);
+					IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
+					RecordInsert(IPr,true);
 				end;
 			end;
 		end;
