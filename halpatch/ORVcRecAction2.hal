@@ -53,6 +53,7 @@ remote procedure POSumup(var record POVc);
 remote updating procedure ECCreatestockItPOfromOR(record ORVc, var record POVc);
 remote updating procedure ECCreatePOfromOR(record ORVc, var record POVc);
 remote function Boolean POVc_PasteVECode(var record POVc,Boolean);
+remote function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean);
 
 
 
@@ -1500,6 +1501,11 @@ begin
 	record SHVc SHr;
 	integer errcode;
 	string 60 warning;
+	record ARVc ARr;
+  record IPVc IPr, OldIPr;
+  row IPVc IPrw;
+  val tmpval;
+  boolean tmpbool;
 	
 	if(ORr.OrderConfirmed==1 and ORr.PayDeal=="O")then begin
 		res = RecordAction_raPasteOrdInInv(IVr,ORr.SerNr,true,errcode);
@@ -1507,16 +1513,31 @@ begin
 		if(res==0)then begin
 			RecordCopy(oldIVr,IVr);
 			mtrw = matrowcnt(IVr);
-			IVr.PayDeal = "O";
+			IVr.PayDeal = "O1";
 			IVr.SalesMan = "ECOMMERCE";
-			IVrw.stp = kInvoiceRowTypeCreditCardPayment;
-			IVrw.Sum = IVr.Sum4;
-			IVrw.PayMode = "T1";
-			matrowput(IVr,mtrw,IVrw);
-			IVSumUp(IVr,true);
+			// IVrw.stp = kInvoiceRowTypeCreditCardPayment;
+			// IVrw.Sum = IVr.Sum4;
+			// IVrw.PayMode = "T1";
+			// matrowput(IVr,mtrw,IVrw);
+			// IVSumUp(IVr,true);
 			IVr.OKFlag = 1;
 		end;
-		if(RecordUpdate(oldIVr,IVr,true)==0)then begin end;
+		if(RecordUpdate(oldIVr,IVr,true)==0)then begin 
+			if (IVr.OKFlag==1) then begin
+				ARr.InvoiceNr = IVr.SerNr;
+				if (readfirstmain(ARr,1,true)) then begin
+					RecordNew(IPr);
+					IPrw.InvoiceNr = IVr.SerNr;
+					MatRowPut(IPr,0,IPrw);
+					PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+					MatRowGet(IPr,0,IPrw);
+					IPr.MachineName = IVr.MachineName;
+					RecordCopy(OldIPr,IPr);
+					IPr.OKFlag = 1;
+					RecordUpdate(OldIPr,IPr,true);
+				end;
+			end;
+		end;
 	end;
 	CreateGlobalIVFromWebOR = res;
 return;
