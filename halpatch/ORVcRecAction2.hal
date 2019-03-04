@@ -790,11 +790,11 @@ begin
 	string 255 tstr;
 	Boolean nousersernr,testf;
 	record CUVc CUr;
-	longint r, res;
+	longint r, res, IVOFFCnt;
 	record RetPUVc RetPUr;
 	record VIVc VIr, credVIr, offVIr;
 	record ECommManUserBlock ECMUb;
-	record IVVc IVCreditr;
+	record IVVc IVCreditr,offIVr;
 	row IVVc IVCreditrw;
 	
 	BlockLoad(ECMUb);
@@ -803,6 +803,18 @@ begin
 		if(IVr.PayDeal=="O1")then begin
 			BlockLoad(LMb);
       res = CreateCreditNoteIV(IVr,kInvoiceTypeCredit,IVCreditr,LMb.DefReturnLocation,false);
+			IVCreditr.SerNr = NextSerNr("IVVc",IVCreditr.TransDate,-1,false,IVCreditr.LangCode);
+			testf = true;
+			IVOFFCnt = 1;
+			while (testf) begin
+				offIVr.OfficialSerNr = IVCreditr.CustOrdNr & "-" & IVOFFCnt;
+				if(ReadFirstKey("OfficialSerNr",offIVr,1,true) and offIVr.SerNr!=IVCreditr.SerNr)then begin
+					IVOFFCnt = IVOFFCnt + 1;
+				end else begin
+					testf = false;
+					IVCreditr.OfficialSerNr = IVCreditr.CustOrdNr & "-" & IVOFFCnt;
+				end;
+			end;
 			if (res==0) then begin
 				IVCreditr.OKFlag = 1;
 				if(RecordInsert(IVCreditr,true))then begin
