@@ -32,16 +32,16 @@ begin
   boolean TrHs,TrHs2,testf,testf2,emptyf,giftf,InvoiceRowTypeDownpaymentf;
   date startdate,enddate;
   record IVVc IVr,tIVr;
-  record LocationVc Locr;
-  record UserVc Userr;
-  record GCSVc GCSr;
-  record ObjVc Objr;
-  record IPVc IPr;
-  record TRVc TRr;
-  record ORVc ORr;
-  record ARPayHistVc ARPayHistr;
-  record CUVc CUr;//Edit-------------------Vitalii 15:57 13.11.2017
-  record PDVc PDr;
+  record LocationVc Locr;// Склады
+  record UserVc Userr; //Сотрудники
+  record GCSVc GCSr; //Проданные подарочные ваучеры
+  record ObjVc Objr; //Объекты для транзакций
+  record IPVc IPr;//Платежи клиентов
+  record TRVc TRr;//Транзакции
+  record ORVc ORr;//Счета клиентов
+  record ARPayHistVc ARPayHistr;//Служебный регистр - История платежей клиентов
+  record CUVc CUr;//Edit-------------------Vitalii 15:57 13.11.2017 //Контакты
+  record PDVc PDr;//Условия оплаты
   row IVVc IVrw,tIVrw;
   row IPVc IPrw;
   row PMBlock PMrw;
@@ -51,12 +51,12 @@ begin
   integer rwcnt,rwcnt2,rwcnt3,LAi,MAi,CAi,i,j,k,artcnt,artqty;
   val sumoborot,sumvozvrat,recivedmoneybase,prepayment,gifted,giftsertpaym,loyaltypaym,percent,printedrmb,
       sumbase,fr,to1,to2,br1,br2,printedprepval,rmbpart;
-  vector boolean LocInArr,MonthInArr,ConsultInArr,MonthLoc;
+  vector boolean LocInArr,MonthInArr,ConsultInArr,MonthLoc;//Тип данных vector - массив с доступом к элементу по строковому индексу
   vector string 100 LocName,ConsultName;
   vector val Oborot,Vozvrat;
   boolean f1,f2;
-  record CompaniesBlock Compb;
-  row CompaniesBlock Comprw;
+  record CompaniesBlock Compb;// Список компаний на сервере
+  row CompaniesBlock Comprw;// row - матрица регистра - для SQL - запись в таблице CompaniesBlock.math
   
   array string 50 sheetNames;
 	array val sheetColls;
@@ -71,11 +71,11 @@ begin
   
   setexportcodepage("UTF8");
   
-  BlockLoad(Compb);
+  BlockLoad(Compb);//BlockLoad - Запрос из БД блока - всегда одна запись в базе
   MatRowGet(Compb,currentcompany-1,Comprw);
-  Userr.Code = "";
+  Userr.Code = "";//Стартовая позиция для следующей функции LoopMain. Записи будут листаться начиная с той, в которой "Userr.Code = ""; "
   TrHs = true;
-  while (LoopMain(Userr,1,TrHs)) begin
+  while (LoopMain(Userr,1,TrHs)) begin//Сбор масива сотрудников // LoopMain - перебор записей одной таблицы. При каждой итерации запись таблицы передается в объект Userr
     if ((Userr.IsSalesMan!=0) and (Userr.Closed==0)) then begin
       ConsultInArr[Userr.Code] = true;
       ConsultArr[CAi] = Userr.Code;
@@ -96,22 +96,22 @@ begin
   end;
   IVr.InvDate = startdate;
   TrHs = true;
-  while(loopkey("InvDate",IVr,1,TrHs))begin
+  while(loopkey("InvDate",IVr,1,TrHs))begin//Цикл по сч/ф отсортированым по дате//loopkey перебирает по одной записи по порядку и позвращает их в переменную IVr
     testf = true;
     if (IVr.InvDate>enddate) then begin TrHs = false; testf = false; end;
     if nonblank(RepSpec.ObjStr) then begin
       store = "";
-      GetObjs("STORE",IVr.Objects,store);
+      GetObjs("STORE",IVr.Objects,store);//Возвращает объект типа STORE из списка объектов сч/ф
       if (RepSpec.ObjStr!=store) then begin testf = false; end;
     end;
     if (IVr.OKFlag==0) then begin testf = false; end;
     if (IVr.Invalid==1) then begin testf = false; end;
     //if (IVr.CustCode=="FOB36") then begin testf = false; end;
     if (testf) then begin
-      rwcnt = matrowcnt(IVr);
+      rwcnt = matrowcnt(IVr);//Счетчик записей в матрице объекта IVr
       for (i=0;i<rwcnt;i=i+1) begin
-        matrowget(IVr,i,IVrw);
-        if (IVrw.stp==kInvoiceRowTypeDownpayment) then begin
+        matrowget(IVr,i,IVrw); //Выгрузка объекта i строки из IVr в объект IVrw
+        if (IVrw.stp==kInvoiceRowTypeDownpayment) then begin//kInvoiceRowTypeDownpayment - тип строки сч/ф авансовый платеж
           i = rwcnt;
           testf = false;
         end;
@@ -119,7 +119,7 @@ begin
     end;
     if (testf) then begin
       if (RepSpec.flags[1]==1) then begin
-        store = Comprw.ShortName;
+        store = Comprw.ShortName;//Название компании
         if (LocInArr[store]==false) then begin
           LocInArr[store] = true;
           LocArr[LAi] = store;
@@ -134,7 +134,7 @@ begin
           LocArr[LAi] = store;
           LAi = LAi + 1;
           Locr.Code = store;
-          if (ReadFirstMain(Locr,1,true)) then begin
+          if (ReadFirstMain(Locr,1,true)) then begin //Запрос одной записи из базы данных, в которой Locr.Code = store; (строка выше)
             LocName[store] = Locr.Name;
           end else begin
             Objr.Code = store;
@@ -157,7 +157,7 @@ begin
           ConsultName[IVr.SalesMan] = IVr.SalesMan;
         end;
       end;
-      month = getmonth(IVr.InvDate) & "_" & getyear(IVr.InvDate);
+      month = getmonth(IVr.InvDate) & "_" & getyear(IVr.InvDate);///  & - оператор соединения строк
       if (MonthInArr[month]==false) then begin
         MonthInArr[month] = true;
         MonthArr[MAi] = month;
@@ -170,7 +170,7 @@ begin
       end;*/
       if (left(IVr.CustCode,3)=="FOB") then begin//Edit-------------------Vitalii 15:52 13.11.2017
         CUr.Code = IVr.CustCode;
-        readfirstmain(CUr,1,true);
+        readfirstmain(CUr,1,true);//readfirstmain - запрос в базу данных записи регистра CUr где условия совпадают с предыдущими несколькими строками. В данном слуучае  CUr.Code = IVr.CustCode;
         if (CUr.CustCat=="STORE") then begin
           tstr = store & ";" & month & ";FOB36;";
         end;
@@ -197,23 +197,23 @@ begin
         rwcnt = matrowcnt(IVr);
         for (i=0;i<rwcnt;i=i+1) begin
           matrowget(IVr,i,IVrw);
-          if (IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment) then begin
+          if (IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment) then begin//тип строки Оплата баллами лояльности
             loyaltypaym = loyaltypaym + IVToBaseMy(IVr,IVrw,IVrw.Sum);
             recivedmoneybase = recivedmoneybase + IVToBaseMy(IVr,IVrw,IVrw.Sum);
           end;
-          if (IVrw.stp==kInvoiceRowTypePrepayment) then begin
+          if (IVrw.stp==kInvoiceRowTypePrepayment) then begin//тип строки Использование предоплаты
             prepayment = prepayment + IVToBaseMy(IVr,IVrw,IVrw.Sum);
           end;
-          if (IVrw.stp==kInvoiceRowTypeCashPayment) then begin
+          if (IVrw.stp==kInvoiceRowTypeCashPayment) then begin//тип строки Оплата наличными
             recivedmoneybase = recivedmoneybase + IVToBaseMy(IVr,IVrw,IVrw.Sum);
           end;
-          if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+          if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin//тип строки Оплата Кредитной картой
             if ((IVrw.PayMode=="G") or (IVrw.PayMode=="GS") or (IVrw.PayMode=="D")) then begin
               gifted = gifted + IVToBaseMy(IVr,IVrw,IVrw.Sum);
             end;
             recivedmoneybase = recivedmoneybase + IVToBaseMy(IVr,IVrw,IVrw.Sum);
           end;
-          if (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) then begin
+          if (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) then begin//тип строки Оплата подарочным ваучером
             //giftsertpaym = giftsertpaym + IVToBaseMy(IVr,IVrw,IVrw.Sum);
             recivedmoneybase = recivedmoneybase + IVToBaseMy(IVr,IVrw,IVrw.Sum);
           end;
@@ -234,7 +234,7 @@ begin
           artqty = 0;
           for (i=0;i<rwcnt;i=i+1) begin
             matrowget(IVr,i,IVrw);
-            if ((IVrw.stp==kInvoiceRowTypeNormal) or (IVrw.stp==kInvoiceRowTypeGiftVoucherSold)) then begin
+            if ((IVrw.stp==kInvoiceRowTypeNormal) or (IVrw.stp==kInvoiceRowTypeGiftVoucherSold)) then begin//тип строки Продажа подарочного ваучера
               artqty = artqty + 1;
             end;
           end;
@@ -799,6 +799,9 @@ LDownpaymentFoundRet:;
     qtyOfSheets = qtyOfSheets + 1;
   end;
   
+  
+  //-------------------Начало форматирования Excel файла. Данные для отчета уже собраны выше
+  
 	sheetColls[0] = 2.86;
 	sheetColls[1] = 27.71;
 	sheetColls[2] = 12.14;
@@ -960,11 +963,11 @@ LDownpaymentFoundRet:;
 end;
 
 global 
-procedure DaysCumulativeExcelRn(record RcVc RepSpec)
+procedure DaysCumulativeExcelRn(record RcVc RepSpec)//RepSpec  - объект передаваемый в отчет из пользовательского интерфейса с определением стартовых данных
 begin
   string 250 filename,tstr,errstr,tstr2;
   boolean testf;
-  record ObjVc Objr;
+  record ObjVc Objr;//Объекты
   integer i,char;
   
   testf = true;
@@ -998,7 +1001,7 @@ begin
     tstr = tstr & "_" & CurrentUser & "_" & DateToString(CurrentDate,"DDMMYYYY") & StrReplace(CurrentTime,":","");
     filename = tstr & ".xlsx";
     RepSpec.f6 = filename;
-    DaysCumulativeExcel(RepSpec);
+    DaysCumulativeExcel(RepSpec);//Запуск отчета
     StartReportNoHeaderJob("Отчет за день с накопительным эффектом");
     StartFormat(15);
       OutString(0,"DblImagesExcel",RepSpec.f7 & filename,false);
