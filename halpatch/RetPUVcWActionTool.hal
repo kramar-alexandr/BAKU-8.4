@@ -1429,7 +1429,7 @@ boolean testf;
 longint r;
 record LocalMachineBlock LMb;
 record RetVc LocRetr;
-vector longint vPUNr;
+vector longint vPUNr, vPUrQuant;
 record PUVc PUr;
 row PUVc PUrw;
 record RetPUVc RetPUr;
@@ -1440,7 +1440,7 @@ row VIVc credVIrw, VIrw;
 record SRBlock SRb;
 LongInt newnr;
 string 255 tstr, strInvoiceNr;
-Boolean nousersernr;
+Boolean nousersernr, TrHs;
 record CUVc CUr;
 	
 	
@@ -1575,8 +1575,26 @@ record CUVc CUr;
 		ResetCompany(29);
 		logtext(0,pucnt & " Cnt PUs");
 		for (i=0;i<pucnt;i=i+1)begin
-			PUr.SerNr = vPUNr[i];
+			PUr.SerNr = vPUNr[i];;
 			if (ReadFirstMain(PUr,1,true))then begin
+				rwcnt = matrowcnt(PUr);
+				for (i=0;i<rwcnt;i=i+1) begin
+					matrowget(PUr,i,PUrw);
+					vPUrQuant[PUr.SerNr & "_" & PUrw.ArtCode] = PUrw.Quant;
+				end;
+				RetPUr.OfficialSerNr = Retr.OrdNr;
+				TrHs = true;
+				while (loopkey("OfficialSerNr",RetPUr,1,TrHs)) begin
+					if(StringToLongInt(RetPUr.OfficialSerNr)!=Retr.OrdNr)then begin TrHs = false; end;
+					if(TrHs)then begin
+						rwcnt = matrowcnt(RetPUr);
+						for (i=0;i<rwcnt;i=i+1) begin
+							matrowget(RetPUr,i,RetPUrw);
+							vPUrQuant[PUr.SerNr & "_" & RetPUrw.ArtCode] = vPUrQuant[PUr.SerNr & "_" & RetPUrw.ArtCode] - RetPUrw.Quant;
+						end;
+					end;
+				end;
+				ResetLoop(RetPUr);
 				RecordNew(RetPUr);
 				r = PastePUInRetPU(PUr,RetPUr);
 				logtext(0,r & " PastePUInRetPU error code");
@@ -1594,9 +1612,19 @@ record CUVc CUr;
 							MatRowPut(RetPUr,j,RetPUrw);
 							//RetPUVc_PasteQuant(RetPUr,j);
 						end else begin
-							RetPUrw.Quant = vRetItemsQuant[RetPUrw.ArtCode];
-							vRetItemsQuant[RetPUrw.ArtCode] = vRetItemsQuant[RetPUrw.ArtCode] - RetPUrw.Quant;
-							MatRowPut(RetPUr,j,RetPUrw);
+							if(vPUrQuant[PUr.SerNr & "_" & RetPUrw.ArtCode]>vRetItemsQuant[RetPUrw.ArtCode])then begin
+								RetPUrw.Quant = vRetItemsQuant[RetPUrw.ArtCode];
+								vRetItemsQuant[RetPUrw.ArtCode] = vRetItemsQuant[RetPUrw.ArtCode] - RetPUrw.Quant;
+								vPUrQuant[PUr.SerNr & "_" & RetPUrw.ArtCode] = vPUrQuant[PUr.SerNr & "_" & RetPUrw.ArtCode] - RetPUrw.Quant;
+								RetPUitemQuant[RetPUr.SerNr & "_" & RetPUrw.ArtCode] = RetPUrw.Quant;
+								MatRowPut(RetPUr,j,RetPUrw);
+							end else begin
+								RetPUrw.Quant = vPUrQuant[PUr.SerNr & "_" & RetPUrw.ArtCode];
+								vRetItemsQuant[RetPUrw.ArtCode] = vRetItemsQuant[RetPUrw.ArtCode] - RetPUrw.Quant;
+								vPUrQuant[PUr.SerNr & "_" & RetPUrw.ArtCode] = 0;
+								RetPUitemQuant[RetPUr.SerNr & "_" & RetPUrw.ArtCode] = RetPUrw.Quant;
+								MatRowPut(RetPUr,j,RetPUrw);
+							end;
 						end;
 					end else begin
 						matrowdelete(RetPUr,j);
