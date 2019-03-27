@@ -59,8 +59,6 @@ external function string 20 GetNextOfficialSerNr(string, date);	//Edit----------
 external function Boolean SetInSet2(string,string);
 external procedure ActVcRecordDefClient(var record ActVc);
 remote updating function Boolean MakeActFromOR(var record ORVc,var record ActVc);
-external function Boolean PasteActTypeInAct(string,var record ActVc);
-
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -2135,12 +2133,7 @@ begin
 	record RLinkVc RLr;
   record RetPUVc RetPUr;
 	record ECommManUserBlock ECMUb;
-	record ASTBlock ASTRec;
-  Integer curcomp;
-  record CUVc CUr;
-  record OrderClassVc ORClassr;
-  record ActTypeVc ActTyper;
-  record ActTypeGrVc ActTypeGrr;
+	vector boolean vRetPurCrf;
 	
 	BlockLoad(ECMUb);
 	
@@ -2177,60 +2170,23 @@ LStockMovVcRecordCheck:;
 				if(ReadFirstMain(ORr,1,true))then begin
 					rcnt = 1;
 					while(ReadRecordLink(ORr,rcnt,RetPUr,RLr))begin
-						if(RetPUr.OKFlag!=1)then begin
+						if(RetPUr.OKFlag!=1 and vRetPurCrf[RetPUr.SerNr]!=true)then begin
+							vRetPurCrf[RetPUr.SerNr] = true;
 							RecordNew(Actr);
 							ActVcRecordDefClient(Actr);
-							Actr.SerNr = -1;
-							Actr.Invalid = 0;
-							Actr.CUCode = ORr.CustCode;
-							Actr.Comment = "Товары по возврату №" & RetPUr.SerNr & " прибыли на склад " & SMp.ToLocation & ". Ожидаеться отправка в магазин " & right(RetPUr.VECode,len(RetPUr.VECode)-4);
-							Actr.Contact = ORr.CustContact;
-							CUr.Code = ORr.CustCode;
-							if (ReadFirstMain(CUr,1,true)) then begin
-								Actr.CUName = CUr.Name;
-								Actr.Phone = CUr.Phone;
-								if (blank(Actr.Contact)) then begin
-									Actr.Contact = ORr.SalesMan;
-								end;
-							end;
-							BlockLoad(ASTRec);
-							Actr.ActType = ASTRec.GenSalesOrd;
-							if (PasteActTypeInAct("",Actr)) then begin
-							end;
-							ORClassr.Code = ORr.OrderClass;
-							if (ReadFirstMain(ORClassr,1,true)) then begin
-								if (nonblank(ORClassr.OrderActCode)) then begin
-									Actr.ActType = ORClassr.OrderActCode;
-									if (PasteActTypeInAct("",Actr)) then begin
-									end;
-								end;
-							end;
-							ActTyper.Code = Actr.ActType;
-							if (ReadFirstMain(ActTyper,1,true)) then begin
-								Actr.ItemCode = ActTyper.ItemCode;
-								ActTypeGrr.Code = ActTyper.ActTypeGr;
-								if (ReadFirstMain(ActTypeGrr,1,true)) then begin
-									Actr.CalTimeFlag = ActTypeGrr.DefTimeFlag;
-								end;
-							end;  
-							Actr.OKFlag = ASTRec.OrderDone;
-							Actr.TransDate = CurrentDate;
-							if (ORr.SalesMan!=CurrentUser) then begin
-								Actr.CCPersons = CurrentUser;
-							end;
-							Actr.SerNr = NextSerNr("ActVc",Actr.TransDate,-1,false,"");  
+							MakeActFromOR(ORr,Actr);
+							RecordCopy(OldActr,Actr);
 							Actr.StartTime = CurrentTime;
 							Actr.EndTime = CurrentTime;
+							Actr.Comment = "Товары по возврату №" & RetPUr.SerNr & " прибыли на склад " & SMp.ToLocation & ". Ожидаеться отправка в магазин " & right(RetPUr.VECode,len(RetPUr.VECode)-4);
 							Actr.TodoFlag = 1;
 							Actr.MainPersons = ECMUb.UserStockSet;
 							Actr.CalTimeFlag = kCalTimeFlagTime;
 							Actr.AlarmType = 1;
 							Actr.SymbNr = 3;
-							if(RecordInsert(Actr,true))then begin 
+							if(RecordUpdate(oldActr,Actr,true)==0)then begin 
 								CreateRecordLink(Actr,Currentcompany,RetPUr,Currentcompany);
 								CreateRecordLink(RetPUr,Currentcompany,Actr,Currentcompany);
-								CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);  
-								CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);  
 							end;
 						end;
 						rcnt = rcnt + 1;
