@@ -46,12 +46,16 @@ begin
   val torate;// Edit ************************** Thursday, 8 October 2015 13:48:34
   string 10 tempcur;
   record PUVc PUr;
-  val temptotcostsd,tempsqty;
+  val temptotcostsd,tempsqty,tempeqty,temptotcosted;
 	
 	temptotcostsd = totcostsd;
+	temptotcosted = totcosted;
 	tempsqty = sqty;
+	tempeqty = eqty;
 	totcostsd = blankval;
+	totcosted = blankval;
 	sqty = blankval;
+	eqty = blankval;
 	
 	CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);// Edit ************************** Wednesday, 19 June 2013 13:59:15
 	curncy = acrncy[0];// Edit ************************** Wednesday, 19 June 2013 13:59:14
@@ -119,72 +123,17 @@ begin
     end;
     if testf then begin
     	
-    	/*
-    	
-    	if(curcode==basecur)then begin// Edit ************************** Thursday, 8 October 2015 14:00:53
-    		torate = 1;
-    	end else begin
-    		if(nonblank(IHr.InDate))then begin
-    			if(IHr.CurncyCode==curcode)then begin
-						if(IHr.TotCostPrice/IHr.TotCostPriceCurncy!=0)then begin
-							torate = IHr.TotCostPriceCurncy/IHr.TotCostPrice;
-						end else begin
-							tempcur = curcode;
-							GetFullCurncyRate(tempcur,IHr.InDate,fr,to1,to2,br1,br2);
-							if(fr==0 or to1==0)then begin
-								tempcur = curcode;
-								GetFullCurncyRate(tempcur,IHr.TransDate,fr,to1,to2,br1,br2);
-								if(fr==0 or to1==0)then begin
-									tempcur = curcode;
-									GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);
-									if(fr==0 or to1==0)then begin
-										fr = 1;	to1 = 1;
-									end;
-								end;
-							end;
-							torate = fr/to1;
-						end;
-    			end else begin
-    				tempcur = curcode;
-    				GetFullCurncyRate(tempcur,IHr.InDate,fr,to1,to2,br1,br2);
-						if(fr==0 or to1==0)then begin
-							tempcur = curcode;
-							GetFullCurncyRate(tempcur,IHr.TransDate,fr,to1,to2,br1,br2);
-							if(fr==0 or to1==0)then begin
-								tempcur = curcode;
-								GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);
-								if(fr==0 or to1==0)then begin
-									fr = 1;	to1 = 1;
-								end;
-							end;
-						end;
-						torate = fr/to1;
-    			end;
-    		end else begin
-    			tempcur = curcode;
-    			GetFullCurncyRate(tempcur,IHr.TransDate,fr,to1,to2,br1,br2);
-					if(fr==0 or to1==0)then begin
-						tempcur = curcode;
-						GetFullCurncyRate(tempcur,CurrentDate,fr,to1,to2,br1,br2);
-						if(fr==0 or to1==0)then begin
-							fr = 1;	to1 = 1;
-						end;
-					end;
-					torate = fr/to1;
-    		end;
-    	end;// Edit ************************** Thursday, 8 October 2015 14:00:51
-    	
-    	*/
     	if(curcode!=basecur)then begin
     		ihcost = blankval;
 				CalcCostInCurncyOldDate(IHr,ihcost,curcode,1);
-    	end;// else begin
-    	//ihcost = ihcost * torate;// Edit ************************** Thursday, 8 October 2015 14:00:49
-    	//end;
+    	end;
       if IHr.TransDate<sd then begin
       	if(IHr.StockAffectf==1)then begin
 					sqty = sqty + IHr.Qty;
 					eqty = eqty + IHr.Qty;
+					if(IHr.ArtCode=="5237757")then begin
+						//logtext(0,"5237757" & IHr.TransDate & " " & IHr.Qty);
+					end;
       	end;
         switch (IHr.FileName) begin
           case "IVVc":
@@ -235,13 +184,16 @@ begin
       end else begin
       	if(IHr.StockAffectf==1)then begin
 					eqty = eqty + IHr.Qty;
+					if(IHr.ArtCode=="5237757")then begin
+						//logtext(0,"5237757" & IHr.TransDate & " " & IHr.Qty);
+					end;
       	end;
         switch (IHr.FileName) begin
           case "IVVc":
             qty = qty+1;
 						if IHr.Qty>=0 then begin
 							IVr.SerNr = IHr.TransNr;
-							if (ReadFirstMain(IVr,1,true) and testf1) then begin
+							if (ReadFirstMain(IVr,1,true)) then begin
 								ivfr = 1; ivto = 1;
 								fr = 1; to1 = 1;
 								if(IVr.CurncyCode!=curcode)then begin
@@ -257,7 +209,7 @@ begin
 									end;
 								end;
 								MatRowGet(IVr,IHr.Row,IVrw);
-								retsum = retsum - IVrw.Sum/ivfr*ivto*fr/to1;
+								retsum = retsum - IVrw.Sum/ivfr*ivto*fr/to1/IVrw.Quant*IHr.Qty;
 							end;						
 						end else begin
 							IVr.SerNr = IHr.TransNr;
@@ -280,9 +232,9 @@ begin
 
 								MatRowGet(IVr,IHr.Row,IVrw);
 								if(left(IVr.CustCode,3)=="FOB") then begin
-									ivshpricesum[0] = ivshpricesum[0] +  IVrw.Sum/ivfr*ivto*fr/to1;
+									ivshpricesum[0] = ivshpricesum[0] +  IVrw.Sum/ivfr*ivto*fr/to1/IVrw.Quant*-IHr.Qty;
 								end else begin	
-									ivshpricesum[1] = ivshpricesum[1] +  IVrw.Sum/ivfr*ivto*fr/to1;
+									ivshpricesum[1] = ivshpricesum[1] +  IVrw.Sum/ivfr*ivto*fr/to1/IVrw.Quant*-IHr.Qty;
 								end;	
 								
 							end;
@@ -426,17 +378,29 @@ begin
         end;
         //logtext(0,"e " & IHr.ArtCode & " " & IHr.SerNr & " " & totcostsd);
       end;
+      
+      /*if(ed>stringtodate("1/3/2019"))then begin
+				if(sqty==0)then begin
+					totcostsd = blankval;
+				end;
+				if(eqty==0)then begin
+					totcosted = blankval;
+				end;
+			end;*/
+      
     end;
   end;
   
   if(currentuser=="SA" or currentuser=="SA1")then begin
-  	if(sqty<=0 and totcostsd!=0)then begin
-  		logtext(0,item & " _ " & sqty & " _ " & totcostsd);
+  	if(totcosted!=0)then begin
+  		//logtext(0,item & " _ " & eqty & " _ " & totcosted);
   	end;
   end;
   
   totcostsd = totcostsd + temptotcostsd;
   sqty = sqty + tempsqty;
+  totcosted = totcosted + temptotcosted;
+  eqty = eqty + tempeqty;
   
   //temptotcostsd = totcostsd;
 //	tempsqty = sqty;
