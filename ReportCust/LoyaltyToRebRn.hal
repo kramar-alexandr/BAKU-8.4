@@ -3,16 +3,73 @@
 global
 procedure LoyaltyToRebRn(record RcVc RepSpec)
 begin
-  record LCMLevelSetBlock LCMSB;
-  row LCMLevelSetBlock LCMSBw;
-  record LoyaltyCardVc LCr;
+  record LCMLevelSetBlock LCMLevelSetBl;
+  row LCMLevelSetBlock LCMLevelSetrw;
+  record LoyaltyCardVc LoyaltyCardr;
   record CUVc CUr;
   Integer pos,i,rwcnt;
   boolean testf,testf1;
-
+	val reb,reb2,points;
+	record RebVc Rebr,Reb2r;
+  string 20 rebcode;
+  string 20 clevel;
+  
   StartReportNoHeaderJob("Client rebate to loyalty card mismatch");
 	
-  pos = 0;
+	blockload(LCMLevelSetBl);
+  rwcnt = matrowcnt(LCMLevelSetBl);
+  
+  LoyaltyCardr.SerNr = "";
+  while(loopmain(LoyaltyCardr,1,true))begin
+    reb = 0;
+    reb2 = 0;
+    
+    testf = true;
+    if(LoyaltyCardr.Closed>0)then begin testf = false; end;
+    if(LoyaltyCardr.LCMLevel!="1")then begin testf = false; end;
+    
+    if(testf)then begin
+      CUr.Code = LoyaltyCardr.CustCode;
+      if(readfirstmain(CUr,1,true) and left(CUr.Code,2)!="CC")then begin
+				points = LoyaltyCardr.PointsBalance;
+				clevel = LoyaltyCardr.LCMLevel;
+				rebcode = "";
+				for (i=0;i<rwcnt;i=i+1) begin
+					MatRowGet(LCMLevelSetBl,i,LCMLevelSetrw);
+					if ((points>=LCMLevelSetrw.FromPoints) and ((points<=LCMLevelSetrw.ToPoints) or (LCMLevelSetrw.ToPoints==0)) and (clevel==LCMLevelSetrw.LCMLevel)) then begin
+						rebcode = LCMLevelSetrw.RebCode;
+						i = rwcnt;
+					end;
+				end;  
+				if(nonblank(rebcode))then begin
+					Rebr.Code = rebcode;
+					readfirstmain(Rebr,1,true);
+					reb = Rebr.vra0;
+					if(nonblank(CUr.RebCode))then begin
+						Reb2r.Code = CUr.RebCode;
+						readfirstmain(Reb2r,1,true);
+						reb2 = Reb2r.vra0;
+					end;
+					if(reb!=reb2 or rebcode!=CUr.RebCode)then begin
+						pos = 0;
+						StartFormat(15);
+						 OutString(pos,0,CUr.DateCreated,false);pos = pos + 50;
+						 OutString(pos,0,CUr.Code,false);pos = pos + 50;
+						 OutString(pos,0,CUr.RebCode,false); pos = pos + 50;
+						 OutString(pos,0,LCMLevelSetrw.RebCode,false); pos = pos + 50;
+						 OutString(pos,0,LoyaltyCardr.PointsBalance,false); pos = pos + 50;
+						 OutString(pos,0,CUr.CreateLocation,false); pos = pos + 50;
+						 OutString(pos,0,CUr.Comment0,false); pos = pos + 100;
+						 OutString(pos,0,CUr.CreateComment,false); pos = pos + 70;
+						EndFormat;
+					end;
+				end;
+      end;
+    end;
+  end;
+	
+	
+  /*pos = 0;//old code
 	StartFormat(15);
 	 OutString(pos,0,"Card date",false);pos = pos + 50;
    OutString(pos,0,"Client ID",false);pos = pos + 50;
@@ -56,7 +113,7 @@ begin
        OutString(pos,0,CUr.CreateComment,false); pos = pos + 70;
       EndFormat;
     end;
-  end;
+  end;*/
 	
 	EndJob;
 
