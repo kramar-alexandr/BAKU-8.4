@@ -502,6 +502,96 @@ begin
   return;
 end;
 
+
+global
+function val FindCostPriceSerial1(record INVc INr,string location,string serialnr,val qty,val adjustqty,Boolean printf,Integer consigstock,var record IVVc fifocurIVr,Integer rownr)
+begin
+  record ItemHistVc IHr,CurrIHr;
+  string 200 thekey;
+  Integer keys;
+  row IVVc fifocurIVrw;
+  Boolean foundf,testf;
+  val res,adjv,t,takenqty,remcost,skippedqty,convertedsum;
+	
+  Date blankd;
+  res = blankval;
+  takenqty = 0;
+  IHr.ArtCode = INr.Code;
+  IHr.Location = location;
+  thekey = "ActiveQty";
+  keys = 1;
+  if (nonblank(IHr.Location)) then begin
+    thekey = "ActiveLocQty";
+    keys = 2;
+  end;
+  adjv = adjustqty;
+  ResetLoop(IHr);
+  foundf = true;
+  while (LoopKey(thekey,IHr,keys,foundf)) begin
+    if (IHr.ArtCode!=INr.Code) then begin
+      foundf = false;
+    end;
+    if (keys==2) then begin
+      if (IHr.Location!=location) then begin
+        foundf = false;
+      end;
+    end;
+    if (takenqty>=qty) then begin
+      foundf = false;
+    end;
+    testf = foundf;
+    if (nonblank(serialnr)) then begin
+      if (IHr.SerialNr!=serialnr) then begin
+        testf = false;
+      end;
+    end;
+    if (testf) then begin
+      testf = true;
+      switch (consigstock) begin
+        case 1: 
+          if (ConsigmentStock(IHr.ArtCode,IHr.SerialNr,blankd)) then begin
+//          if (IHr.ConsigStock!=0) then begin 
+            testf = false;
+          end;
+        case 2: 
+          if (ConsigmentStock(IHr.ArtCode,IHr.SerialNr,blankd)==false) then begin
+//          if (IHr.ConsigStock==0) then begin 
+            testf = false;
+          end;
+      end;
+      if (testf) then begin
+        res = res + CalculateCosts(IHr,qty,adjv,skippedqty,takenqty,false,printf,false,0,0,INr);
+      end;
+    end;
+  end;
+	if (MatRowCnt(fifocurIVr)>rownr) then begin 
+		MatRowGet(fifocurIVr,rownr,fifocurIVrw);
+        if (nonblank(fifocurIVrw.Spec) and fifocurIVrw.Spec!=IHr.CurncyCode) then begin
+            if (fifocurIVrw.Quant!=1) then begin
+				CurrIHr.ArtCode = IHr.ArtCode;
+				CurrIHr.FileName = "PUVc";
+				if (ReadLastKey("FNArtCode",CurrIHr,2,false) and CurrIHr.ArtCode==IHr.ArtCode) then begin
+					if (CurrIHr.CurncyCode!=fifocurIVrw.Spec) then begin
+						CurValToOtherCur(IHr.TransDate,fifocurIVrw.Spec,fifocurIVrw.FIFO,CurrIHr.CurncyCode,convertedsum,DefaultCurRoundOff);
+						fifocurIVrw.FIFO = convertedsum;
+						fifocurIVrw.FrRate = round(CurrIHr.TotCostPriceCurncy/CurrIHr.TotCostPrice,DefaultCurRoundOff);
+						fifocurIVrw.BaseRate1 = 1;
+						fifocurIVrw.Spec = CurrIHr.CurncyCode;
+						fifocurIVrw.Quant = 1;
+					end else begin
+						fifocurIVrw.Quant = 1;
+					end;
+				end;
+			end;
+		end;
+    end else begin
+        ClearRow(fifocurIVr,fifocurIVrw,1);
+        fifocurIVrw.Spec = IHr.CurncyCode;
+    end; 
+  FindCostPriceSerial1 = res;
+  return;
+end;
+
 global
 function val FindCostPriceSerial(record INVc INr,string location,string serialnr,val qty,val adjustqty,Boolean printf,Integer consigstock)
 begin
@@ -566,6 +656,8 @@ begin
   return;
 end;
 
+
+
 function val FindLastCostPriceSerial(record INVc INr,string location,string serialnr,val qty,Boolean printf,Integer consigstock)
 begin
   record ItemHistVc IHr;
@@ -617,6 +709,7 @@ begin
       end;
     end;
   end;
+
   FindLastCostPriceSerial = res;
   return;
 end;
@@ -1170,7 +1263,7 @@ begin
           res = -FindLastCostPriceSerial(INr,location,serialnr,qty,false,0);//here
 					 logtext(0,"5.1");
         end else begin
-          res = FindCostPriceSerial(INr,location,serialnr,qty,0,false,0);
+          res = FindCostPriceSerial1(INr,location,serialnr,qty,0,false,0,fifocurIVr,rownr);
 					logtext(0,"5.2");
         end;
     end;
