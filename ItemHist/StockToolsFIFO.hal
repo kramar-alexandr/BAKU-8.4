@@ -504,23 +504,30 @@ end;
 
 
 global
-function val FindCostPriceSerial1(record INVc INr,string location,string serialnr,val qty,val adjustqty,Boolean printf,Integer consigstock,var record IVVc fifocurIVr,Integer rownr)
+function val FindCostPriceSerial1(record INVc INr,string location,string serialnr,val qty,val adjustqty,Boolean printf,Integer consigstock,var record IVVc fifocurIVr,integer rownr)
 begin
-  record ItemHistVc IHr,CurrIHr;
+  record ItemHistVc IHr;
   string 200 thekey;
   Integer keys;
-  row IVVc fifocurIVrw;
   Boolean foundf,testf;
-  val res,adjv,t,takenqty,remcost,skippedqty,convertedsum;
+  val res,adjv,t,takenqty,remcost,skippedqty;
+	record StockMovVc fifocurSMr;
+	Date blankd;
 	
-  Date blankd;
   res = blankval;
   takenqty = 0;
   IHr.ArtCode = INr.Code;
   IHr.Location = location;
-  IHr.SerNr = serialNr;
+  thekey = "ActiveQty";
+  keys = 1;
+  if (nonblank(IHr.Location)) then begin
+    thekey = "ActiveLocQty";
+    keys = 2;
+  end;
+  adjv = adjustqty;
+  ResetLoop(IHr);
   foundf = true;
-  ReadFirstKey("ArtCodeSerialNr",IHr,3,true);
+  while (LoopKey(thekey,IHr,keys,foundf)) begin
     if (IHr.ArtCode!=INr.Code) then begin
       foundf = false;
     end;
@@ -553,38 +560,14 @@ begin
           end;
       end;
       if (testf) then begin
-		//res = CalculateCosts(IHr,qty,adjv,skippedqty,takenqty,false,printf,false,0,0,INr);
+        res = res +  AddCurValToTrans_CalculateCosts(IHr,qty,adjv,skippedqty,takenqty,true,printf,true,0,0,INr,rownr,fifocurIVr,fifocurSMr,1);
       end;
     end;
-	// End of logic that was
-	//res = CalculateCosts(IHr,qty,adjv,skippedqty,takenqty,false,printf,false,0,0,INr);
-		MatRowGet(fifocurIVr,rownr,fifocurIVrw);
-            if (fifocurIVrw.Quant!=1) then begin
-				CurrIHr.ArtCode = INr.Code;
-				CurrIHr.FileName = "PUVc";
-				CurrIHr.SerialNr = serialnr;
-				if (ReadLastKey("ArtCodeSerialNr",CurrIHr,3,false)) then begin
-					if (CurrIHr.CurncyCode!=fifocurIVrw.Spec) then begin
-						fifocurIVrw.FrRate = round(CurrIHr.TotCostPriceCurncy/CurrIHr.TotCostPrice,DefaultCurRoundOff);
-						fifocurIVrw.BaseRate1 = 1;
-						res = CalculateCosts(CurrIHr,qty,adjv,skippedqty,takenqty,false,printf,false,0,0,INr);
-						fifocurIVrw.Spec = CurrIHr.CurncyCode;
-						fifocurIVrw.Quant = 1;
-						//CurValToOtherCur(CurrIHr.TransDate,fifocurIVrw.Spec,res,CurrIHr.CurncyCode,convertedsum,DefaultCurRoundOff);
-						fifocurIVrw.FIFO = CurrIHr.TotCostPriceCurncy;
-					end else begin
-						fifocurIVrw.Quant = 1;
-					end;
-				end;
-			end;
-		matrowput(fifocurIVr,rownr,fifocurIVrw);
-	res = res;
-	matrowput(fifocurIVr,rownr,fifocurIVrw);   
-	
-	// and of my logic
+  end;
   FindCostPriceSerial1 = res;
   return;
 end;
+
 
 global
 function val FindCostPriceSerial(record INVc INr,string location,string serialnr,val qty,val adjustqty,Boolean printf,Integer consigstock)
