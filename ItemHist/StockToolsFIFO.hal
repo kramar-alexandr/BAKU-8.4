@@ -518,16 +518,9 @@ begin
   takenqty = 0;
   IHr.ArtCode = INr.Code;
   IHr.Location = location;
-  thekey = "ActiveQty";
-  keys = 1;
-  if (nonblank(IHr.Location)) then begin
-    thekey = "ActiveLocQty";
-    keys = 2;
-  end;
-  adjv = adjustqty;
-  ResetLoop(IHr);
+  IHr.SerNr = serialNr;
   foundf = true;
-  while (LoopKey(thekey,IHr,keys,foundf)) begin
+  ReadFirstKey("ArtCodeSerialNr",IHr,3,true);
     if (IHr.ArtCode!=INr.Code) then begin
       foundf = false;
     end;
@@ -560,34 +553,35 @@ begin
           end;
       end;
       if (testf) then begin
-        res = res + CalculateCosts(IHr,qty,adjv,skippedqty,takenqty,false,printf,false,0,0,INr);
+		//res = CalculateCosts(IHr,qty,adjv,skippedqty,takenqty,false,printf,false,0,0,INr);
       end;
     end;
-  end;
-	if (MatRowCnt(fifocurIVr)>rownr) then begin 
+	// End of logic that was
+	//res = CalculateCosts(IHr,qty,adjv,skippedqty,takenqty,false,printf,false,0,0,INr);
 		MatRowGet(fifocurIVr,rownr,fifocurIVrw);
-        if (nonblank(fifocurIVrw.Spec) and fifocurIVrw.Spec!=IHr.CurncyCode) then begin
             if (fifocurIVrw.Quant!=1) then begin
-				CurrIHr.ArtCode = IHr.ArtCode;
+				CurrIHr.ArtCode = INr.Code;
 				CurrIHr.FileName = "PUVc";
-				if (ReadLastKey("FNArtCode",CurrIHr,2,false) and CurrIHr.ArtCode==IHr.ArtCode) then begin
+				CurrIHr.SerialNr = serialnr;
+				if (ReadLastKey("ArtCodeSerialNr",CurrIHr,3,false)) then begin
 					if (CurrIHr.CurncyCode!=fifocurIVrw.Spec) then begin
-						CurValToOtherCur(IHr.TransDate,fifocurIVrw.Spec,fifocurIVrw.FIFO,CurrIHr.CurncyCode,convertedsum,DefaultCurRoundOff);
-						fifocurIVrw.FIFO = convertedsum;
 						fifocurIVrw.FrRate = round(CurrIHr.TotCostPriceCurncy/CurrIHr.TotCostPrice,DefaultCurRoundOff);
 						fifocurIVrw.BaseRate1 = 1;
+						res = CalculateCosts(CurrIHr,qty,adjv,skippedqty,takenqty,false,printf,false,0,0,INr);
 						fifocurIVrw.Spec = CurrIHr.CurncyCode;
 						fifocurIVrw.Quant = 1;
+						//CurValToOtherCur(CurrIHr.TransDate,fifocurIVrw.Spec,res,CurrIHr.CurncyCode,convertedsum,DefaultCurRoundOff);
+						fifocurIVrw.FIFO = CurrIHr.TotCostPriceCurncy;
 					end else begin
 						fifocurIVrw.Quant = 1;
 					end;
 				end;
 			end;
-		end;
-    end else begin
-        ClearRow(fifocurIVr,fifocurIVrw,1);
-        fifocurIVrw.Spec = IHr.CurncyCode;
-    end; 
+		matrowput(fifocurIVr,rownr,fifocurIVrw);
+	res = res;
+	matrowput(fifocurIVr,rownr,fifocurIVrw);   
+	
+	// and of my logic
   FindCostPriceSerial1 = res;
   return;
 end;
