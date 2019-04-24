@@ -1950,7 +1950,66 @@ LkInvoiceTypeCredit:;
         goto L99;
 		end;
 	end;//Edit---end-------------------Dima  04.06.2015
- 
+	
+	
+	cntvch=0;
+	for (i=0; i<MatRowCnt(IVp);i=i+1) begin 
+		MatRowGet(IVp,i,IVrw);
+				if(IVrw.ArtCode=="CASHBACKCARD" and currentcompany==25) then begin
+					TrHs = true;
+					LoyaltyCardr.CustCode = IVp.CustCode;
+					while(LoopKey("CustCode",LoyaltyCardr,1,TrHs)) begin 
+						if(LoyaltyCardr.CustCode!=IVp.CustCode) then begin TrHs = false; end;
+						if(TrHs) then begin
+							if(LoyaltyCardr.Closed==0 and LoyaltyCardr.SerNr!=IVrw.SerialNr) then begin
+								RecordCheckError(36225,"",i,"SerialNr");      
+								res = -1; 
+								goto L99;
+							end;
+						end;
+					end;	
+					ResetLoop(LoyaltyCardr);
+				end;
+		if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) then begin 
+			GCSr.SerNr=IVrw.GCNr;
+			ReadFirstMain(GCSr,1,true);
+			if(GCSr.RealSum!=GCSr.Amount and left(IVp.PriceList,3)=="FOB") then begin
+				res=-1;
+				RecordCheckError(36223,"",-1,"SerNr");
+				goto L999;
+			end;	
+      tIVr.SerNr = GCSr.InvSerNr;
+      if(readfirstmain(tIVr,1,true)) then begin
+				rwcnt2 = matrowcnt(tIVr);
+				giftf = false;
+				for (j=0;j<rwcnt2;j=j+1) begin
+					matrowget(tIVr,j,tIVrw);
+					if (((tIVrw.PayMode=="G") or (tIVrw.PayMode=="GS")) and (tIVrw.stp==kInvoiceRowTypeCreditCardPayment)) then begin
+						giftf = true;
+					end;
+				end;
+				
+				if(giftf) then begin
+					cntvch=cntvch+1;
+				end;	
+			end;	
+		end;
+	end;	
+	
+	if(MNGb.Count!=0 AND cntvch>MNGb.Count ) then begin          //Edit_________________ABR 12:24 22.10.18
+		res=-1;
+		RecordCheckError(36200,"",MatRowCnt(IVp),"Sum");
+		goto L999;
+	end;	
+	if(transf) then begin
+		if(UserCanAction("DisableSetOkIVPrevDate",true)==false and CurrentDate>IVp.InvDate) then begin
+			res=-1;
+			RecordCheckError(36228,"",-1,"SerNr");
+			goto L999;
+		end;
+	end;
+	
+	 
   RecordNew(TRr);
 
   if (transf) then begin
@@ -2336,62 +2395,7 @@ LIVVcRecordCheck_GenTrans:;
   if(transf)then begin
   	SendIVVisitToCRM(IVp);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 18 September 2018 17:29:10
   end;
-	cntvch=0;
-	for (i=0; i<MatRowCnt(IVp);i=i+1) begin 
-		MatRowGet(IVp,i,IVrw);
-				if(IVrw.ArtCode=="CASHBACKCARD" and currentcompany==25) then begin
-					TrHs = true;
-					LoyaltyCardr.CustCode = IVp.CustCode;
-					while(LoopKey("CustCode",LoyaltyCardr,1,TrHs)) begin 
-						if(LoyaltyCardr.CustCode!=IVp.CustCode) then begin TrHs = false; end;
-						if(TrHs) then begin
-							if(LoyaltyCardr.Closed==0 and LoyaltyCardr.SerNr!=IVrw.SerialNr) then begin
-								RecordCheckError(36225,"",i,"SerialNr");      
-								res = -1; 
-								goto L99;
-							end;
-						end;
-					end;	
-					ResetLoop(LoyaltyCardr);
-				end;
-		if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) then begin 
-			GCSr.SerNr=IVrw.GCNr;
-			ReadFirstMain(GCSr,1,true);
-			if(GCSr.RealSum!=GCSr.Amount and left(IVp.PriceList,3)=="FOB") then begin
-				res=-1;
-				RecordCheckError(36223,"",-1,"SerNr");
-				goto L999;
-			end;	
-      tIVr.SerNr = GCSr.InvSerNr;
-      if(readfirstmain(tIVr,1,true)) then begin
-				rwcnt2 = matrowcnt(tIVr);
-				giftf = false;
-				for (j=0;j<rwcnt2;j=j+1) begin
-					matrowget(tIVr,j,tIVrw);
-					if (((tIVrw.PayMode=="G") or (tIVrw.PayMode=="GS")) and (tIVrw.stp==kInvoiceRowTypeCreditCardPayment)) then begin
-						giftf = true;
-					end;
-				end;
-				
-				if(giftf) then begin
-					cntvch=cntvch+1;
-				end;	
-			end;	
-		end;
-	end;	
 	
-	if(MNGb.Count!=0 AND cntvch>MNGb.Count ) then begin          //Edit_________________ABR 12:24 22.10.18
-		res=-1;
-		RecordCheckError(36200,"",MatRowCnt(IVp),"Sum");
-		goto L999;
-	end;	
-	if(transf) then begin
-		if(UserCanAction("DisableSetOkIVPrevDate",true)==false and CurrentDate>IVp.InvDate) then begin
-			res=-1;
-			RecordCheckError(36228,"",-1,"SerNr");
-			goto L999;
-		end;
-	end;
 L99:;
   if (res!=0) then begin 
     IVp.SerNr = oldnr; 
