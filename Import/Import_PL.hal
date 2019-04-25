@@ -31,6 +31,7 @@ remote function boolean CompanyIsJWLikeCompany(Integer);
 external procedure GetPriceItem(string,var val,var val);
 external function string 255 StrReplace(string,string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 19 March 2019 14:26:14
 external function Boolean SetInSet2(string,string);
+remote function boolean CompanyIsJWLikeCompany(Integer);
 					 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -183,7 +184,15 @@ record GlobalItemVc GIr;
 row INVc INrw;
 string 255 code,glcode;
 array string 255 names,codes;
-integer i;
+integer i,oldComp,j,CompQty;
+record CompaniesBlock Compb;
+row CompaniesBlock Comprw;		
+	BlockLoad(Compb);
+	
+	
+	CompQty = matrowcnt(Compb);
+	
+	oldComp = currentcompany;
 		while (TestEOF()==false) begin
 			code = importfield;
 			for (i=0;i<2;i=i+1) begin
@@ -192,39 +201,48 @@ integer i;
 			for (i=0;i<2;i=i+1) begin
 				names[i] = importfield;
 			end;
-			INr.Code = code;
-			if(ReadFirstMain(INr,1,true)) then begin
-				for (i=0;i<2;i=i+1) begin
-					if(nonblank(names[i])) then begin
-						matrowget(INr,i,INrw);
-						INrw.LangCode = codes[i];
-						INrw.Text = names[i];
-						matrowput(INr,i,INrw);
+			for (j=0;j<CompQty;j=j+1)begin
+				matrowget(Compb,i,Comprw);
+				if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3) and j+1!=10)then begin
+					setcompany(j+1,false);
+					glcode = "";
+					INr.Code = code;
+					if(ReadFirstMain(INr,1,true)) then begin
+						for (i=0;i<2;i=i+1) begin
+							if(nonblank(names[i])) then begin
+								matrowget(INr,i,INrw);
+								INrw.LangCode = codes[i];
+								INrw.Text = names[i];
+								matrowput(INr,i,INrw);
+							end;
+						end;
+						glcode = INr.BPIBrand & "_" & INr.Code;
 					end;
+					GIr.Code = glcode;
+					if(ReadFirstMain(GIr,1,true)) then begin
+						for (i=0;i<2;i=i+1) begin
+							if(nonblank(names[i])) then begin
+								if(codes[i]=="RUS") then begin GIr.NameRUS = names[i]; end;
+								if(codes[i]=="AZ") then begin GIr.NameAZ = names[i]; end;
+							end;
+						end;	
+					end;
+					if(nonblank(glcode)) then begin
+						RecordStore(INr,true);
+						RecordStore(GIr,true);
+					end;	
 				end;
-				glcode = INr.BPIBrand & "_" & INr.Code;
-			end;
-			GIr.Code = glcode;
-			if(ReadFirstMain(GIr,1,true)) then begin
-				for (i=0;i<2;i=i+1) begin
-					if(nonblank(names[i])) then begin
-						if(codes[i]=="RUS") then begin GIr.NameRUS = names[i]; end;
-						if(codes[i]=="AZ") then begin GIr.NameAZ = names[i]; end;
-					end;
-				end;	
-			end;
-			RecordStore(INr,true);
-			RecordStore(GIr,true);
+			end;	
 		NextImportLine(true);
 		end;
-
+	setcompany(oldComp,false);
  return;
 end;
 
 Global updating procedure FillPresIm()
 begin
 	record PLVc PLr;
-	Integer i;
+	Integer i,j,oldComp,CompQty;
 	array string 255 sfield;
 	record GlobalItemVc GIr;
 	string 5 flag;
@@ -233,37 +251,53 @@ begin
 	val price, calcprice, calcrebate;		
 	record CurncyCodeVc Curncyr;
 	string 50 tstr,code,glcode;
-		
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;		
+	BlockLoad(Compb);
+	
+	
+	CompQty = matrowcnt(Compb);
+	
+	
+		oldComp = currentcompany;
 		while (TestEOF()==false) begin
 			code = ImportField; 
 			for (i=0;i<25;i=i+1) begin
 				sfield[i]=ImportField;
 			end;
-			glcode = "";
-			INr.Code = code;
-			if(readfirstmain(INr,1,true)) then begin
-				for (i=0;i<25;i=i+1) begin
-					if(nonblank(sfield[i])) then begin
-						INr.BTRxGiftClass = sfield[i] & ",";
+			for (j=0;j<CompQty;j=j+1)begin
+				matrowget(Compb,i,Comprw);
+				if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3) and j+1!=10)then begin
+					setcompany(j+1,false);
+					glcode = "";
+					INr.Code = code;
+					if(readfirstmain(INr,1,true)) then begin
+						for (i=0;i<25;i=i+1) begin
+							if(nonblank(sfield[i])) then begin
+								INr.BTRxGiftClass = sfield[i] & ",";
+							end;
+						end;
+						INr.BTRxGiftClass = left(INr.BTRxGiftClass,len(INr.BTRxGiftClass) - 1);
+						glcode = INr.BPIBrand & "_" & INr.Code;
 					end;
-				end;
-				INr.BTRxGiftClass = left(INr.BTRxGiftClass,len(INr.BTRxGiftClass) - 1);
-				glcode = INr.BPIBrand & "_" & INr.Code;
-			end;
-			GIr.Code = glcode;
-			if(readfirstmain(GIr,1,true)) then begin
-				for (i=0;i<25;i=i+1) begin
-					if(nonblank(sfield[i])) then begin
-						GIr.BTRxGiftClass = sfield[i] & ",";
+					GIr.Code = glcode;
+					if(readfirstmain(GIr,1,true)) then begin
+						for (i=0;i<25;i=i+1) begin
+							if(nonblank(sfield[i])) then begin
+								GIr.BTRxGiftClass = sfield[i] & ",";
+							end;
+						end;
+						GIr.BTRxGiftClass = left(GIr.BTRxGiftClass,len(GIr.BTRxGiftClass) - 1);
 					end;
+					if(nonblank(glcode)) then begin
+						RecordStore(INr,true);
+						RecordStore(GIr,true);
+					end;	
 				end;
-				GIr.BTRxGiftClass = left(GIr.BTRxGiftClass,len(GIr.BTRxGiftClass) - 1);
-			end;
-			RecordStore(INr,true);
-			RecordStore(GIr,true);
+			end;	
 		NextImportLine(true);
 		end;
-
+	setcompany(oldComp,false);
  return;
 end;
 
