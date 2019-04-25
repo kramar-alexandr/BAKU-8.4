@@ -176,6 +176,97 @@ BEGIN
   RETURN;
 END;
 
+Global updating procedure FillNamesIm()
+begin
+record INVc INr;
+record GlobalItemVc GIr;
+row INVc INrw;
+string 255 code,glcode;
+array string 255 names,codes;
+integer i;
+		while (TestEOF()==false) begin
+			code = importfield;
+			for (i=0;i<2;i=i+1) begin
+				codes[i] = importfield;
+			end;
+			for (i=0;i<2;i=i+1) begin
+				names[i] = importfield;
+			end;
+			INr.Code = code;
+			if(ReadFirstMain(INr,1,true)) then begin
+				for (i=0;i<2;i=i+1) begin
+					if(nonblank(names[i])) then begin
+						matrowget(INr,i,INrw);
+						INrw.LangCode = codes[i];
+						INrw.Text = names[i];
+						matrowput(INr,i,INrw);
+					end;
+				end;
+				glcode = INr.BPIBrand & "_" & INr.Code;
+			end;
+			GIr.Code = glcode;
+			if(ReadFirstMain(GIr,1,true)) then begin
+				for (i=0;i<2;i=i+1) begin
+					if(nonblank(names[i])) then begin
+						if(codes[i]=="RUS") then begin GIr.NameRUS = names[i]; end;
+						if(codes[i]=="AZ") then begin GIr.NameAZ = names[i]; end;
+					end;
+				end;	
+			end;
+			RecordStore(INr,true);
+			RecordStore(GIr,true);
+		NextImportLine(true);
+		end;
+
+ return;
+end;
+
+Global updating procedure FillPresIm()
+begin
+	record PLVc PLr;
+	Integer i;
+	array string 255 sfield;
+	record GlobalItemVc GIr;
+	string 5 flag;
+	record INVc INr;
+	record PLDefVc PLDr;
+	val price, calcprice, calcrebate;		
+	record CurncyCodeVc Curncyr;
+	string 50 tstr,code,glcode;
+		
+		while (TestEOF()==false) begin
+			code = ImportField; 
+			for (i=0;i<25;i=i+1) begin
+				sfield[i]=ImportField;
+			end;
+			glcode = "";
+			INr.Code = code;
+			if(readfirstmain(INr,1,true)) then begin
+				for (i=0;i<25;i=i+1) begin
+					if(nonblank(sfield[i])) then begin
+						INr.BTRxGiftClass = sfield[i] & ",";
+					end;
+				end;
+				INr.BTRxGiftClass = left(INr.BTRxGiftClass,len(INr.BTRxGiftClass) - 1);
+				glcode = INr.BPIBrand & "_" & INr.Code;
+			end;
+			GIr.Code = glcode;
+			if(readfirstmain(GIr,1,true)) then begin
+				for (i=0;i<25;i=i+1) begin
+					if(nonblank(sfield[i])) then begin
+						GIr.BTRxGiftClass = sfield[i] & ",";
+					end;
+				end;
+				GIr.BTRxGiftClass = left(GIr.BTRxGiftClass,len(GIr.BTRxGiftClass) - 1);
+			end;
+			RecordStore(INr,true);
+			RecordStore(GIr,true);
+		NextImportLine(true);
+		end;
+
+ return;
+end;
+
 Global updating procedure ImportPLIn()
 begin
 	record PLVc PLr;
@@ -3483,6 +3574,7 @@ array string 100 abrand,anewbrand;
 										INr.BPIBrand = BPIBrand1r.Code;
 										GIr.Code = glCode;
 										if(ReadFirstMain(GIr,1,true)) then begin
+											logtext(0,"del" & GIr.Code);
 											RecordDelete(GIr);
 										end;
 										CreateNewGlobalItem(INr);
