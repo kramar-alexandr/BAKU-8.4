@@ -4601,8 +4601,12 @@ begin
 			messagebox(0,"Некорректное имя склада!");
 			goto LCreatePufromIVforPLHandle1;
 		end;
-        PUr.VECode = IVr.CustCode;
-        PUVc_PasteVECode(PUr);
+		if(blank(Locr.FOBSuplier)) then begin
+			PUr.VECode = IVr.CustCode;
+			PUVc_PasteVECode(PUr);
+		end else begin
+			PUr.VECode = Locr.FOBSuplier;
+		end;	
         PUr.VEName = "Invoice # " & IVr.SerNr & " from company " & compname & " (" & (m+1) & " Receipt from " & curcnt & ")";
         if (currs[m]!=targetBCb.BaseCur1) then begin
           curcode = currs[m];
@@ -12473,4 +12477,151 @@ logtext(0,"DeleteRhistMn end");
 
 DeleteRhistMnEND:;
 return;
+end;
+
+
+global 
+webpublic updating procedure WebDellCUIHr()
+begin
+  record GlobalItemVc GIr,mainGIr;
+	row GlobalItemVc GIrw;
+	boolean TrHs,TrHs1,changed;
+	val ITRebate,price;
+	record INVc INr;
+	record PLVc PLr,OldPLr;
+	record RHistVc RHistr;
+	string 200 rstr,custocode;
+	record CUVc CUr;
+	
+	custocode = webgetarg("cucode");
+	setcompany(1,false);
+	CUr.Code = custocode;
+	if(readfirstmain(CUr,1,true))then begin
+		resetloop(RHistr);
+		rstr = BuildRecordIdStr(CUr,CurrentCompany);
+		
+		RHistr.RecidStr = rstr;
+		TrHs1 = true;
+		changed = false;
+		while(loopkey("RecidStr",RHistr,1,TrHs1)) begin
+			if(RHistr.RecidStr!=rstr)then begin TrHs1 = false; end;
+			if(fileexists("stop"))then begin 
+				TrHs1 = false; 
+				logtext(0,"stop file exists");
+			end;
+			
+			if(TrHs1)then begin
+				
+				logtext(0,RHistr.TransDate & " " & RHistr.TransTime & " " & BlobSize(RHistr));
+				if(BlobSize(RHistr)<=1040)then begin
+					recorddelete(RHistr);
+					stepback(RHistr);
+				end;
+			end;
+		end;
+		
+	end;
+	
+	
+	/*if(SetCompany(25,false))then begin
+		PLr.PLCode = "RRP";
+		TrHs = true;
+		while(loopkey("PLCode",PLr,1,TrHs))begin
+			if(PLr.PLCode!="RRP")then begin TrHs = false; end;
+			
+			if(TrHs)then begin
+				resetloop(RHistr);
+				rstr = BuildRecordIdStr(PLr,CurrentCompany);
+				RHistr.RecidStr = rstr;
+				TrHs1 = true;
+				changed = false;
+				while(loopkey("RecidStr",RHistr,1,TrHs1)) begin
+					if(RHistr.RecidStr!=rstr)then begin TrHs1 = false; end;
+					
+					if(TrHs1)then begin
+						if(RHistr.TransDate==CurrentDate)then begin
+							if(RHistr.User=="TOVAROVED" and RHistr.accode==1)then begin
+								if(RHistr.TransTime<stringtotime("18:00:00"))then begin
+									if(changed==false)then begin
+										ReadOriginalRecord(RHistr,OldPLr);
+										if(OldPLr.ExVatPrice!=PLr.ExVatPrice)then begin
+											logtext(0,PLr.ArtCode & " " & OldPLr.ExVatPrice & " -> " & PLr.ExVatPrice);
+											PLr.ExVatPrice = OldPLr.ExVatPrice;
+											PLr.CurncyCode = OldPLr.CurncyCode;
+											recordstore(PLr,true);
+											changed = true;
+											TrHs1 = false;
+										end;
+									end;
+									
+								end;
+							end;
+						end;
+					end;
+				end;
+				if(changed)then begin
+					//logtext(0,PLr.ArtCode);
+				end;
+			end;
+		end;
+		
+	end;*/
+  return;
+end;
+
+
+global 
+webpublic updating procedure offWebDellSmallHr()
+begin
+  record GlobalItemVc GIr,mainGIr;
+	row GlobalItemVc GIrw;
+	boolean TrHs,TrHs1,changed;
+	val ITRebate,price;
+	record INVc INr;
+	record PLVc PLr,OldPLr;
+	record RHistVc RHistr;
+	string 200 rstr,custocode;
+	record CUVc CUr;
+	longint cnt,reset;
+	
+	custocode = webgetarg("cucode");
+	setcompany(1,false);
+	
+	cnt = 0;
+	RHistr.RecidStr = "";
+	TrHs1 = true;
+	changed = false;
+	CUr.Code = "";
+	//while(loopmain(CUr,1,true))begin
+		//rstr = BuildRecordIdStr(CUr,CurrentCompany);
+		RHistr.RecidStr = rstr;
+		TrHs1 = true;
+		while(loopkey("RecidStr",RHistr,1,TrHs1)) begin
+			//if(RHistr.RecidStr!=rstr)then begin TrHs1 = false; end;
+			if(fileexists("stop"))then begin 
+				TrHs1 = false; 
+				logtext(0,"stop file exists");
+			end;
+		
+			if(TrHs1)then begin
+			
+				//logtext(0,RHistr.TransDate & " " & RHistr.TransTime & " " & BlobSize(RHistr));
+				//if(BlobSize(RHistr)<=1040)then begin
+				if(blank(RHistr.User) or RHistr.accode==7)then begin
+					recorddelete(RHistr);
+					stepback(RHistr);
+					cnt = cnt + 1;
+					reset = reset + 1;
+					if(reset>=1000)then begin
+						reset = 0;
+						logtext(0,"deleted IHr " & cnt & " user " & RHistr.User & " recid " & RHistr.RecidStr);
+					end;
+				end;
+			end;
+		end;
+		resetloop(RHistr);
+	//end;
+			
+
+  return;
 end;
