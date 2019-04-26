@@ -54,7 +54,7 @@ begin
   vector boolean LocInArr,MonthInArr,ConsultInArr,MonthLoc;//Тип данных vector - массив с доступом к элементу по строковому индексу
   vector string 100 LocName,ConsultName;
   vector val Oborot,Vozvrat;
-  boolean f1,f2;
+  boolean f1,f2,curfound;
   record CompaniesBlock Compb;// Список компаний на сервере
   row CompaniesBlock Comprw;// row - матрица регистра - для SQL - запись в таблице CompaniesBlock.math
   
@@ -372,12 +372,14 @@ begin
             MonthLoc[month & ";" & store] = true;
             TRr.Number = IPr.SerNr;
             TRr.IntYc = IPYc;
+            curfound = false;
             if (ReadFirstMain(TRr,2,true)) then begin
               fr = 1;
               rwcnt2 = MatRowCnt(TRr);
               for(j=0;j<rwcnt2;j=j+1) begin
                 MatRowGet(TRr,j,TRrw);
-                if ((left(TRrw.AccNumber,1) == "5") and (TRrw.ovst <> 1) and TRrw.Curncy==IPrw.BankCurncy) then begin
+                if ((left(TRrw.AccNumber,1) == "5") and (TRrw.ovst <> 1) and TRrw.Curncy==IPrw.BankCurncy and (IPrw.BankVal==TRrw.CurCredVal or IPrw.BankVal==TRrw.CurDebVal)) then begin
+                  curfound = true;
                   to1 = TRrw.DebVal/TRrw.CurDebVal;
                   if (to1==0) then begin
                     to1 = TRrw.CredVal/TRrw.CurCredVal;
@@ -385,6 +387,23 @@ begin
                   j = rwcnt2;
                 end;
               end;
+              
+              if(curfound==false)then begin
+              	fr = 1;
+								rwcnt2 = MatRowCnt(TRr);
+								for(j=0;j<rwcnt2;j=j+1) begin
+									MatRowGet(TRr,j,TRrw);
+									if ((left(TRrw.AccNumber,1) == "5") and (TRrw.ovst <> 1) and TRrw.Curncy==IPrw.BankCurncy) then begin
+										curfound = true;
+										to1 = TRrw.DebVal/TRrw.CurDebVal;
+										if (to1==0) then begin
+											to1 = TRrw.CredVal/TRrw.CurCredVal;
+										end;
+										j = rwcnt2;
+									end;
+								end;
+              end;
+              
             end else begin
               GetFullCurncyRate(IPrw.BankCurncy,IPr.TransDate,fr,to1,to2,br1,br2);
             end;
@@ -454,8 +473,6 @@ begin
               		Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1;
               		sumoborot = sumoborot + sumbase;
                   Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
-                  logtext(0,"Oborot7 " & tstr & "sum + " & sumoborot);
-									logtext(0,"-- " & Oborot[tstr & "sum"]);
                   InvoiceRowTypeDownpaymentf = true;
                   goto LDownpaymentFoundRet;
               	end;
@@ -499,8 +516,6 @@ begin
                   if (sumoborot!=0) then begin
                     Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
                     Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
-                    logtext(0,"Oborot6 " & tstr & "sum + " & sumoborot);
-										logtext(0,"-- " & Oborot[tstr & "sum"]);
                   end;
                   j = rwcnt2;
                 end;
@@ -552,8 +567,6 @@ LDownpaymentFoundRet:;
                 if (sumoborot!=0) then begin
                   Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
                   Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
-                  logtext(0,"Oborot5 " & tstr & "sum + " & sumoborot);
-                  logtext(0,"-- " & Oborot[tstr & "sum"]);
                 end;
               end;
             end else begin
@@ -604,8 +617,6 @@ LDownpaymentFoundRet:;
                 if (sumoborot!=0) then begin
                   Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
                   Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
-                  logtext(0,"Oborot4 " & tstr & "sum + " & sumoborot);
-                  logtext(0,"-- " & Oborot[tstr & "sum"]);
                 end;
               end else begin
                 if (IPrw.CUPNr!=-1) then begin
@@ -688,8 +699,6 @@ LDownpaymentFoundRet:;
                             if (sumoborot!=0) then begin
                               Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
                               Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
-                              logtext(0,"Oborot3 " & tstr & "sum + " & sumoborot);
-                      				logtext(0,"-- " & Oborot[tstr & "sum"]);
                             end;
                             j = rwcnt2;
                           end;
@@ -739,8 +748,6 @@ LDownpaymentFoundRet:;
                         if (sumoborot!=0) then begin
                           Oborot[tstr & "chek"] = Oborot[tstr & "chek"] + 1*percent;
                           Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumoborot;
-                          logtext(0,"Oborot2 " & tstr & "sum + " & sumoborot);
-                      		logtext(0,"-- " & Oborot[tstr & "sum"]);
                         end;
                         printedprepval = printedprepval + rmbpart;
                       end;
@@ -778,8 +785,6 @@ LDownpaymentFoundRet:;
                     sumbase = recivedmoneybase - printedprepval;
                     if (sumbase>0) then begin
                       Oborot[tstr & "sum"] = Oborot[tstr & "sum"] + sumbase;
-                      logtext(0,"Oborot1 " & tstr & "sum + " & sumbase);
-                      logtext(0,"-- " & Oborot[tstr & "sum"]);
                     end else begin
                       Vozvrat[tstr & "sum"] = Vozvrat[tstr & "sum"] + sumbase;
                     end;
