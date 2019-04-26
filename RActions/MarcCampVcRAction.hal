@@ -2523,6 +2523,281 @@ begin
 return;
 end;
 
+global updating procedure SendUpdateIVVisitToCRM(record IVVc IVr)//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:38 11.09.2018
+begin
+	integer err,noErr;
+  string 255 host,tstr,nonce,opaque,page;
+  LongInt port,pos,mtrw;
+  Area req,reply,idreq;
+  string 255 ha1,ha2;
+  record MarcCampVc MCr;
+  row MarcCampVc MCrw;
+  integer i,cnt;
+	record LoyaltyCardVc LCr;
+  json jsresponse;
+	record WebReportChBlock WRChb;
+	record CUVc CUr;
+	record LocationVc Locr;
+	record GlobalStoresVc GSr;
+	record UserVc User;
+	boolean testf;
+	row IVVc IVrw;
+	record INVc INr;
+	LongInt res;  
+  record CreditLimitBlock CLb; 
+  record MainStockBlock MSb;  
+  record AccBlock ARAccRec;  
+  record SRBlock SRb;  
+  record CashierDefBlock CDb;
+  record CYBlock CYb;
+  record ItemStatusVc ISr;  
+  record SHVc recSHr;
+  record AccVc Accr;
+  record LegalInvNrBlock LINrb;
+  row LegalInvNrBlock LINrbrw;
+  row SHVc SHrw2;
+  row IVCashVc IVCashrw;
+  row IVCashVc IVCash2rw;  
+  record IVCashVc locIVCashr;
+  Integer rwcnt,j,rwcnt2; 
+  LongInt newnr,oldnr;
+  Boolean gentrans,transf,unokf;
+  val limit,bal,quant,prev,cash;
+  string 255 tstr2,errstr,oldOfficialSerNr,c;
+  string 10 location;
+  Boolean isstruct;  
+  Boolean check;
+  Integer insertmode,updatemode;
+  Integer errcode;
+  LongInt sernr;
+  record LocalOffLineNrBlock LastRecNr;
+  Integer positivef;
+  val discountprice,price,vreb,baseprice,tax2prc;
+  string 255 curitemname,salesacc,vatcode,tax2code,taxtemplatecode;
+  Boolean calcpricef,dummyf;
+  Boolean test2f,remoteconnection;
+  LongInt l,dummyl;
+  Date td;
+  Integer programmode;
+  record ACPVc ACPr;
+  record HotelBlock Hotelb;
+  record JobVc Jobr;
+  string 50 CRMid,campid,currebcode;
+  
+  
+	logtext(0,"SendUpdateIVVisitToCRM");
+	
+	testf = true;
+	if(left(IVr.CustCode,3)=="FOB")then begin
+		testf = false;
+	end;
+	if(blank(IVr.CRMid))then begin
+		testf = false;
+	end;
+	blockload(WRChb);		
+	if(WRChb.WEBCheck==1 and testf)then begin
+	
+  	host = "192.168.3.11";
+		page = "/api/Visit/Update";
+		port = 8088;
+		logtext(0,"CURIPADDRESS" & CURIPADDRESS); 
+		if(fileexists("demoserver"))then begin
+			port = 8087;
+ 	logtext(0,"newport 8087");
+		end;
+
+		
+		if(IVr.CustCode!="NONAME" and left(IVr.CustCode,3)!="FOB")then begin
+			CUr.Code = IVr.CustCode;
+			readfirstmain(CUr,1,true);
+			if(blank(CUr.CRMid) or CUr.CRMid=="null")then begin
+				SendWebRequest(host,port,-1,false,"GET","/api/Contact/GetCrmId?hansaId=" & UrlEncode(CUr.Code),"application/json","",false,req,reply,5);
+				jsresponse = ParseJSONArea(reply);
+				if(nonblank(MyJSGet(jsresponse,"result")))then begin
+					CUr.CRMid = MyJSGet(jsresponse,"result");
+					logtext(0,"SendUpdateLoyaltyCardToCRM CUr.CRMid " & CUr.CRMid);
+					recordstore(CUr,true);
+				end;
+			end;
+		end;
+  	
+  	GSr.Code = IVr.Location;
+  	if(currentcompany==9)then begin
+  		GSr.Code = "CS1";
+  	end;
+  	readfirstmain(GSr,1,true);
+  	if(blank(GSr.CRMid) or GSr.CRMid=="null")then begin
+  		SendWebRequest(host,port,-1,false,"GET","/api/Shop/GetCrmId?hansaId=" & UrlEncode(GSr.Code),"application/json","",false,req,reply,5);
+			jsresponse = ParseJSONArea(reply);
+			logtext(0,"/api/Shop/GetCrmId?hansaId  " & MyJSGet(jsresponse,"result"));
+			if(nonblank(MyJSGet(jsresponse,"result")))then begin
+				GSr.CRMid = MyJSGet(jsresponse,"result");
+				recordstore(GSr,true);
+			end else begin
+				Locr.Code = GSr.Code;
+				if(readfirstmain(Locr,1,true))then begin
+					SendShopToCRM(Locr);
+					if(NONBLANK(Locr.CRMid))then begin
+						recordstore(Locr,true);
+						GSr.CRMid = Locr.CRMid;
+						recordstore(GSr,true);
+					END;
+				end;
+			end;
+  	end;
+  	
+  	User.Code = IVr.SalesMan;
+  	if(readfirstmain(User,1,true))then begin
+  		if(User.IsSalesMan==1)then begin
+				if(blank(User.CRMid) or User.CRMid=="null")then begin
+					logtext(0,"SednConsultantToCRM shopid " & User.Code);
+					SendWebRequest(host,port,-1,false,"GET","/api/Consultant/GetCrmId?hansaId=" & UrlEncode(User.Code),"application/json","",false,req,reply,5);
+					jsresponse = ParseJSONArea(reply);
+					if(nonblank(MyJSGet(jsresponse,"result")))then begin
+						User.CRMid = MyJSGet(jsresponse,"result");
+					
+						recordstore(User,true);
+						logtext(0,"SednConsultantToCRM shopid " & MyJSGet(jsresponse,"result"));
+					end;
+				end;
+  		end;
+  	end;
+  	
+  	
+  	if(nonblank(IVr.LoyaltyCardNr))then begin
+  		LCr.SerNr = IVr.LoyaltyCardNr;
+  		if(readfirstmain(LCr,1,true))then begin
+  			if(blank(LCr.CRMid) or LCr.CRMid=="null")then begin
+					if(blank(LCr.CRMid) or LCr.CRMid=="null")then begin
+						SendWebRequest(host,port,-1,false,"GET","/api/LoyaltyCard/GetCrmId?hansaId=" & UrlEncode(LCr.SerNr),"application/json","",false,req,reply,5);
+						jsresponse = ParseJSONArea(reply);
+						if(nonblank(MyJSGet(jsresponse,"result")))then begin
+							LCr.CRMid = MyJSGet(jsresponse,"result");
+							logtext(0,"SendUpdateLoyaltyCardToCRM LCr.CRMid " & LCr.CRMid);
+							recordstore(LCr,true);
+						end;
+					end;
+				end;
+			end;
+		end;
+  			
+		addtexttoarea("{" & chr(13) & chr(10),req);
+		if(IVr.CustCode!="NONAME" and left(IVr.CustCode,3)!="FOB" and nonblank(CUr.CRMid))then begin
+			addtexttoarea("\"contactCrmId\":\"" & NormalizeStrToJson(CUr.CRMid) & "\"," & chr(13) & chr(10),req);
+		end;
+		if(nonblank(LCr.CRMid) and LCr.CRMid!="null")then begin
+			addtexttoarea("\"loyaltyCardId\":\"" & NormalizeStrToJson(LCr.CRMid) & "\"," & chr(13) & chr(10),req);
+		end;
+		//addtexttoarea("\"MobilePhone1\":\"" & IVr.SerNr & "\"," & chr(13) & chr(10),req);
+		addtexttoarea("\"checkNumber\":\"" & NormalizeStrToJson(IVr.SerNr) & "\"," & chr(13) & chr(10),req);
+		if(nonblank(GSr.CRMid)) then begin
+		addtexttoarea("\"shopId\":\"" & NormalizeStrToJson(GSr.CRMid) & "\"," & chr(13) & chr(10),req);
+		end;
+		if(nonblank(User.CRMid))then begin
+			addtexttoarea("\"consultantId\":\"" & NormalizeStrToJson(User.CRMid) & "\"," & chr(13) & chr(10),req);
+		end;
+		addtexttoarea("\"purchaseAmount\":\"" & valtostring(IVr.Sum4,M45Val,"",".",0) & "\"," & chr(13) & chr(10),req);
+		addtexttoarea("\"invDate\":\"" & datetostring(IVr.InvDate,"YYYY-MM-DD") & "\"," & chr(13) & chr(10),req);
+		addtexttoarea("\"hansaId\":" & "\"" & currentcompany & "_" & IVr.SerNr & "\"," & chr(13) & chr(10),req);
+		addtexttoarea("\"taxfree\":" & "" & IVr.TaxFree & "," & chr(13) & chr(10),req);
+		addtexttoarea("\"id\":" & "" & IVr.CRMid & "," & chr(13) & chr(10),req);
+		if(/*fileexists("demoserver")*/true)then begin
+			addtexttoarea("\"visitProducts\":[" & chr(13) & chr(10),req);
+			cnt=0;
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if(IVrw.stp==1) then begin
+					INr.Code = IVrw.ArtCode;
+					if(Readfirstmain(INr,1,true)) then begin
+						if(cnt>0) then begin 
+							addtexttoarea(",",req);
+						end;	
+						addtexttoarea("{" & chr(13) & chr(10),req);
+						addtexttoarea("\"productDetail\":{" & chr(13) & chr(10),req);
+						addtexttoarea("\"name\":\"" & NormalizeStrToJson(INr.Name) & "\"," & chr(13) & chr(10) ,req);
+						addtexttoarea("\"brand\":{" & chr(13) & chr(10) ,req);
+						addtexttoarea("\"brand\":\"" &  NormalizeStrToJson(BPICodeToName(INr.BPIBrand)) & "\"," & chr(13) & chr(10) ,req);
+						addtexttoarea("\"hansaid\":\"" & INr.BPIBrand & "\"" & chr(13) & chr(10) ,req);
+						addtexttoarea("}," & chr(13) & chr(10),req);
+						addtexttoarea("\"group\":\"" & INr.BPISubGroup & "\"," & chr(13) & chr(10) ,req);
+						addtexttoarea("\"collection\":\"" & INr.BPICollection & "\"," & chr(13) & chr(10) ,req);
+						addtexttoarea("\"category\":\"" & INr.BPICategory & "\"," & chr(13) & chr(10) ,req);
+						addtexttoarea("\"subGroup\":\"" & INr.BPISubGroup & "\"," & chr(13) & chr(10) ,req);
+						addtexttoarea("\"hansaid\":\"" & INr.Code & "\"" & chr(13) & chr(10) ,req);
+						addtexttoarea("}," & chr(13) & chr(10),req);
+						CRMid = "";
+						if (GetItemPriceDiscount3CRM(IVrw.ArtCode,IVrw.Quant,INr,IVr.CurncyCode,
+                              IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,
+                              IVr.LangCode,IVr.CustCat,User.MinPLCode,IVr.RebCode,
+                              price,curitemname,vreb,vatcode,baseprice,salesacc,
+                              0,calcpricef,IVr.TransDate,IVr.TransTime,IVr.CustCode,true,dummyf,IVr.PayDeal,tax2code,tax2prc,IVr.Region,location,taxtemplatecode,CRMid,MCr)) then begin
+							campid = CRMid;
+							logtext(0,"CRMid " & CRMid);
+						end else begin
+							CRMid = "";
+							campid = "";
+							if(blank(MCr.CRMID) and nonblank(MCr.Code))then begin
+								setareazerosize(idreq);
+								addtexttoarea("{" & chr(13) & chr(10),idreq);
+									addtexttoarea("\"proposedStartDate\":\"" & datetostring(MCr.sDate,"YYYY-MM-DD") & "\"," & chr(13) & chr(10) ,idreq);
+									addtexttoarea("\"hansaId\":\"" & MCr.Code & "\"," & chr(13) & chr(10) ,idreq);
+								addtexttoarea("}",idreq);
+								SendWebRequest(host,port,-1,false,"POST","/api/MarketingCampaign/GetCampaignId","application/json","",false,idreq,reply,5);
+								addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,idreq);
+								writeareatofile(idreq,"CRMRequest.txt",1);
+								addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,reply);
+								writeareatofile(reply,"CRMResponse.txt",1);
+								jsresponse = ParseJSONArea(reply);
+								CRMid = MyJSGet(jsresponse,"result");
+								if(nonblank(CRMid))then begin
+									MCr.CRMID = CRMid;
+									campid = CRMid;
+									logtext(0,"MarketingCampaign MCr.CRMid " & MCr.CRMID);
+									recordstore(MCr,true);
+								end else begin
+									SednMarcCampVcToCRM(MCr);
+									if(nonblank(MCr.CRMID))then begin
+										campid = MCr.CRMID;
+										recordstore(MCr,true);
+									end;
+								end;
+							end;
+							
+							
+						end;	
+						if(nonblank(campid))then begin
+							addtexttoarea("\"campaign\":\"" & campid & "\"," & chr(13) & chr(10) ,req);
+						end;
+						addtexttoarea("\"count\":" &  stringtoint(IVrw.Quant) & "," & chr(13) & chr(10) ,req);
+						addtexttoarea("\"salesPrice\":" &  valtostring(IVrw.Price,M45Val,"",".",0) & "," & chr(13) & chr(10) ,req);
+						if(IVrw.vRebate==blankval)then begin
+							IVrw.vRebate = 0;
+						end;
+						addtexttoarea("\"salesDiscount\":" &  stringtoint(IVrw.vRebate) & "" & chr(13) & chr(10) ,req);
+						addtexttoarea("}" & chr(13) & chr(10),req);
+						cnt = cnt + 1;
+					end;	
+				end;	
+			end;
+			addtexttoarea("]" & chr(13) & chr(10),req);
+		end;
+		addtexttoarea("}" & chr(13) & chr(10),req);
+		addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,req);
+		writeareatofile(req,"CRMRequest.txt",1);
+		SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5);
+		if(getarealength(reply)>0)then begin
+			jsresponse = ParseJSONArea(reply);
+			if(nonblank(MyJSGet(jsresponse,"result")))then begin
+				Logtext(0,"SendUpdateIVVisitToCRM" & MyJSGet(jsresponse,"result"));
+			end;
+		end;
+
+		addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,reply);
+		writeareatofile(reply,"CRMResponse.txt",1);
+	end;
+return;
+end;
+
 
 global updating procedure SendVisitstoCRM()
 begin
@@ -3075,29 +3350,20 @@ LongInt port,pos,mtrw,cnter;
  	
  	blockload(WRChb);		
  	BlockLoad(Compb);
-	
-	host = "192.168.3.11";
-	page = "/api/LoyaltyCard/Update";
-	port = 8088;
-	logtext(0,"CURIPADDRESS" & CURIPADDRESS); 
-	if(fileexists("demoserver"))then begin
-	 port = 8087;
-		logtext(0,"newport 8087");
-	end;
-	
+		
 	CompQty = matrowcnt(Compb);
 	CustCode = WebGetArg("CustCode");
 	TrHsCU = true;
-	CUr.Code = "ID006893";
+	CUr.Code = CustCode;
 	while(loopmain(CUr,1,TrHsCU))begin
-		//if(CUr.Code>"+994773008075")then begin TrHsCU = false; end;
+		if(CUr.Code!=CustCode)then begin TrHsCU = false; end;
 		testf = true;
 		if(cnter>5000)then begin TrHsCU = false; testf = false; end;
 		if(CUr.CUType==0)then begin testf = false; end;
 		
 		if(testf)then begin
 		
-			if(blank(CUr.CRMid) or CUr.CRMid=="null")then begin
+			/*if(blank(CUr.CRMid) or CUr.CRMid=="null")then begin
 				SendWebRequest(host,port,-1,false,"GET","/api/Contact/GetCrmId?hansaId=" & UrlEncode(CUr.Code),"application/json","",false,req,reply,5);
 				jsresponse = ParseJSONArea(reply);
 				if(nonblank(MyJSGet(jsresponse,"result")))then begin
@@ -3108,14 +3374,14 @@ LongInt port,pos,mtrw,cnter;
 				end;
 			end;
 		
-			logtext(0,"Export to CRM Customer" & CUr.Code);
-			/*if(CUr.Code!="NONAME")then begin
+			logtext(0,"Export to CRM Customer" & CUr.Code);*/
+			if(CUr.Code!="NONAME")then begin
 				for (i=0;i<CompQty;i=i+1)begin
 					matrowget(Compb,i,Comprw);
 					if(Comprw.ActiveStatus==0)then begin
 						SetCompany(i+1,false)
 						IVr.CustCode = CUr.Code;
-						IVr.InvDate = stringtodate("01/01/2016");
+						IVr.InvDate = stringtodate("01/08/2018");
 						TrHs = true;
 						while(LoopKey("CustDate",IVr,2,TrHs)) begin
 							if(IVr.CustCode!=CUr.Code) then begin TrHs = false; end;
@@ -3127,6 +3393,9 @@ LongInt port,pos,mtrw,cnter;
 										if(nonblank(IVr.CRMid))then begin
 											recordstore(IVr,true);
 										end;
+									end else begin
+										logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
+										SendUpdateIVVisitToCRM(IVr);
 									end;
 								//end;						
 							end;	
@@ -3134,7 +3403,7 @@ LongInt port,pos,mtrw,cnter;
 						ResetLoop(IVr);
 					end;	
 				end;
-			end;*/
+			end;
 		end;
 	end;
  return;
