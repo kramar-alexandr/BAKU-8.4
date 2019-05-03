@@ -73,6 +73,7 @@ external function Boolean GetItemPriceDiscount3CRM(string,val,var record INVc,st
 external function Boolean GetItemPriceDiscount3(string,val,var record INVc,string,val,val,val,val,val,string,string,string,string,
                                                 var val,var string,var val,var string,var val,var string,Integer,var Boolean,Date,Time,
                                                 string,Boolean,var Boolean,string,var string,var val,string,string,var string);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 15 April 2019 10:15:34
+			external function Date DateFromString(string,string);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -3226,7 +3227,7 @@ begin
 	vector string 255 vbrandname;
 	record BPIBrandVc BPIBr;
 	record WEBReservStock WRSb;
-	boolean entf;
+	boolean entf,locfnd;
 	
 	
 	CompQty = 28;
@@ -3253,13 +3254,16 @@ begin
 				resetloop(LCr);
 				
 				TrHs = true;
+				
 				For(li=0;li<aloccnt;li=li+1) begin
+					locfnd = false;
 					if(setinset(aloc[li],WRSb.ResStockSet))then begin
 						ISr.Code = GIr.HansaCode;
 						ISr.Location = aloc[li];
 						for(j=0;j<matrowcnt(GIr);j=j+1) begin
 							MatRowGet(GIr,j,GIrw);
 							if(GIrw.Location==ISr.Location) then begin
+								locfnd = true;
 								if(ReadFirstMain(ISr,2,true))then begin
 									if(GIrw.Instock!=(ISr.Instock-ISr.RsrvQty))then begin
 										logtext(0,ISr.Code & "<> Old" & GIrw.Instock & "<> New" & (ISr.Instock - ISr.RsrvQty));
@@ -3268,6 +3272,14 @@ begin
 										entf = true;
 									end;
 								end;	
+							end;
+						end;
+						if(locfnd==false)then begin
+							GIrw.Location = aloc[li];
+							if(ReadFirstMain(ISr,2,true))then begin
+								GIrw.Instock = ISr.Instock - ISr.RsrvQty;
+								entf = true;
+								MatRowPut(GIr,matrowcnt(GIr),GIrw);
 							end;
 						end;	
 					end; 
@@ -12797,4 +12809,22 @@ begin
 			
 
   return;
+end;
+
+global 
+webpublic procedure WebChekcIVCRM()
+begin
+record IVVc IVr;
+boolean testf
+	IVr.SerNr = "";
+	while(LoopMain(IVr,1,true))begin
+		testf = false;
+		if(IVr.TransDate>DateFromString("01.03.2019","DD.MM.YYYY")) then begin testf = true; end;
+		if(testf) then begin
+			if(blank(IVr.CRMid)) then begin
+				logtext(0,"SerNr " & IVr.SerNr & " CRMid " & IVr.CRMid & " CustCode " & IVr.CustCode);
+			end;
+		end;	
+	end;
+return;
 end;

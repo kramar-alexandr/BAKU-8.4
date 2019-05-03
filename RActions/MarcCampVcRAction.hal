@@ -2822,6 +2822,7 @@ begin
 	record CompaniesBlock CBb;
 	boolean TrHs;
 	string 150 oldid;
+	date fromdate;
 	
 	logtext(0,"SendVisitstoCRM");
 	
@@ -2829,11 +2830,15 @@ begin
 	
 	for(i=1;i<=matrowcnt(CBb);i=i+1)begin
 		setcompany(i,false);
-		IVr.InvDate = addday(currentdate,-1);
+		fromdate = addday(currentdate,-1);
+		IVr.InvDate = fromdate;
+		if(currenttime>=stringtotime("23:55:00") and currenttime<stringtotime("23:55:59"))then begin
+			fromdate = addday(fromdate,-90);
+		end;
 		TrHs = true;
 		if(currentdate>stringtodate("16/03/2019"))then begin
 			while(loopkey("InvDate",IVr,1,TrHs))begin
-				if(TrHs and IVr.InvDate>=addday(currentdate,-1))then begin
+				if(TrHs and IVr.InvDate>=fromdate)then begin
 					oldid = IVr.CRMid;
 					if(blank(oldid) and IVr.OKFlag==1)then begin
 						SendIVVisitToCRM(IVr);
@@ -3767,7 +3772,7 @@ begin
  row CompaniesBlock Comprw;
  boolean TrHs,TrHsCU,testf;
  string 255 host,tstr,nonce,opaque,page;
-LongInt port,pos,mtrw,cnter;
+	LongInt port,pos,mtrw,cnter;
 	record WebReportChBlock WRChb;
 	Area req,reply;
 	json jsresponse;
@@ -3796,14 +3801,28 @@ LongInt port,pos,mtrw,cnter;
 		if(true)then begin
 			TrHs = true;
 			CUr.Code = "";
+			cnter = 0;
 			while(LoopMain(CUr,1,TrHs)) begin
-				if(CUr.VEType==1 and nonblank(CUr.CRMid))then begin
+				if(CUr.VEType==1 and CUr.CUType==0 and nonblank(CUr.CRMid))then begin
 					SendWebRequest(host,port,-1,false,"DELETE",page & "?id=" & CUr.CRMid,"application/json","id",false,req,reply,5);
+					CUr.CRMid = "";
+					recordstore(CUr,true);
+					logtext(0,"needdelete " & CUr.Code);
+					cnter = cnter + 1;
+					if(cnter>5)THEN BEGIN
+						GOTO lWebDelVECUID;
+					END;
+				end;
+				if(CUr.VEType==1 and CUr.CUType==1 and nonblank(CUr.CRMid))then begin
+					CUr.CRMid = "";
+					recordstore(CUr,true);
 					logtext(0,"needdelete " & CUr.Code);
 				end;
 			end;
 		end;
 	end;	
 
+lWebDelVECUID:;
+logtext(0,"WebSyncUsersToCRM end");
 return;
 end;

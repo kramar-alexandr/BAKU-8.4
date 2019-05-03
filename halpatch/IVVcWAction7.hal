@@ -101,6 +101,7 @@ remote procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var stri
 remote procedure LogTextOnServer(string);// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 23 January 2019 10:29:45
 external procedure PasteOPOItemIVDsm;//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 12:00 11.04.2019
 remote function boolean BDRebateIsUsed(string,date,var longint);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 16 April 2019 14:18:49
+remote procedure RecalcDiscountIVD(var record IVVc);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -1122,6 +1123,161 @@ begin
 	
 	
 	
+return;
+end;
+
+global function boolean GetFlayerObjects(record IVVc IVr)
+begin
+	boolean res;
+	res = false;
+	
+	if(setinset("BAKUCARD",IVr.Objects))then begin
+		res = true;
+	end;
+	if(setinset("MINICARD",IVr.Objects))then begin
+		res = true;
+	end;
+	GetFlayerObjects = res;
+return;
+end;
+
+global function boolean CheckFlayersInput(string code, var record IVVc IVr, integer wn)
+begin
+	boolean res;
+	Integer nwn,i;
+  row IVVc IVrw;
+  record UserVc Userr;
+  string 255 subset;
+  integer mtrw,rwcnt;
+  string 50 artcode;
+  Integer sernrf;
+  string 255 inwarning,warning;
+  record BirthdayRebateBlock BRb;
+  date startdate,enddate;
+  date birthmin,birth,mirthmax;
+  val lastquant,rebate; 
+  record CUVc CUr;
+  boolean notused;
+  record RebVc Rebr;
+  string 100 targetcard;
+  val targetrebate;
+		
+		
+		For(i=0;i<mtrw;i=i+1) begin
+			matrowget(IVr,i,IVrw);
+			if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
+				goto lCheckFlayersInput;
+			end;
+		end; 
+		
+		targetcard = "BAKUCARD";
+		targetrebate = 10;
+		if(code==targetcard)then begin
+			Rebr.Code = IVr.RebCode;
+			readfirstmain(Rebr,1,true);
+			if(targetrebate>=Rebr.vra0)then begin
+				if(currentcompany==1 or currentcompany==16 or currentcompany==25)then begin
+					RecalcDiscountIVD(IVr);
+					mtrw = matrowcnt(IVr);
+					IVr.Objects = RemoveObjectFromObjectList(IVr.Objects,targetcard);
+					For(i=0;i<mtrw;i=i+1) begin
+						matrowget(IVr,i,IVrw);
+						IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,targetcard);
+						matrowput(IVr,i,IVrw);
+					end;
+				
+				
+					For(i=0;i<mtrw;i=i+1) begin
+						matrowget(IVr,i,IVrw);
+						if(nonblank(IVrw.ArtCode) and IVrw.stp==1 and IVrw.vRebate==Rebr.vra0)then begin
+							if(!setinset(targetcard,IVr.Objects))then begin
+								if(nonblank(IVr.Objects))then begin
+									IVr.Objects = IVr.Objects & "," &  targetcard;
+								end else begin
+									IVr.Objects = targetcard;
+								end;
+							end;
+							lastquant = IVrw.Quant;
+							matrowget(IVr,i,IVrw);
+							IVrw.Quant = lastquant;
+							IVrw.vRebate = targetrebate;
+					
+							if(!setinset(targetcard,IVrw.Objects))then begin
+								if(nonblank(IVrw.Objects))then begin
+									IVrw.Objects = IVrw.Objects & "," & targetcard;
+								end else begin
+									IVrw.Objects = targetcard;
+								end;
+							end;
+							matrowput(IVr,i,IVrw);
+							IVVc_PasteQuantity(IVr,i);		
+							IVDchrsum(IVr,i);
+							IVDchsum(IVr,i);
+						end;
+					end;
+					IVSumup(IVr,true);
+					res = true;
+				end;
+			end;
+		end;
+		
+		targetcard = "MINICARD";
+		targetrebate = 10;
+		
+		if(IVr.InvDate<stringtodate("01/11/2019"))then begin
+			if(code==targetcard)then begin
+				Rebr.Code = IVr.RebCode;
+				readfirstmain(Rebr,1,true);
+				if(targetrebate>=Rebr.vra0)then begin
+					if(currentcompany==1 or currentcompany==16 or currentcompany==5 or currentcompany==7 or currentcompany==20 or currentcompany==3 or currentcompany==24 or currentcompany==21 or currentcompany==22)then begin
+						RecalcDiscountIVD(IVr);
+						mtrw = matrowcnt(IVr);
+						IVr.Objects = RemoveObjectFromObjectList(IVr.Objects,targetcard);
+						For(i=0;i<mtrw;i=i+1) begin
+							matrowget(IVr,i,IVrw);
+							IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,targetcard);
+							matrowput(IVr,i,IVrw);
+						end;
+				
+				
+						For(i=0;i<mtrw;i=i+1) begin
+							matrowget(IVr,i,IVrw);
+							if(nonblank(IVrw.ArtCode) and IVrw.stp==1 and IVrw.vRebate==Rebr.vra0)then begin
+								if(!setinset(targetcard,IVr.Objects))then begin
+									if(nonblank(IVr.Objects))then begin
+										IVr.Objects = IVr.Objects & "," &  targetcard;
+									end else begin
+										IVr.Objects = targetcard;
+									end;
+								end;
+								lastquant = IVrw.Quant;
+								matrowget(IVr,i,IVrw);
+								IVrw.Quant = lastquant;
+								IVrw.vRebate = targetrebate;
+					
+								if(!setinset(targetcard,IVrw.Objects))then begin
+									if(nonblank(IVrw.Objects))then begin
+										IVrw.Objects = IVrw.Objects & "," & targetcard;
+									end else begin
+										IVrw.Objects = targetcard;
+									end;
+								end;
+								matrowput(IVr,i,IVrw);
+								IVVc_PasteQuantity(IVr,i);		
+								IVDchrsum(IVr,i);
+								IVDchsum(IVr,i);
+							end;
+						end;
+						IVSumup(IVr,true);
+						res = true;
+					end;
+				end;
+			end;
+		end;
+
+lCheckFlayersInput:;
+
+	CheckFlayersInput = res;
 return;
 end;
 
