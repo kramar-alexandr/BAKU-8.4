@@ -102,6 +102,7 @@ remote procedure LogTextOnServer(string);// Edit ************************** BPI 
 external procedure PasteOPOItemIVDsm;//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 12:00 11.04.2019
 remote function boolean BDRebateIsUsed(string,date,var longint);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 16 April 2019 14:18:49
 remote procedure RecalcDiscountIVD(var record IVVc);
+external updating function Boolean IVDClassivcashcommandOnEnterKey(Integer,Integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -121,7 +122,8 @@ enum begin //edited by BPI {  //RUSWINDOWFUNCT
   kPOSButtonTypeShowImage = 212,
   kPOSButtonType1plus1 = 213,
   kPOSButtonTypeCashWithObj = 214,
-  kPOSButtonTypeTermWithObj = 215
+  kPOSButtonTypeTermWithObj = 215,
+  kPOSButtonTypeRebateCard = 216
 end;
 // Edit Start ---------------------------------------------- Edit Start
 	//Wednesday, 25 October 2017 10:13:25
@@ -141,7 +143,24 @@ begin
 end;
 
 	// Edit End ---------------------------------------------- Edit End
+
+
+procedure PasteRebateCardToInvoice(string card)// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 8 May 2019 10:06:32
+begin
+	integer mwn,wn;
+	record IVVc IVr;
+	record RcVc RepSpec;
 	
+	mwn = curwindow;
+	getwindowrecord(mwn,IVr);
+	if(IVr.OKFlag==0)then begin
+		RepSpec.f1 = card;
+		wn = OpenWindow("RebateCardWClass",1,mwn,"","",RepSpec);
+	end;
+
+return;
+end;
+
 function string 200 ParseClassification(string class)
 begin
 	string 200 res,cl;
@@ -188,6 +207,30 @@ begin
   NPTSIVOpenLClassOpenExecute(wn);
   return;
 end;
+
+global
+updating function Boolean RebateCardWClassOnOKWindow(integer wn)
+begin
+  Boolean res,testf;
+  string 255 WinSearchField;  
+	record IVVc IVr;
+	integer mwn;
+	record RcVc RepSpec;
+ 	
+ 	mwn = motherwindow(wn);
+ 	getwindowrecord(wn,RepSpec);
+ 	getwindowrecord(mwn,IVr);
+  PutWindowString(mwn,"ivcashcommand",RepSpec.f1 & ":" & RepSpec.f2);
+  closewindow(wn);
+  selectwindow(mwn);
+  IVDClassivcashcommandOnEnterKey(mwn,-1);
+  
+  res = true;
+  RebateCardWClassOnOKWindow = res;
+  return;
+end;
+
+
 
 global
 function Boolean NPTSIVOpenLClassOnOKWindow(integer wn)
@@ -1159,8 +1202,9 @@ begin
   record CUVc CUr;
   boolean notused;
   record RebVc Rebr;
-  string 100 targetcard;
+  string 100 targetcard,cardnumber;
   val targetrebate;
+  record UsedRebateCardsVc URCr;
 		
 		
 		
@@ -1174,11 +1218,25 @@ begin
 		
 		targetcard = "BAKUCARD";
 		targetrebate = 10;
-		if(code==targetcard)then begin
+		if(firstinrange(code,10)==targetcard)then begin
 			if(IVr.CustCode!="NONAME")then begin
 				messagebox(36231,"");
 				goto lCheckFlayersInput;
 			end;
+			
+			cardnumber = lastinrange(code,10);
+			if(blank(cardnumber))then begin
+				goto lCheckFlayersInput;
+			end else begin
+				URCr.Code = code;
+				if(readfirstmain(URCr,1,true))then begin
+					if(URCr.Compnr!=currentcompany or URCr.InvoiceNr!=IVr.SerNr)then begin
+						messagebox(36232,"");
+						goto lCheckFlayersInput;
+					end;
+				end;
+			end;
+			
 			
 			Rebr.Code = IVr.RebCode;
 			readfirstmain(Rebr,1,true);
@@ -1846,6 +1904,9 @@ begin
       	goto LIVDClassTouchScreenPasteButtonDo;	
       case kPOSButtonType1plus1:// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 17 November 2017 12:27:48
       	PasteOPOItemIVDsm;
+      	goto LIVDClassTouchScreenPasteButtonDo;	
+      case kPOSButtonTypeRebateCard:// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 8 May 2019 10:05:07
+      	PasteRebateCardToInvoice(POSBrw.Code);
       	goto LIVDClassTouchScreenPasteButtonDo;	
       case kPOSButtonTypeTermWithObj:
 					paymode = FirstInRange(POSBrw.Code,10);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 18 07 2018 y. î 14:38:09
