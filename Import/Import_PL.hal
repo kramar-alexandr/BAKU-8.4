@@ -5146,3 +5146,68 @@ logtext(0,"end");
 return;
 end;
 
+
+global updating procedure ReturnOldNamesINIn(record RcVc RepSpec)
+begin
+record INVc INr,oldINr;
+integer i,curcomp,cnt,j,k,CompQty;
+record GlobalItemVc GIr;
+string 100 artcode,brand,newBrand,code,glCode,tstr;
+record BPIBrandVc BPIBrandr;
+record BPIBrandVc BPIBrand1r;
+array string 100 abrand,anewbrand;
+array string 100 headers,params;
+record CompaniesBlock Compb;
+row CompaniesBlock Comprw;
+boolean TrHs1, TrHs, TrHs2;
+record RHistVc RHistr;
+string 200 rstr;
+		
+	BlockLoad(Compb);
+
+	while (TestEOF()==false) begin
+		artcode = importfield;
+		StripEndingSpaces(artcode);
+		brand = importfield;
+		StripEndingSpaces(brand);
+		BPIBrandr.Name = brand;
+		TrHs2 = true;
+		if(readfirstkey("Name",BPIBrandr,1,true))then begin
+			INr.Code = artcode;
+			while(LoopMain(INr,1,TrHs2))begin
+				if(INr.BPIBrand==BPIBrandr.Code)then begin
+					TrHs2 = false;
+					resetloop(RHistr);
+					TrHs1 = true;
+					rstr = BuildRecordIdStr(INr,currentcompany);
+	  			RHistr.RecidStr = rstr;
+					while(loopkey("RecidStr",RHistr,1,TrHs1)) begin					
+						if(TrHs1)then begin
+							if(RHistr.TransDate<StringToDate("2/5/2019"))then begin
+								if(RHistr.User=="SA1")then begin
+									ReadOriginalRecord(RHistr,oldINr);
+									if(INr.Name!=oldINr.Name and INr.Code==oldINr.Code)then begin
+										INr.Name = oldINr.Name;
+										recordstore(INr,true);
+										TrHs1 = false;
+									end;
+								end;
+							end;
+						end;
+					end;
+					ResetLoop(RHistr);
+				end else begin
+					TrHs2 = false;
+				end;
+			end;
+			ResetLoop(INr);
+		end;
+		if (NextImportLine(true)) then begin end;
+	end;
+	
+	lImportAddClassIn:;
+logtext(0,"end");
+return;
+end;
+
+
