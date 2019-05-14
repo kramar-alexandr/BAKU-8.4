@@ -694,9 +694,6 @@ begin
 				logtext(0,"SednUpdateMarcCampVcToCRM " &MyJSGet(rejs,"result"));
 			end;
 		end;
-		addtexttoarea(" SednUpdateMarcCampVcToCRM " & MCr.Code & " " & currentcompany & " ",reply);
-		addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,reply);
-		writeareatofile(reply,"CRMResponse.txt",1);
 	end;
 return;
 end;
@@ -710,8 +707,10 @@ begin
   string 255 ha1,ha2;
   row MarcCampVc MCrw;
   integer i;
-  json rejs;
+  json rejs,jsresponse;
   record WebReportChBlock WRChb;
+  
+  
 	blockload(WRChb);		
 	if(WRChb.WEBCheck==1)then begin
 		host = "192.168.3.11";
@@ -726,7 +725,18 @@ begin
 		if(nonblank(MCr.CRMID))then begin
 			SednUpdateMarcCampVcToCRM(MCr);
 		end else begin
-	
+			if(blank(MCr.CRMID))then begin
+				SendWebRequest(host,port,-1,false,"GET","/api/MarketingCampaign/GetCrmId?hansaId=" & UrlEncode(MCr.Code),"application/json","",false,req,reply,5);
+				jsresponse = ParseJSONArea(reply);
+				if(nonblank(MyJSGet(jsresponse,"result")))then begin
+					MCr.CRMID = MyJSGet(jsresponse,"result");
+					if(nonblank(MCr.CRMID))then begin
+						SednUpdateMarcCampVcToCRM(MCr);
+					end;
+					recordstore(MCr,true);
+					goto LMarketingCampaign;
+				end;
+			end;
 			addtexttoarea("{" & chr(13) & chr(10),req);
 			addtexttoarea("\"campaignName\":\"" & NormalizeStrToJson(MCr.Name) & "\"," & chr(13) & chr(10),req);
 			addtexttoarea("\"name\":\"" & NormalizeStrToJson(MCr.Name) & "\"," & chr(13) & chr(10),req);
@@ -754,6 +764,9 @@ begin
 	writeareatofile(reply,"CRMResponse.txt",1);
 		end;
 	end;
+	
+	LMarketingCampaign:;
+	
 return;
 end;
 
@@ -1060,7 +1073,8 @@ begin
 		if(nonblank(GBr.CRMid)) then begin
 			addtexttoarea("\"id\":" & "\"" & NormalizeStrToJson(GBr.CRMid) & "\"," & chr(13) & chr(10),req);
 		end else begin
-			SendBrandToCRM(GBr);
+			
+			
 			if(blank(GBr.CRMid))then begin
 				SendWebRequest(host,port,-1,false,"GET","/api/Brand/GetCrmId?hansaId=" & UrlEncode(GBr.Code),"application/json","",false,req,reply,5);
 				jsresponse = ParseJSONArea(reply);
@@ -1068,6 +1082,12 @@ begin
 					GBr.CRMid = MyJSGet(jsresponse,"result");
 					recordstore(GBr,true);
 				end;
+			end;
+			if(blank(GBr.CRMid))then begin
+				SendBrandToCRM(GBr);
+			end;
+			if(nonblank(GBr.CRMid))then begin
+				recordstore(GBr,true);
 			end;
 		end;
 		addtexttoarea("}" & chr(13) & chr(10),req);
