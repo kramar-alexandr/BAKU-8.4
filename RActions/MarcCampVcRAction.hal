@@ -2414,6 +2414,110 @@ begin
 return;
 end;
 
+global webpublic updating procedure WebSendIVVisitToCRMAsyncResponse()
+begin
+integer err,noErr;
+  string 255 host,tstr,nonce,opaque,page;
+  LongInt port,pos,mtrw;
+  Area req,reply;
+  string 255 ha1,ha2;
+  row MarcCampVc MCrw;
+  integer i;
+  json jsresponse;
+	record WebReportChBlock WRChb;
+	record LocationVc Locr;
+	string 100 compn,reccode;
+	record IVVc IVr;
+	
+	logtext(0,"WebSendIVVisitToCRMAsyncResponse");
+	
+	blockload(WRChb);		
+	compn = webgetarg("compnr");
+	reccode = webgetarg("reccode");
+	webgetpostdata(reply);
+	if(getarealength(reply)>0)then begin
+		jsresponse = ParseJSONArea(reply);
+		if(nonblank(compn))then begin
+			setcompany(stringtoint(compn),false);
+			if(nonblank(compn))then begin
+				logtext(0,reccode);
+				if(nonblank(reccode))then begin
+					logtext(0,"WebSendIVVisitToCRMAsyncResponse " & MyJSGet(jsresponse,"result"));
+					IVr.SerNr = stringtolongint(reccode);
+					if(readfirstmain(IVr,1,true))then begin
+						if(blank(IVr.CRMid))then begin
+							IVr.CRMid = MyJSGet(jsresponse,"result");
+							recordstore(IVr,true);
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	addtexttoarea(" SendIVVisitToCRM " & IVr.SerNr & " " & currentcompany & " ",reply);
+	addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,reply);
+	writeareatofile(reply,"CRMResponse.txt",1);
+return;
+end;
+
+global updating procedure SendIVVisitToCRMAsync(area request,string reccode)
+begin
+	integer err,noErr;
+  string 255 host,tstr,nonce,opaque,page;
+  LongInt port,pos,mtrw;
+  Area req,reply,a_req,req64;
+  string 255 ha1,ha2,ssl;
+  row MarcCampVc MCrw;
+  integer i;
+  json jsresponse;
+	record WebReportChBlock WRChb;
+	
+	blockload(WRChb);		
+	if(WRChb.WEBCheck==1)then begin
+	
+  
+		host = "192.168.3.11";
+		page = "/api/Visit/Create";
+		port = 8088;
+		logtext(0,"CURIPADDRESS" & CURIPADDRESS); 
+		if(fileexists("demoserver"))then begin
+			port = 8087;
+ 			logtext(0,"newport 8087");
+		end;
+		ssl = "false";
+
+
+		addtexttoarea("}" & chr(13) & chr(10),req);
+			
+		AddTextToArea("{\"host\" : \"" & host & "\"," & chr(13) & chr(10),a_req);//++++++++++++++++++++++++Request part
+		AddTextToArea("\"port\" : " & port & "," & chr(13) & chr(10),a_req);
+		AddTextToArea("\"https\" : " & ssl & "," & chr(13) & chr(10),a_req);
+		AddTextToArea("\"page\" : \"" & page & "\"," & chr(13) & chr(10),a_req);
+		AddTextToArea("\"method\" : \"" & "POST" & "\"," & chr(13) & chr(10),a_req);
+		
+		AddTextToArea("\"callbackhost\" : \"" & "127.0.0.1" & "\"," & chr(13) & chr(10),a_req);//++++++++++++++++++++++++CalBackPart
+		AddTextToArea("\"callbackport\" : \"" & "8033" & "\"," & chr(13) & chr(10),a_req);
+		AddTextToArea("\"callbackpage\" : \"" & "/WebSendIVVisitToCRMAsyncResponse.hal" & "\"," & chr(13) & chr(10),a_req);
+		AddTextToArea("\"contenttype\" : \"" & "application/json;charset=utf8" & "\"," & chr(13) & chr(10),a_req);
+
+		AddTextToArea("\"callbackgetdata\" : \"" & "?compnr=" & currentcompany & "&reccode=" & reccode & "\"," & chr(13) & chr(10),a_req);
+
+		AddTextToArea("\"xmldata\" : ",a_req);//++++++++++++++++++++++++Request body
+		insertareabeforearea(a_req,request);
+		setareazerosize(a_req);
+		insertareabeforearea(request,a_req);
+		AddTextToArea("}" & chr(13) & chr(10),a_req);		
+		
+		host = "127.0.0.1";
+		page = "/getProxyRequest";
+		port = 1071;
+		SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,a_req,reply,5);
+		
+	end;
+return;
+end;
+
 global updating procedure SendIVVisitToCRM(var record IVVc IVr)//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:38 11.09.2018
 begin
 	integer err,noErr;
@@ -2576,7 +2680,6 @@ begin
 		if(nonblank(LCr.CRMid) and LCr.CRMid!="null")then begin
 			addtexttoarea("\"loyaltyCardId\":\"" & NormalizeStrToJson(LCr.CRMid) & "\"," & chr(13) & chr(10),req);
 		end;
-		//addtexttoarea("\"MobilePhone1\":\"" & IVr.SerNr & "\"," & chr(13) & chr(10),req);
 		addtexttoarea("\"checkNumber\":\"" & NormalizeStrToJson(IVr.SerNr) & "\"," & chr(13) & chr(10),req);
 		if(nonblank(GSr.CRMid)) then begin
 		addtexttoarea("\"shopId\":\"" & NormalizeStrToJson(GSr.CRMid) & "\"," & chr(13) & chr(10),req);
@@ -2588,7 +2691,7 @@ begin
 		addtexttoarea("\"invDate\":\"" & datetostring(IVr.InvDate,"YYYY-MM-DD") & "\"," & chr(13) & chr(10),req);
 		addtexttoarea("\"hansaId\":" & "\"" & currentcompany & "_" & IVr.SerNr & "\"," & chr(13) & chr(10),req);
 		addtexttoarea("\"taxfree\":" & "" & IVr.TaxFree & "," & chr(13) & chr(10),req);
-		if(/*fileexists("demoserver")*/true)then begin
+		if(true)then begin
 			addtexttoarea("\"visitProducts\":[" & chr(13) & chr(10),req);
 			cnt=0;
 			for (i=0;i<matrowcnt(IVr);i=i+1) begin
@@ -2683,7 +2786,8 @@ begin
 		addtexttoarea("}" & chr(13) & chr(10),req);
 		addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,req);
 		writeareatofile(req,"CRMRequest.txt",1);
-		SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,10);
+		SendIVVisitToCRMAsync(req,IVr.SerNr);
+		/*SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,10);
 		if(getarealength(reply)>0)then begin
 			jsresponse = ParseJSONArea(reply);
 			if(nonblank(MyJSGet(jsresponse,"result")))then begin
@@ -2693,7 +2797,7 @@ begin
 		end;
 		addtexttoarea(" SendIVVisitToCRM " & IVr.SerNr & " " & currentcompany & " ",reply);
 		addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,reply);
-		writeareatofile(reply,"CRMResponse.txt",1);
+		writeareatofile(reply,"CRMResponse.txt",1);*/
 	end;
 return;
 end;
