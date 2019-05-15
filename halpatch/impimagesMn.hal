@@ -4564,6 +4564,36 @@ return;
 end;
 
 
+global
+procedure CodeBrandRn(record RcVc RepSpec)
+begin
+	record INVc INr;
+	integer i, o;
+	
+	startreportnoheaderjob("Brand report");
+	startformat(15);
+		outstring(0,0,"Item Code",false);
+		outstring(70,0,"Brand Code",false);
+	endformat;
+	o = currentcompany;
+	for(i=0;i<33;i=i+1)begin
+		setcompany(i+1,false);
+		INr.Code = "";
+		while (loopmain(INr,1,true)) begin
+			startformat(15);
+				outstring(0,0,INr.Code,false);
+				outstring(70,0,INr.BPIBrand,false);
+			endformat;
+		end;
+		resetloop(INr);
+	end;
+	ResetCompany(o);
+	endjob;
+	
+return;
+end;
+
+
 
 
 
@@ -5156,7 +5186,10 @@ begin
   array string 20 currs; //Edit***************************Sasha2,14:47 18.03.2016
   val fr,to1,to2,br1,br2; //Edit***************************Sasha2,15:14 18.03.2016
   string 5 curcode,sourcecurcode; //Edit***************************Sasha2,15:14 18.03.2016
+	record ConsCompBlock CCBb;
   
+	
+		BlockLoad(CCBb);
     IVr.SerNr = RepSpec.long1;
     ReadFirstMain(IVr,1,true);
     sourcecurcode = IVr.CurncyCode;
@@ -5291,42 +5324,94 @@ begin
         				end;
         			end;
         		end;
-    		
-            if (SetCompanyCode("" & RepSpec.flags[0],false)) then begin
-            	//AddFormulaToPricelist(groupCode,PFormr);	//Edit----------------------Dima  14.09.2015
-            	//AddFormulaToPricelist commented // Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 29 October 2018 15:13:32
-              IN2r.Code = IVrw.ArtCode;
-              if (!ReadFirstMain(IN2r,1,true)) then begin
-                LookUpClassAndGroups(INr,curcomp,arrClass,arrClassName,arrClassType,acNum,groupCode,groupComment);
-                RECORDSTORE(INr,false);
-              end;
-              ClearRow(PUr,PUrw,1);
-              PUrw.ArtCode = IVrw.ArtCode;
-              MatRowPut(PUr,i,PUrw);
-              PUVc_PasteArtCode(PUr,i,warning,inwarn);
-              MatRowGet(PUr,i,PUrw);
-              PUrw.Quant = IVrw.Quant;
-              MatRowPut(PUr,i,PUrw);
-              PUVc_PasteQuant(PUr,i);
-              MatRowGet(PUr,i,PUrw);
-              PUrw.UPrice = IVrw.FIFORowVal;
-              /*PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
-                      PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
-                      PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
-                      PUrw.CustomsCost,p,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
-              PUrw.CostPrice = p;
-              PUrw.Sum = s;*/
-              PUrw.CostPrice = IVrw.FIFO;
-              MatRowPut(PUr,i,PUrw);
-              PUVc_PasteCostPrice(PUr,i);
-              MatRowGet(PUr,i,PUrw);
-              //s = IVrw.FIFO*IVrw.Quant;
-              //PUrw.Sum = s;
-              totivsum = totivsum + Round(IVrw.Sum,DefaultRoundMode);
-              chsum = true;
-              MatRowPut(PUr,i,PUrw);
-              RESETCOMPANY(curcomp);
-            end;
+						if(CCBb.OKFlag==1)then begin
+							if (SetCompanyCode("" & RepSpec.flags[0],false)) then begin
+								//AddFormulaToPricelist(groupCode,PFormr);	//Edit----------------------Dima  14.09.2015
+								//AddFormulaToPricelist commented // Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 29 October 2018 15:13:32
+								IN2r.Code = INr.AlternativeCode;
+								if (!ReadFirstMain(IN2r,1,true)) then begin
+									IN2r.Code = INr.Code;
+									if(!ReadFirstMain(IN2r,1,true))then begin
+										RecordNew(IN2r);
+										RecordCopy (IN2r,INr);
+										LookUpClassAndGroups(IN2r,curcomp,arrClass,arrClassName,arrClassType,acNum,groupCode,groupComment);
+										RECORDSTORE(IN2r,false);
+									end;
+								end else begin
+									if(IN2r.BPIBrand!=INr.BPIBrand)then begin
+										IN2r.Code = INr.Code;
+										if(!ReadFirstMain(IN2r,1,true))then begin
+											RecordNew(IN2r);
+											RecordCopy (IN2r,INr);
+											LookUpClassAndGroups(IN2r,curcomp,arrClass,arrClassName,arrClassType,acNum,groupCode,groupComment);
+											RECORDSTORE(IN2r,false);
+										end;
+									end;
+								end;
+								ClearRow(PUr,PUrw,1);
+								PUrw.ArtCode = INr.Code;
+								MatRowPut(PUr,i,PUrw);
+								PUVc_PasteArtCode(PUr,i,warning,inwarn);
+								MatRowGet(PUr,i,PUrw);
+								PUrw.Quant = IVrw.Quant;
+								MatRowPut(PUr,i,PUrw);
+								PUVc_PasteQuant(PUr,i);
+								MatRowGet(PUr,i,PUrw);
+								PUrw.UPrice = IVrw.FIFORowVal;
+								/*PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
+												PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+												PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+												PUrw.CustomsCost,p,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+								PUrw.CostPrice = p;
+								PUrw.Sum = s;*/
+								PUrw.CostPrice = IVrw.FIFO;
+								MatRowPut(PUr,i,PUrw);
+								PUVc_PasteCostPrice(PUr,i);
+								MatRowGet(PUr,i,PUrw);
+								//s = IVrw.FIFO*IVrw.Quant;
+								//PUrw.Sum = s;
+								totivsum = totivsum + Round(IVrw.Sum,DefaultRoundMode);
+								chsum = true;
+								MatRowPut(PUr,i,PUrw);
+								RESETCOMPANY(curcomp);
+							end;
+						end else begin
+							if (SetCompanyCode("" & RepSpec.flags[0],false)) then begin
+								//AddFormulaToPricelist(groupCode,PFormr);	//Edit----------------------Dima  14.09.2015
+								//AddFormulaToPricelist commented // Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 29 October 2018 15:13:32
+								IN2r.Code = IVrw.ArtCode;
+								if (!ReadFirstMain(IN2r,1,true)) then begin
+									LookUpClassAndGroups(INr,curcomp,arrClass,arrClassName,arrClassType,acNum,groupCode,groupComment);
+									RECORDSTORE(INr,false);
+								end;
+								ClearRow(PUr,PUrw,1);
+								PUrw.ArtCode = IVrw.ArtCode;
+								MatRowPut(PUr,i,PUrw);
+								PUVc_PasteArtCode(PUr,i,warning,inwarn);
+								MatRowGet(PUr,i,PUrw);
+								PUrw.Quant = IVrw.Quant;
+								MatRowPut(PUr,i,PUrw);
+								PUVc_PasteQuant(PUr,i);
+								MatRowGet(PUr,i,PUrw);
+								PUrw.UPrice = IVrw.FIFORowVal;
+								/*PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
+												PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+												PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+												PUrw.CustomsCost,p,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+								PUrw.CostPrice = p;
+								PUrw.Sum = s;*/
+								PUrw.CostPrice = IVrw.FIFO;
+								MatRowPut(PUr,i,PUrw);
+								PUVc_PasteCostPrice(PUr,i);
+								MatRowGet(PUr,i,PUrw);
+								//s = IVrw.FIFO*IVrw.Quant;
+								//PUrw.Sum = s;
+								totivsum = totivsum + Round(IVrw.Sum,DefaultRoundMode);
+								chsum = true;
+								MatRowPut(PUr,i,PUrw);
+								RESETCOMPANY(curcomp);
+							end;
+						end;
           end;
         end;
         if (SetCompanyCode("" & RepSpec.flags[0],false)) then begin
