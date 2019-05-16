@@ -183,10 +183,16 @@ BEGIN
   record POVc POr;
   record PUVc PUr;
   LongInt r;
-  Integer wn,nwn,err;
-  Boolean testf;
+  Integer wn,nwn,err,cntIV,cntORIV;
+  Boolean testf,TsTr,testf1;
   record POSettingBlock POSb;
-  
+	record VIVc VIr;
+  record ConsCompBlock CCB;
+	
+	BlockLoad(CCB);
+	
+	cntORIV = 0;
+	cntIV = 0;
   wn = CurWindow;
   if (WindowState(wn)==0) then begin//Rs_normal
     GetWindowRecord(wn,POr);
@@ -211,17 +217,42 @@ BEGIN
           testf = false;
         end;
         if (testf) then begin
-          r = RecordAction_raPastePOInPU(POr,PUr);
-          switch (r) begin
-            case -1: Beep;
-            case -2: MessageBox(1281,"");
-            case 0:
-              nwn = OpenWindow("PUDClass",1,0,"","",PUr);
-              SetRLink(wn,true);  
-            otherwise
-              MessageBox(r,"");
-          end;
-          UpdateBrowses("POVc");
+					testf1 = true;
+					if(CCB.OKFlagPOr) then begin
+						if(nonblank(POr.ShipCost) and POr.ShipCost!=0) then begin cntORIV = cntORIV + 1; end;
+						if(nonblank(POr.CustomsCost) and POr.CustomsCost!=0) then begin cntORIV = cntORIV + 1; end;
+						if(nonblank(POr.Cost1) and POr.Cost1!=0) then begin cntORIV = cntORIV + 1; end;
+						if(nonblank(POr.Cost2) and POr.Cost2!=0) then begin cntORIV = cntORIV + 1; end;
+						if(nonblank(POr.Cost3) and POr.Cost3!=0) then begin cntORIV = cntORIV + 1; end;
+						if(nonblank(POr.Cost4) and POr.Cost4!=0) then begin cntORIV = cntORIV + 1; end;
+						if(nonblank(POr.Cost5) and POr.Cost5!=0) then begin cntORIV = cntORIV + 1; end;
+						VIr.POSerNr = POr.SerNr;
+						TsTr = true;
+						while(LoopKey("POSerNr",VIr,1,TsTr)) begin
+							if(VIr.POSerNr!=POr.SerNr) then begin TsTr = false; end;
+							if(TsTr) then begin
+								cntIV = cntIV + 1;
+							end;
+						end;
+						ResetLoop(VIr);
+						if(blank(POr.ShipCost) or POr.ShipCost==0) then begin testf1 = false;  MessageBox(36234,""); end;
+						if(blank(POr.CustomsCost) or POr.CustomsCost==0) then begin testf1 = false;  MessageBox(36235,""); end;
+						if(blank(POr.Location)) then begin testf1 = false;  MessageBox(36208,""); end;
+						if(cntIV==cntORIV+1) then begin testf1 = false;  MessageBox(36236,""); end;
+					end;	
+					if(testf1) then begin
+						r = RecordAction_raPastePOInPU(POr,PUr);
+						switch (r) begin
+							case -1: Beep;
+							case -2: MessageBox(1281,"");
+							case 0:
+								nwn = OpenWindow("PUDClass",1,0,"","",PUr);
+								SetRLink(wn,true);  
+							otherwise
+								MessageBox(r,"");
+						end;
+						UpdateBrowses("POVc");
+					end;	
         end;       
       end else begin
         MessageBox(22062,"");
@@ -1259,6 +1290,9 @@ begin
   record POShipmDataVc POSDr;
   Integer nwn;
 	record PUVc PUr;
+	record ConsCompBlock CCB;
+	
+	BlockLoad(CCB);
   
   res = true;
   nwn = FindWindow("SelectApproverWClass");
@@ -1426,19 +1460,20 @@ LPODClassActiveEditField:;
     end;
   end;
 	
-		
-	switch (fieldname) begin  //Edit_____________________________________ABR 16.05.19
-		case "ShipCost":
-			PUr.PONr = POr.SerNr;
-			if(ReadFirstKey("PONr",PUr,1,true)) then begin
-				res = false;
-			end;
-		case "CustomsCost":	
-			PUr.PONr = POr.SerNr;
-			if(ReadFirstKey("PONr",PUr,1,true)) then begin
-				res = false;
-			end;
-	end;
+	if(CCb.OKFlagPOr!=0)	then begin
+		switch (fieldname) begin  //Edit_____________________________________ABR 16.05.19
+			case "ShipCost":
+				PUr.PONr = POr.SerNr;
+				if(ReadFirstKey("PONr",PUr,1,true)) then begin
+					res = false;
+				end;
+			case "CustomsCost":	
+				PUr.PONr = POr.SerNr;
+				if(ReadFirstKey("PONr",PUr,1,true)) then begin
+					res = false;
+				end;
+		end;
+	end;	
 	
   PODClassActiveEditField = res;
   return;
