@@ -6,7 +6,8 @@ remote function string 255 GetCompanyShortCode(string);
 external  function string 100 BPICodeToName(string);
 external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
 external function Boolean FindStringInString(string,string);
-
+external procedure FindAndStoreINVcImgLink(record INVc, integer, var string, var string);
+ 
 SetLangMode(LangRussian,"RUS",0);
 
 global procedure BrendLeadTime (var array string BrandNames, var array string VeCodes, 
@@ -2134,6 +2135,23 @@ begin
 	boolean TrHs,testf;
 	record ItemHistVc IHr;
 	date outin;
+	vector string 255 cat;
+	record BtrxColourVc BClr;
+	record BtrxMaterialVc BMr;
+	record GlobalItemVc GIr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	string 255 filename,tstr,inrcode;
+	
+	BClr.Code = "";
+	while(LoopMain(BClr,1,true)) begin
+		cat[BClr.Code] = BClr.Name;
+	end;
+	
+	BMr.Code = "";
+	while(LoopMain(BMr,1,true)) begin
+		cat[BMr.Code] = BMr.Name;
+	end;
 	
 	startreportnoheaderjob("");
 	oldcomp = currentcompany;
@@ -2145,11 +2163,17 @@ begin
 			outstring(0,0,"Код товара",false);
 			outstring(0,0,"Бренд",false);
 			outstring(0,0,"Название",false);
+			outstring(0,0,"Коллекция",false);
+			outstring(0,0,"Материал",false);
+			outstring(0,0,"Цвет",false);
 			outstring(0,0,"Кол-во",false);		
 			outstring(0,0,"Цена",false);	
 			outstring(0,0,"Дата поступлени€",false);	
 			outstring(0,0,"Дата создания",false);				
 	endformat;
+	BlockLoad(Compb);
+	MatRowGet(Compb,currentcompany-1,Comprw);
+	
 	for(i=1;i<29;i=i+1) begin
 		setcompany(i,false);
 		POr.SerNr = "";
@@ -2161,6 +2185,8 @@ begin
 						testf = false;
 						INr.Code = POrw.ArtCode;
 						if(ReadFirstMain(INr,1,true)) then begin
+							GIr.Code = INr.GlobalArtCode;
+							if(ReadFirstMain(GIr,1,true)) then begin end;
 							startformat(15);
 							outstring(0,0,POr.SerNr,false);
 							outstring(0,0,POr.TransDate,false);
@@ -2169,6 +2195,9 @@ begin
 							outstring(0,0,INr.Code,false);
 							outstring(0,0,BPICodeToName(INr.BPIBrand),false);
 							outstring(0,0,INr.Name,false);
+							outstring(0,0,BPICodeToName(INr.BPICollection),false);
+							outstring(0,0,cat[GIr.BPIMaterial],false);
+							outstring(0,0,cat[GIr.BTRxProdColour],false);
 							outstring(0,0,POrw.Quant,false);
 							outstring(0,0,POrw.Price,false);
 							PUr.PONr = POr.SerNr;
@@ -2193,6 +2222,19 @@ begin
 								outstring(0,0,IHr.TransDate,false)
 							end else begin
 								outstring(0,0,POr.TransDate,false)
+							end;
+							inrcode = INr.Code;
+							if (fileexists("webcust/" & Comprw.ShortName & "/" & inrcode & ".jpg")) then begin
+								filename = "webcust/" & Comprw.ShortName & "/" & inrcode & ".jpg";
+							end;
+							if (fileexists("webcust/" & Comprw.ShortName & "/" & inrcode & ".png")) then begin
+								filename = "webcust/" & Comprw.ShortName & "/" & inrcode & ".jpg";
+							end;
+							//FindAndStoreINVcImgLink(INr,currentcompany,tstr,filename);
+							if(nonblank(filename))then begin
+								outstring(0,0,"<td width=\"300\" height=\"300\" align=\"center\"><div align=\"justify\"><img src=\"" & filename & "?rnd=" & random(1,1000) & "\" width=\"100%\" height=\"100%\"/></div></td>",false);
+							end else begin
+								outstring(0,0,"<td>Image not found</td>",false);
 							end;
 							endformat;
 						end;	
