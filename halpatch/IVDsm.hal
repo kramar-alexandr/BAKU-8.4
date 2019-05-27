@@ -81,6 +81,7 @@ remote function boolean CheckPOFromOR(record ORVc);// Edit *********************
 remote procedure FindReItemsMatrix(var record SHVc); //Edit***************************Sasha2,12:58 19.05.2016
 external function val AbsoluteVal(val); //edited by BPI
 remote function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean);
+remote procedure IVVc_PasteCurncyCode(var record IVVc,string,Integer,Boolean,Boolean);
 
 SetLangMode(LangRussian,"RUS",0); //edited by BPI
 global
@@ -3114,15 +3115,15 @@ global //edited by BPI {
 procedure PasteRetItems()
 begin
 integer wn,i,mtrw,mtrw2,mwn,cnt,length,rn;
-record IVVc IVr,IV2r; //Edit***************************Sasha2,13:56 03.07.2015
+record IVVc IVr,IV2r,sourceIVr; //Edit***************************Sasha2,13:56 03.07.2015
 row IVVc IVrw,IV2rw; //Edit***************************Sasha2,13:59 03.07.2015
 record SHVc SHr;
 row SHVc SHrw;
-string 100 artcode,art;
+string 100 artcode,art,oldcur;
 val price,rebate,sum,qty;
 array string 100 params;
 string 255 inwarning,warning;
-Integer sernrf,k;
+Integer sernrf,k,curcom;
 Boolean chsum, testf;
 string 20 tstr,transnr,rowstr; 
 
@@ -3151,6 +3152,31 @@ string 20 tstr,transnr,rowstr;
 	  if(testf)then begin
 		  mtrw = matrowcnt(IVr);
 		  ClearRow(IVr,IVrw,1);
+		  
+		  if(SHrw.OrdRow>-1)then begin
+				if(stringtoint(SHrw.Source)==currentcompany)then begin
+					sourceIVr.SerNr = stringtoint(SHrw.OrdRow);
+					if(readfirstmain(sourceIVr,1,true))then begin
+						if(sourceIVr.CurncyCode!=IVr.CurncyCode)then begin
+							oldcur = IVr.CurncyCode;
+							IVr.CurncyCode = sourceIVr.CurncyCode;
+							IVVc_PasteCurncyCode(IVr,oldcur,-1,true,true);
+						end;
+					end;
+				end else begin
+					curcom = currentcompany;
+					setcompany(stringtoint(SHrw.Source),false);
+					sourceIVr.SerNr = stringtoint(SHrw.OrdRow);
+					if(readfirstmain(sourceIVr,1,true))then begin
+						if(sourceIVr.CurncyCode!=IVr.CurncyCode)then begin
+							oldcur = IVr.CurncyCode;
+							IVr.CurncyCode = sourceIVr.CurncyCode;
+							IVVc_PasteCurncyCode(IVr,oldcur,-1,true,true);
+						end;
+					end;
+					resetcompanY(curcom);
+				end;
+		  end;
 		  IVrw.ArtCode = SHrw.ArtCode;
 		  matrowput(IVr,mtrw,IVrw);
 		  IVVc_PasteArtCode(IVr,mtrw,inwarning,warning,false,sernrf);
