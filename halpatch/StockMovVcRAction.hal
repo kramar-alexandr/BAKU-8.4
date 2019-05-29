@@ -2125,7 +2125,7 @@ begin
   string 255 oldOfficialSerNr;
   LongInt error;
   string 255 errorstr,fieldstr;
-  Integer rownr, i, rcnt;
+  Integer rownr, i, rcnt, j;
   Boolean UnOKedCheckSerialf;
   row StockMovVc StockMovrw;
 	record ActVc Actr, OldActr;
@@ -2134,6 +2134,8 @@ begin
   record RetPUVc RetPUr;
 	record ECommManUserBlock ECMUb;
 	vector boolean vRetPurCrf;
+	record ECCasierDocSetBlock ECCDSb;
+	row ECCasierDocSetBlock ECCDSrw;
 	
 	BlockLoad(ECMUb);
 	
@@ -2192,6 +2194,33 @@ LStockMovVcRecordCheck:;
 							end;
 							rcnt = rcnt + 1;
 						end;
+					end;
+				end;
+			end;
+		end else begin
+			for(i=0;i<matrowcnt(ECCDSb);i=i+1)begin
+				matrowget(ECCDSb,i,ECCDSrw);
+				if(SMp.ToLocation==ECCDSrw.LocCode)then begin
+					i = matrowcnt(ECCDSb);
+					if(ReadRecordLink(SMp,1,ORr,RLr))then begin 
+						SetCompany(ECCDSrw.CompNr,false);
+						RecordNew(Actr);
+						ActVcRecordDefClient(Actr);
+						MakeActFromOR(ORr,Actr);
+						RecordCopy(OldActr,Actr);
+						Actr.StartTime = CurrentTime;
+						Actr.EndTime = CurrentTime;
+						Actr.Comment = "’овары по заказу номер: " & ORr.SerNr & "перемещены на этот склад самовывоза. Џеремещение номер: " & SMp.SerNr;
+						Actr.TodoFlag = 1;
+						Actr.MainPersons = ECCDSrw.CashierName;
+						Actr.CalTimeFlag = kCalTimeFlagTime;
+						Actr.AlarmType = 1;
+						Actr.SymbNr = 3;
+						if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+							CreateRecordLink(Actr,Currentcompany,RetPUr,Currentcompany);
+							CreateRecordLink(RetPUr,Currentcompany,Actr,Currentcompany);
+						end;
+						resetcompany(29);
 					end;
 				end;
 			end;
