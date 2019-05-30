@@ -59,6 +59,9 @@ external function string 20 GetNextOfficialSerNr(string, date);	//Edit----------
 external function Boolean SetInSet2(string,string);
 external procedure ActVcRecordDefClient(var record ActVc);
 remote updating function Boolean MakeActFromOR(var record ORVc,var record ActVc);
+remote updating function Boolean MakeActFromORToComp(var record ORVc,var record ActVc,integer);
+
+
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -2121,11 +2124,11 @@ global
 updating function LongInt StockMovVcRecordCheck(var record StockMovVc SMp,record StockMovVc SM2p,LongInt stat,LongInt check)
 begin
   LongInt res;
-  LongInt oldnr,newnr;
+  LongInt oldnr,newnr,sORSerNr;
   string 255 oldOfficialSerNr;
   LongInt error;
   string 255 errorstr,fieldstr;
-  Integer rownr, i, rcnt;
+  Integer rownr, i, rcnt, j;
   Boolean UnOKedCheckSerialf;
   row StockMovVc StockMovrw;
 	record ActVc Actr, OldActr;
@@ -2134,7 +2137,9 @@ begin
   record RetPUVc RetPUr;
 	record ECommManUserBlock ECMUb;
 	vector boolean vRetPurCrf;
-	
+	record ECCasierDocSetBlock ECCDSb;
+	row ECCasierDocSetBlock ECCDSrw;
+	BlockLoad(ECCDSb);
 	BlockLoad(ECMUb);
 	
   logtext(0,"StockMovVcRecordCheck");
@@ -2191,6 +2196,33 @@ LStockMovVcRecordCheck:;
 								end;
 							end;
 							rcnt = rcnt + 1;
+						end;
+					end;
+				end;
+			end;
+		end else begin
+			for(i=0;i<matrowcnt(ECCDSb);i=i+1)begin
+				matrowget(ECCDSb,i,ECCDSrw);
+				if(SMp.ToLocation==ECCDSrw.LocCode)then begin
+					i = matrowcnt(ECCDSb);
+					if(ReadRecordLink(SMp,1,ORr,RLr))then begin 
+						sORSerNr = ORr.SerNr;
+						SetCompany(ECCDSrw.CompNr,false);
+						RecordNew(Actr);
+						ActVcRecordDefClient(Actr);
+						MakeActFromORToComp(ORr,Actr,29);
+						RecordCopy(OldActr,Actr);
+						Actr.StartTime = CurrentTime;
+						Actr.EndTime = CurrentTime;
+						Actr.Comment = "’овары по заказу номер: " & sORSerNr & " перемещены на этот склад самовывоза. Џеремещение номер: " & SMp.SerNr;
+						Actr.TodoFlag = 1;
+						Actr.MainPersons = ECCDSrw.CashierName;
+						Actr.CalTimeFlag = kCalTimeFlagTime;
+						Actr.AlarmType = 1;
+						Actr.SymbNr = 3;
+						if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+							CreateRecordLink(Actr,Currentcompany,SMp,29);
+							CreateRecordLink(SMp,29,Actr,Currentcompany);
 						end;
 					end;
 				end;
