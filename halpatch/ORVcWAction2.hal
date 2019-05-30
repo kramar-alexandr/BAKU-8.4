@@ -726,6 +726,98 @@ END;
 
 
 
+global
+updating procedure SHFromOR3Dsm(var record ORVc ORr)
+BEGIN
+  record ORVc OR2r;
+	row ORVc ORrw, OR2rw;
+  record SHVc SHr;
+  Integer wn,nwn,i,mtrw,j;
+  Boolean testf, chsum;
+  string 60 warning;
+  LongInt r;
+	vector integer ItemQuant, PUItQuant;
+
+  
+	if(ReadFirstMain(ORr,1,true))then begin 
+		mtrw = matrowcnt(ORr);
+		for (i=0;i<mtrw;i=i+1) begin
+			matrowget(ORr,i,ORrw);
+			ItemQuant[ORrw.ArtCode] = ItemQuant[ORrw.ArtCode] + ORrw.Quant;
+			PUItQuant[ORrw.ArtCode] = PUItQuant[ORrw.ArtCode] + ORrw.ECReceived;
+		end;
+		j = 0;
+		for (i=0;i<mtrw;i=i+1) begin
+			matrowget(ORr,i-j,ORrw);
+			if(ItemQuant[ORrw.ArtCode]>0)then begin
+				ORrw.Quant = ItemQuant[ORrw.ArtCode];
+				ORrw.ECReceived = PUItQuant[ORrw.ArtCode];
+				matrowput(ORr,i-j,ORrw);
+				ORVc_PasteQuant(ORr,i-j,true,chsum);
+				ItemQuant[ORrw.ArtCode] = 0;
+				PUItQuant[ORrw.ArtCode] = 0;
+			end else begin
+				matrowdelete(ORr,i-j);
+				j = j + 1;
+			end;
+		end;
+		RecordStore(ORr,true);
+	end;
+	if (ORr.Closed==0) then begin
+		if (UserCanAction("ORToSH",true)) then begin
+			testf = true;
+			if (ORr.OKFlag==0) then begin 
+				if (UserCanAction("NotOKORToSH",false)) then begin
+					MessageBox(20054,"");
+					testf = false;
+				end; 
+			end;
+			if (testf) then begin
+				if (BA_ORMinMarkupWarning(ORr,i)==true) then begin
+					if (UserCanAction("DisallowSaleBelowGP",false)) then begin
+						testf = false;
+						MessageBox(1274,StringFromStringSet(3,"DisallowSaleBelowGP"));
+					end;
+				end;
+			end;
+			r = ORTestApprovalStatus(ORr);
+			if (r!=0) then begin
+				MessageBox(r,"");
+				testf = false;
+			end;
+			if (testf) then begin  
+				r = RecordAction_raPasteOrdInShip2(SHr,ORr.SerNr,warning);
+				if (r==0) then begin
+					if (MatRowCnt(SHr)!=0) then begin
+						nwn = OpenWindow("SHDClass",1,0,"","",SHr);
+						UpdateBrowses("ORVc");
+						CustMessages("SHVc",SHr.CustCode);
+						if (nonblank(warning)) then begin
+							MessageBox(0,warning);
+						end;
+					end else begin
+						Beep;
+					end;
+				end else begin
+					if (r==-1) then begin
+						Beep;
+					end else begin
+						MessageBox(r,"");
+					end;
+				end;
+			end;  
+		end else begin
+			MessageBox(1274,StringFromStringSet(3,"ORToSH"));
+		end;
+	end;      
+  RETURN;
+END;
+
+
+
+
+
+
 
 
 global
