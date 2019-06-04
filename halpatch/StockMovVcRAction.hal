@@ -2165,6 +2165,42 @@ begin
     RecordCheckError(error,errorstr,rownr,fieldstr);
     goto LStockMovVcRecordCheck;
   end;
+	if(currentcompany==29 and SMp.OKFlag==1 and SM2p.OKFlag==0)then begin
+		if(SMp.FrLocation=="RETURN")then begin
+			if(ReadRecordLink(SMp,1,Actr,RLr))then begin
+				RecordDelete(Actr);
+				for(i=0;i<MatRowCnt(SMp);i=i+1) begin
+					MatRowGet(SMp,i,StockMovrw);
+					ORr.SerNr = mid(StockMovrw.SerialNr,3,len(StockMovrw.SerialNr)-12);
+					if(ReadFirstMain(ORr,1,true))then begin
+						rcnt = 1;
+						while(ReadRecordLink(ORr,rcnt,RetPUr,RLr))begin
+							if(RetPUr.OKFlag!=1 and vRetPurCrf[RetPUr.SerNr]!=true)then begin
+								vRetPurCrf[RetPUr.SerNr] = true;
+								RecordNew(Actr);
+								ActVcRecordDefClient(Actr);
+								MakeActFromOR(ORr,Actr);
+								RecordCopy(OldActr,Actr);
+								Actr.StartTime = CurrentTime;
+								Actr.EndTime = CurrentTime;
+								Actr.Comment = "Товары по возврату №" & RetPUr.SerNr & " прибыли на склад " & SMp.ToLocation & ". Ожидаеться отправка в магазин " & right(RetPUr.VECode,len(RetPUr.VECode)-4);
+								Actr.TodoFlag = 1;
+								Actr.MainPersons = ECMUb.UserStockSet;
+								Actr.CalTimeFlag = kCalTimeFlagTime;
+								Actr.AlarmType = 1;
+								Actr.SymbNr = 3;
+								if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+									CreateRecordLink(Actr,Currentcompany,RetPUr,Currentcompany);
+									CreateRecordLink(RetPUr,Currentcompany,Actr,Currentcompany);
+								end;
+							end;
+							rcnt = rcnt + 1;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
 LStockMovVcRecordCheck:;
   if (res!=0) then begin 
     SMp.SerNr = oldnr; 
