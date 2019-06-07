@@ -104,7 +104,7 @@ remote function boolean BDRebateIsUsed(string,date,var longint);// Edit ********
 remote procedure RecalcDiscountIVD(var record IVVc);
 external updating function Boolean IVDClassivcashcommandOnEnterKey(Integer,Integer);
 remote procedure IVVc_PasteCurncyCode(var record IVVc,string,Integer,Boolean,Boolean);// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 29 May 2019 17:43:36
-
+remote updating procedure IVDClassECTouchScreenFinishButtonRun(string);
 SetLangMode(LangRussian,"RUS",0);
 
 enum begin //edited by BPI {  //RUSWINDOWFUNCT
@@ -2501,12 +2501,162 @@ LIVDClassTouchScreenLookupSerialNr:;
   return;
 end;
 
+
+
+
+
 global
 updating procedure IVDClassTouchScreenFinishButtonRun(Boolean newf,Integer awnst)
 begin
   Integer wn;
   LongInt printrownr,err;
-  record IVVc IVr;
+  record IVVc IVr, OldIVr;
+  record IVVc prevIVr;
+  Boolean save_recordf,new_recordf;
+  record LocalMachineBlock LMb;
+  Integer wnst;
+  val prevRetValue;
+  string 255 tstr;
+  record CashierDefBlock CDb;
+  record RcVc RepSpec;
+  record IVCashVc IVCashr;
+  string 255 fromwclass;
+  err = 0;
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  GetWindowRecord(wn,IVr);
+	if(IVr.SalesMan=="ECOMMERCE")then begin
+		CloseWindow(wn);
+		IVDClassECTouchScreenFinishButtonRun(IVr.SerNr);
+	end else begin
+		if (IVr.Invalid!=0) then begin 
+			goto LIVDClassTouchScreenFinishButtonRun; 
+		end;
+		if (IVr.OKFlag!=0) then begin 
+			goto LIVDClassTouchScreenFinishButtonRun; 
+		end;
+		BlockLoad(LMb);
+		BlockLoad(CDb); 
+		wnst = awnst;
+		if (wnst==-1) then begin
+			wnst = WindowState(wn);
+		end;
+		GetPrevWindowRecord(wn,prevIVr);
+		if (RecordValid(prevIVr)==false) or (prevIVr.SerNr<=0) then begin
+			RecordCopy(prevIVr,IVr);
+		end;
+		fromwclass = GetWindowString(wn,"touchscreenwindowFrom");
+		printrownr = StringToLongInt(GetWindowString(wn,"touchscreenitemlastrownr"));
+		if (printrownr>=0) then begin
+			IVPrintReceipt(wn,IVr,prevIVr,printrownr,false,false,LMb.IncrementalReceiptPrinting,wnst);
+		end;
+		
+		IVSumup(IVr,true);              
+	//  IVr.OKFlag = 1;
+		err = IVCheckIfSaveAllowed(IVr,prevIVr,wnst,3);
+	//  SetRecordCheckVc("IVVc");
+	//  err = IVVcRecordCheck(IVr,prevIVr,wnst,3);
+	//carefull withthis one
+	//if u comenting out IVVcRecordCheck pls make code validatign Invoice
+		if (err==0 and CurrentCompany!=10) then begin  //Edit***************************Sasha2,10:12 27.03.2015
+			if (CDb.RequireReturnCustomer!=0) then begin
+				if (IVr.OKFlag!=0) and (IVr.Sum4<0) then begin
+					if (IVr.CustCode==CDb.DefCustCode) or (IVr.CustCode==LMb.DefCustCode) then begin
+						MessageBox(21351,"");
+						err = 21351;
+					end;
+				end;
+			end;
+		end;
+		if (err==0 or RECORDCHECKLASTERRORNO==31412) then begin
+			if (HasLocalization("HRV") and blank(IVr.RefStr)) then begin
+				if (DoXMLExport_IVVc(IVr)==false) then begin
+					PutWindowRecord(wn,IVr);
+					OpenWindow("EnterRefStrDClass",0,wn,"","",RepSpec);
+					err = 1;
+				end;
+			end;
+		end;
+		if (err==0) then begin
+			if (IVPrintReceipt(wn,IVr,prevIVr,-1,true,true,LMb.IncrementalReceiptPrinting,wnst)==false) then begin
+	//      MessageBox(22165,"");
+				err = 1;
+				new_recordf = false;
+			end;
+		end;
+		if (err==0) then begin
+			IVr.OKFlag = 1;
+			PutWindowRecord(wn,IVr);
+			save_recordf = true;
+			if (CurrentCompany==10) then begin
+				new_recordf = false; //Edit***************************Sasha2,10:13 27.03.2015
+			end else begin
+				new_recordf = newf;
+			end;      
+
+			if (save_recordf) then begin
+				if (WindowDoOK(wn,0)==false) then begin 
+					IVr.OKFlag = 0;
+					PutWindowRecord(wn,IVr);
+					new_recordf = false;
+				end;
+			end;
+		end;
+		IVDClass_RefreshStringList(wn,IVr);
+		prevRetValue = IVr.RetnValue;
+		if (new_recordf) then begin
+	//    sleep(5);
+			switch (fromwclass) begin
+				case "NPTSIVCashDClass":
+					CloseWindow(wn);
+
+					wn = OpenWindow("NPTSIVCashDClass",1,0,"","",IVCashr);
+					if (wn>0) then begin
+						GetWindowRecord(wn,IVCashr);
+						IVCashr.RetValue = prevRetValue;
+						PutWindowString(wn,"touchscreenwindowpage",1);
+						PutWindowString(wn,"touchscreenwindowpagestack","1");
+						PutWindowString(wn,"touchscreenwindowprinterstack","*");
+						PutWindowString(wn,"CustomerDisplayData_Line1","");
+						PutWindowString(wn,"CustomerDisplayData_Line2","");    
+						PutWindowString(wn,"touchscreenitemlastrownr",-1);
+						tstr = USetStr(24172) & "  ";
+						tstr = tstr & ValToString(prevRetValue,M4Val,ThousandSeparator,DecimalSeparator,0);
+						SetPOSWindowDisplay("",tstr);
+						PutWindowRecord(wn,IVCashr);
+						IVCashDClass_RefreshStringList(wn,IVCashr);
+						WindowFieldGotoForTouchScreen(wn,-1,"ivcashcommand",false); 
+					end;
+				otherwise
+					WindowDoNew(wn,0);
+					GetWindowRecord(wn,IVr);
+					IVr.RetnValue = prevRetValue;
+					PutWindowString(wn,"touchscreenwindowpage",1);
+					PutWindowString(wn,"touchscreenwindowpagestack","1");
+					PutWindowString(wn,"touchscreenwindowprinterstack","*");
+					PutWindowString(wn,"CustomerDisplayData_Line1","");
+					PutWindowString(wn,"CustomerDisplayData_Line2","");    
+					PutWindowString(wn,"touchscreenitemlastrownr",-1);
+					tstr = USetStr(24172) & "  ";
+					tstr = tstr & ValToString(prevRetValue,M4Val,ThousandSeparator,DecimalSeparator,0);
+					SetPOSWindowDisplay("",tstr);
+					PutWindowRecord(wn,IVr);
+					IVDClass_RefreshStringList(wn,IVr);
+			 end;
+	//    ReRunWindowDef(wn);
+		end;
+	end;
+LIVDClassTouchScreenFinishButtonRun:;  
+  return;
+end;
+
+
+global
+updating procedure IVDClassECTouchScreenFinishButtonRun(Boolean newf,Integer awnst)
+begin
+  Integer wn;
+  LongInt printrownr,err;
+  record IVVc IVr, OldIVr;
   record IVVc prevIVr;
   Boolean save_recordf,new_recordf;
   record LocalMachineBlock LMb;
@@ -2522,125 +2672,15 @@ begin
   wn = CurWindow;
   DeselectWindow(wn,true);
   GetWindowRecord(wn,IVr);
-  if (IVr.Invalid!=0) then begin 
-    goto LIVDClassTouchScreenFinishButtonRun; 
-  end;
-  if (IVr.OKFlag!=0) then begin 
-    goto LIVDClassTouchScreenFinishButtonRun; 
-  end;
-  BlockLoad(LMb);
-  BlockLoad(CDb); 
-  wnst = awnst;
-  if (wnst==-1) then begin
-    wnst = WindowState(wn);
-  end;
-  GetPrevWindowRecord(wn,prevIVr);
-  if (RecordValid(prevIVr)==false) or (prevIVr.SerNr<=0) then begin
-    RecordCopy(prevIVr,IVr);
-  end;
-  fromwclass = GetWindowString(wn,"touchscreenwindowFrom");
-  printrownr = StringToLongInt(GetWindowString(wn,"touchscreenitemlastrownr"));
-  if (printrownr>=0) then begin
-    IVPrintReceipt(wn,IVr,prevIVr,printrownr,false,false,LMb.IncrementalReceiptPrinting,wnst);
-  end;
-  
-  IVSumup(IVr,true);              
-//  IVr.OKFlag = 1;
-  err = IVCheckIfSaveAllowed(IVr,prevIVr,wnst,3);
-//  SetRecordCheckVc("IVVc");
-//  err = IVVcRecordCheck(IVr,prevIVr,wnst,3);
-//carefull withthis one
-//if u comenting out IVVcRecordCheck pls make code validatign Invoice
-  if (err==0 and CurrentCompany!=10) then begin  //Edit***************************Sasha2,10:12 27.03.2015
-    if (CDb.RequireReturnCustomer!=0) then begin
-      if (IVr.OKFlag!=0) and (IVr.Sum4<0) then begin
-        if (IVr.CustCode==CDb.DefCustCode) or (IVr.CustCode==LMb.DefCustCode) then begin
-          MessageBox(21351,"");
-          err = 21351;
-        end;
-      end;
-    end;
-  end;
-  if (err==0 or RECORDCHECKLASTERRORNO==31412) then begin
-    if (HasLocalization("HRV") and blank(IVr.RefStr)) then begin
-      if (DoXMLExport_IVVc(IVr)==false) then begin
-        PutWindowRecord(wn,IVr);
-        OpenWindow("EnterRefStrDClass",0,wn,"","",RepSpec);
-        err = 1;
-      end;
-    end;
-  end;
-  if (err==0) then begin
-    if (IVPrintReceipt(wn,IVr,prevIVr,-1,true,true,LMb.IncrementalReceiptPrinting,wnst)==false) then begin
-//      MessageBox(22165,"");
-      err = 1;
-      new_recordf = false;
-    end;
-  end;
-  if (err==0) then begin
-    IVr.OKFlag = 1;
-    PutWindowRecord(wn,IVr);
-    save_recordf = true;
-    if (CurrentCompany==10) then begin
-      new_recordf = false; //Edit***************************Sasha2,10:13 27.03.2015
-    end else begin
-      new_recordf = newf;
-    end;      
-
-    if (save_recordf) then begin
-      if (WindowDoOK(wn,0)==false) then begin 
-        IVr.OKFlag = 0;
-        PutWindowRecord(wn,IVr);
-        new_recordf = false;
-      end;
-    end;
-  end;
-  IVDClass_RefreshStringList(wn,IVr);
-  prevRetValue = IVr.RetnValue;
-  if (new_recordf) then begin
-//    sleep(5);
-    switch (fromwclass) begin
-      case "NPTSIVCashDClass":
-        CloseWindow(wn);
-
-        wn = OpenWindow("NPTSIVCashDClass",1,0,"","",IVCashr);
-        if (wn>0) then begin
-          GetWindowRecord(wn,IVCashr);
-          IVCashr.RetValue = prevRetValue;
-          PutWindowString(wn,"touchscreenwindowpage",1);
-          PutWindowString(wn,"touchscreenwindowpagestack","1");
-          PutWindowString(wn,"touchscreenwindowprinterstack","*");
-          PutWindowString(wn,"CustomerDisplayData_Line1","");
-          PutWindowString(wn,"CustomerDisplayData_Line2","");    
-          PutWindowString(wn,"touchscreenitemlastrownr",-1);
-          tstr = USetStr(24172) & "  ";
-          tstr = tstr & ValToString(prevRetValue,M4Val,ThousandSeparator,DecimalSeparator,0);
-          SetPOSWindowDisplay("",tstr);
-          PutWindowRecord(wn,IVCashr);
-          IVCashDClass_RefreshStringList(wn,IVCashr);
-          WindowFieldGotoForTouchScreen(wn,-1,"ivcashcommand",false); 
-        end;
-      otherwise
-        WindowDoNew(wn,0);
-        GetWindowRecord(wn,IVr);
-        IVr.RetnValue = prevRetValue;
-        PutWindowString(wn,"touchscreenwindowpage",1);
-        PutWindowString(wn,"touchscreenwindowpagestack","1");
-        PutWindowString(wn,"touchscreenwindowprinterstack","*");
-        PutWindowString(wn,"CustomerDisplayData_Line1","");
-        PutWindowString(wn,"CustomerDisplayData_Line2","");    
-        PutWindowString(wn,"touchscreenitemlastrownr",-1);
-        tstr = USetStr(24172) & "  ";
-        tstr = tstr & ValToString(prevRetValue,M4Val,ThousandSeparator,DecimalSeparator,0);
-        SetPOSWindowDisplay("",tstr);
-        PutWindowRecord(wn,IVr);
-        IVDClass_RefreshStringList(wn,IVr);
-     end;
-//    ReRunWindowDef(wn);
-  end;
-LIVDClassTouchScreenFinishButtonRun:;  
+	RecordCopy(OldIVr,IVr);
+	IVr.OKFlag = 1;
+	PutWindowRecord(wn,IVr);
+	RecordUpdate(OldIVr,IVr,true);
+	CloseWindow(wn);
   return;
 end;
+
+
 
 global
 updating procedure IVDClassTouchScreenFinishButton()
@@ -2655,8 +2695,8 @@ begin
   
   switch (POSBrw.ButtonType) begin
     case kPOSButtonTypeFinish:
-      IVDClassTouchScreenFinishButtonRun(true,-1);   
-      res = true;
+			IVDClassTouchScreenFinishButtonRun(true,-1);   
+			res = true;
     case kPOSButtonTypeLookupSerialNr:
       IVDClassTouchScreenLookupSerialNr;
       res = true;
