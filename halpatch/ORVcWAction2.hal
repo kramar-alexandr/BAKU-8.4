@@ -513,9 +513,9 @@ global
 updating function longint IVFromLocWEBORDsm(record ORVc ORr)
 BEGIN
   record IVVc IVr,OldIVr;
-  Integer wn,nwn,rownr,i,c,cscnt;
+  Integer wn,nwn,rownr,i,c,cscnt,ivmtrw,k;
   Integer errcode;
-  Boolean testf;
+  Boolean testf, testf1;
   LongInt ErrorCode, r;
 	row ORVc ORrw;
 	integer mtrw,j,pos;
@@ -527,6 +527,9 @@ BEGIN
 	record ObjVc Objr;
 	record ECCasierDocSetBlock ECCDSb;
 	row ECCasierDocSetBlock ECCDSrw;
+	row IVVc IVrw;
+	record ItemStatusVc ISr;
+	string 255 items;
 	
 	BlockLoad(ECMUb);
 	BlockLoad(ECCDSb);
@@ -547,6 +550,8 @@ BEGIN
 	end;
 	
 	for (i=0;i<j;i=i+1)begin
+		testf1 = false;
+		items = "";
 		if (testf) then begin  
 			r = RecordAction_raPasteOrdInInv2(IVr,ORr.SerNr,false,errcode,aORLocations[i]);
 			if(r==0)then begin
@@ -578,7 +583,52 @@ BEGIN
 					Obj = Locr.Objects;
 				end;
 				IVr.Objects = Objtsr & "," & Obj;
-				RecordUpdate(OldIVr,IVr,false)
+				RecordUpdate(OldIVr,IVr,false);
+				ivmtrw = matrowcnt(IVr);
+				for (k=0;k<ivmtrw;k=k+1) begin
+					matrowget(IVr,k,IVrw);
+					ISr.Code = IVrw.ArtCode;
+					ISr.Location = aORLocations[i];
+					if(ReadFIrstMain(ISr,2,true)) begin
+						if((ISr.Instock-ISr.RsrvQty)==0) then begin
+							if(!SetInSet(IVrw.ArtCode,items))then begin
+								items = items & IVrw.ArtCode & ",";
+								testf1 = true;
+							end;
+						end;	
+					end;
+				end;
+				if(testf1)then begin
+					RecordNew(Actr);
+					ActVcRecordDefClient(Actr);
+					if (MakeActFromIV(IVr,Actr)) then begin 	
+						RecordCopy(oldActr,Actr);
+						Actr.Comment = "Товары: " & items & " нужно убрать с витрины";
+						cscnt = matrowcnt(ECCDSb);
+						for(c=0;c<cscnt;c=c+1)begin
+							matrowget(ECCDSb,c,ECCDSrw);
+							if(ECCDSrw.LocCode==aORLocations[i])then begin
+								Actr.MainPersons = ECCDSrw.CashierName;
+								j = cscnt;
+							end;
+						end;
+						if(blank(Actr.MainPersons))then begin
+							Actr.MainPersons = "SA";
+						end;
+						if(blank(Actr.TransDate))then begin
+							Actr.TransDate = CurrentDate;
+						end;
+						Actr.TodoFlag = 1;
+						Actr.CalTimeFlag = kCalTimeFlagTime;
+						Actr.AlarmType = 1;
+						Actr.SymbNr = 3;
+						if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+							CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
+							CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
+						end;
+					end;
+				end;
+				
 				RecordNew(Actr);
 				ActVcRecordDefClient(Actr);
 				if (MakeActFromIV(IVr,Actr)) then begin 	
@@ -894,11 +944,11 @@ updating function longint SHFromLocWEBORDsm(record ORVc ORr)
 BEGIN
   record SHVc SHr, OldSHr;
   Integer wn,nwn,i,pos;
-  Boolean testf;
+  Boolean testf, testf1;
   string 60 warning;
   LongInt r;
 	row ORVc ORrw;
-	integer mtrw,j;
+	integer mtrw,j,k;
 	array string 255 aORLocations;
 	record ActVc Actr, OldActr;
 	record RLinkVc RLr;
@@ -921,7 +971,9 @@ BEGIN
 		MessageBox(0,"Не указанны склады товаров!!!");//23
 		testf = false;
 	end;
+	k=1;
 	for (i=0;i<j;i=i+1)begin
+		testf1 = true;
 		if (testf) then begin  
 			r = RecordAction_raPasteOrdInShip3(SHr,ORr.SerNr,warning,aORLocations[i]);
 			Objtsr = "";
@@ -947,13 +999,20 @@ BEGIN
 			SHr.Objects = Objtsr & "," & Obj;
 			if(recordstore(SHr,true))then begin end;
 			logtext(0,"Link");
-			if(ReadRecordLink(ORr,i+1,Actr,RLr))then begin
-				logtext(0,"LinkCreated");
-				RecordCopy(OldActr,Actr);
-				Actr.Comment = Actr.Comment & ", Отгрузка № " & SHr.SerNr;
-				CreateRecordLink(Actr,Currentcompany,SHr,Currentcompany);
-				CreateRecordLink(SHr,Currentcompany,Actr,Currentcompany);
-				if(RecordUpdate(OldActr,Actr,false)==0)then begin end;
+			
+			
+			while(ReadRecordLink(ORr,k,Actr,RLr) and testf1) begin
+				if(left(Actr.Comment,6)=="Создан")then begin
+					logtext(0,"LinkCreated");
+					RecordCopy(OldActr,Actr);
+					Actr.Comment = Actr.Comment & ", Отгрузка № " & SHr.SerNr;
+					CreateRecordLink(Actr,Currentcompany,SHr,Currentcompany);
+					CreateRecordLink(SHr,Currentcompany,Actr,Currentcompany);
+					if(RecordUpdate(OldActr,Actr,false)==0)then begin 
+						testf1 = false;
+					end;
+				end;
+				k = k + 1;
 			end;
 		end;
 	end;
