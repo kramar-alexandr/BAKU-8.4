@@ -37,7 +37,9 @@ external function Boolean GetItemPriceDiscount3(string,val,var record INVc,strin
                                                 string,Boolean,var Boolean,string,var string,var val,string,string,var string);
 external updating procedure UpdatePrice(record PLVc);		
 external function string 255 DelSpecSymb( string );		 //Edit_________________ABR 16:26 21.12.18																				
-external procedure GetPriceItem(string,var val,var val); //Edit_________________ABR 		22.01.19																						
+external procedure GetPriceItem(string,var val,var val); //Edit_________________ABR 		22.01.19		
+external function string 255 NextSerialNumber(string,string,record SerNrTrackBlock);	
+external procedure NextNumber(string,var string);																			
 SetLangMode(LangRussian,"RUS",0);
 
 global updating procedure CreateNewGlobalItem(var record INVc INr)// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 26 December 2018 12:42:52
@@ -2519,6 +2521,63 @@ LValidateItemDescriptionRows_Polish:;
   ValidateItemDescriptionRows_Polish = res;
   return;
 end;
+
+
+
+global  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 14:21 18.06.2019
+updating function LongInt TemporaryPricesVcRecordCheck(var record TemporaryPricesVc TPr,record TemporaryPricesVc TP2r,LongInt stat,LongInt long4)
+begin
+	LongInt res;
+	record TemporaryPricesVc oldTPr;
+	row TemporaryPricesVc TPrw;
+	boolean TrHs;
+	integer NewSerNr,i,mtrw;
+	vector boolean Itmf;
+	res = 0;
+	if(TPr.SerNr<1)then begin
+		oldTPr.SerNr = 9999999999999999;
+		TrHs = true;
+		while (loopbackkey("SerNr",oldTPr,1,TrHs)) begin
+			TrHs = false;
+			TPr.SerNr = oldTPr.SerNr + 1;
+		end;
+	end;
+	mtrw = matrowcnt(TPr);
+	for (i=0;i<mtrw;i=i+1) begin
+		matrowget(TPr,i,TPrw);
+		if(Itmf[TPrw.ArtCode]) then begin
+			RecordCheckError(36245,TPrw.ArtCode,i,"ArtCode");      
+      res = -1; 
+      goto LTemporaryPricesVcRecordCheck;
+		end else begin
+			Itmf[TPrw.ArtCode] = true;
+		end;
+		if(TPrw.Price==blankval and nonblank(TPrw.ArtCode))then begin
+			RecordCheckError(36248,"",i,"Price");      
+      res = -1; 
+      goto LTemporaryPricesVcRecordCheck;
+		end;
+		if(blank(TPrw.Currency) and nonblank(TPrw.ArtCode))then begin
+			RecordCheckError(36249,"",i,"Currency");      
+      res = -1; 
+      goto LTemporaryPricesVcRecordCheck;
+		end;
+	end;
+	if(blankdate(TPr.FromDate))then begin
+		RecordCheckError(36246,"",-1,"FromDate");      
+		res = -1; 
+		goto LTemporaryPricesVcRecordCheck;
+	end;
+	if(blankdate(TPr.ToDate))then begin
+		RecordCheckError(36247,"",-1,"ToDate");      
+		res = -1; 
+		goto LTemporaryPricesVcRecordCheck;
+	end;
+	LTemporaryPricesVcRecordCheck:;
+	TemporaryPricesVcRecordCheck = res;
+	return;
+end;	
+
 
 global //if change something do it in nINVcRecordCheck(...) also
 updating function LongInt INVcRecordCheck(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
