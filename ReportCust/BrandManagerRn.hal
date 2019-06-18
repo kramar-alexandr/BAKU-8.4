@@ -504,6 +504,8 @@ BEGIN
 			head = "Нам должны (сч. 62)";
 		case "75/02":
 			head = "Расчет с учредителями (сч. 75/02)";
+		case "76":
+			head = "Расчет магазинов";
 	end;
 	StartFormat(15);
 		OutString(tab1,0,"",false);
@@ -582,10 +584,12 @@ BEGIN
 	val custEndBal,custBeginBal,custDebet,custCredit,custEndBalB,custBeginBalB,custDebetB,custCreditB;
 	string 30 customer, tempstr;
 	string 255 index,curObjs;
-	vector boolean founderflag;
-	vector string 100 foundercode,foundername;
+	vector boolean founderflag,fobflag;
+	vector string 100 foundercode,foundername,fobcode,fobname;
 	record CUVc CUr;
 	string 255 objstr;
+	boolean firstOb;
+	val TotEndFob,TotCreditFob,TotDebetFob,TotBeginBalFob;
 	
 	tab1 = 0;	tabname = 60; tab2 = 160;	  tab3 = 190;
 	tab4 = 230;  tab5 = 270;  tab6 = 310;
@@ -595,6 +599,7 @@ BEGIN
 	AccList[0] = "62"; //нам
 	AccList[1] = "63"; //мы
 	AccList[2] = "75/02";
+	//AccList[3] = "76"; //магазины
 	acccount = 3;
 	TrHs = true;
 	curcount = 0;
@@ -607,6 +612,17 @@ BEGIN
 			founderflag[Objr.Code] = true;
 			foundercode[Objr.Code] = Objr.Code;
 			foundername[Objr.Code] = Objr.Comment;
+		end;
+	end;
+	
+	Objr.OTCode = "FOB";
+	while(loopkey("OTCode",Objr,1,TrHs))begin
+		if(Objr.OTCode!="FOB")then begin TrHs = false; end;
+		
+		if(TrHs and Objr.OTCode=="FOB")then begin
+			fobflag[Objr.Code] = true;
+			fobcode[Objr.Code] = Objr.Code;
+			fobname[Objr.Code] = Objr.Comment;
 		end;
 	end;
 	
@@ -642,7 +658,10 @@ BEGIN
 	CustomerAddedToList["BLANKCUSTOMER"] = true;
 
 	for (i=0;i<acccount;i=i+1) begin
-	  
+	  TotEndFob = 0;
+		TotCreditFob = 0;
+		TotDebetFob = 0;
+		TotBeginBalFob = 0;
 	  arrCnt = CustomersList.length;
 		for (j=0;j<arrCnt;j=j+1) begin
   		if (CustomerHasBalance[CustomersList[j]]==true) then begin
@@ -678,6 +697,7 @@ BEGIN
 							  IVr.SerNr = TRr.Number;
 								ReadFirstMain(IVr,1,true);
 							end;
+							firstOb = true;
 							rwcnt = MatRowCnt(TRr);
 							for (j=0;j<rwcnt;j=j+1) begin
 								MatRowGet(TRr,j,TRrw);
@@ -716,7 +736,39 @@ BEGIN
 												CustomerEndBal[index] = CustomerEndBal[index] + (TRrw.CurDebVal - TRrw.CurCredVal);
 												CustomerEndBal[index & ":BASE"] = CustomerEndBal[index & ":BASE"] + (TRrw.DebVal - TRrw.CredVal);
 											end;
-											otherwise
+										case "76":
+											if(firstOb) then begin
+												customer = "";
+												GetObjs("FOB",TRrw.Objects,customer);
+												objstr = "";// Edit ************************** Wednesday, 1 November 2017 13:27:11
+												if(nonblank(RepSpec.ObjStr))then begin
+													objstr = RepSpec.ObjStr & "," & customer;
+												end else begin
+													objstr = customer;
+												end;	
+												if(nonblank(customer) and fobflag[customer] and SetInSet(objstr,TRrw.Objects))then begin
+													if (CustomerAddedToList[customer]==false) then begin
+														CustomersList[CustomersList.length] = customer;
+														CustomerAddedToList[customer] = true;
+													end;
+													CustomerHasBalance[customer] = true;
+													logtext(0,customer & " " & CustomerHasBalance[customer]);
+													index = customer & ":" & TRrw.Curncy;
+													if (mainr.TransDate >= RepSpec.sStartDate) then begin
+														CustomerDebet[index] = CustomerDebet[index] + TRrw.CurDebVal;
+														CustomerDebet[index & ":BASE"] = CustomerDebet[index & ":BASE"] + TRrw.DebVal;
+														CustomerCredit[index] = CustomerCredit[index] + TRrw.CurCredVal;
+														CustomerCredit[index & ":BASE"] = CustomerCredit[index & ":BASE"] + TRrw.CredVal;
+													end else begin
+														CustomerBeginBal[index] = CustomerBeginBal[index] + (TRrw.CurDebVal - TRrw.CurCredVal);
+														CustomerBeginBal[index & ":BASE"] = CustomerBeginBal[index & ":BASE"] + (TRrw.DebVal - TRrw.CredVal);
+													end;
+													CustomerEndBal[index] = CustomerEndBal[index] + (TRrw.CurDebVal - TRrw.CurCredVal);
+													CustomerEndBal[index & ":BASE"] = CustomerEndBal[index & ":BASE"] + (TRrw.DebVal - TRrw.CredVal);
+												end;	
+												firstOb = false;
+											end;
+										otherwise
 												customer = TRrw.CompCode;
 												if (blank(customer)) then begin
 													customer = TRrw.CustCode;
@@ -883,6 +935,10 @@ BEGIN
 							OutString(tab9,0,custEndBal,false);
 							OutString(tab10,0,custEndBalB,true);
 						EndFormat;
+						TotEndFob = TotEndFob + custEndBalB;
+						TotCreditFob = TotCreditFob + custCreditB;
+						TotDebetFob = TotDebetFob + custDebetB;
+						TotBeginBalFob = TotBeginBalFob + custBeginBalB;
 						Gray_Divider(0,1);
 					end;
 					
@@ -890,25 +946,42 @@ BEGIN
 			end;
 		end;
 		Black_Divider(0,1);
-		
-		RepSpec.f4 = AccList[i];
-		RepSpec.CurncyCode = "";
-		BrandManagerRnTool(RepSpec,TotDebet,TotCredit,TotBeginBal,TotEndBal);
-		StartFormat(15);
-			OutString(tab1,0,"Итого",false);
-			OutString(tabname,0,"",false);
-			OutString(tab2,0,"",false);
-			OutString(tab3,0,"",false);
-			OutString(tab4,0,TotBeginBal,false);
-			OutString(tab5,0,"",false);
-			OutString(tab6,0,TotDebet,false);
-			OutString(tab7,0,"",false);
-			OutString(tab8,0,TotCredit,false);
-			OutString(tab9,0,"",false);
-			OutString(tab10,0,TotEndBal,true);
-		EndFormat;
-		StartFormat(15);
-		EndFormat;
+		if(AccList[i]!="76") then begin
+			RepSpec.f4 = AccList[i];
+			RepSpec.CurncyCode = "";
+			BrandManagerRnTool(RepSpec,TotDebet,TotCredit,TotBeginBal,TotEndBal);
+			StartFormat(15);
+				OutString(tab1,0,"Итого",false);
+				OutString(tabname,0,"",false);
+				OutString(tab2,0,"",false);
+				OutString(tab3,0,"",false);
+				OutString(tab4,0,TotBeginBal,false);
+				OutString(tab5,0,"",false);
+				OutString(tab6,0,TotDebet,false);
+				OutString(tab7,0,"",false);
+				OutString(tab8,0,TotCredit,false);
+				OutString(tab9,0,"",false);
+				OutString(tab10,0,TotEndBal,true);
+			EndFormat;
+			StartFormat(15);
+			EndFormat;
+		end else begin	
+			StartFormat(15);
+				OutString(tab1,0,"Итого",false);
+				OutString(tabname,0,"",false);
+				OutString(tab2,0,"",false);
+				OutString(tab3,0,"",false);
+				OutString(tab4,0,TotBeginBalFob,false);
+				OutString(tab5,0,"",false);
+				OutString(tab6,0,TotDebetFob,false);
+				OutString(tab7,0,"",false);
+				OutString(tab8,0,TotCreditFob,false);
+				OutString(tab9,0,"",false);
+				OutString(tab10,0,TotEndFob,true);
+			EndFormat;
+			StartFormat(15);
+			EndFormat;
+		end;	
 	end;
 
 	EndJob;
