@@ -14291,83 +14291,22 @@ return;
 end;	
 
 
-global updating procedure ChangeAllBrandBPIBrandMn(record RcVc RepSpec)
+global updating procedure ReplaceGiftsFromGiftFieldToCatThrdLvlMn(record RcVc RepSpec)
 begin
-record INVc INr,oldINr;
 integer i,curcomp,cnt,j,k;
 record GlobalItemVc GIr,oldGIr;
 string 100 item,oldBrand,newBrand,code,glCode;
-record BPIBrandVc BPIBrandr;
-record BPIBrandVc BPIBrand1r;
-array string 100 abrand,anewbrand;
-boolean tochan;
 
-
-	curcomp = currentcompany;
-	logtext(0,"start");
-
-		cnt = cnt + 1;
-		oldBrand = RepSpec.f1;
-		newBrand = RepSpec.f2;
-		BPIBrandr.Code = oldBrand;
-		logtext(0,"oldBrand " & oldBrand);
-		logtext(0,"newBrand " & newBrand);
-		if(readfirstkey("Code",BPIBrandr,1,true))then begin
-			if(uppercase(oldBrand)==uppercase(BPIBrandr.Code))then begin		
-				BPIBrand1r.Code = newBrand;
-				if(readfirstkey("Code",BPIBrand1r,1,true))then begin						
-					for(i=1;i<33; i=i+1) begin
-						if((!CompanyIsJWLikeCompany(i) or i==3) and i!=10) then begin
-							SetCompany(i,false);
-							resetloop(INr);
-							INr.Code = "";
-							while(LoopMain(INr,1,true))begin
-								if(nonblank(INr.BPIBrand))then begin
-									if(INr.BPIBrand==BPIBrandr.Code)then begin;
-										tochan = true;
-										logtext(0,INr.Code & " " & INr.BPIBrand & " " & INr.GlobalArtCode);
-										if(setinset(INr.BPIBrand,INr.DispGroups))then begin										
-											INr.DispGroups = StrReplace(INr.DispGroups,INr.BPIBrand,BPIBrand1r.Code);
-										end;
-										glCode = INr.GlobalArtCode;
-										INr.GlobalArtCode = "";
-										INr.BPIBrand = BPIBrand1r.Code;
-										GIr.Code = glCode;										
-										if(ReadFirstMain(GIr,1,true)) then begin
-											logtext(0,"del" & GIr.Code);
-											oldGIr.Code = INr.Code & "_" & INr.BPIBrand;
-											if(readfirstmain(oldGIr,1,true))then begin
-												tochan = false;
-												logtext(0,"Failed to change brand for " & INr.Code & " in company " & currentcompany);
-											end else begin
-												recordcopy(oldGIr,GIr);
-											 GIr.Code = INr.BPIBrand & "_" & INr.Code;
-											 INr.GlobalArtCode = GIr.Code;
-											 GIr.Brand = BPIBrand1r.Name;
-											 GIr.BPIBrand = BPIBrand1r.Code;
-											 if(nonblank(GIr.MainCode))then begin
-											 	if(left(GIr.MainCode,8)!=left(GIr.Code,8))then begin
-											 		GIr.MainCode = GIr.BPIBrand & right(GIr.MainCode,len(GIr.MainCode)-8);
-											 	end;
-											 end;
-											 GIr.Classification = INr.DispGroups;
-											 recordupdate(oldGIr,GIr,false);
-											end;
-										end;
-										if(tochan)then begin
-											logtext(0,"Brand Changed for item " & INr.Code & " in company " & currentcompany);
-											if(recordStore(INr,true)) then begin  end;
-										end;
-									end; 
-								end;
-							end;
-						end;
-					end;
-				end;
+	GIr.Code = "";
+	while (loopmain(GIr,1,true)) begin
+		if(nonblank(GIr.BTRxGiftClass)) then begin
+			if(nonblank(GIr.BTRxThirdLevCat))then begin GIr.BTRxThirdLevCat = GIr.BTRxThirdLevCat & ","; end;
+			GIr.BTRxThirdLevCat = GIr.BTRxThirdLevCat & GIr.BTRxGiftClass;
+			if(RecordStore(GIr,true)) then begin
+				logtext (0,GIr.Code);
 			end;
 		end;
-	SetCompany(curcomp,false);
+	end;
 	
-logtext(0,"end");
 return;
 end;
