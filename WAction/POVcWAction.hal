@@ -58,6 +58,7 @@ remote procedure NextM4SerialNumber(string,var string);//9:51 02.10.2018
 external procedure PasteFromSysList(Integer,Integer);
 remote updating function LongInt RecordAction_raPastePUInVI(record PUVc,var record VIVc,var string);
 remote procedure CreatePufromIVforPLHandle(record RcVc,integer,var string);
+remote updating function LongInt RecordAction_raPastePOInPUFromBPU(var record POVc,var record PUVc,var record BigPUVc);
 
 
 global
@@ -319,6 +320,171 @@ BEGIN
     Beep;
   end;
 LPUFromPODsm:;  
+  return;
+end;
+
+global
+updating procedure PUFromBigPUDsm()
+BEGIN
+  record POVc POr;
+  record PUVc PUr;
+	record BigPUVc BPUr;
+	row BigPUVc BPUrw;
+  LongInt r;
+	integer i;
+  Integer wn,nwn,err,cntIV,cntORIV,j,count;
+  Boolean testf,TsTr,testf1,testVI;
+  record POSettingBlock POSb;
+	record VIVc VIr;
+	row VIVc VIrw;
+  record ConsCompBlock CCB;
+	record AccBlock AccB;
+	vector boolean vecVI;
+	array boolean arrVI;
+	vector boolean created;
+	array string 255 PONr;
+	integer cnti;
+	BlockLoad(CCB);
+	BlockLoad(AccB);
+	
+	cntORIV = 0;
+	cntIV = 0;
+  wn = CurWindow;
+    GetWindowRecord(wn,BPUr);
+		cnti = 0;
+	for(j=0;j<matrowcnt(BPUr);j=j+1) begin
+		matrowget(BPUr,j,BPUrw);
+		if(!created[BPUrw.FromOrdNr]) then begin
+			PONr[cnti] = BPUrw.FromOrdNr;
+			messagebox(0,PONr[cnti]);
+			cnti = cnti + 1;
+			created[BPUrw.FromOrdNr] = true;
+		end;
+	end;
+	testf1 = true;
+	testf = true;
+	for(j=0;j<PONr.length;j=j+1) begin
+		POr.SerNr = PONr[j];
+		ReadFIrstMain(POr,1,true);
+    switch (POr.OrderType) begin
+      case kOrderTypeDropShip:
+        DropSHFromPODsm;
+        goto LPUFromPODsm; 
+    end;
+    if (UserCanAction("POToPU",true)) then begin
+      BlockLoad(POSb);
+      if (POr.Closed==0) then begin
+        if (POr.OKFlag==0) then begin 
+          if ((AnyNextReservationsExists) or (POSb.POMustBeOKToPU!=0) or (UserCanAction("NotOKPOToPU",false))) then begin
+            testf = false;
+            MessageBox(20053,"");
+          end; 
+        end;
+        err = POTestApprovalStatus(POr);
+        if (err!=0) then begin
+          MessageBox(err,"ERR");
+          testf = false;
+        end;
+        if (testf) then begin
+					if(CCB.OKFlagPOr!=0) then begin
+						testVI = true;
+						i = 0;
+						if(nonblank(POr.CustomsCost) and POr.CustomsCost!=0) then begin vecVI["CustomsCost"] = true; arrVI[i] = false; i = i + 1; end;
+						if(nonblank(POr.ShipCost) and POr.ShipCost!=0) then begin vecVI["ShipCost"] = true; arrVI[i] = false; i = i + 1; end;
+						if(nonblank(POr.Cost1) and POr.Cost1!=0) then begin vecVI["Cost1"] = true; arrVI[i] = false; i = i + 1; end;
+						if(nonblank(POr.Cost2) and POr.Cost2!=0) then begin vecVI["Cost2"] = true; arrVI[i] = false; i = i + 1; end;
+						if(nonblank(POr.Cost3) and POr.Cost3!=0) then begin vecVI["Cost3"] = true; arrVI[i] = false; i = i + 1; end;
+						if(nonblank(POr.Cost4) and POr.Cost4!=0) then begin vecVI["Cost4"] = true; arrVI[i] = false; i = i + 1; end;
+						if(nonblank(POr.Cost5) and POr.Cost5!=0) then begin vecVI["Cost5"] = true; arrVI[i] = false; i = i + 1; end;
+						VIr.POSerNr = POr.SerNr;
+						TsTr = true;
+						i = 0;
+						while(LoopKey("POSerNr",VIr,1,TsTr)) begin
+							if(VIr.POSerNr!=POr.SerNr) then begin TsTr = false; end;
+							if(TsTr) then begin
+								matrowget(VIr,0,VIrw);
+								if(vecVI["CustomsCost"]) then begin 
+									if(AccB.PUCustomsAcc==VIrw.AccNumber) then begin
+										arrVI[i] = true; i = i + 1;
+									end;
+								end;
+								if(vecVI["ShipCost"]) then begin 
+									if(AccB.PUFreightAcc==VIrw.AccNumber) then begin
+										arrVI[i] = true; i = i + 1;
+									end;
+								end;
+								if(vecVI["Cost1"]) then begin 
+									if(AccB.Cost1PriceVar==VIrw.AccNumber) then begin
+										arrVI[i] = true; i = i + 1;
+									end;
+								end;
+								if(vecVI["Cost2"]) then begin 
+									if(AccB.Cost2PriceVar==VIrw.AccNumber) then begin
+										arrVI[i] = true; i = i + 1;
+									end;
+								end;
+								if(vecVI["Cost3"]) then begin 
+									if(AccB.Cost3PriceVar==VIrw.AccNumber) then begin
+										arrVI[i] = true; i = i + 1;
+									end;
+								end;
+								if(vecVI["Cost4"]) then begin 
+									if(AccB.Cost4PriceVar==VIrw.AccNumber) then begin
+										arrVI[i] = true; i = i + 1;
+									end;
+								end;
+								if(vecVI["Cost5"]) then begin 
+									if(AccB.Cost5PriceVar==VIrw.AccNumber) then begin
+										arrVI[i] = true; i = i + 1;
+									end;
+								end;
+							end;
+						end;
+						ResetLoop(VIr);
+						/*if(POr.ShipCostOKFlag!=0) then begin
+							if(blank(POr.ShipCost)) then begin testf1 = false;  MessageBox(36234,""); end;
+						end else begin	
+							if(blank(POr.ShipCost) or POr.ShipCost==0) then begin testf1 = false;  MessageBox(36234,""); end;
+						end;
+						if(POr.CustomsCostOKFlag!=0) then begin
+							if(blank(POr.CustomsCost)) then begin testf1 = false;  MessageBox(36235,""); end;
+						end else begin
+							if(blank(POr.CustomsCost) or POr.CustomsCost==0) then begin testf1 = false;  MessageBox(36235,""); end;
+						end;
+						//if(blank(POr.Location)) then begin testf1 = false;  MessageBox(36208,""); end;*/
+						for(i=0;i<arrVI.length;i=i+1) begin
+							if(arrVI[i]==false) then begin
+								testVI = false;
+							end;
+						end;
+						if(!testVI) then begin testf1 = false;  MessageBox(36236,""); end;
+					end;	
+        end;       
+      end else begin
+        MessageBox(22062,"");
+      end;
+    end else begin
+      MessageBox(1274,StringFromStringSet(3,"POToPU"));
+    end;  
+	end;	
+		for(j=0;j<PONr.length;j=j+1) begin
+			if(testf1) then begin
+							POr.SerNr = PONr[j];
+							ReadFIrstMain(POr,1,true);
+							r = RecordAction_raPastePOInPUFromBPU(POr,PUr,BPUr);
+							switch (r) begin
+								case -1: Beep; 
+								case -2: 
+								case 0:
+									//nwn = OpenWindow("PUDClass",1,0,"","",PUr);
+									SetRLink(wn,true);  
+								otherwise
+									MessageBox(r,"");
+							end;
+							UpdateBrowses("POVc");
+						end;	
+			LPUFromPODsm:;
+		end;	  
   return;
 end;
 
