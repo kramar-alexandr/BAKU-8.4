@@ -4818,6 +4818,78 @@ endjob;
 return;
 end;
 
+
+global
+procedure StockInAllCompRn(record RcVc RepSpec)
+begin
+record INVc INr,IN2r;
+integer i,CompOld,CompQty;
+record DIVc DIr;
+boolean testf;
+integer pos;
+string 100 class;
+record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record ItemStatusVc ISr;
+	
+	
+	// WebSyncCustomerSales;
+	
+	BlockLoad(Compb);
+	
+	CompOld = currentcompany;
+	CompQty = matrowcnt(Compb);
+	
+
+	StartReportnoheaderjob("остатки в компаниях");
+	
+	INr.Code = RepSpec.f1;
+	if(!ReadFirstMain(INr,1,true)) then begin
+		INr.BarCode = RepSpec.f1;
+		if(!ReadFirstKey("BarCode",INr,1,true)) then begin
+			INr.AlternativeCode = RepSpec.f1;
+			If(!ReadFirstKey("AlternativeCode",INr,1,true)) then begin
+				goto StockInAllCompRnEnd;
+			end;
+		end;
+	end;
+	
+	for (i=0;i<CompQty;i=i+1)begin
+		matrowget(Compb,i,Comprw);
+		if(Comprw.ActiveStatus==0)then begin
+			SetCompany(i+1,false);
+			IN2r.Code = RepSpec.f1;
+				if(!ReadFirstMain(IN2r,1,true)) then begin
+					IN2r.BarCode = RepSpec.f1;
+					if(!ReadFirstKey("BarCode",IN2r,1,true)) then begin
+						IN2r.AlternativeCode = RepSpec.f1;
+						If(!ReadFirstKey("AlternativeCode",IN2r,1,true)) then begin
+							goto skipcomp;
+						end;
+					end;	
+				end;	
+			if(IN2r.BPIBrand!=INr.BPIBrand) then begin 	goto skipcomp; end;
+			Black_Divider(0,1);
+			startformat(15);
+				outstring(0,0,"Company - " & Comprw.CompName ,false);
+			endformat;
+			ISr.Code = INr.Code;
+			ISr.Location = ";;;";
+			if(ReadFirstMain(ISr,2,true)) then begin
+				startformat(15);
+				outstring(0,"dblINVc",INr.Code ,false);
+				outstring(150,0,ISr.Instock,false);
+				endformat;
+			end;	
+		end;
+		skipcomp:;
+	end;
+	SetCompany(CompOld,false);
+	StockInAllCompRnEnd:;
+endjob;	
+return;
+end;
+
 global
 procedure CodeBrandRn(record RcVc RepSpec)
 begin
