@@ -399,28 +399,48 @@ updating procedure CollectItemsFromOrd()
 begin
 record BigPUVc BPUr;
 row BigPUVc BPUrw;
-integer wn,i,j,BProw;
+integer wn,i,j,BProw,cnt;
 string 255 ordNr;
 record POVc POr;
 row POVc POrw;
+record BPIBrandVc BBr;
+record ConsCompBlock CCB;
+record INVc INr;
+	
+	BlockLoad(CCB);
 
 	wn = curwindow;
 	BProw = 0;
+	DeselectWindow(wn,true);
 	getwindowrecord(wn,BPUr);
+	cnt = matrowcnt(BPUr);
+	for(j=cnt;j>=0;j=j-1) begin
+		MatRowDelete(BPUr,j);
+	end;	
 	i=0;
 	ExtractObj(BPUr.FromOrds,i,ordNr);
 	while (nonblank(ordNr)) begin
 		POr.SerNr = ordNr;
 		if(ReadFirstMain(POr,1,true)) then begin
 			for(j=0;j<matrowcnt(POr);j=j+1) begin
+			
 				matrowget(POr,j,POrw);
+				if(CCB.OKFlag>0) then begin
+					INr.Code = POrw.ArtCode;
+					if(readfirstmain(INr,1,true)) then begin
+						BBr.Code = INr.BPIBrand;
+						if(ReadFirstMain(BBr,1,true)) then begin
+							BPUrw.Position = BBr.CWHCode;
+						end;
+					end;
+				end;	
 				BPUrw.ArtCode = POrw.ArtCode;
-				matrowput(BPUr,BProw,BPUrw);
 				BPUrw.FromOrdNr = POr.SerNr;
 				BPUrw.FromOrdrowNr = j;
 				BPUrw.Quant = POrw.Quant;
 				BPUrw.UPrice = POrw.Price;
 				BPUrw.Sum = POrw.Sum;
+				BPUrw.ItemConsgType = POrw.ItemConsgType;
 				BPUrw.CurrencyItem = POr.CurncyCode;
 				BPUrw.Spec = POrw.Spec;
 				BPUrw.CostPrice = MulRateToBase1(POr.CurncyCode,POrw.Price,POr.FrRate,POr.ToRateB1,POr.ToRateB2,POr.BaseRate1,POr.BaseRate2,SetROundModeD(3));
