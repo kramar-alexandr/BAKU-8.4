@@ -1,6 +1,11 @@
 external procedure ExtractObj(string,var Integer,var string);
 remote updating procedure R_ProceedChangeLoyCard(record RcVc);
 external procedure FindRepDefHeader(string,string,var string);
+external procedure ExtractObj(string,var Integer,var string);
+external function Boolean BPUVc_PasteArtCode(var record BigPUVc,Integer,var string,var string);
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external function roundmode SetRoundModeD(Integer);
+external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -266,6 +271,168 @@ begin
 return;
 end;
 
+global 
+function Boolean BPUDClassArtCodeEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  record BigPUVc BPUr;
+  row BigPUVc BPUrw;
+  record INVc INr;
+  GetWindowRecord(wn,BPUr);
+  MatRowGet(BPUr,rownr,BPUrw);    
+	INr.Code = BPUrw.ArtCode;
+		if(ReadFirstMain(INr,1,true)) then begin BPUrw.Spec = INr.Name; end;
+	MatRowPut(BPUr,rownr,BPUrw); 	
+  PutWindowRecord(wn,BPUr);     
+  BPUDClassArtCodeEFAfter = true;
+  return;
+end;
+
+global 
+function Boolean BPUDClassShipCostEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  record BigPUVc BPUr;
+  row BigPUVc BPUrw;
+  integer i;
+	val total;
+	val FInBase;
+  
+	total = 0;
+	GetWindowRecord(wn,BPUr);
+	for(i=0;i<matrowcnt(BPUr);i=i+1) begin
+		MatRowGet(BPUr,i,BPUrw);
+		total = total + BPUrw.Quant * BPUrw.CostPrice;
+	end;
+	if(nonblank(BPUr.CurrencyF)) then begin
+		FInBase = MulRateToBase1(BPUr.CurrencyF,BPUr.ShipCost,BPUr.FrRateF,BPUr.ToRateF,BPUr.ToRateF,BPUr.FrRateF,BPUr.ToRateF,SetROundModeD(2));
+	end else begin 	FInBase = BPUr.ShipCost; end;
+	for(i=0;i<matrowcnt(BPUr);i=i+1) begin
+		MatRowGet(BPUr,i,BPUrw);
+		BPUrw.ShipCost = FInBase * (BPUrw.Quant * BPUrw.CostPrice/total);
+		MatRowPut(BPUr,i,BPUrw);
+	end;
+	PutWindowRecord(wn,BPUr);     
+  BPUDClassShipCostEFAfter = true;
+  return;
+end;
+
+global 
+function Boolean BPUDClassCustomsCostEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+  record BigPUVc BPUr;
+  row BigPUVc BPUrw;
+  integer i;
+	val total;
+	val FInBase;
+  
+	total = 0;
+	GetWindowRecord(wn,BPUr);
+	for(i=0;i<matrowcnt(BPUr);i=i+1) begin
+		MatRowGet(BPUr,i,BPUrw);
+		total = total + BPUrw.Quant * BPUrw.CostPrice;
+	end;
+	if(nonblank(BPUr.CurrencyT)) then begin
+		FInBase = MulRateToBase1(BPUr.CurrencyT,BPUr.CustomsCost,BPUr.FrRateT,BPUr.ToRateT,BPUr.ToRateT,BPUr.FrRateT,BPUr.ToRateT,SetROundModeD(2));
+	end else begin 	FInBase = BPUr.CustomsCost; end;
+	for(i=0;i<matrowcnt(BPUr);i=i+1) begin
+		MatRowGet(BPUr,i,BPUrw);
+		BPUrw.CustomsCost = FInBase * (BPUrw.Quant * BPUrw.CostPrice/total);
+		MatRowPut(BPUr,i,BPUrw);
+	end;
+	PutWindowRecord(wn,BPUr);     
+  BPUDClassCustomsCostEFAfter = true;
+  return;
+end;
+
+global 
+function Boolean BPUDClassCurrencyFEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+val fr,to1,to2,br1,br2;
+record BigPUVc BPUr;
+
+  row BigPUVc BPUrw;
+	GetWindowRecord(wn,BPUr);
+	GetFullCurncyRate(BPUr.CurrencyF,CurrentDate,fr,to1,to2,br1,br2);
+	BPUr.FrRateF = fr;
+	BPUr.ToRateF = to1;
+	PutWindowRecord(wn,BPUr);
+	BPUDClassShipCostEFAfter(wn,fn,rownr,changedf);
+	BPUDClassCurrencyFEFAfter = true;
+return;
+end;
+
+global 
+function Boolean BPUDClassCurrencyTEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
+begin
+val fr,to1,to2,br1,br2;
+record BigPUVc BPUr;
+
+  row BigPUVc BPUrw;
+	GetWindowRecord(wn,BPUr);
+	GetFullCurncyRate(BPUr.CurrencyT,CurrentDate,fr,to1,to2,br1,br2);
+	BPUr.FrRateT = fr;
+	BPUr.ToRateT = to1;
+	PutWindowRecord(wn,BPUr);
+	BPUDClassCustomsCostEFAfter(wn,fn,rownr,changedf);
+	BPUDClassCurrencyTEFAfter = true;
+return;
+end;
+
+global
+updating function Boolean BigPUDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
+BEGIN
+  Boolean res;
+
+  switch (fieldname) begin
+    
+    case "ArtCode": res = BPUDClassArtCodeEFAfter(wn,fn,rownr,changed);
+		case "ShipCost": res = BPUDClassShipCostEFAfter(wn,fn,rownr,changed);
+		case "CustomsCost": res = BPUDClassCustomsCostEFAfter(wn,fn,rownr,changed);
+		case "CurrencyF": res = BPUDClassCurrencyFEFAfter(wn,fn,rownr,changed);
+		case "CurrencyT": res = BPUDClassCurrencyTEFAfter(wn,fn,rownr,changed);
+  end;
+  BigPUDClassAfterEditField = res;
+  RETURN;
+END;
+
+global 
+updating procedure CollectItemsFromOrd()
+begin
+record BigPUVc BPUr;
+row BigPUVc BPUrw;
+integer wn,i,j,BProw;
+string 255 ordNr;
+record POVc POr;
+row POVc POrw;
+
+	wn = curwindow;
+	BProw = 0;
+	getwindowrecord(wn,BPUr);
+	i=0;
+	ExtractObj(BPUr.FromOrds,i,ordNr);
+	while (nonblank(ordNr)) begin
+		POr.SerNr = ordNr;
+		if(ReadFirstMain(POr,1,true)) then begin
+			for(j=0;j<matrowcnt(POr);j=j+1) begin
+				matrowget(POr,j,POrw);
+				BPUrw.ArtCode = POrw.ArtCode;
+				matrowput(BPUr,BProw,BPUrw);
+				BPUrw.FromOrdNr = POr.SerNr;
+				BPUrw.FromOrdrowNr = j;
+				BPUrw.Quant = POrw.Quant;
+				BPUrw.UPrice = POrw.Price;
+				BPUrw.Sum = POrw.Sum;
+				BPUrw.CurrencyItem = POr.CurncyCode;
+				BPUrw.Spec = POrw.Spec;
+				BPUrw.CostPrice = MulRateToBase1(POr.CurncyCode,POrw.Price,POr.FrRate,POr.ToRateB1,POr.ToRateB2,POr.BaseRate1,POr.BaseRate2,SetROundModeD(3));
+				matrowput(BPUr,BProw,BPUrw);
+				BProw	= BProw + 1;	
+			end;
+		end;
+		ExtractObj(BPUr.FromOrds,i,ordNr);
+	end;	
+	putwindowrecord(wn,BPUr);	
+return;
+end;
 
 global 
 updating procedure OrderStatusInfoMn()

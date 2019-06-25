@@ -4818,6 +4818,92 @@ endjob;
 return;
 end;
 
+
+global
+procedure StockInAllCompRn(record RcVc RepSpec)
+begin
+record INVc INr,IN2r;
+integer i,CompOld,CompQty;
+record DIVc DIr;
+boolean testf;
+integer pos;
+string 100 class;
+record CompaniesBlock Compb;
+row CompaniesBlock Comprw;
+record ItemStatusVc ISr,IS2r;
+boolean TrHs;
+record LocationVc Locr;
+	
+	
+	// WebSyncCustomerSales;
+	
+	BlockLoad(Compb);
+	
+	CompOld = currentcompany;
+	CompQty = matrowcnt(Compb);
+	
+
+	StartReportnoheaderjob("Остатки в компаниях");
+	
+	INr.Code = RepSpec.f1;
+	if(!ReadFirstMain(INr,1,true)) then begin
+		INr.BarCode = RepSpec.f1;
+		if(!ReadFirstKey("BarCode",INr,1,true)) then begin
+			INr.AlternativeCode = RepSpec.f1;
+			If(!ReadFirstKey("AlternativeCode",INr,1,true)) then begin
+				goto StockInAllCompRnEnd;
+			end;
+		end;
+	end;
+	
+	for (i=0;i<CompQty;i=i+1)begin
+		matrowget(Compb,i,Comprw);
+		if(Comprw.ActiveStatus==0)then begin
+			SetCompany(i+1,false);
+			IN2r.Code = INr.Code;
+				if(!ReadFirstMain(IN2r,1,true)) then begin
+					goto skipcomp;
+				end;	
+			if(IN2r.BPIBrand!=INr.BPIBrand) then begin 	goto skipcomp; end;
+			
+			
+			ISr.Code = INr.Code;
+			ISr.Location = ";;;";
+			if(ReadFirstMain(ISr,2,true) and (ISr.Instock-ISr.RsrvQty)>0) then begin
+				Black_Divider(0,1);
+				startformat(15);
+					outstring(0,0,"Company - " & Comprw.CompName ,false);
+				endformat;
+				gray_divider(0,1);
+				
+				resetloop(IS2r);
+				TrHs = true;
+				IS2r.Code = ISr.Code;
+				while(loopmain(IS2r,1,TrHs))begin
+					if(IS2r.Code!=ISr.Code)then begin TrHs = false; end;
+					
+					if(TrHs and IS2r.Location!=ISr.Location and (IS2r.Instock-IS2r.RsrvQty)>0)then begin
+						startformat(15);
+						outstring(0,0,IS2r.Location,false);
+						Locr.Code = IS2r.Location;
+						readfirstmain(Locr,1,true);
+						outstring(50,0,Locr.Name,false);
+						outstring(150,"dblINVc",INr.Code ,false);
+						outstring(250,0,INr.Name ,false);
+						outstring(350,0,IS2r.Instock-IS2r.RsrvQty,false);
+						endformat;
+					end;
+				end;
+			end;	
+		end;
+		skipcomp:;
+	end;
+	SetCompany(CompOld,false);
+	StockInAllCompRnEnd:;
+endjob;	
+return;
+end;
+
 global
 procedure CodeBrandRn(record RcVc RepSpec)
 begin

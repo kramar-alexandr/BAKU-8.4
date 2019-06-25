@@ -30,6 +30,7 @@ external updating procedure AssignStockResFromPO(record POVc);
 external function Boolean ActVc_ShouldAttachPdfToEMail(record ActVc);
 external procedure GetMailFormattingSettings(record MailVc,var record ConfVc);
 external procedure FindUserMailboxName(string,var string,var string);
+external updating function Integer PastePOInPUFromBPU(record POVc,record PUVc,Integer,record BigPUVc);
 
 global
 procedure PasteInvInEDIInv(var record EDIIVVc EDIIVp,record IVVc IVp)
@@ -508,6 +509,53 @@ BEGIN
   end;
 LRecordAction_raPastePOInPU:;  
   RecordAction_raPastePOInPU = res;
+  RETURN;
+END;
+
+global
+updating function LongInt RecordAction_raPastePOInPUFromBPU(var record POVc POp,var record PUVc PUp,var record BigPUVc BPUr )
+BEGIN
+  LongInt res,ponr,newnr;
+  record SRBlock SRRec;
+      
+  if (ReadFirstMain(POp,0,true)) then begin end;  
+  if (POp.OrderType!=kOrderTypeNormal) then begin 
+    res = 22075;
+    goto LRecordAction_raPastePOInPU;
+  end;
+  ponr = PUp.PONr;
+  RecordNew(PUp);
+  PUp.PONr = ponr;
+  if (PUp.SerNr==-1) then begin
+    BlockLoad(SRRec);
+    newnr = GetCurUserLastNr("PUVc");
+    if (newnr==-1) then begin
+      newnr = SRRec.LastPurNr;      
+    end;    
+    PUp.SerNr = NextSerNr("PUVc",PUp.TransDate,newnr,false,"");
+    if (PUp.SerNr==-1) then begin 
+      res = 1747;
+      goto LRecordAction_raPastePOInPU; 
+    end;
+  end;
+  AssignStockResFromPO(POp);
+  res = PastePOInPUFromBPU(POp,PUp,199,BPUr);
+	if(CurrentCompany==29 and left(POp.InvAddr4,5)=="SABIN")then begin
+		PUp.FreightCompanyRegNr = right(POp.InvAddr4,len(POp.InvAddr4)-5);
+	end;
+  if (res!=0) then begin
+    goto LRecordAction_raPastePOInPU;
+  end;
+  if ((MatRowCnt(PUp)>0) and (PUp.SerNr!=-1)) then begin
+    if (RecordStore(PUp,false)) then begin 
+      CreateRecordLink(PUp,CurrentCompany,POp,CurrentCompany);  
+			CreateRecordLink(BPUr,CurrentCompany,PUp,CurrentCompany); 
+      CreateRecordLink(POp,CurrentCompany,PUp,CurrentCompany);  
+    end;
+    res = 0;
+  end;
+LRecordAction_raPastePOInPU:;  
+  RecordAction_raPastePOInPUFromBPU = res;
   RETURN;
 END;
 
