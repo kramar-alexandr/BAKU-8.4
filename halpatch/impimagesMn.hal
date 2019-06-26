@@ -14396,3 +14396,137 @@ string 100 item,oldBrand,newBrand,code,glCode;
 	
 return;
 end;
+
+
+
+
+
+global updating procedure CollectConsItemsMn(record RcVc RepSpec)
+begin
+	record INVc INr, ConsINr, OldConsINr;
+	record ItemHistVc IHr;
+	record DIVc DIr;
+	boolean TrHs,testf,datef,anndemaatef,compf,INCodef,CustCodef;
+	record IVVc IVr;
+	row IVVc IVrw;
+	vector val SaleMon;
+	integer pos,mtrw,y,months,i,MonSep,AnnDem,IVqty,POPlacingTime,Year,Margin,currcomp,compmtrw,j,CompDem,oldDemComp,brcnt,br,Quart,posdem;
+	string 255 cmd,sCategory,sBrand,sType,sBrandName,BrDemPl,DeadCode,NPCode,DemComp,sCompName,oldCode;
+	date backdate,trdate,AnnDemDate,FrontDate;
+	val basesum, middleitprice,basesumprice,LTd;
+	vector integer Mon;
+	record CUVc CUr;
+	vector val brandleadtime;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	longint quant, INq, k;
+	array string 255 INCode,arBR;
+	vector string 255 INmatstrv, CalculatedLeadTime,MonName,vItemComp;
+	vector integer arComp, YearMonSep;
+	vector boolean vDemComp, SalesThrYf, SalesOneYf;
+	record UserVc USr;
+	boolean CompItemf, TrHs2;
+	integer OldComp;
+	
+	
+	
+	
+	backdate = AddYear(CurrentDate,-3);
+	backdate.month = 1;
+	backdate.day = 1;
+	
+	BlockLoad(Compb);
+	compmtrw = matrowcnt(Compb);
+	
+	for (j=0;j<compmtrw;j=j+1)begin
+		matrowget(Compb,j+1,Comprw);
+		logtext(0,j+1);
+		if(Comprw.ActiveStatus==0 and ((j+1)!=32) and ((j+1)!=29) and ((j+1)!=33))then begin
+			resetloop(INr);
+			INr.Code = "";
+			while(loopmain(INr,1,true))begin
+				testf = true;
+				if(INr.Terminated==1)then begin testf = false; end;
+				if(setinset("30",INr.DispGroups))then begin testf = false; end;
+				if(setinset("31",INr.DispGroups))then begin testf = false; end;
+				if(setinset("32",INr.DispGroups))then begin testf = false; end;
+				if(setinset("33",INr.DispGroups))then begin testf = false; end;
+				if(setinset("34",INr.DispGroups))then begin testf = false; end;
+				if(setinset("35",INr.DispGroups))then begin testf = false; end;
+				if(INr.ItemCat=="O" or INr.ItemCat=="D")then begin testf = false; end;
+				
+				
+				if(INr.ConsgType!=0)then begin
+					testf = false;
+				end;
+				
+				
+				
+				
+				if(testf)then begin
+					FrontDate = currentdate;
+					FrontDate.day = 31;
+					FrontDate.month = 12;
+					
+					IHr.ArtCode = INr.Code;
+					IHr.TransDate = FrontDate;
+					MonSep = 1;
+					basesumprice = 0;
+					IVqty = 0;
+					TrHs = true;
+					quant = 0;
+					CustCodef = false;
+					while (loopbackkey("ArtCode",IHr,2,TrHs)) begin
+						if(IHr.ArtCode!=INr.Code)then begin TrHs = false; end;
+						if(IHr.TransDate<backdate)then begin TrHs = false; end;
+						INCodef = true;
+						for (k=0;k<INCode.length;k=k+1)begin
+							if(INCode[k]==INr.Code or blank(INr.Code))then begin INCodef = false; k = INq + 1; end;
+						end;
+						
+						if(INCodef)then begin
+							INCode[INq] = INr.Code;
+							INq = INq + 1;
+						end;
+						if(IHr.FileName=="IVVc" and TrHs)then begin
+							IVr.SerNr = IHr.TransNr;
+							if(readfirstmain(IVr,1,true))then begin
+								if(!setinset("FOB",IVr.CustCode))then begin 
+									CustCodef = true;
+									TrHs = false;
+								end;
+							end;
+						end;
+					end;
+					resetloop(IHr);
+					OldComp = currentcompany;
+					if(CustCodef)then begin
+						SetCompany(32,false);
+						recordnew(ConsINr);
+						RecordCopy(ConsINr,INr);
+						OldConsINr.Code = "IN_9999999";
+						TrHs2 = true;
+						while (LoopBackKey("Code",OldConsINr,1,TrHs2)) begin
+							OldCode = OldConsINr.Code;
+							TrHs2 = false;
+						end;
+						ResetLoop(OldConsINr);
+						if(blank(OldCode)) then begin oldCode = "IN_0000001"; end;
+						NextM4SerialNumber(OldCode,ConsINr.Code);
+						if(RecordStore(ConsINr,true))then begin
+							logtext(0,ConsINr.Code);
+						end;
+						ResetCompany(OldComp);
+					end;
+				end;
+			end;
+			ResetLoop(INr);
+		end;
+	end;
+return;
+end;
+
+
+
+
+
