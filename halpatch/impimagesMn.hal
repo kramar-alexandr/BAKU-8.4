@@ -14475,7 +14475,7 @@ end;
 
 global updating procedure CollectConsItemsMn(record RcVc RepSpec)
 begin
-	record INVc INr, ConsINr, OldConsINr;
+	record INVc INr, ConsINr, OldConsINr, UINr;
 	record ItemHistVc IHr;
 	record DIVc DIr;
 	boolean TrHs,testf,datef,anndemaatef,compf,INCodef,CustCodef;
@@ -14498,7 +14498,8 @@ begin
 	vector boolean vDemComp, SalesThrYf, SalesOneYf;
 	record UserVc USr;
 	boolean CompItemf, TrHs2;
-	integer OldComp;
+	integer OldComp,stop;
+	record ConsItemVc CIr;
 	
 	
 	
@@ -14509,11 +14510,11 @@ begin
 	
 	BlockLoad(Compb);
 	compmtrw = matrowcnt(Compb);
-	
 	for (j=0;j<compmtrw;j=j+1)begin
 		matrowget(Compb,j+1,Comprw);
 		logtext(0,j+1);
 		if(Comprw.ActiveStatus==0 and ((j+1)!=32) and ((j+1)!=29) and ((j+1)!=33))then begin
+			SetCompany(j+1,false);
 			resetloop(INr);
 			INr.Code = "";
 			while(loopmain(INr,1,true))begin
@@ -14573,8 +14574,9 @@ begin
 					resetloop(IHr);
 					OldComp = currentcompany;
 					if(CustCodef)then begin
-						SetCompany(32,false);
-						recordnew(ConsINr);
+						SetCompany(33,false);
+						recordNew(UINr);
+						recordNew(ConsINr);
 						RecordCopy(ConsINr,INr);
 						OldConsINr.Code = "IN_9999999";
 						TrHs2 = true;
@@ -14583,18 +14585,29 @@ begin
 							TrHs2 = false;
 						end;
 						ResetLoop(OldConsINr);
-						if(blank(OldCode)) then begin oldCode = "IN_0000001"; end;
+						if(blank(OldCode)) then begin oldCode = "IN_0000000"; end;
 						NextM4SerialNumber(OldCode,ConsINr.Code);
-						if(RecordStore(ConsINr,true))then begin
-							logtext(0,ConsINr.Code);
+						ConsINr.UUID = UINr.UUID;
+						CIr.LocCode = INr.Code;
+						CIr.BrandCode = ConsINr.BPIBrand;
+						if(!ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
+							if(RecordStore(ConsINr,true))then begin
+								logtext(0,ConsINr.Code & " Code");
+								recordNew(CIr);
+								CIr.Code = ConsINr.Code;
+								CIr.LocCode = INr.Code;
+								CIr.BrandCode = ConsINr.BPIBrand;
+								RecordStore (CIr,true);
+							end;
+							ResetCompany(OldComp);
 						end;
-						ResetCompany(OldComp);
 					end;
 				end;
 			end;
 			ResetLoop(INr);
 		end;
 	end;
+	ResetCompany(33);
 return;
 end;
 
