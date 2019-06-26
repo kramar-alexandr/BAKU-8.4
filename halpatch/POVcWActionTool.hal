@@ -71,6 +71,9 @@ external procedure POSumup(var record POVc );
 external function Boolean VIVc_PasteVECode(var record VIVc,Integer,Boolean,Boolean,var string);
 remote procedure AddPrepaymentPORows(var record VIVc,LongInt);//Edit----------------------Dima  05.03.2015
 external procedure ExtractObj(string,var Integer,var string);
+external function Boolean PasteCustInOrder(var record ORVc,string,string,var string,var string);
+remote procedure ORVc_PasteLocation(var record ORVc,Integer);
+
 
 procedure CreateNewPUFromPO(record PUVc PUp,record POVc POp,LongInt ponr)
 BEGIN
@@ -3307,4 +3310,53 @@ begin
 		Messagebox(35160,"");
 	end;
   return;
+end;
+
+
+global updating function integer Remote_ORFromPOConsDsm(var record POVc POr, var record ORVc ORr, var string warn)// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 26 06 2019 y. at 2:49:06 PM
+begin
+	row POVc POrw;
+	integer wn,i,mtrw,curcomp;
+	row ORVc ORrw;
+	record LocationVc Locr;
+	string 100 backfob,msg,warning,errstr;
+	integer res;
+	record MainStockBlock MSb;
+	
+	curcomp = currentcompany;
+	
+	blockload(MSb);
+	
+	Locr.Code = POr.Location;
+	if(readfirstmain(Locr,1,true))then begin
+		backfob = Locr.FOBSuplier;
+	end;
+	
+	setcompany(33,false);//++++++++++++++++++++++++ CC in
+		recordnew(ORr);
+		ORr.CustCode = backfob;
+		if (PasteCustInOrder(ORr,ORr.CustCode,"",warning,errstr)) then begin
+		end;
+		ORr.Location = MSb.MainStock;
+		ORVc_PasteLocation(ORr,-1);
+		ORr.OrderClass = "STOCK";
+		
+		mtrw = matrowcnt(POr);
+		
+		for(i=0;i<mtrw;i=i+1)begin
+			matrowget(POr,1,POrw);
+			
+			clearrow(ORr,ORrw,1);
+			
+			
+			matrowput(ORr,i,ORrw);
+		end;
+		
+		ORr.SerNr = NextSerNr("ORVc",ORr.OrdDate,-1,false,"");
+		recordinsert(ORr,true);
+	
+	resetcompany(curcomp);//++++++++++++++++++++++++ CC out
+	
+	Remote_ORFromPOConsDsm = res;
+return;
 end;

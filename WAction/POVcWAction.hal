@@ -59,7 +59,7 @@ external procedure PasteFromSysList(Integer,Integer);
 remote updating function LongInt RecordAction_raPastePUInVI(record PUVc,var record VIVc,var string);
 remote procedure CreatePufromIVforPLHandle(record RcVc,integer,var string);
 remote updating function LongInt RecordAction_raPastePOInPUFromBPU(var record POVc,var record PUVc,var record BigPUVc);
-
+remote updating function integer Remote_ORFromPOConsDsm(var record POVc,var record ORVc,var string);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 26 06 2019 y. at 2:42:07 PM
 
 global
 procedure PrintOSDD(Integer wn,Boolean previewf)
@@ -3636,4 +3636,69 @@ begin
 	
   OSDCodeSClassOnOKWindow = false;
   return;
+end;
+
+
+global updating procedure ORFromPOConsDsm()
+begin
+	record POVc POr;
+	row POVc POrw;
+	integer wn,i,mtrw,curcomp;
+	record ORVc ORr;
+	row ORVc ORrw;
+	record LocationVc Locr;
+	string 100 backfob,msg;
+	integer res;
+	
+	wn = curwindow;
+	getwindowrecord(wn,POr);
+	
+	if(windowstate(wn)!=Rs_normal)then begin
+		messagebox(0,"Save document first");
+		goto lORFromPOConsDsm;
+	end;
+	
+	if(POr.OKFlag==1)then begin
+		if(POr.VECode=="FOB_SKLAD")then begin
+			mtrw = matrowcnt(POr);
+			if(mtrw>0)then begin
+				curcomp = currentcompany;
+				Locr.Code = POr.Location;
+				if(readfirstmain(Locr,1,true))then begin
+					backfob = Locr.FOBSuplier;
+				end;
+				
+				if(blank(backfob))then begin
+					messagebox(0,"Blank FOB Suppllier for order");
+					goto lORFromPOConsDsm;
+				end;
+				
+				
+				//setcompany(33,false);//++++++++++++++++++++++++ CC in
+					//recordnew(ORr);
+					res = Remote_ORFromPOConsDsm(POr,ORr,msg);
+					if(res==-1)then begin
+						messagebox(0,msg);
+						goto lORFromPOConsDsm;
+					end;
+					
+					if(ORr.SerNr>-1)then begin
+						createrecordlink(POr,currentcompany,ORr,33);
+						createrecordlink(ORr,33,POr,currentcompany);
+					end;
+					
+				//resetcompany(curcomp);//++++++++++++++++++++++++ CC out
+			end else begin
+				messagebox(0,"Purchase Order must be with items");
+			end;
+		end else begin
+			messagebox(0,"Purchase Order must be on FOB_SKLAD vendor code");
+		end;
+	end else begin	
+		messagebox(0,"Purchase Order must be OK'ed");
+	end;
+	
+	lORFromPOConsDsm:;
+
+return;
 end;
