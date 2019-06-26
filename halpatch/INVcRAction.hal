@@ -1124,7 +1124,7 @@ begin
 				end;
 			end;
 		end;
-		if(CurrentCompany!=32 and CurrentCompany!=10) then begin
+		if(CurrentCompany!=32 and CurrentCompany!=10 and CurrentCompany!=33) then begin
 			CreateNewGlobalItem(INr);// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 20 12 2018 y. at 9:26:30 PM;
 		end;
 		
@@ -2599,7 +2599,7 @@ global //if change something do it in nINVcRecordCheck(...) also
 updating function LongInt INVcRecordCheck(var record INVc INr,record INVc IN2r,LongInt stat,LongInt long4)
 begin
   LongInt res;
-  record INVc lINr,tINr;
+  record INVc lINr,tINr,oldINr;
   record ITVc ITr;
   Boolean checkf,check;
   record ItemSettingBlock ISb;
@@ -2628,7 +2628,13 @@ begin
 	row IdINSNOneBlock IINSNOrw;//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 16:41 03.08.2018
   record NewClassifChBlock NCCHb;
 	string 50 object;
-	string 255 dispGroup;
+	string 255 dispGroup,oldCode;
+	record ConsCompBlock CCBb;
+	record BPIBrandVc BBr;
+	boolean TrHs;
+  
+	
+		BlockLoad(CCBb);
 	
 	logtext(0,"INVcRecordCheck");
 	
@@ -2637,6 +2643,43 @@ begin
 	INr.Name = DelSpecSymb(INr.Name);
 	
   res = 0;
+	if(CCBb.OKFlag!=0) then begin
+		if((mid(INr.Code,0,3)!="IN_" or Len(INr.Code)!=10) and nonblank(INr.Code)) then begin
+			RecordCheckError(36256,"",-1,"Code");      
+      res = -1; 
+      goto LINVcRecordCheck;
+		end;
+		if(blank(INr.Code)) then begin
+			OldINr.Code = "IN_9999999";
+			TrHs = true;
+			while (LoopBackKey("Code",OldINr,1,TrHs)) begin
+				oldCode = OldINr.Code;
+				TrHs = false;
+			end;
+			ResetLoop(OldINr);
+			if(blank(oldCode)) then begin oldCode = "IN_0000000"; end;
+			NextM4SerialNumber(OldINr.Code,INr.Code);
+		end;
+		if(blank(INr.BPIBrand)) then begin
+			RecordCheckError(36253,INr.BPIBrand,-1,"BPIBrand");      
+      res = -1; 
+      goto LINVcRecordCheck;
+		end else begin
+			BBr.Code = INr.BPIBrand;
+			if(!ReadFIrstMain(BBr,1,true)) then begin
+				RecordCheckError(36254,INr.BPIBrand,-1,"BPIBrand");      
+				res = -1; 
+				goto LINVcRecordCheck;
+			end else begin
+				if(blank(BBr.CWHCode)) then begin
+					RecordCheckError(36255,INr.BPIBrand,-1,"BPIBrand");      
+					res = -1; 
+					goto LINVcRecordCheck;
+				end;
+			end;
+		end;
+	end;
+	
   if ((ProgramType==typFirstOffice) or 
       (ProgramType==typFirstOfficeSmall) or 
       (ProgramType==typFirstOfficePro) or 
