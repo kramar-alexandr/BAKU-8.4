@@ -14654,10 +14654,11 @@ begin
 return;
 end;
 
+
 global procedure CheckItemCC(var record newINVc newINr, integer rownr)
 begin
 	integer i,mtrw,oldComp,CompQty;
-	record INVc OldINr,tmpINr;
+	record INVc OldINr,tmpINr,INr;
 	row NewINVc newINrw,newIN2rw;
 	boolean res,testf,TrHs;
 	record BPIBrandVc BBr;
@@ -14669,14 +14670,30 @@ begin
 	
 	oldComp = CurrentCompany;
 	CompQty = matrowcnt(Compb);
-		matrowget(newINr,1,newINrw);
+		matrowget(newINr,rownr,newINrw);
+		
+		OldINr.Code = "IN_9999999";
+		TrHs = true;
+		while (LoopBackKey("Code",OldINr,1,TrHs)) begin
+			old = OldINr.Code;
+			TrHs = false;
+		end;
 		CIr.LocCode = newINrw.VendorCode;
 		CIr.BrandCode = newINr.Brand;
-		if(ReadfirstMain(CIr,2,true)) then begin
-			newINrw.Code = CIr.Code;
-			matrowput(newINr,rownr,newINrw)
-			HandleNewIN2DClassCode(newINr,rownr);
+		if(ReadfirstKey("LocCodeBrand",CIr,2,true)) then begin
+				newINrw.Code = CIr.Code;
+				matrowput(newINr,rownr,newINrw)
+				HandleNewIN2DClassCode(newINr,rownr);
 		end else begin
+			INr.Code = newINrw.VendorCode;
+			if(ReadFirstMain(INr,1,true)) then begin
+				if(INr.BPIBrand==newINr.Brand) then begin
+					newINrw.Code = INr.Code;
+					matrowput(newINr,rownr,newINrw)
+					HandleNewIN2DClassCode(newINr,rownr);
+					goto skipsearch;
+				end;	
+			end;	
 			for (i=0;i<CompQty;i=i+1)begin
 				matrowget(Compb,i,Comprw);
 				if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(i+1) or i+1==3) and i+1!=10 and i+1!=32)then begin
@@ -14685,29 +14702,39 @@ begin
 					if(ReadFirstMain(tmpINr,1,true)) then begin
 						if(tmpINr.BPIBrand==newINr.Brand) then begin
 							if(rownr==0) then begin
-								OldINr.Code = "IN_9999999";
-								TrHs = true;
-								while (LoopBackKey("Code",OldINr,1,TrHs)) begin
-									old = OldINr.Code;
-									TrHs = false;
-								end;
-								ResetLoop(OldINr);
-								NextM4SerialNumber(old,new);
-								newINrw.Code = new;
-								matrowput(newINr,rownr,newINrw);
+									newINrw.Code = tmpINr.Code;
+									matrowput(newINr,rownr,newINrw);
+									HandleNewIN2DClassCode(newINr,rownr);
+									matrowget(newINr,rownr,newINrw);
+									ResetLoop(OldINr);
+									NextM4SerialNumber(old,new);
+									newINrw.Code = new;
+									matrowput(newINr,rownr,newINrw);
 							end else begin	
+								newINrw.Code = tmpINr.Code;
+								matrowput(newINr,rownr,newINrw);
+								HandleNewIN2DClassCode(newINr,rownr);	
 								matrowget(newINr,rownr-1,newIN2rw);
 								NextM4SerialNumber(newIN2rw.Code,newINrw.Code);
 								matrowput(newINr,rownr,newINrw);
-								HandleNewIN2DClassCode(tmpINr,rownr);	
 							end;	
 						end;	
 					end;	
 				end;
-			end;	
+			end;
 		end;	
 	SetCompany(oldComp,false);
+	if(blank(newINrw.Code)) then begin
+		OldINr.Code = "IN_9999999";
+		TrHs = true;
+		while (LoopBackKey("Code",OldINr,1,TrHs)) begin
+			old = OldINr.Code;
+			TrHs = false;
+		end;
+		NextM4SerialNumber(old,new);
+		newINrw.Code = new;
+		matrowput(newINr,rownr,newINrw);
+	end;
+	skipsearch:;
 return;
 end;	
-
-
