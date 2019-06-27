@@ -358,6 +358,178 @@ LGetRebate:;
   RETURN;
 END;
 
+
+
+
+global
+function Boolean GetRebate2(record INVc INr,var val pricep,var val qtp,string cucat,string reb2code,var val rebvp,var Boolean foundstaff,Date tdp,var string Object)
+BEGIN
+  Boolean res;
+  record CCatVc CCatr;
+  record RebVc Rebr;
+  row RebVc Rebrw;
+  Integer rwcnt;
+  Integer i;
+  string 5 rebcode;
+  Boolean rebfound,testf;// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 17 April 2018 10:22:35
+  string 20 temprebcode; // Edit ************************** Friday, 30 August 2013 11:45:23
+  boolean findreb; // Edit ************************** Friday, 30 August 2013 11:45:23
+  integer checkin; // Edit ************************** Friday, 30 August 2013 11:45:23
+  record MyRebVc MyRebr;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 16 April 2018 10:42:44
+  row MyRebVc MyRebrw;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 16 April 2018 10:42:45
+  
+  
+  rebvp = 0;
+  rebcode = reb2code;
+  //if(currentcompany!=25)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 8 December 2017 14:22:55
+		if (blank(rebcode)) then begin
+			if (nonblank(cucat)) then begin
+				CCatr.Code = cucat;
+				if (ReadFirstMain(CCatr,1,true)) then begin
+					if (nonblank(CCatr.RebCode)) then begin
+						rebcode = CCatr.RebCode;
+					end;
+				end;
+			end;
+		end;  
+  //end;    
+  if (nonblank(rebcode)) then begin
+    temprebcode  = rebcode; //edited by BPI
+    findreb = true;  //edited by BPI
+    checkin = 0;  //edited by BPI
+    while(findreb)begin  //edited by BPI
+			if (GetYear(tdp)>0) then begin
+				Rebr.Replaces = rebcode;
+				Rebr.FromDate = tdp;
+				rebfound = ReadLastKey("Replaces",Rebr,2,false); 
+				if (Rebr.Replaces<>rebcode) then begin rebfound = false; end;
+				if (DateInRange(tdp,Rebr.FromDate,Rebr.ToDate)==false) then begin rebfound = false; end;
+				if (rebfound) then begin rebcode = Rebr.Code; end;
+			end;  
+			if (rebfound==false) then begin
+				Rebr.Code = rebcode;
+				rebfound = ReadFirstMain(Rebr,1,true);
+				findreb = false; //edited by BPI {
+			end; 
+			
+			checkin = checkin + 1;
+			If(checkin>20) then begin
+				findreb  = false;
+			end; //edited by BPI }
+    end;
+    if (rebfound and GetYear(tdp)>0) then begin
+      if (DateInRange(tdp,Rebr.FromDate,Rebr.ToDate)==false) then begin rebfound = false; end;
+    end;
+    if (rebfound) then begin
+      rwcnt = MatRowCnt(Rebr);
+      for (i=0;i<rwcnt;i=i+1) begin
+        MatRowGet(Rebr,i,Rebrw);
+        if (Rebrw.CodeType==0) then begin
+          if(nonblank(INr.RebGroup))then begin //edited by BPI {
+            if (INr.RebGroup==Rebrw.ITCode) then begin
+              GetStaffReb(INr,Rebrw.StaffCode,qtp,pricep,Rebr,i,rebvp,foundstaff);
+							Object = Rebr.Object;
+              res = true;
+              goto LGetRebate;
+             end;
+          end;  //edited by BPI }
+          if (INr.Group==Rebrw.ITCode) then begin
+//            GetStaffReb(INr,Rebrw.StaffCode,qtp,pricep,Rebr,rebvp,foundstaff);
+            GetStaffReb(INr,Rebrw.StaffCode,qtp,pricep,Rebr,i,rebvp,foundstaff);
+						Object = Rebr.Object;
+            res = true;
+            goto LGetRebate;
+          end;
+        end;
+        if (Rebrw.CodeType==1) then begin
+          if (INr.Code==Rebrw.ITCode) then begin
+            GetStaffReb(INr,Rebrw.StaffCode,qtp,pricep,Rebr,i,rebvp,foundstaff);
+						Object = Rebr.Object;
+            res = true;
+            goto LGetRebate;
+          end;
+        end;
+      end;
+      GetStaffReb(INr,Rebr.StaffCode,qtp,pricep,Rebr,-1,rebvp,foundstaff);
+      res = true;
+    end;
+    
+    // Edit Start ---------------------------------------------- Edit Start
+	//Monday, 16 April 2018 10:42:06
+	
+    
+    
+	// Edit End ---------------------------------------------- Edit End
+	
+	/*
+	if(Inr.Code==MyRebrw.ITCode) then begin
+		
+	end;
+	*/
+  end;
+LGetRebate:;
+
+	if(nonblank(reb2code))then begin
+		MyRebr.Code = "";
+		while(loopmain(MyRebr,1,true))begin
+			if(true)then begin
+				if(DateInRange(tdp,MyRebr.FromDate,MyRebr.ToDate))then begin
+					testf = true;
+					if(tdp==MyRebr.FromDate and MyRebr.FromDate==currentdate)then begin
+						if(nonblanktime(MyRebr.FromTime) and MyRebr.FromTime>currenttime)then begin
+							testf = false;
+						end;
+					end;
+					if(tdp==MyRebr.ToDate and MyRebr.ToDate==currentdate)then begin
+						if(nonblanktime(MyRebr.ToTime) and MyRebr.ToTime<currenttime)then begin
+							testf = false;
+						end;
+					end;
+					
+					if(testf)then begin
+						rwcnt = MatRowCnt(MyRebr);
+						for (i=0;i<rwcnt;i=i+1) begin
+							MatRowGet(MyRebr,i,MyRebrw);
+						
+							if(MyRebrw.CodeType==0)then begin
+								if(INr.Group==MyRebrw.ITCode)then begin
+									rebvp = MyRebrw.vra0;
+									Object = MyRebr.Object;
+								end;
+							end;
+							if(MyRebrw.CodeType==1)then begin
+								if(INr.Code==MyRebrw.ITCode)then begin
+									rebvp = MyRebrw.vra0;
+									Object = MyRebr.Object;
+								end;
+							end;
+						
+						end;
+					end;
+				end;
+			end;
+		end;    
+	end;
+	
+	
+	if(INr.Code=="GLOBALGIFTCARD")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 31 August 2018 11:14:07
+		rebvp = blankval;
+	end;
+
+  GetRebate2 = res;
+  RETURN;
+END;
+
+
+
+
+
+
+
+
+
+
+
 global
 procedure GetStructureCostPrice(string recepy,var val costp)
 BEGIN
