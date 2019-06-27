@@ -12,6 +12,7 @@ external function string 255 ReplaceCharByString(string,string,string);
 external function string 255 NormalizeSetString(string);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 3 April 2018 12:00:28
 external procedure NextM4Number(string,var string);
 external procedure NextM4SerialNumber(string,var string);
+remote function boolean CompanyIsJWLikeCompany(Integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -838,6 +839,7 @@ updating function LongInt NewINVcRecordCheck(var record NewINVc newINr,record Ne
 BEGIN
   LongInt res;
   row NewINVc newINrw;
+	record INVc OldINr,tmpINr;
 	record NewINVc OthCompnewINr;
   record INVc INr,IN2r;
 	record NewINVc newINr2;
@@ -847,7 +849,7 @@ BEGIN
 	string 100 lastSerNr,newSerNr;
   LongInt stat1,long41;
   string 200 rawclass,uloc,group;
-  integer pos,rwcnt, t,tcnt;
+  integer pos,rwcnt, t,tcnt,oldComp,CompQty;
   record DIVc DIr;
   boolean upd,insertDispNameNotCode,TrHs,TrHs1,testf;
   record DiCheckBlock DiCb; //Edit***************************Sasha2,16:52 07.12.2015
@@ -880,14 +882,21 @@ BEGIN
 	record BPIStoneVc BPIStoner;
 	record BPIStrapVc BPIStrapr;
 	record BPIOdourVc BPIOdourr;
+	record ConsCompBlock CCB;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+
+	BlockLoad(Compb);
+	
+	BlockLoad(CCB);
 	NewValidClassif = false;
   res = 0;
   insertmode = 1;
   updatemode = 2;
   BlockLoad(NCCHb);
   
-  
-
+  CompQty = matrowcnt(Compb);
+	oldComp = currentcompany;
   matrowget(newINr,0,newINrw);
   if(NCCHb.ClassifCheck==1 and newINr.Brand!="BRND0046" and (newINrw.ConsgType!=3 and newINrw.ConsgType!=4) )then begin
 		if(blank(newINr.Group))then begin
@@ -957,6 +966,21 @@ BEGIN
 		
 			for (i=0;i<mtrw;i=i+1) begin
 				matrowget(newINr,i,newINrw);
+				if(CCB.OKFlag!=0) then begin
+					for (j=0;j<CompQty;j=j+1)begin
+						matrowget(Compb,j,Comprw);
+						if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3) and j+1!=10 and j+1!=32)then begin
+							SetCompany(j+1,false);
+							tmpINr.Code = newINrw.VendorCode;
+							if(ReadFirstMain(tmpINr,1,true)) then begin
+									res = -1;
+									RecordCheckError(31231," существует в другой компании",i,"VendorCode");
+									goto LNewINVcRecordCheck;
+							end;	
+						end;
+					end;
+					SetCompany(oldComp,false);
+				end;
 				
 				//if(blank(NewINrw.BrandSC))then begin
 					newINrw.BrandSC = NewINr.Brand;
