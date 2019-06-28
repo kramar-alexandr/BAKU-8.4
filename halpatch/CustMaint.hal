@@ -1,5 +1,8 @@
 //server-only
 external function string 60 AddObjectToObjectList(string,string);
+external procedure NextM4SerialNumber(string,var string);
+external procedure ExtractObj(string,var Integer,var string);
+
 
 global webpublic updating procedure WebChangeDownpaymentAcc()
 begin
@@ -405,5 +408,76 @@ begin
 	end;
 
 
+return;
+end;
+
+global 
+webpublic updating procedure WebFillTreePathMn()
+begin
+	record GlobalItemVc GIr;
+	record BtrxFirstLevelCatVc BtrxFirstLevelCatr;
+	record BtrxSecondLevelCatVc BtrxSecondLevelCatr, BSLLastCoder;
+	record BtrxThirdLevelCatVc BtrxThirdLevelCatr, BTLLastCoder,old3cetr;
+	boolean testf, TrHs;
+	string 255 catName, catNameRUS, catNameAZ, OldCode, sCatName, tCatName,tstr,new3cat;
+	vector string 200 tlvelto2;
+	integer pos;
+	
+	BtrxThirdLevelCatr.Name = "";
+	while (loopkey("Name",BtrxThirdLevelCatr,1,testf)) begin
+		tlvelto2[BtrxThirdLevelCatr.Name & ";;;" & BtrxThirdLevelCatr.PathScndCode] = BtrxThirdLevelCatr.Code;
+	end;
+	
+	
+	GIr.Code = "";
+	while (LoopMain(GIr,1,true)) begin
+		if(nonblank(GIr.BTRxFirstLevCat) and nonblank(GIr.BTRxSecondLevCat) and nonblank(GIr.BTRxThirdLevCat))then begin
+			logtext(0,GIr.Code);
+			
+			pos = 0;
+			new3cat = "";
+			ExtractObj(GIr.BTRxThirdLevCat,pos,tstr);
+			while(nonblank(tstr))begin
+				if(nonblank(tstr) and left(tstr,5)=="THLVL")then begin
+					BtrxThirdLevelCatr.Code = tstr;
+					if(ReadFirstMain(BtrxThirdLevelCatr,1,true))then begin 
+						if(BtrxThirdLevelCatr.PathScndCode!=GIr.BTRxSecondLevCat and left(BtrxThirdLevelCatr.Code,5)=="THLVL")then begin
+							if(nonblank(tlvelto2[BtrxThirdLevelCatr.Name & ";;;" & GIr.BTRxSecondLevCat]))then begin
+								tstr = tlvelto2[BtrxThirdLevelCatr.Name & ";;;" & GIr.BTRxSecondLevCat];
+							end else begin
+								BTLLastCoder.Code = "THLVL9999";
+								if (readlastkey("Code",BTLLastCoder,1,false)) begin
+									OldCode = BTLLastCoder.Code;
+									recordcopy(BTLLastCoder,BtrxThirdLevelCatr);
+									NextM4SerialNumber(OldCode,BTLLastCoder.Code);
+									old3cetr.Code = BTLLastCoder.Code;
+									if(readfirstmain(old3cetr,1,true)==false)then begin
+										BTLLastCoder.PathScndCode = GIr.BTRxSecondLevCat;
+										tlvelto2[BTLLastCoder.Name & ";;;" & BTLLastCoder.PathScndCode] = BTLLastCoder.Code;
+										tstr = BTLLastCoder.Code;
+										recordstore(BTLLastCoder,true);
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+				if(nonblank(new3cat))then begin
+					new3cat = new3cat & "," & tstr;
+				end else begin
+					new3cat = tstr;
+				end;
+				ExtractObj(GIr.BTRxThirdLevCat,pos,tstr);
+			end;
+			if(nonblank(new3cat))then begin
+				if(GIr.BTRxThirdLevCat!=new3cat)then begin
+					GIr.BTRxThirdLevCat = new3cat;
+					recordstore(GIr,true);
+					new3cat = "";
+				end;
+			end;
+			
+		end;
+	end;
 return;
 end;
