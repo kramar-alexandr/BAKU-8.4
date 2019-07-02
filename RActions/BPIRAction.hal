@@ -3,7 +3,7 @@ external function LongInt GetCurUserLastNr(string);
 external procedure NextM4Number(string,var string);
 remote procedure OSDSumUp(var record OSDVc);
 remote procedure NextM4SerialNumber(string,var string);//9:51 02.10.2018
-
+external procedure ExtractObj(string,var Integer,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -1978,21 +1978,41 @@ end;
 global
 updating function LongInt BtrxThirdLevelCatVcRecordCheck(var record BtrxThirdLevelCatVc TLCr,record BtrxThirdLevelCatVc TLC2r,LongInt stat,LongInt long4)
 begin
-string 255 OldCode;
-boolean TrHs;
-record BtrxThirdLevelCatVc oldTLCr;
-if(blank(TLCr.Code))then begin
-	oldTLCr.Code = "THLVL9999";
-	TrHs = true;
-	while (LoopBackKey("Code",oldTLCr,1,TrHs)) begin
-			OldCode = oldTLCr.Code;
-			TrHs = false;
+	string 255 OldCode, tstr;
+	boolean TrHs;
+	record BtrxThirdLevelCatVc oldTLCr, THrdLVLr;
+	integer pos,res;
+
+	res = 0;
+
+	if(blank(TLCr.Code))then begin
+		oldTLCr.Code = "THLVL9999";
+		TrHs = true;
+		while (LoopBackKey("Code",oldTLCr,1,TrHs)) begin
+				OldCode = oldTLCr.Code;
+				TrHs = false;
+		end;
+		ResetLoop(oldTLCr);
+		if(blank(OldCode)) then begin oldCode = "THLVL0000"; end;
+		NextM4SerialNumber(OldCode,TLCr.Code);
 	end;
-	ResetLoop(oldTLCr);
-	if(blank(OldCode)) then begin oldCode = "THLVL0000"; end;
-	NextM4SerialNumber(OldCode,TLCr.Code);
-end;
-return;
+	if(nonblank(TLCr.RelatedTo))then begin
+		pos = 0;
+		tstr = "";
+		ExtractObj(TLCr.RelatedTo,pos,tstr);
+		while (NonBlank(tstr)) begin
+			THrdLVLr.Code = tstr;
+			if(!ReadFirstMain(THrdLVLr,1,true))then begin
+				res = -1;
+				recordcheckerror(36259,tstr,-1,"RelatedTo");
+				goto LBtrxThirdLevelCatVcRecordCheck;
+			end;
+			ExtractObj(TLCr.RelatedTo,pos,tstr);
+		end;
+	end;
+	LBtrxThirdLevelCatVcRecordCheck:;
+	BtrxThirdLevelCatVcRecordCheck = res;
+	return;
 end;
 
 global
