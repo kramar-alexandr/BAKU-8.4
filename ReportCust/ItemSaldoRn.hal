@@ -10,6 +10,38 @@ external procedure GetBaseCurncy(Integer,var string);//Edit---------------------
 external  function string 100 BPICodeToName(string);
 external function boolean CheckUserBrands(string,var vector boolean);
 
+
+global function boolean ObjectIsPROMO(string objstr)
+begin
+	record ObjVc Objr;
+	integer pos;
+	string 100 tstr;
+	boolean res;
+	
+	if(nonblank(objstr))then begin
+		pos = 0;
+		tstr = "";
+		ExtractObj(objstr,pos,tstr);
+		while(nonblank(tstr))begin
+			if(nonblank(tstr))then begin
+				Objr.Code = tstr;
+				if(readfirstmain(Objr,1,true))then begin
+					if(Objr.OTCode=="APRIC" or Objr.OTCode=="AREB")then begin
+						res = true;
+						goto lObjectIsPROMO;
+					end;
+				end;
+			end;
+			ExtractObj(objstr,pos,tstr);
+		end;
+		
+	end;
+	
+	lObjectIsPROMO:;
+	ObjectIsPROMO = res;
+return;
+end;
+
 function string 200 ParseClassification(string class)
 begin
 	string 200 res,cl;
@@ -87,7 +119,7 @@ end;
 
 procedure ItemStockIHSerch(record RcVc RepSpec,string item,string location,date sd,date ed,var val qty_start,var val cost_start,var val pu_qty,var val pu_cost,
                            var val sm_poz_qty,var val sm_neg_qty,var val sm_poz_cost,var val sm_neg_cost,var val iv_poz_qty,
-                           var val iv_neg_qty,var val iv_poz_sum,var val iv_poz_cost,var val iv_neg_sum,var val gp,var val iv_neg_cost,var val sd_qty,var val sd_cost,var val cost_end,var val qty_end,var val srval,var val rpu_qty,var val rpu_cost)
+                           var array val iv_neg_qty,var val iv_poz_sum,var val iv_poz_cost,var array val iv_neg_sum,var val gp,var array val iv_neg_cost,var val sd_qty,var val sd_cost,var val cost_end,var val qty_end,var val srval,var val rpu_qty,var val rpu_cost)
 begin
   record ItemHistVc IHr,IHrinvr;
   record StockMovVc SMr;
@@ -97,7 +129,7 @@ begin
   Boolean TrHs,testf,testf1;
   string 100 oldartcode,oldfilename;
 	longint oldsernr;
-  integer oldrow,oldinvalid;
+  integer oldrow,oldinvalid,promo;
 	val fr,to1,to2,br1,br2,ivfr,ivto;
   string 20 curncy,brandcur;
 	Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
@@ -165,6 +197,7 @@ begin
 						end;
 					end else begin
 						if(testf1)then begin
+							promo = 0;
 							if IHr.Qty>0 then begin
 								IVr.SerNr = IHr.TransNr;
 								if ReadFirstMain(IVr,1,true) then begin
@@ -237,13 +270,20 @@ begin
 									if(IHr.Invalid==1)then begin
 									  sign = -sign;
 									end;
+									
+									
+									promo = 0;
+									if(ObjectIsPROMO(IVrw.Objects))then begin
+										promo = 1;
+									end;
 									if(IVr.InvType==kInvoiceTypeCredit)then begin
-										iv_neg_sum = iv_neg_sum - IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;
+										iv_neg_sum[promo] = iv_neg_sum[promo] - IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;
 										gp = gp - IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;//SumAZN
 									end else begin
-										iv_neg_sum = iv_neg_sum + IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;
+										iv_neg_sum[promo] = iv_neg_sum[promo] + IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;
 										gp = gp + IVrw.Sum/IVrw.Quant*sign*AbsoluteVal(IHr.Qty)/ivfr*ivto*fr/to1;//SumAZN
 									end;
+
 									//gp = gp + IVrw.rowGP;
 									
 									
@@ -271,8 +311,8 @@ begin
 								cost_end = cost_end + IHr.TotCostPrice;
 								qty_end = qty_end + IHr.Qty;
 							end else begin
-								iv_neg_qty = iv_neg_qty + (-IHr.Qty);
-								iv_neg_cost = iv_neg_cost + IHr.TotCostPrice;
+								iv_neg_qty[promo] = iv_neg_qty[promo] + (-IHr.Qty);
+								iv_neg_cost[promo] = iv_neg_cost[promo] + IHr.TotCostPrice;
 								cost_end = cost_end - IHr.TotCostPrice;
 								qty_end = qty_end + IHr.Qty;
 							end;
@@ -282,7 +322,7 @@ begin
                   iv_poz_qty = iv_poz_qty + IHr.Qty;
                   qty_end = qty_end + IHr.Qty;
                 end else begin
-                  iv_neg_qty = iv_neg_qty + (-IHr.Qty);
+                  iv_neg_qty[promo] = iv_neg_qty[promo] + (-IHr.Qty);
                   qty_end = qty_end + IHr.Qty;
                 end;
 						  end;
@@ -324,12 +364,12 @@ begin
 					end else begin
 						cost_end = cost_end - IHr.TotCostPrice;
 						qty_end = qty_end + IHr.Qty;
-						iv_neg_qty = iv_neg_qty + (-IHr.Qty);
+						iv_neg_qty[promo] = iv_neg_qty[promo] + (-IHr.Qty);
 						if(RepSpec.flags[0]==1)then begin
 						  qty_end = qty_end - IHr.Qty;
-              iv_neg_qty = iv_neg_qty - (-IHr.Qty);
+              iv_neg_qty[promo] = iv_neg_qty[promo] - (-IHr.Qty);
 						end;
-						iv_neg_cost = iv_neg_cost + IHr.TotCostPrice;
+						iv_neg_cost[promo] = iv_neg_cost[promo] + IHr.TotCostPrice;
 					end;
 				case "SDVc":
 					if(IHr.TransDate<sd)then begin
@@ -402,7 +442,8 @@ begin
   record INVc INr;
   Boolean TrHs,testf;
   integer i,reprownr,mark,gi,pos;
-  val rate,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost;
+  val rate,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_poz_sum,iv_poz_cost,gp,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost;
+  array val iv_neg_qty,iv_neg_sum,iv_neg_cost;
   array val totals;
   record PLVc PLr;
   val price;
@@ -467,18 +508,21 @@ begin
       sm_poz_cost = 0;
       sm_neg_cost = 0;
       iv_poz_qty = 0;
-      iv_neg_qty = 0;
+      iv_neg_qty[0] = 0;
+      iv_neg_qty[1] = 0;
       iv_poz_sum = 0;
       iv_poz_cost = 0;
-      iv_neg_sum = 0;
-      iv_neg_cost = 0;
+      iv_neg_sum[0] = 0;
+      iv_neg_sum[1] = 0;
+      iv_neg_cost[0] = 0;
+      iv_neg_cost[1] = 0;
       cost_end = 0;
       qty_end = 0;
       gp = 0;
       rpu_cost = 0;
       rpu_qty = 0;
       ItemStockIHSerch(RepSpec,INr.Code,location,sd,ed,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost);
-      if (qty_start==0 and pu_qty==0 and sd_qty==0 and sm_poz_qty==0 and sm_neg_qty==0 and iv_poz_qty==0 and iv_neg_qty==0 and rpu_qty==0 and cost_start==0 and cost_end==0) then begin
+      if (qty_start==0 and pu_qty==0 and sd_qty==0 and sm_poz_qty==0 and sm_neg_qty==0 and iv_poz_qty==0 and iv_neg_qty[0]==0 and iv_neg_qty[1]==0 and rpu_qty==0 and cost_start==0 and cost_end==0) then begin
         reprownr = reprownr - 1;
       end else begin
         StartFormat(15);
@@ -558,19 +602,29 @@ begin
             totals[18] = totals[18] + iv_poz_cost;//Кост продаж
           end;
           //  Отпущено
-          OutString(150,0,iv_neg_qty,false);//Отпущено кол-во
-          totals[8] = totals[8] + iv_neg_qty;
+          OutString(150,0,iv_neg_qty[0],false);//Отпущено кол-во
+          totals[8] = totals[8] + iv_neg_qty[0];
           
           OutString(160,0,sm_neg_qty,false);//Отпущено кол-во внур
           totals[9] = totals[9] + sm_neg_qty;
           
           if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
-            OutVal(170,0,iv_neg_sum,M4Val,false);//Отпущено сумма
-            totals[10] = totals[10] + iv_neg_sum;
-            totals[19] = totals[19] + iv_neg_cost;
+            OutVal(170,0,iv_neg_sum[0],M4Val,false);//Отпущено сумма
+            totals[10] = totals[10] + iv_neg_sum[0];
+            totals[19] = totals[19] + iv_neg_cost[0];
             OutVal(180,0,sm_neg_cost,M4Val,false);//Отпущено сумма внутр
-            OutVal(185,0,iv_neg_cost,M4Val,false);//Отпущено сумма себестоимость// Edit ************************** Wednesday, 12 November 2014 16:40:34
+            OutVal(185,0,iv_neg_cost[0],M4Val,false);//Отпущено сумма себестоимость// Edit ************************** Wednesday, 12 November 2014 16:40:34
             totals[11] = totals[11] + sm_neg_cost;
+          end;
+          
+          //  Отпущено промо
+          OutString(151,0,iv_neg_qty[1],false);//Отпущено кол-во
+          totals[23] = totals[23] + iv_neg_qty[1];
+          if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
+            OutVal(171,0,iv_neg_sum[1],M4Val,false);//Отпущено сумма
+            totals[24] = totals[24] + iv_neg_qty[1];
+            OutVal(186,0,iv_neg_cost[1],M4Val,false);//Отпущено сумма себестоимость// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 27 06 2019 y. at 1:25:08 PM
+          	totals[25] = totals[25] + iv_neg_cost[1];
           end;
           
           //Возврат поставщикам
@@ -605,8 +659,8 @@ begin
           OutVal(235,0,srval,M4Val,false);//переоценка
           totals[20] = totals[20] + srval;// Edit ************************** Friday, 26 December 2014 13:40:11;
           
-          OutVal(240,0,(qty_start+pu_qty+sm_poz_qty+iv_poz_qty-iv_neg_qty-sm_neg_qty-sd_qty)*price,M4Val,false);//сумма цена
-          totals[17] = totals[17] + (qty_start+pu_qty+sm_poz_qty+iv_poz_qty-iv_neg_qty-sm_neg_qty-sd_qty)*price;
+          OutVal(240,0,(qty_start+pu_qty+sm_poz_qty+iv_poz_qty-iv_neg_qty[0]-sm_neg_qty-sd_qty)*price,M4Val,false);//сумма цена
+          totals[17] = totals[17] + (qty_start+pu_qty+sm_poz_qty+iv_poz_qty-iv_neg_qty[0]-sm_neg_qty-sd_qty)*price;
           
           /*if(left(currentuser,2)=="SA")then begin
           	OutVal(230,0,(cost_start),M4Val,false);
@@ -662,6 +716,12 @@ begin
       OutVal(170,0,totals[10],m4val,false);
       OutVal(180,0,totals[11],m4val,false);
       OutVal(185,0,totals[19],m4val,false);// Edit ************************** Friday, 14 November 2014 10:28:05
+		end;
+		//  Отпущено Promo
+		OutVal(151,0,totals[23],m4val,false);
+		if(RepSpec.flags[0]==0)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 27 06 2019 y. at 1:27:00 PM
+      OutVal(171,0,totals[24],m4val,false);
+      OutVal(186,0,totals[25],m4val,false);// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 27 06 2019 y. at 1:27:04 PM
 		end;
 		//Возврат поставщикам
 		OutVal(190,0,totals[12],m4val,false);
@@ -820,6 +880,12 @@ begin
                 OutString(180,0,"",false);
                 OutString(185,0,"",false);// Edit ************************** Wednesday, 12 November 2014 16:40:56
 							end;
+							//PROMO// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 27 06 2019 y. at 1:35:25 PM
+							OutString(151,0,USetStr(31084) & " PROMO",false);
+							if(RepSpec.flags[0]==0)then begin
+                OutString(171,0,"",false);
+                OutString(186,0,"",false);
+							end;
 							OutString(190,0,USetStr(31111),false);
 							if(RepSpec.flags[0]==0)then begin//Edit-------------------Vitalii 15:42 17.11.2015
 							OutString(200,0,"",false);
@@ -877,6 +943,12 @@ begin
                 OutString(170,0,USetStr(31122),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:30
                 OutString(180,0,USetStr(31093),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:29
                 OutString(185,0,USetStr(31099),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:30
+							end;
+							//  Отпущено PROMO// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 27 06 2019 y. at 1:39:12 PM
+							OutString(151,0,USetStr(31121),false);
+							if(RepSpec.flags[0]==0)then begin
+                OutString(171,0,USetStr(31122),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:30
+                OutString(186,0,USetStr(31099),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:30
 							end;
 							//Возврат поставщикам
 							OutString(190,0,USetStr(31121),false);
