@@ -4933,26 +4933,26 @@ record LocationVc Locr;
 				while(loopmain(IS2r,1,TrHs))begin
 					if(IS2r.Code!=ISr.Code)then begin TrHs = false; end;
 					
-					if(TrHs and IS2r.Location!=ISr.Location and (IS2r.Instock-IS2r.RsrvQty)>0)then begin
-						startformat(15);
-						outstring(0,0,IS2r.Location,false);
-						Locr.Code = IS2r.Location;
-						readfirstmain(Locr,1,true);
-						outstring(50,0,Locr.Name,false);
-						outstring(200,"dblINVc",IN2r.Code ,false);
-						outstring(280,0,IN2r.Name ,false);
-						outstring(500,0,IS2r.Instock,false);
-						outstring(580,0,IS2r.RsrvQty,false);
-						outstring(660,0,IS2r.Instock-IS2r.RsrvQty,false);
-						endformat;
+					if(TrHs and IS2r.Location!=ISr.Location)then begin
+							startformat(15);
+							outstring(0,0,IS2r.Location,false);
+							Locr.Code = IS2r.Location;
+							readfirstmain(Locr,1,true);
+							outstring(50,0,Locr.Name,false);
+							outstring(200,"dblINVc",IN2r.Code ,false);
+							outstring(280,0,IN2r.Name ,false);
+							outstring(500,0,IS2r.Instock,false);
+							outstring(580,0,IS2r.RsrvQty,false);
+							outstring(660,0,IS2r.Instock-IS2r.RsrvQty,false);
+							endformat;
 					end;
 				end;
 			end;	
 		end;
 		skipcomp:;
 	end;
-	SetCompany(CompOld,false);
 	StockInAllCompRnEnd:;
+	SetCompany(CompOld,false);
 endjob;	
 return;
 end;
@@ -13334,12 +13334,46 @@ return;
 end;	
 
 global 
+updating procedure RecalcDiscBackMn(area text)
+begin
+  record GlobalItemVc GIr,mainGIr;
+	boolean TrHs;
+	val ITRebate,price;
+	record INVc INr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	
+	logtext(0,"RecalcDiscMn " & currentcompany);
+	TrHs = true;
+	ResetLoop(INr);
+	INr.Code = "";
+	matrowget(Compb,currentcompany-1,Comprw);
+	while(loopmain(INr,1,TrHs)) begin		
+		GIr.Code = INr.GlobalArtCode;
+		if(CurrentCompany==29 and blank(INr.Group)) then begin
+		end else begin
+			if (ReadFirstMain(GIr,1,true)) then begin
+				GetPriceItem(INr.Code,price,ITRebate);
+				if(GIr.Price!=price or GIr.Rebate!=ITRebate) then begin
+					AddTextToArea	(INr.Code & chr(9) & GIr.Price & chr(9) & price & chr(9) & price-GIr.Price & chr(9) & GIr.Rebate & chr(9) & ITRebate & chr(9) & ITRebate-GIr.Rebate & chr(9) & Comprw.CompName & chr(13),text);
+				end;
+				GIr.Price = price;
+				GIr.Rebate = ITRebate;
+				RecordStore(GIr,true);
+			end;
+		end;	
+	end;	
+  return;
+end;
+
+global 
 updating procedure RecalcDiscMn()
 begin
   record GlobalItemVc GIr,mainGIr;
 	boolean TrHs;
 	val ITRebate,price;
 	record INVc INr;
+	area text
 	
 	logtext(0,"RecalcDiscMn " & currentcompany);
 	TrHs = true;
@@ -14868,6 +14902,34 @@ begin
 return;
 end;	
 
+global updating procedure FillNameThirdClassMn(record RcVc RepSpec)
+begin
+	record BtrxThirdLevelCatVc BtrxThr;
+	record BtrxSecondLevelCatVc BtrxSecr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	integer compQty,currcomp,i;
+	
+	blockload(Compb);
+	CompQty = matrowcnt(Compb);
+	currcomp = currentcompany;
+	for (i=0;i<CompQty;i=i+1)begin
+		matrowget(Compb,i,Comprw);
+		if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(i+1) or i+1==3) and i+1!=10 and i+1!=32)then begin
+			SetCompany(i+1,false);
+			BtrxThr.Code = "";
+			While(loopMain(BtrxThr,1,true))begin
+				BtrxSecr.Code = BtrxThr.PathScndCode;
+				if(ReadFirstMain(BtrxSecr,1,true)) then begin
+					BtrxThr.CatSecLvlName = BtrxSecr.Name;
+					RecordStore(BtrxThr,true);
+				end;	
+			end;
+		end;
+	end;	
+SetCompany(currcomp,false);
+return;
+end; 
 global updating procedure RenDIVcFromBrandMn(record RcVc RepSpec)
 begin
 	record BPIBrandVc BBr;
