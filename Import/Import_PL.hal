@@ -6801,6 +6801,93 @@ end;
 
 
 
+
+global updating procedure ImportAddMainItemIn(record RcVc RepSpec)
+begin
+record INVc INr,oldINr;
+integer i,curcomp,cnt,j,k,CompQty,ErrCnt1,ErrCnt2,mtrw,INComp,pos;
+record GlobalItemVc GIr, MainGIr;
+string 100 artcode,brand,newBrand,code,glCode,tstr,cntstr,OldCode,lev3cat, LevCode;
+record BPIBrandVc BPIBrandr;
+record BPIBrandVc BPIBrand1r;
+area ErrAr1, ErrAr2, reply;
+array string 255 abrand,anewbrand,ErrArr;
+array string 100 headers,params;
+record CompaniesBlock Compb;
+row CompaniesBlock Comprw;
+vector boolean Errf;
+boolean INrf, TrHs2;
+record BtrxThirdLevelCatVc BtrxThirdLevelCatr, BTLLastCoder;
+
+		
+	i = 0;
+	k = 0;
+	logtext(0,"start");
+	while (TestEOF()==false) begin
+		brand = ImportField;
+		artcode = ImportField;
+		if(nonblank(brand) and nonblank(artcode))then begin
+			BPIBrandr.Name = brand;
+			if(readfirstkey("Name",BPIBrandr,1,true))then begin
+				artcode = BPIBrandr.Code & "_" & artcode;
+				GIr.Code = artcode;
+				if(readfirstmain(GIr,1,true))then begin
+					glCode = ImportField;
+					MainGIr.Code = glCode;
+					if(ReadFirstMain(MainGIr,1,true))then begin
+						GIr.MainCode = MainGIr.Code;
+						GIr.MainItemFlag = 1;
+						GIr.IsVariant = 1;
+						if(RecordStore(GIr,true))then begin
+							logtext(0,GIr.Code & "  Updated MainCode");
+						end;
+					end else begin
+						MainGIr.Code = glCode;
+						MainGIr.Brand = brand;
+						MainGIr.Name = ImportField;
+						MainGIr.BTRxFirstLevCat = GIr.BTRxFirstLevCat;
+						MainGIr.BTRxSecondLevCat = GIr.BTRxSecondLevCat;
+						MainGIr.MainItemFlag = 0;
+						MainGIr.IsVariant = 1;
+						lev3cat = GIr.BTRxSecondLevCat;
+						pos = 0;
+						ExtractObjWithSeparator(",",lev3cat,true,pos,LevCode);
+						while (nonblank(LevCode)) begin
+							BtrxThirdLevelCatr.Code = LevCode;
+							if(ReadFirstmain(BtrxThirdLevelCatr,1,true))then begin
+								MainGIr.BTRxThirdLevCat = BtrxThirdLevelCatr.Code;
+							end;
+							ExtractObjWithSeparator(",",lev3cat,true,pos,LevCode);
+						end;
+						if(RecordStore(MainGIr,true))then begin
+							logtext(0,MainGIr.Code & "  Created MainItem");
+							GIr.MainCode = MainGIr.Code;
+							GIr.MainItemFlag = 1;
+							GIr.IsVariant = 1;
+							if(RecordStore(GIr,true))then begin
+								logtext(0,GIr.Code & "  Updated MainCode");
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+		if (NextImportLine(true)) then begin end;
+	end;
+	
+return;
+end;
+
+
+
+
+
+
+
+
+
+
+
 //  Import("Импорт параметров товаров для Bitrix",ImportIClass,ImportAddClassIn,modBtrx);
 // 36229 = Проверка кодировки
 global updating procedure ImportAddClassIn(record RcVc RepSpec)
