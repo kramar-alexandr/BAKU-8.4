@@ -75,7 +75,7 @@ external function Boolean PasteCustInOrder(var record ORVc,string,string,var str
 remote procedure ORVc_PasteLocation(var record ORVc,Integer);
 remote function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
 remote procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
-
+external procedure NextM4SerialNumber(string,var string);
 
 
 procedure CreateNewPUFromPO(record PUVc PUp,record POVc POp,LongInt ponr)
@@ -1317,6 +1317,8 @@ BEGIN
 					ClearRow(PUp,PUrw,1);
 					PUrw.StockType = POrw.StockType;
 					PUrw.TREO = POrw.TREO;
+					PUrw.Location = BPUrw.Location;
+					PUrw.ToPosCode = BPUrw.Position;
 					PUrw.VATCode = POrw.VATCode;
 					PUrw.ArtCode = POrw.ArtCode;
 					PUrw.Objects = POrw.Objects;
@@ -3322,13 +3324,13 @@ begin
 	integer wn,i,mtrw,curcomp;
 	row ORVc ORrw;
 	record LocationVc Locr;
-	string 100 backfob,msg,warning,errstr,inwarning;
+	string 100 backfob,msg,warning,errstr,inwarning, OldCode;
 	integer res,rowor;
 	record MainStockBlock MSb;
 	record ConsItemVc CIr;
-	record INVc INr;
+	record INVc INr, UINr, ConsIN, OldConsINr, ConsINr;
 	vector string 255 Brands;
-	boolean chsum;
+	boolean chsum, TrHs2, testf;
 	integer comp;
 	curcomp = currentcompany;
 	blockload(MSb);
@@ -3368,6 +3370,8 @@ begin
 				ORrw.ECReservComp = comp;
 				ORrw.Quant = POrw.Quant;	
 				ORrw.Price = POrw.Price;
+				ORrw.GlobalItemArtCode = CIr.LocCode;
+				ORrw.IDAltCode = CIr.BrandCode;
 				matrowput(ORr,rowor,ORrw);		
 				ORVc_PasteArtCode(ORr,rowor,inwarning,warning,false);
 				matrowget(ORr,rowor,ORrw);
@@ -3376,6 +3380,58 @@ begin
 				ORVc_PasteQuant(ORr,rowor,true,chsum);
 
 				rowor = rowor + 1;
+			end else begin
+				testf = false;
+				if(SetCompany(curcomp,false))then begin
+					INr.Code = POrw.ArtCode;
+					if(ReadFirstMain(INr,1,true)) then begin
+						testf = true;
+						SetCompany(33,false)
+					end;
+				end;
+				if(testf)then begin
+					recordNew(UINr);
+					recordNew(ConsINr);
+					RecordCopy(ConsINr,INr);
+					OldConsINr.Code = "IN_9999999";
+					TrHs2 = true;
+					while (LoopBackKey("Code",OldConsINr,1,TrHs2)) begin
+						OldCode = OldConsINr.Code;
+						TrHs2 = false;
+					end;
+					ResetLoop(OldConsINr);
+					if(blank(OldCode)) then begin oldCode = "IN_0000000"; end;
+					NextM4SerialNumber(OldCode,ConsINr.Code);
+					ConsINr.UUID = UINr.UUID;
+					CIr.LocCode = INr.Code;
+					CIr.BrandCode = ConsINr.BPIBrand;
+					if(!ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
+						if(RecordStore(ConsINr,true))then begin
+							logtext(0,ConsINr.Code & " Code");
+							recordNew(CIr);
+							CIr.Code = ConsINr.Code;
+							CIr.LocCode = INr.Code;
+							CIr.BrandCode = ConsINr.BPIBrand;
+							if(RecordStore (CIr,true)) then begin
+								ORrw.ArtCode = CIr.Code;
+								ORrw.ECReceived = POr.SerNr;
+								ORrw.ECReservComp = comp;
+								ORrw.Quant = POrw.Quant;	
+								ORrw.Price = POrw.Price;
+								ORrw.GlobalItemArtCode = CIr.LocCode;
+								ORrw.IDAltCode = CIr.BrandCode;
+								matrowput(ORr,rowor,ORrw);		
+								ORVc_PasteArtCode(ORr,rowor,inwarning,warning,false);
+								matrowget(ORr,rowor,ORrw);
+								ORrw.Price = POrw.Price;
+								matrowput(ORr,rowor,ORrw);
+								ORVc_PasteQuant(ORr,rowor,true,chsum);
+
+								rowor = rowor + 1;
+							end;
+						end;
+					end;
+				end;
 			end;
 		end;
 		
