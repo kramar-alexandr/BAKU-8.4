@@ -3259,61 +3259,72 @@ BEGIN
   row POVc POrw;
   Integer i,rwcnt;
   val totval,rv,rest,q;
-  val calcval,rowcalcval,sum33weight,sum33carat;
+  val calcval,rowcalcval;
   record SysFormatBlock SFb;
   array integer roworder;
   record INVc INr;
   
   BlockLoad(SFb);
   switch( column) begin
+    case 1: calcval = POr.Cost1; // Calculate Extra Costs 
+    case 2: calcval = POr.Cost2; // Calculate Extra Costs 
+    case 3: calcval = POr.Cost3; // Calculate Extra Costs 
     case 4: calcval = POr.Cost4; // Calculate Extra Costs 
     case 5: calcval = POr.Cost5; // Calculate Extra Costs 
+    case 6: calcval = POr.ShipCost;    // Calculate Shipment Cost 
+    case 7: calcval = POr.CustomsCost; // Calculate Customs Cost 
     otherwise goto LPOSetShipCost;
   end;
   rwcnt = MatRowCnt(POr);
   for (i=0;i<rwcnt;i=i+1) begin
     MatRowGet(POr,i,POrw);
-    // if ((POrw.stp!=3) and (POrw.ovst==0) and (nonblank(POrw.ArtCode)) and !(column==7 and POrw.TREO==kTREO)) then begin
+    if ((POrw.stp!=3) and (POrw.ovst==0) and (nonblank(POrw.ArtCode)) and !(column==7 and POrw.TREO==kTREO)) then begin
+//      DivPIFactor(POrw.Quant,POrw.PIFactor,q); //why extra cost should be per supplier unit not ours ? 
       q = POrw.Quant;
       rv = blankval;
-      if(POrw.WeightRow!=blankval)then begin
-				sum33weight = sum33weight + q * POrw.WeightRow;
-			end;
-			if(POrw.WeightRow!=blankval)then begin
-				sum33carat = sum33carat + q * POrw.CaratRow;
-			end;
-    // end;
+      switch (POr.ExtraCostsCalculation) begin 
+        case 1:
+          if (ReadFirstItem(POrw.ArtCode,INr,false,false)) then begin
+            rv = q*INr.Weight;
+          end;
+        otherwise
+          rv = q*POrw.Price;
+      end;
+      totval = totval + rv;
+    end;
   end;
   for (i=0;i<rwcnt;i=i+1) begin
     MatRowGet(POr,i,POrw);
-    // if ((POrw.stp==3) or (POrw.ovst!=0) or (blank(POrw.ArtCode)) or (column==7 and POrw.TREO==kTREO)) then begin
-      // goto LSKIPPOROW;
-    // end;
-		switch (column) begin
-      case 4: POCalcOneCCRow(SFb,POr,i,DefaultCurRoundOff,sum33weight,calcval,rowcalcval,rest,1);
-      case 5: POCalcOneCCRow(SFb,POr,i,DefaultCurRoundOff,sum33carat,calcval,rowcalcval,rest,2);
-		end;
+    if ((POrw.stp==3) or (POrw.ovst!=0) or (blank(POrw.ArtCode)) or (column==7 and POrw.TREO==kTREO)) then begin
+      goto LSKIPPOROW;
+    end;
+    POCalcOneRow(SFb,POr,i,DefaultCurRoundOff,totval,calcval,rowcalcval,rest);
     switch (column) begin
+      case 1: POrw.RowCost1 = rowcalcval; 
+      case 2: POrw.RowCost2 = rowcalcval; 
+      case 3: POrw.RowCost3 = rowcalcval; 
       case 4: POrw.RowCost4 = rowcalcval; 
       case 5: POrw.RowCost5 = rowcalcval; 
+      case 6: POrw.ShipCost = rowcalcval; 
+      case 7: POrw.CustomsCost = ValToString(rowcalcval,M45Val,SFb.thousSep,SFb.decimalPt,0);
     end;
     MatRowPut(POr,i,POrw);
 LSKIPPOROW:;
   end;
 //!!!  PUSortByVal(POr,locPOr,column,roworder);
-  // rwcnt = MatRowCnt(locPOr);
-  // for (i=0;i<rwcnt;i=i+1) begin
-    // if (rest==calcval) then begin goto L88POSetShipCost; end;
-    // MatRowGet(locPOr,i,POrw);
-    // if ((POrw.stp==3) or (POrw.ovst!=0) or (blank(POrw.ArtCode))) then begin
-      // goto LSKIPPOROW2;
-    // end;
-    // if (rest!=0) then begin
-      // POCalcOneRow2(SFb,locPOr,i,5,column,calcval,rest);
-    // end;
-    // MatRowPut(locPOr,i,POrw);
-// LSKIPPOROW2:;
-  // end;
+  rwcnt = MatRowCnt(locPOr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    if (rest==calcval) then begin goto L88POSetShipCost; end;
+    MatRowGet(locPOr,i,POrw);
+    if ((POrw.stp==3) or (POrw.ovst!=0) or (blank(POrw.ArtCode))) then begin
+      goto LSKIPPOROW2;
+    end;
+    if (rest!=0) then begin
+      POCalcOneRow2(SFb,locPOr,i,5,column,calcval,rest);
+    end;
+    MatRowPut(locPOr,i,POrw);
+LSKIPPOROW2:;
+  end;
 L88POSetShipCost:;
 //!!!  PUUnsortByVal(POr,locPOr,column,roworder);
 LPOSetShipCost:;
