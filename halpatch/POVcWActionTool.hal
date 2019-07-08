@@ -2946,6 +2946,48 @@ BEGIN
   RETURN;
 END;
 
+
+
+
+
+procedure POCalcOneCCRow(record SysFormatBlock SysFormatRec,record POVc POr,Integer rownr,roundmode roundoff,val totvalp,val calcvalp,var val rowcalcvalp,var val restp,integer ExtraCostsCalculation)
+BEGIN    
+  row POVc POrw;
+  val temp,rv,q;
+  string 255 tstr;
+  record INVc INr;
+  
+  MatRowGet(POr,rownr,POrw);
+//  DivPIFactor(POrw.Quant,POrw.PIFactor,q); //why extra cost should be per supplier unit not ours ? 
+  q = POrw.Quant;
+  switch (ExtraCostsCalculation) begin 
+    case 1:
+			temp = q*POrw.WeightRow;
+    otherwise
+      temp = q*POrw.CaratRow;
+  end;
+
+  temp = temp*calcvalp;
+  temp = temp/totvalp;
+  rowcalcvalp = temp/q;
+  temp = rowcalcvalp*q;
+/*  M4ValRound(rowcalcvalp,roundoff,rowcalcvalp);*/
+  rowcalcvalp = Round(rowcalcvalp,SetRoundModeD(5));
+  if (rowcalcvalp==0) then begin rowcalcvalp = blankval; end;
+  /*if this is not here then
+  put qty 106, price 1500 shpcost(in header) 10 and will be 9.999 after recalculating
+  M4ToStr just cuts 6th and rest digits*/
+  tstr = ValToString(rowcalcvalp,M45Val,SysFormatRec.thousSep,SysFormatRec.decimalPt,0);
+  rowcalcvalp = StringToVal(tstr,M45Val);
+  rv = rowcalcvalp*q;
+/*  SubM4Val(&temp,&rv,&rv);*/
+  restp = rv + restp;
+  RETURN;
+END;
+
+
+
+
 procedure POUnsortByVal(record POVc POr,record POVc PO2r,Integer column,array integer roworder)
 BEGIN
   row POVc POrw;
@@ -3206,6 +3248,82 @@ L88POSetShipCost:;
 LPOSetShipCost:;
   RETURN;
 END;
+
+
+
+
+global
+procedure POSetShipCCCost(var record POVc POr,Integer column)
+BEGIN
+  record POVc locPOr;
+  row POVc POrw;
+  Integer i,rwcnt;
+  val totval,rv,rest,q;
+  val calcval,rowcalcval,sum33weight,sum33carat;
+  record SysFormatBlock SFb;
+  array integer roworder;
+  record INVc INr;
+  
+  BlockLoad(SFb);
+  switch( column) begin
+    case 4: calcval = POr.Cost4; // Calculate Extra Costs 
+    case 5: calcval = POr.Cost5; // Calculate Extra Costs 
+    otherwise goto LPOSetShipCost;
+  end;
+  rwcnt = MatRowCnt(POr);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(POr,i,POrw);
+    // if ((POrw.stp!=3) and (POrw.ovst==0) and (nonblank(POrw.ArtCode)) and !(column==7 and POrw.TREO==kTREO)) then begin
+      q = POrw.Quant;
+      rv = blankval;
+      if(POrw.WeightRow!=blankval)then begin
+				sum33weight = sum33weight + q * POrw.WeightRow;
+			end;
+			if(POrw.WeightRow!=blankval)then begin
+				sum33carat = sum33carat + q * POrw.CaratRow;
+			end;
+    // end;
+  end;
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(POr,i,POrw);
+    // if ((POrw.stp==3) or (POrw.ovst!=0) or (blank(POrw.ArtCode)) or (column==7 and POrw.TREO==kTREO)) then begin
+      // goto LSKIPPOROW;
+    // end;
+		switch (column) begin
+      case 4: POCalcOneCCRow(SFb,POr,i,DefaultCurRoundOff,sum33weight,calcval,rowcalcval,rest,1);
+      case 5: POCalcOneCCRow(SFb,POr,i,DefaultCurRoundOff,sum33carat,calcval,rowcalcval,rest,2);
+		end;
+    switch (column) begin
+      case 4: POrw.RowCost4 = rowcalcval; 
+      case 5: POrw.RowCost5 = rowcalcval; 
+    end;
+    MatRowPut(POr,i,POrw);
+LSKIPPOROW:;
+  end;
+//!!!  PUSortByVal(POr,locPOr,column,roworder);
+  // rwcnt = MatRowCnt(locPOr);
+  // for (i=0;i<rwcnt;i=i+1) begin
+    // if (rest==calcval) then begin goto L88POSetShipCost; end;
+    // MatRowGet(locPOr,i,POrw);
+    // if ((POrw.stp==3) or (POrw.ovst!=0) or (blank(POrw.ArtCode))) then begin
+      // goto LSKIPPOROW2;
+    // end;
+    // if (rest!=0) then begin
+      // POCalcOneRow2(SFb,locPOr,i,5,column,calcval,rest);
+    // end;
+    // MatRowPut(locPOr,i,POrw);
+// LSKIPPOROW2:;
+  // end;
+L88POSetShipCost:;
+//!!!  PUUnsortByVal(POr,locPOr,column,roworder);
+LPOSetShipCost:;
+  RETURN;
+END;
+
+
+
+
+
 
 global
 procedure PODClassOnOpenWindowRemote(var record POVc POr,var Integer AcceptanceStatusFlag)
