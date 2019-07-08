@@ -31,6 +31,7 @@ external function Boolean ActVc_ShouldAttachPdfToEMail(record ActVc);
 external procedure GetMailFormattingSettings(record MailVc,var record ConfVc);
 external procedure FindUserMailboxName(string,var string,var string);
 external updating function Integer PastePOInPUFromBPU(record POVc,record PUVc,Integer,record BigPUVc);
+remote function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
 
 global
 procedure PasteInvInEDIInv(var record EDIIVVc EDIIVp,record IVVc IVp)
@@ -519,8 +520,12 @@ BEGIN
   record SRBlock SRRec;
   record PUVc OldPU;  
 	row PUVc PUrw;
-	integer i;
+	integer i,k,orcnt;
 	record ClientItemStatusVc CISr;
+	record ORVc ORr;
+	string 255 warning;
+	row ORVc ORrw;
+	
   if (ReadFirstMain(POp,0,true)) then begin end;  
   if (POp.OrderType!=kOrderTypeNormal) then begin 
     res = 22075;
@@ -556,6 +561,17 @@ BEGIN
 	end;
   if ((MatRowCnt(PUp)>0) and (PUp.SerNr!=-1)) then begin
     if (RecordUpdate(OldPU,PUp,true)==0) then begin 
+			ORr.SerNr = POp.OrdNr;
+			if(readfirstmain(ORr,1,true))then begin
+				orcnt = matrowcnt(ORr);
+				for (k=0;k<orcnt;k=k+1)begin
+					logtext(0,ORr.SerNr);
+					ORVc_PasteArtCode(ORr,k,warning,warning,false);
+					matrowget(ORr,k,ORrw);
+					matrowput(ORr,k,ORrw);
+				end;
+				RecordStore(ORr,true);
+			end;
 			for(i=0;i<matrowcnt(PUp);i=i+1) begin
 				matrowget(PUp,i,PUrw);
 				CISr.ItemCode = PUrw.ArtCode;
