@@ -249,6 +249,7 @@ begin
   record RLinkVc RLr;
 	record ActVc Actr;
 	record ClientItemStatusVc CISr;
+	boolean TrHs;
 	
   logtext(0,"DoSHVcRecordCheck");
   
@@ -1074,6 +1075,7 @@ begin
               MatRowGet(SHp,cnt,SHrw3);
               isstruct = ExpandStructItem(SHrw3.ArtCode,SHrw3.Recepy,SHrw3.Ship,rec2SHr);
               if (isstruct) then begin
+								logtext(0,"is struct");
                 rwcntrec2 = MatRowCnt(rec2SHr);
                 for (reci2=0;reci2<rwcntrec;reci2=reci2+1) begin
                   MatRowGet(rec2SHr,reci2,rec2SHrw);
@@ -1090,20 +1092,40 @@ begin
                       FindStockValueInclStockReserv(SHp.OrderNr,rec2SHrw.ArtCode,rec2SHrw.SerialNr,loc2,ISr,stockreservq);
 											if(Currentcompany==33) then begin
 												OR2r.SerNr = SHp.OrderNr;
+												logtext(0,SHp.OrderNr);
 												if(readFirstMain(OR2r,1,true)) then begin 
 													if(OR2r.OrderClass=="CLIEN") then begin
 														CISr.ItemCode = rec2SHrw.ArtCode;
 														CISr.OrderNr = SHp.OrderNr;
 														if(ReadFirstMain(CISr,2,true)) then begin
-															CISr.Quant= CISr.Quant - prev;
-															RecordStore(CISr,true);
+															if(CISr.Quant>=SHrw.Ship and SHrw.Ship!=0) then begin
+																CISr.Quant = CISr.Quant - prev;
+																RecordStore(CISr,true);
+															end else begin 	
+																CISr.ItemCode = rec2SHrw.ArtCode;
+																TrHs = true;
+																if(LoopMain(CISr,1,TrHs)) then begin
+																	testf = true;
+																	if(CISr.ItemCode!=rec2SHrw.ArtCode) then begin TrHs = false; testf = false; end;
+																	if(CISr.OrderNr==SHp.OrderNr) then begin testf = false; end;
+																	if(testf) then begin
+																		stockreservq = stockreservq + CISr.Quant;
+																	end;	
+																end;
+																ResetLoop(CISr);
+															end;	
 														end;
 													end else begin
 														CISr.ItemCode = rec2SHrw.ArtCode;
-														CISr.OrderNr = SHp.OrderNr;
-														if(ReadFirstMain(CISr,2,true)) then begin
-															stockreservq = stockreservq + CISr.Quant;
+														TrHs = true;
+														if(LoopMain(CISr,1,TrHs)) then begin
+															if(CISr.OrderNr!=SHp.OrderNr) then begin TrHs = false; end;
+															if(CISr.ItemCode!=rec2SHrw.ArtCode) then begin TrHs = false; end;
+															if(TrHs) then begin
+																stockreservq = stockreservq + CISr.Quant;
+															end;	
 														end;
+														ResetLoop(CISr);
 													end;	
 												end;	
 											end;
@@ -1119,6 +1141,7 @@ begin
                   end;
                 end;
               end else begin
+								logtext(0,"not struct");
                 prev = SHrw3.Ship;
                 for (reci=0;reci<rwcntrec;reci=reci+1) begin
                   MatRowGet(recSHr,reci,recSHrw);
@@ -1132,20 +1155,41 @@ begin
                     FindStockValueInclStockReserv(SHp.OrderNr,SHrw3.ArtCode,SHrw3.SerialNr,loc2,ISr,stockreservq);
 										if(Currentcompany==33) then begin
 											OR2r.SerNr = SHp.OrderNr;
+											logtext(0,SHp.OrderNr);
 											if(readFirstMain(OR2r,1,true)) then begin 
 												if(OR2r.OrderClass=="CLIEN") then begin
-													CISr.ItemCode = rec2SHrw.ArtCode;
+													CISr.ItemCode = SHrw3.ArtCode;
 													CISr.OrderNr = SHp.OrderNr;
+													logtext(0,CISr.ItemCode);
 													if(ReadFirstMain(CISr,2,true)) then begin
-														CISr.Quant= CISr.Quant - prev;
-														RecordStore(CISr,true);
+														if(CISr.Quant>=SHrw.Ship and SHrw.Ship!=0) then begin
+															CISr.Quant = CISr.Quant - prev;
+															RecordStore(CISr,true);
+														end else begin 	
+															CISr.ItemCode = SHrw3.ArtCode;
+															TrHs = true;
+															if(LoopMain(CISr,1,TrHs)) then begin
+																testf = true;
+																if(CISr.ItemCode!=rec2SHrw.ArtCode) then begin TrHs = false; testf = false; end;
+																if(CISr.OrderNr==SHp.OrderNr) then begin testf = false; end;
+																if(testf) then begin
+																	stockreservq = stockreservq + CISr.Quant;
+																end;	
+															end;
+															ResetLoop(CISr);
+														end;	
 													end;
 												end else begin
-													CISr.ItemCode = rec2SHrw.ArtCode;
-													CISr.OrderNr = SHp.OrderNr;
-													if(ReadFirstMain(CISr,2,true)) then begin
-														stockreservq = stockreservq + CISr.Quant;
-													end;
+													CISr.ItemCode = SHrw3.ArtCode;
+														TrHs = true;
+														if(LoopMain(CISr,1,TrHs)) then begin
+															if(CISr.OrderNr!=SHp.OrderNr) then begin TrHs = false; end;
+															if(CISr.ItemCode!=SHrw3.ArtCode) then begin TrHs = false; end;
+															if(TrHs) then begin
+																stockreservq = stockreservq + CISr.Quant;
+															end;	
+														end;
+														ResetLoop(CISr);
 												end;	
 											end;	
 										end;
@@ -1163,6 +1207,7 @@ begin
             end;
           end;
         end else begin
+					logtext(0,"blankrecepy");
           prev = blankval;
           for (cnt=0;cnt<i;cnt=cnt+1) begin
             MatRowGet(SHp,cnt,SHrw3);
@@ -1212,20 +1257,41 @@ begin
           end;
 					if(Currentcompany==33) then begin
 						OR2r.SerNr = SHp.OrderNr;
+						logtext(0,SHp.OrderNr);
 						if(readFirstMain(OR2r,1,true)) then begin 
 							if(OR2r.OrderClass=="CLIEN") then begin
-								CISr.ItemCode = rec2SHrw.ArtCode;
+								CISr.ItemCode = SHrw.ArtCode;
 								CISr.OrderNr = SHp.OrderNr;
+								logtext(0,CISr.ItemCode);
 								if(ReadFirstMain(CISr,2,true)) then begin
-									CISr.Quant= CISr.Quant - prev;
-									RecordStore(CISr,true);
+									if(CISr.Quant>=SHrw.Ship and SHrw.Ship!=0) then begin
+										CISr.Quant = CISr.Quant - prev;
+										RecordStore(CISr,true);
+									end else begin 	
+										CISr.ItemCode = SHrw.ArtCode;
+										TrHs = true;
+										if(LoopMain(CISr,1,TrHs)) then begin
+											testf = true;
+											if(CISr.ItemCode!=rec2SHrw.ArtCode) then begin TrHs = false; testf = false; end;
+											if(CISr.OrderNr==SHp.OrderNr) then begin testf = false; end;
+											if(testf) then begin
+												stockreservq = stockreservq + CISr.Quant;
+											end;	
+										end;
+										ResetLoop(CISr);
+									end;	
 								end;
 							end else begin
-								CISr.ItemCode = rec2SHrw.ArtCode;
-								CISr.OrderNr = SHp.OrderNr;
-								if(ReadFirstMain(CISr,2,true)) then begin
-									stockreservq = stockreservq + CISr.Quant;
+								logtext(0,SHrw.ArtCode);
+								CISr.ItemCode = SHrw.ArtCode;
+								TrHs = true;
+								if(LoopMain(CISr,1,TrHs)) then begin
+									if(CISr.ItemCode!=SHrw.ArtCode) then begin TrHs = false; end;
+									if(TrHs) then begin
+										stockreservq = stockreservq + CISr.Quant;
+									end;	
 								end;
+								ResetLoop(CISr);
 							end;	
 						end;	
 					end;
