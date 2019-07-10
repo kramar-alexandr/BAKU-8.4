@@ -58,11 +58,11 @@ BEGIN
   LongInt res;
   row PricePointListVc PPLrw;
   integer i,mtrw;
-  record PLVc PLr;
-  record INVc INr;
+  record PLVc PLr,oldPLr;
+  record INVc INr,oldINr;
   record PricePointListVc oldPPLr;
   boolean testf,foundfVEitem;
-  record PIVc PIr;
+  record PIVc PIr,oldPIr;
   
   if(PPLr.OKFlag==1 and PPLr.Closed==0)then begin
     testf = true;
@@ -80,10 +80,12 @@ BEGIN
       mtrw = matrowcnt(PPLr);
       INr.Code = "";
       while(loopmain(INr,1,true))begin
+      	recordcopy(oldINr,INr);
         foundfVEitem = false;
         PIr.ItemCode = INr.Code;
         if(readfirstmain(PIr,1,true))then begin
           if(INr.Code==PIr.ItemCode)then begin
+          	recordcopy(oldPIr,PIr);
             foundfVEitem = true;
           end;
         end;        
@@ -95,15 +97,20 @@ BEGIN
 							if(foundfVEitem)then begin
 								PIr.PurPrice = PPLrw.Cost;
 								INr.InPrice = PPLrw.Cost/PIr.PIFactor;
-								RecordStore(PIr,true);
+								if(PIr.PurPrice!=oldPIr.PurPrice)then begin
+									RecordStore(PIr,true);
+								end;
 							end else begin
 								INr.InPrice = PPLrw.Cost;
 							end;
             end;
-            RecordStore(INr,true);
+            if(INr.InPrice!=oldINr.InPrice)then begin
+							RecordStore(INr,true);
+            end;
             PLr.PLCode  = "RRP";
             PLr.ArtCode = INr.Code;
-            if(readfirstmain(PLr,2,true))then begin     
+            if(readfirstmain(PLr,2,true))then begin   
+            	recordcopy(oldPLr,PLr);  
               if(PLr.DonotRecalculate==0)then begin         
                 if(foundfVEitem)then begin
                   if (INr.LastPurchCurncyCode=="USD") then begin
@@ -118,8 +125,10 @@ BEGIN
                     PLr.ExVatPrice = PPLrw.Price;
                   end;
                 end;
-                recordStore(PLr,true);
-								UpdatePrice(PLr);
+                if(PLr.ExVatPrice!=oldPLr.ExVatPrice)then begin
+									recordStore(PLr,true);
+									UpdatePrice(PLr);
+								end;
               end;
             end else begin
               recordNew(PLr);
