@@ -212,7 +212,7 @@ begin
   Boolean blankf,testf,test2f;
   Boolean transf;
   Boolean orfound,gentrans;
-  val t,prev,stockreservq;
+  val t,prev,stockreservq,CISqty;
   record SHVc recSHr;
   row SHVc recSHrw;
   record SHVc rec2SHr;
@@ -1094,39 +1094,21 @@ begin
 												OR2r.SerNr = SHp.OrderNr;
 												logtext(0,SHp.OrderNr);
 												if(readFirstMain(OR2r,1,true)) then begin 
-													if(OR2r.OrderClass=="CLIEN") then begin
-														CISr.ItemCode = rec2SHrw.ArtCode;
-														CISr.OrderNr = SHp.OrderNr;
-														if(ReadFirstMain(CISr,2,true)) then begin
-															if(CISr.Quant>=SHrw.Ship and SHrw.Ship!=0) then begin
-																CISr.Quant = CISr.Quant - prev;
-																RecordStore(CISr,true);
-															end else begin 	
-																CISr.ItemCode = rec2SHrw.ArtCode;
-																TrHs = true;
-																if(LoopMain(CISr,1,TrHs)) then begin
-																	testf = true;
-																	if(CISr.ItemCode!=rec2SHrw.ArtCode) then begin TrHs = false; testf = false; end;
-																	if(CISr.OrderNr==SHp.OrderNr) then begin testf = false; end;
-																	if(testf) then begin
-																		stockreservq = stockreservq + CISr.Quant;
-																	end;	
-																end;
-																ResetLoop(CISr);
-															end;	
+													CISr.ItemCode = rec2SHrw.ArtCode;
+													CISqty = 0;
+													TrHs = true;
+													while (loopmain(CISr,1,TrHs)) begin
+														if(CISr.ItemCode!=rec2SHrw.ArtCode)then begin TrHs = false; end;
+														if(CISr.OrderNr!=SHp.OrderNr and TrHs)then begin
+															CISqty = CISqty + CISr.Quant;
 														end;
-													end else begin
-														CISr.ItemCode = rec2SHrw.ArtCode;
-														TrHs = true;
-														if(LoopMain(CISr,1,TrHs)) then begin
-															if(CISr.OrderNr!=SHp.OrderNr) then begin TrHs = false; end;
-															if(CISr.ItemCode!=rec2SHrw.ArtCode) then begin TrHs = false; end;
-															if(TrHs) then begin
-																stockreservq = stockreservq + CISr.Quant;
-															end;	
+														if(OR2r.OrderClass=="STOCK" and CISr.OrderNr==OR2r.SerNr and TrHs)then begin
+															CISqty = CISqty + CISr.Quant;
 														end;
-														ResetLoop(CISr);
-													end;	
+													end;
+													ResetLoop(CISr);
+													stockreservq = stockreservq - CISqty;
+													logtext(0,stockreservq);
 												end;	
 											end;
                       if ((ISr.Instock-ISr.RsrvQty-stockreservq<prev) and (prev>0)) then begin
@@ -1157,40 +1139,21 @@ begin
 											OR2r.SerNr = SHp.OrderNr;
 											logtext(0,SHp.OrderNr);
 											if(readFirstMain(OR2r,1,true)) then begin 
-												if(OR2r.OrderClass=="CLIEN") then begin
-													CISr.ItemCode = SHrw3.ArtCode;
-													CISr.OrderNr = SHp.OrderNr;
-													logtext(0,CISr.ItemCode);
-													if(ReadFirstMain(CISr,2,true)) then begin
-														if(CISr.Quant>=SHrw.Ship and SHrw.Ship!=0) then begin
-															CISr.Quant = CISr.Quant - prev;
-															RecordStore(CISr,true);
-														end else begin 	
-															CISr.ItemCode = SHrw3.ArtCode;
-															TrHs = true;
-															if(LoopMain(CISr,1,TrHs)) then begin
-																testf = true;
-																if(CISr.ItemCode!=rec2SHrw.ArtCode) then begin TrHs = false; testf = false; end;
-																if(CISr.OrderNr==SHp.OrderNr) then begin testf = false; end;
-																if(testf) then begin
-																	stockreservq = stockreservq + CISr.Quant;
-																end;	
-															end;
-															ResetLoop(CISr);
-														end;	
+												CISr.ItemCode = SHrw3.ArtCode;
+												CISqty = 0;
+												TrHs = true;
+												while (loopmain(CISr,1,TrHs)) begin
+													if(CISr.ItemCode!=SHrw3.ArtCode)then begin TrHs = false; end;
+													if(CISr.OrderNr!=SHp.OrderNr and TrHs)then begin
+														CISqty = CISqty + CISr.Quant;
 													end;
-												end else begin
-													CISr.ItemCode = SHrw3.ArtCode;
-														TrHs = true;
-														if(LoopMain(CISr,1,TrHs)) then begin
-															if(CISr.OrderNr!=SHp.OrderNr) then begin TrHs = false; end;
-															if(CISr.ItemCode!=SHrw3.ArtCode) then begin TrHs = false; end;
-															if(TrHs) then begin
-																stockreservq = stockreservq + CISr.Quant;
-															end;	
-														end;
-														ResetLoop(CISr);
-												end;	
+													if(OR2r.OrderClass=="STOCK" and CISr.OrderNr==OR2r.SerNr and TrHs)then begin
+														CISqty = CISqty + CISr.Quant;
+													end;
+												end;
+												ResetLoop(CISr);
+												stockreservq = stockreservq - CISqty;
+												logtext(0,stockreservq);
 											end;	
 										end;
                     if ((ISr.Instock-ISr.RsrvQty-stockreservq<prev) and (prev>0)) then begin
@@ -1259,40 +1222,20 @@ begin
 						OR2r.SerNr = SHp.OrderNr;
 						logtext(0,SHp.OrderNr);
 						if(readFirstMain(OR2r,1,true)) then begin 
-							if(OR2r.OrderClass=="CLIEN") then begin
-								CISr.ItemCode = SHrw.ArtCode;
-								CISr.OrderNr = SHp.OrderNr;
-								logtext(0,CISr.ItemCode);
-								if(ReadFirstMain(CISr,2,true)) then begin
-									if(CISr.Quant>=SHrw.Ship and SHrw.Ship!=0) then begin
-										CISr.Quant = CISr.Quant - prev;
-										RecordStore(CISr,true);
-									end else begin 	
-										CISr.ItemCode = SHrw.ArtCode;
-										TrHs = true;
-										if(LoopMain(CISr,1,TrHs)) then begin
-											testf = true;
-											if(CISr.ItemCode!=rec2SHrw.ArtCode) then begin TrHs = false; testf = false; end;
-											if(CISr.OrderNr==SHp.OrderNr) then begin testf = false; end;
-											if(testf) then begin
-												stockreservq = stockreservq + CISr.Quant;
-											end;	
-										end;
-										ResetLoop(CISr);
-									end;	
+							CISr.ItemCode = SHrw.ArtCode;
+							CISqty = 0;
+							TrHs = true;
+							while (loopmain(CISr,1,TrHs)) begin
+								if(CISr.ItemCode!=SHrw.ArtCode)then begin TrHs = false; end;
+								if(CISr.OrderNr!=SHp.OrderNr and TrHs)then begin
+									CISqty = CISqty + CISr.Quant;
 								end;
-							end else begin
-								logtext(0,SHrw.ArtCode);
-								CISr.ItemCode = SHrw.ArtCode;
-								TrHs = true;
-								if(LoopMain(CISr,1,TrHs)) then begin
-									if(CISr.ItemCode!=SHrw.ArtCode) then begin TrHs = false; end;
-									if(TrHs) then begin
-										stockreservq = stockreservq + CISr.Quant;
-									end;	
+								if(OR2r.OrderClass=="STOCK" and CISr.OrderNr==OR2r.SerNr and TrHs)then begin
+									CISqty = CISqty + CISr.Quant;
 								end;
-								ResetLoop(CISr);
-							end;	
+							end;
+							ResetLoop(CISr);
+							stockreservq = stockreservq + CISqty;
 						end;	
 					end;
           if ((ISr.Instock-stockreservq<prev) and (prev>0)) then begin
@@ -1301,9 +1244,9 @@ begin
             end else begin
               error = 1247;
             end;
-            errorstr = "__--";
+            errorstr = "";
             rownr = i;
-            fieldstr = "SerialNr";                      
+            fieldstr = "ArtCode";                      
             res = -1; 
             goto LSHVcRecordCheck;
           end;
@@ -1905,6 +1848,9 @@ begin
   record ORVc ORr;// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 20 05 2019 y. at 10:33:48 AM
   row ORVc ORrw;
   boolean createf;
+	record ClientItemStatusVc CISr;
+	row SHVc SHrw;
+	integer i,mtrw;
 
   
   ihef = ItemHistExists("SHVc",SHr.SerNr);
@@ -1918,6 +1864,23 @@ begin
     SHUpdateInShipment(SH2r,true,SHr,false,true); // What does this function do??
     SHUpdateStock(SHr,false,false);
     AutomatedSalesOrderly("HasIntegratedNL");
+		if(CurrentCompany==33)then begin
+			ORr.SerNr = SHr.OrderNr;
+			if(readfirstmain(ORr,1,true))then begin
+				if(ORr.OrderClass=="CLIEN") then begin
+					mtrw = matrowcnt(SHr);
+					for (i=0;i<mtrw;i=i+1) begin
+						matrowget(SHr,i,SHrw);
+						CISr.ItemCode = SHrw.ArtCode;
+						CISr.OrderNr = SHr.OrderNr;
+						if(ReadFirstMain(CISr,2,true)) then begin
+							CISr.Quant = CISr.Quant - SHrw.Ship;
+							Recordstore(CISr,true);
+						end;
+					end;
+				end;
+			end;
+		end;
     if (ihef==false) then begin
       UpdateProjFromShip(SHr);
       SHOK(SHr);
