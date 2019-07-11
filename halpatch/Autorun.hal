@@ -762,11 +762,11 @@ end;
 
 
 
-global updating procedure RecalcPriceRebateMn()
+global updating procedure RecalcPriceRebateMn()  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:34 11.07.2019
 begin
 	record CoinSettingsBlock CoinSb;
   string 255 path;
-  integer compnr,CompQty,i;
+  integer compnr,CompQty,i,j;
   record WebReportChBlock WRChb;
 	record BtrxReportChBlock BRChb;
   area req,reply;
@@ -777,15 +777,15 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	record ECAutoRetSMBlock ECARSMb;
-  area text,replyPr;
+  area text,replyPr,text2;
 	record GlobalItemVc GIr,mainGIr;
 	boolean TrHs;
 	val ITRebate,price;
 	record INVc INr;
-	vector boolean OldItemf;
-	vector val ItemOldPrice, ItemOldRebate, NewItemPrice, NewItemRebate;
-	array string 255 ItemCodes;
-	longint ITCcnt
+	vector boolean OldItemf, DiffPricesf;
+	vector val ItemOldPrice, ItemOldRebate, NewItemPrice, NewItemRebate, DifferPrices, DifferRebates;
+	array string 255 ItemCodes, DiffItemCodes;
+	longint ITCcnt, DiffItemsCnt;
 	
 	
   blockload(WRChb);
@@ -793,7 +793,9 @@ begin
 	
 	CompQty = matrowcnt(Compb);
 	ITCcnt = 0;
+	DiffItemsCnt = 0;
 	AddTextToArea	("Code" & chr(9) & "Price old" & chr(9) & "Price new" & chr(9) & "Dif Price" & chr(9) & "Reb old" & chr(9) & "Reb new" & chr(9) & "Reb diff" & chr(9) & "Company name" & chr(13),text);
+	AddTextToArea	("Code" & chr(9) & "Price" & chr(9) & "Rebate" & chr(9) & "Company name" & chr(13),text2);
 	for (i=0;i<CompQty;i=i+1)begin
 		matrowget(Compb,i,Comprw);
 		If(SetInSet(i+1,"1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31")) then begin	
@@ -811,6 +813,18 @@ begin
 					end else begin
 						if (ReadFirstMain(GIr,1,true)) then begin
 							GetPriceItem(INr.Code,price,ITRebate);
+							DifferPrices[GIr.Code & "_" & i+1] = price;
+							DifferRebates[GIr.Code & "_" & i+1] = ITRebate;
+							for (j=1;j<32;j=j+1) begin
+								if((nonblank(DifferPrices[GIr.Code & "_" & j]) or nonblank(DifferRebates[GIr.Code & "_" & j])) and (DifferPrices[GIr.Code & "_" & i+1]!=DifferPrices[GIr.Code & "_" & j] or DifferRebates[GIr.Code & "_" & i+1]!=DifferRebates[GIr.Code & "_" & j])) begin
+									if(!DiffPricesf[GIr.Code])then begin
+										DiffPricesf[GIr.Code] = true;
+										DiffItemCodes[DiffItemsCnt] = GIr.Code;
+										DiffItemsCnt = DiffItemsCnt + 1;
+									end;
+									logtext(0,GIr.Code & " Defferences in prices or rebates");
+								end;
+							end;
 							if(!OldItemf[GIr.Code] and (price!=GIr.Price or ITRebate!=GIr.Rebate))then begin
 								ItemOldPrice[GIr.Code] = GIr.Price;
 								ItemOldRebate[GIr.Code] = GIr.Rebate;
@@ -834,6 +848,19 @@ begin
 	end;
 	
 	
+	for (i=0;i<DiffItemsCnt;i=i+1) begin
+		if(DiffPricesf[DiffItemCodes[i]])then begin
+			AddTextToArea	(chr(13),text2);
+			for (j=1;j<32;j=j+1) begin
+				if(nonblank(DifferPrices[DiffItemCodes[i] & "_" & j]) or nonblank(DifferRebates[DiffItemCodes[i] & "_" & j])) then begin
+					matrowget(Compb,j-1,Comprw);
+					AddTextToArea	(DiffItemCodes[i] & chr(9) & DifferPrices[DiffItemCodes[i]] & chr(9) & DifferRebates[DiffItemCodes[i]] & chr(9) & Comprw.CompName & chr(13),text2);
+				end;
+			end;
+		end;
+	end;
+	
+	
 	for (i=0;i<ITCcnt;i=i+1) begin
 		if((ItemOldPrice[ItemCodes[i]]!=NewItemPrice[ItemCodes[i]]) or (ItemOldRebate[ItemCodes[i]]!=NewItemRebate[ItemCodes[i]]))then begin
 			AddTextToArea	(ItemCodes[i] & chr(9) & ItemOldPrice[ItemCodes[i]] & chr(9) & NewItemPrice[ItemCodes[i]] & chr(9) & (ItemOldPrice[ItemCodes[i]]-NewItemPrice[ItemCodes[i]]),text);
@@ -844,6 +871,7 @@ begin
 	
 	
 	WriteAreaToFile(text,"PriceChanges.txt",0);
+	WriteAreaToFile(text2,"PriceDiff.txt",0);
 	if(fileexists("PriceChanges.txt"))then begin
 		setareazerosize(text);
 		addtexttoarea("{",text);
@@ -862,9 +890,33 @@ begin
 		logtext(0,"PriceChanges.txt");
 		logtext(0,"reply length " & getarealength(replyPr));
 
-		SendWebRequest("127.0.0.1",1071,-1,false,"POST","/sendMail","application/json","",false,text,replyPr,5);
-		MilliSleep(2000);
-		Delete_File("PriceChanges.txt");
+		// SendWebRequest("127.0.0.1",1071,-1,false,"POST","/sendMail","application/json","",false,text,replyPr,5);
+		// MilliSleep(2000);
+		// Delete_File("PriceChanges.txt");
+	end;	
+	
+	
+	if(fileexists("PriceDiff.txt"))then begin
+		setareazerosize(text2);
+		addtexttoarea("{",text2);
+		addtexttoarea("\"host\":\"smtp.gmail.com\",",text2);
+		addtexttoarea("\"port\":465,",text2);
+		addtexttoarea("\"secure\":true,",text2);
+		addtexttoarea("\"user\":\"IDReporSender@gmail.com\",",text2);
+		addtexttoarea("\"pass\":\"c2h5ohc2h5oh\",",text2);
+		addtexttoarea("\"from\":\"IDReportSender@gmail.com\",",text2);
+		addtexttoarea("\"to\":\"" & "logs@ozzi.az" & "\",",text2);
+		addtexttoarea("\"subject\":\"" & USetStr(36260) & " " & CurrentDate & "\",",text2);
+		addtexttoarea("\"plaintext\":\"notblank\",",text2);			
+		addtexttoarea("\"filename\":\"PriceDiff.txt\",",text2);			
+		addtexttoarea("\"path\":\"/usr/local/bin/StandardERPServer/" & "PriceDiff.txt" & "\"",text2);
+		addtexttoarea("}",text2);
+		logtext(0,"PriceDiff.txt");
+		logtext(0,"reply length " & getarealength(replyPr));
+
+		// SendWebRequest("127.0.0.1",1071,-1,false,"POST","/sendMail","application/json","",false,text2,replyPr,5);
+		// MilliSleep(2000);
+		// Delete_File("PriceDiff.txt");
 	end;	
 return;
 end;
