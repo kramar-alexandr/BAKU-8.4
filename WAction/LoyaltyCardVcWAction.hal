@@ -1,5 +1,85 @@
 remote updating procedure LinkIVtoLoyaltyCard(string,string,var record LoyaltyCardVc,var longint);
 
+global updating procedure CheckPLRhistDsm()
+begin
+	integer wn;
+	record PLVc PLr,OldPLr,OldPL2r;
+	record RHistVc RHistr;
+  record RHistVc RHist2r;
+  string 100 tstr;
+  boolean TrHs;
+  record RcVc RepSpec;
+	
+	wn = curwindow;
+	getwindowrecord(wn,PLr);
+	RepSpec.f1 = PLr.ArtCode;
+	RepSpec.f2 = PLr.PLCode;
+	RepSpec.repname = "RHistCompareRecordRn";
+	RunMaintenance(RepSpec);//(RepSpec,0);
+	
+	
+
+return;
+end;
+
+global updating procedure RHistCompareRecordRn(record RcVc RepSpec)
+begin
+	integer wn;
+	record PLVc PLr,OldPLr,OldPL2r;
+	record RHistVc RHistr;
+  record RHistVc RHist2r;
+  string 100 tstr;
+  boolean TrHs,first,diff;
+  
+  startreportnoheaderjob("RHistCompareRecordRn");
+  	PLr.ArtCode = RepSpec.f1;
+  	PLr.PLCode = RepSpec.f2;
+  	if(readfirstmain(PLr,2,true))then begin
+  		tstr = BuildRecordIdStr(PLr,currentcompany);
+			TrHs = true;
+			recordcopy(OldPLr,PLr);
+			RHist2r.RecidStr = tstr;
+			while(loopbackkey("RecidStr",RHist2r,1,TrHs))begin
+				diff = false;
+				if(RHist2r.RecidStr!=tstr)then begin TrHs = false; end;
+				
+				if(TrHs)then begin
+					ReadOriginalRecord(RHist2r,OldPL2r);
+					if(!first)then begin
+						first = true;
+					end else begin
+						ReadOriginalRecord(RHistr,OldPLr);						
+					end;
+					if(OldPLr.ExVatPrice!=OldPL2r.ExVatPrice or OldPLr.CurncyCode!=OldPL2r.CurncyCode)then begin
+						diff = true;
+					end;
+					if(diff)then begin
+						recordcopy(RHistr,RHist2r);
+					end else begin
+						recorddelete(RHist2r);
+						stepback(RHist2r);
+					end;
+					StartFormat(15);
+						outstring(0,0,RHist2r.SerNr,false);
+						if(diff)then begin
+							outstring(15,0,"1",false);
+						end else begin
+							outstring(15,0,"0",false);
+						end;
+						outstring(100,0,OldPL2r.ExVatPrice,false);
+						outstring(150,0,OldPLr.ExVatPrice,false);
+					endformat;
+				end;
+			end;
+			
+  	end;
+	
+	endjob;
+
+return;
+end;
+
+
 global
 updating procedure LinkIVDsm()
 BEGIN
