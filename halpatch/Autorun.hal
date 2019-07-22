@@ -762,7 +762,7 @@ end;
 
 
 
-global updating procedure RecalcPriceRebateMn()  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:34 11.07.2019
+global updating procedure RecalcPriceRebateMn(record RcVc RepSpec)  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:34 11.07.2019
 begin
 	record CoinSettingsBlock CoinSb;
   string 255 path;
@@ -786,17 +786,18 @@ begin
   boolean OldItemf;
 	vector val ItemOldPrice, ItemOldRebate, NewItemPrice, NewItemRebate, DifferPrices, DifferRebates,ItemPriceComp,ItemRebComp;
 	array string 255 ItemCodes, DiffItemCodes,tags;
-	longint ITCcnt, DiffItemsCnt;
+	longint DiffItemsCnt;
 	val oldPrice;
 	val oldReb;
+	record ItemStatusVc ISr;
+	string 255 file1,file2;
 	
 	
   blockload(WRChb);
 	blockload(Compb);
 	
 	CompQty = matrowcnt(Compb);
-	ITCcnt = 0;
-	AddTextToArea	("Code" & chr(9) & "Price old" & chr(9) & "Price new"  chr(9) & "Dif Price" & chr(9) & "Reb old" & chr(9) & "Reb new" & chr(9) & "Reb diff" & "Company name" & chr(13),text);
+	AddTextToArea	("Code" & chr(9) & "Price old" & chr(9) & "Price new" & chr(9) & "Dif Price" & chr(9) & "Reb old" & chr(9) & "Reb new" & chr(9) & "Reb diff" & chr(9) & "Company name" & chr(13),text);
 	AddTextToArea	("Code" & chr(9) & "Price" & chr(9) & "Rebate" & chr(9) & "Company name" & chr(13),text2);
 	logtext(0,"Company num - " & currentcompany);
 	logtext(0,"RecalcPriceRebateMn start");
@@ -805,12 +806,26 @@ begin
 	GIr.Code = "";
 	stop = 0;
 	matrowget(Compb,currentcompany-1,Comprw);
+	
+	if(nonblank(RepSpec.f1))then begin
+		GIr.Code = RepSpec.f1;
+	end;
+	
 	while(loopmain(GIr,1,TrHs)) begin		
+	
+		if(nonblank(RepSpec.f1) and GIr.Code!=RepSpec.f1)then begin
+			TrHs = false;
+		end;
+	
 		DiffItemsCnt = 0;
 		OldItemf = false;
 		ClearVector(compCh);
 		ClearVector(ItemPriceComp);
 		ClearVector(ItemRebComp);
+		if(GIr.Rebate>0) then begin
+			GIr.Rebate = 0;
+			RecordStore(GIr,true);
+		end;
 		for (i=0;i<CompQty;i=i+1)begin
 			if(stop==100) then begin
 				if(fileexists("stop"))then begin
@@ -828,16 +843,23 @@ begin
 					end else begin
 						if (ReadFirstMain(INr,1,true) and INr.BPIBrand==GIr.BPIBrand) then begin
 							GetPriceItem(INr.Code,price,ITRebate);
-							if(!OldItemf and (price!=GIr.Price or ITRebate!=GIr.Rebate))then begin
-								OldItemf = true;
-								ITCcnt = ITCcnt + 1;
-							end;
-							if((price!=GIr.Price or ITRebate!=GIr.Rebate))then begin
-								DiffItemsCnt = DiffItemsCnt + 1;
-								compCh[i+1] = true;
-								ItemPriceComp[GIr.Code & "_" & i+1] = price;
-								ItemRebComp[GIr.Code & "_" & i+1] = ITRebate;
-							end;
+							ISr.Code = INr.Code;
+							ISr.Location = ";;;";
+							if(ReadFirstMain(ISr,2,true)) then begin 
+								if(ISr.Instock>0) then begin
+									if(!OldItemf and (price!=GIr.Price or GIr.Rebate!=ITRebate))then begin
+										OldItemf = true;
+									end;
+									if(price!=GIr.Price)then begin
+										DiffItemsCnt = DiffItemsCnt + 1;
+									end;
+									if(DiffItemsCnt>0) then begin
+										compCh[i+1] = true;
+									end;	
+									ItemPriceComp[GIr.Code & "_" & i+1] = price;
+									ItemRebComp[GIr.Code & "_" & i+1] = ITRebate;
+								end;	
+							end;	
 						end;
 					end;	
 				end;	
@@ -850,8 +872,7 @@ begin
 			for(i=1;i<34;i=i+1) begin
 				if(DiffItemsCnt>1 and compCh[i]) then begin
 					matrowget(Compb,i-1,Comprw);
-					if(ItemRebComp[GIr.Code & "_" & i+1]==blankVal) then begin ItemRebComp[GIr.Code & "_" & i+1] = 0; end; 
-					AddTextToArea	(GIr.Code & chr(9) & ItemPriceComp[GIr.Code & "_" & i] & chr(9) & ItemRebComp[GIr.Code & "_" & i+1] & chr(9) & Comprw.CompName & chr(13),text2);
+					AddTextToArea	(GIr.Code & chr(9) & ItemPriceComp[GIr.Code & "_" & i] & chr(9) & ItemRebComp[GIr.Code & "_" & i] & chr(9) & Comprw.CompName & chr(13),text2);
 				end;
 				if(ItemPriceComp[GIr.Code & "_" & i]>price) then begin
 					price = ItemPriceComp[GIr.Code & "_" & i];
@@ -860,10 +881,15 @@ begin
 					compnr = i;
 				end;
 			end;
-			AddTextToArea	(chr(13),text2);
-			matrowget(Compb,compnr,Comprw);
-			AddTextToArea	( GIr.Code & chr(9) & oldPrice & chr(9)  & GIr.Price & chr(9) & GIr.Price - oldPrice & chr(9) & oldReb & chr(9) & GIr.Rebate & chr(9) & GIr.Rebate -oldReb & chr(9) & Comprw.CompName & chr(13),text);
-			RecordStore(GIr,true);
+			if(DiffItemsCnt>1) then begin
+				AddTextToArea(chr(13),text2);
+			end;			
+			if(GIr.Price!=oldPrice or GIr.Rebate!=oldReb) then begin
+				matrowget(Compb,compnr-1,Comprw);
+				GIr.PriceFromComp = Comprw.CompName;
+				AddTextToArea(GIr.Code & chr(9) & oldPrice & chr(9)  & GIr.Price & chr(9) & GIr.Price - oldPrice & chr(9) & oldReb & chr(9) & GIr.Rebate & chr(9) & GIr.Rebate - oldReb & chr(9) & Comprw.CompName & chr(13),text);
+				RecordStore(GIr,true);
+			end;	
 		end;
 	end;
 	logtext(0,"RecalcPriceRebateMn end");
@@ -871,11 +897,13 @@ begin
 	
 	
 	
+	file1 = "PriceChanges" & Datetostring(currentdate,"DD.MM.YYYY") & ".txt";
+	file2 = "PriceDiff" & Datetostring(currentdate,"DD.MM.YYYY")  & ".txt";
 	
-	
-	WriteAreaToFile(text,"PriceChanges.txt",0);
-	WriteAreaToFile(text2,"PriceDiff.txt",0);
-	if(fileexists("PriceChanges.txt"))then begin
+	WriteAreaToFile(text,file1,0);
+	WriteAreaToFile(text2,file2,0);
+	logtext(0,file1);
+	if(fileexists(file1))then begin
 		setareazerosize(text);
 		addtexttoarea("{",text);
 		addtexttoarea("\"host\":\"smtp.gmail.com\",",text);
@@ -887,19 +915,18 @@ begin
 		addtexttoarea("\"to\":\"" & "logs@ozzi.az" & "\",",text);
 		addtexttoarea("\"subject\":\"" & USetStr(36260) & " " & CurrentDate & "\",",text);
 		addtexttoarea("\"plaintext\":\"notblank\",",text);			
-		addtexttoarea("\"filename\":\"PriceChanges.txt\",",text);			
-		addtexttoarea("\"path\":\"/usr/local/bin/StandardERPServer/" & "PriceChanges.txt" & "\"",text);
+		addtexttoarea("\"filename\":\"" & file1 & "\",",text);			
+		addtexttoarea("\"path\":\"/usr/local/bin/StandardERPServer/" & file1 & "\"",text);
 		addtexttoarea("}",text);
-		logtext(0,"PriceChanges.txt");
+		logtext(0,file1);
 		logtext(0,"reply length " & getarealength(replyPr));
 
 		SendWebRequest("127.0.0.1",1071,-1,false,"POST","/sendMail","application/json","",false,text,replyPr,5);
 		MilliSleep(2000);
-		Delete_File("PriceChanges.txt");
 	end;	
 	
 	
-	if(fileexists("PriceDiff.txt"))then begin
+	if(fileexists(file2))then begin
 		setareazerosize(text2);
 		addtexttoarea("{",text2);
 		addtexttoarea("\"host\":\"smtp.gmail.com\",",text2);
@@ -911,15 +938,14 @@ begin
 		addtexttoarea("\"to\":\"" & "logs@ozzi.az" & "\",",text2);
 		addtexttoarea("\"subject\":\"" & USetStr(36260) & " " & CurrentDate & "\",",text2);
 		addtexttoarea("\"plaintext\":\"notblank\",",text2);			
-		addtexttoarea("\"filename\":\"PriceDiff.txt\",",text2);			
-		addtexttoarea("\"path\":\"/usr/local/bin/StandardERPServer/" & "PriceDiff.txt" & "\"",text2);
+		addtexttoarea("\"filename\":\""& file2 & "\",",text2);			
+		addtexttoarea("\"path\":\"/usr/local/bin/StandardERPServer/" &  file2  & "\"",text2);
 		addtexttoarea("}",text2);
-		logtext(0,"PriceDiff.txt");
+		logtext(0,file2);
 		logtext(0,"reply length " & getarealength(replyPr));
 
 		SendWebRequest("127.0.0.1",1071,-1,false,"POST","/sendMail","application/json","",false,text2,replyPr,5);
 		MilliSleep(2000);
-		Delete_File("PriceDiff.txt");
 	end;	
 return;
 end;
@@ -948,6 +974,7 @@ begin
 	row CompaniesBlock Comprw;
 	record ECAutoRetSMBlock ECARSMb;
   area text,replyPr;
+  record RcVc RepSpec;
    blockload(WRChb);
 	
 	//SyncAllIVtoCRM;
@@ -957,7 +984,8 @@ begin
 		CompQty = matrowcnt(Compb);
 			
 		if(gethour(currenttime)==3 and getminute(currenttime)>=0 and getminute(currenttime)<=5)then begin // Recalculating prices and rebates in global items 
-			RecalcPriceRebateMn; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:32 11.07.2019
+			recordnew(RepSpec);
+			RecalcPriceRebateMn(RepSpec); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:32 11.07.2019
 		end;	
 	
 		for (i=0;i<CompQty;i=i+1) begin
@@ -1028,7 +1056,7 @@ begin
   end;
   
   setcompany(1,false);
-  blockload(BRChb);
+  /*blockload(BRChb);
 	if(BRChb.WabUPDstockf==1 and BRChb.WEBCheck==1)then begin
 		BRChb.WabUPDstockf = 0;
 		BlockStore(BRChb);
@@ -1036,7 +1064,7 @@ begin
 		port = 443;
 		logtext(0,"SendWebRequest " & BRChb.PathSinc & ":" & port & BRChb.PageSinc);
 		SendWebRequest(BRChb.PathSinc,port,-1,true,"GET",BRChb.PageSinc,"text/xml","",false,req,reply,1);
-	end;
+	end;*/
 	
   logtext(0,"BackgroundOperations END");
   
