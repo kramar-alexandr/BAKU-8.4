@@ -2159,12 +2159,15 @@ record PUVc PUr;
 record ORVc ORr;
 record IVVc IVr;
 record RetVc Retr;
-integer i,pos,errcode;
-Boolean TrHs, TrHs1;
+integer i,pos,errcode,cnt;
+Boolean TrHs, TrHs1,TrHs2;
 record OPVc OPr;
 row OPVc OPrw;
 record ObjVc Objr;
 string 255 set,obj,errstr;
+record SHVc SHr;
+record IPVc IPr;
+row IPVc IPrw;
 	logtext(0,"start");
 POr.SerNr = "";
 while(loopmain(POr,1,true))begin
@@ -2210,7 +2213,81 @@ while(loopmain(POr,1,true))begin
 		end;	
 	end;	
 end;	
-							
+IPr.SerNr=-1;
+while(LoopMain(IPr,1,true)) begin
+	cnt = matrowcnt(IPr);
+	for(i=0;i<cnt;i=i+1) begin
+		matrowget(IPr,i,IPrw);
+		if(nonblank(IPrw.InvoiceNr)) then begin
+			IVr.SerNr = IPrw.InvoiceNr;
+			if(ReadFirstMain(IVr,1,true)) then begin
+				ORr.SerNr = IVr.OrderNr;
+				if(ReadFirstMain(ORr,1,true)) then begin
+					TRr.Number = IPr.SerNr;
+					TRr.IntYc = IPYc;
+					if(ReadFirstMain(TRr,2,true)) then begin
+						RecordCopy(tempTRr,TRr);
+						if(nonblank(ORr.AuthorizationCode)) then begin
+							if(!SetInSet(ORr.AuthorizationCode,IPrw.Objects)) then begin
+								if(blank(IPrw.Objects)) then begin
+									errcode = CheckObjs("",ORr.AuthorizationCode,errstr);
+									if(errcode==0) then begin
+										IPrw.Objects = ORr.AuthorizationCode;
+									end;
+								end else begin
+									errcode = CheckObjs("",IPrw.Objects & "," & ORr.AuthorizationCode,errstr);
+									if(errcode==0) then begin
+										IPrw.Objects = IPrw.Objects & "," & ORr.AuthorizationCode;
+									end else begin
+										i = 0;
+										pos = 0;
+										set = "";
+										ExtractObj(IPrw.Objects,i,obj);
+										while(nonblank(obj)) begin
+											Objr.Code = obj;
+											if(pos!=0) then begin
+												set = set & ",";
+											end;
+											pos = pos+1;
+											if(ReadFirstMain(Objr,1,true)) then begin
+												if(Objr.OTCode=="PRC") then begin
+													set = set & ORr.AuthorizationCode;
+												end else begin
+													set = set & obj;
+												end;
+											end;
+											ExtractObj(IPrw.Objects,i,obj);
+										end;
+										IPrw.Objects = set;
+									end;
+								end;
+								matrowput(IPr,i,IPrw);
+								RecordStore(IPr,true);
+							end;
+							for(i=0;i<matrowcnt(TRr);i=i+1) begin
+								matrowget(TRr,i,TRrw);
+								if(!SetInSet(ORr.AuthorizationCode,TRrw.Objects)) then begin
+									if(nonblank(TRrw.Objects)) then begin
+										TRrw.Objects = TRrw.Objects & "," & ORr.AuthorizationCode;
+									end else begin
+										TRrw.Objects = ORr.AuthorizationCode;
+									end;	
+									logtext(0,TRrw.Objects);
+									matrowput(TRr,i,TRrw);
+								end;	
+							end;
+						end;
+						if(RecordUpdate(tempTRr,TRr,true)) then begin
+							logtext(0,"upd");
+						end;	
+					end;	
+				end;
+			end;	
+		end;
+	end;
+end;
+ORr.SerNr = -1;
+while(LoopMain(ORr,1,true)) begin		
 	OPr.SerNr = "";
 	while(loopmain(OPr,1,true))begin
 		for(i=0;i<matrowcnt(OPr);i=i+1)begin
@@ -2347,6 +2424,7 @@ end;
 			end;	
 		end;
 	end;
+end;	
 	VIr.SerNr = "";
 	while(loopmain(VIr,1,true))begin
 		TRr.Number = VIr.SerNr;
@@ -2593,96 +2671,95 @@ end;
 				end;
 			end;	
 		end;	
-			IVr.OrderNr = ORr.SerNr;
-			while(LoopKey("OrderNr",IVr,1,TrHs)) begin	
-				if(IVr.OrderNr!=ORr.SerNr) then begin TrHs = false; end;
-				if(TrHs) begin
-					logtext(0,TRr.Number & "four");
-					TRr.Number = IVr.SerNr;
-					TRr.IntYc = IVYc;
-					if (ReadFirstMain(TRr,2,true)) then begin
-						RecordCopy(tempTRr,TRr);
-							if(nonblank(ORr.AuthorizationCode)) then begin
-								if(!SetInSet(ORr.AuthorizationCode,IVr.Objects)) then begin
-									if(blank(IVr.Objects)) then begin
-										errcode = CheckObjs("",ORr.AuthorizationCode,errstr);
-										if(errcode==0) then begin
-											IVr.Objects = ORr.AuthorizationCode;
-										end;
-									end else begin
-										errcode = CheckObjs("",IVr.Objects & "," & ORr.AuthorizationCode,errstr);
-										if(errcode==0) then begin
-											IVr.Objects = IVr.Objects & "," & ORr.AuthorizationCode;
-										end else begin
-											i = 0;
-											pos = 0;
-											set = "";
-											ExtractObj(IVr.Objects,i,obj);
-											while(nonblank(obj)) begin
-												Objr.Code = obj;
-												if(pos!=0) then begin
-													set = set & ",";
-												end;
-												pos = pos+1;
-												if(ReadFirstMain(Objr,1,true)) then begin
-													if(Objr.OTCode=="PRC") then begin
-														set = set & ORr.AuthorizationCode;
-													end else begin
-														set = set & obj;
-													end;
-												end;
-												ExtractObj(IVr.Objects,i,obj);
-											end;
-											IVr.Objects = set;
-										end;
-									end;
-									RecordStore(IVr,true);
+		TrHs2 = true;
+		SHr.OrderNr = ORr.SerNr;
+		while(LoopKey("OrderNr",SHr,1,TrHs2)) begin	
+			if(SHr.OrderNr!=ORr.SerNr) then begin TrHs2 = false; end;
+			if(TrHs) begin
+				TRr.Number = SHr.SerNr;
+				TRr.IntYc = SHYc;
+				if (ReadFirstMain(TRr,2,true)) then begin
+					RecordCopy(tempTRr,TRr);
+					if(nonblank(ORr.AuthorizationCode)) then begin
+						if(!SetInSet(ORr.AuthorizationCode,SHr.Objects)) then begin
+							if(blank(SHr.Objects)) then begin
+								errcode = CheckObjs("",ORr.AuthorizationCode,errstr);
+								if(errcode==0) then begin
+									SHr.Objects = ORr.AuthorizationCode;
 								end;
-								for(i=0;i<matrowcnt(TRr);i=i+1) begin
-									matrowget(TRr,i,TRrw);
-									if(!SetInSet(ORr.AuthorizationCode,TRrw.Objects)) then begin
-										if(nonblank(TRrw.Objects)) then begin
-											TRrw.Objects = TRrw.Objects & "," & ORr.AuthorizationCode;
-										end else begin
-											TRrw.Objects = ORr.AuthorizationCode;
-										end;	
-										logtext(0,TRrw.Objects);
-										matrowput(TRr,i,TRrw);
-									end;	
+							end else begin
+								errcode = CheckObjs("",SHr.Objects & "," & ORr.AuthorizationCode,errstr);
+								if(errcode==0) then begin
+									SHr.Objects = SHr.Objects & "," & ORr.AuthorizationCode;
+								end else begin
+									i = 0;
+									pos = 0;
+									set = "";
+									ExtractObj(SHr.Objects,i,obj);
+									while(nonblank(obj)) begin
+										Objr.Code = obj;
+										if(pos!=0) then begin
+											set = set & ",";
+										end;
+										pos = pos+1;
+										if(ReadFirstMain(Objr,1,true)) then begin
+											if(Objr.OTCode=="PRC") then begin
+												set = set & ORr.AuthorizationCode;
+											end else begin
+												set = set & obj;
+											end;
+										end;
+										ExtractObj(SHr.Objects,i,obj);
+									end;
+									SHr.Objects = set;
 								end;
 							end;
-							if(RecordUpdate(tempTRr,TRr,true)) then begin
-								logtext(0,"upd");
+							RecordStore(SHr,true);
+						end;
+						for(i=0;i<matrowcnt(TRr);i=i+1) begin
+							matrowget(TRr,i,TRrw);
+							if(!SetInSet(ORr.AuthorizationCode,TRrw.Objects)) then begin
+								if(nonblank(TRrw.Objects)) then begin
+									TRrw.Objects = TRrw.Objects & "," & ORr.AuthorizationCode;
+								end else begin
+									TRrw.Objects = ORr.AuthorizationCode;
+								end;	
+								logtext(0,TRrw.Objects);
+								matrowput(TRr,i,TRrw);
 							end;	
+						end;
+					end;
+					if(RecordUpdate(tempTRr,TRr,true)) then begin
+						logtext(0,"upd");
 					end;	
-				end;
-			end;	
-			ResetLoop(IVr);
-			Retr.OrdNr = ORr.SerNr;
-			TrHs1 = true;
-			while(LoopKey("OrdNr",Retr,1,TrHs1)) begin	
-				if(Retr.OrdNr!=ORr.SerNr) then begin TrHs1 = false; end;
-				if(TrHs1) begin
-					TRr.Number = Retr.SerNr;
-					TRr.IntYc = RetYc;
-					if (ReadFirstMain(TRr,2,true)) then begin
-						RecordCopy(tempTRr,TRr);
+				end;	
+			end;
+		end;	
+		ResetLoop(SHr);
+		IVr.OrderNr = ORr.SerNr;
+		while(LoopKey("OrderNr",IVr,1,TrHs)) begin	
+			if(IVr.OrderNr!=ORr.SerNr) then begin TrHs = false; end;
+			if(TrHs) begin
+				TRr.Number = IVr.SerNr;
+				TRr.IntYc = IVYc;
+				if (ReadFirstMain(TRr,2,true)) then begin
+					RecordCopy(tempTRr,TRr);
 						if(nonblank(ORr.AuthorizationCode)) then begin
-							if(!SetInSet(ORr.AuthorizationCode,Retr.Objects)) then begin
-								if(blank(Retr.Objects)) then begin
+							if(!SetInSet(ORr.AuthorizationCode,IVr.Objects)) then begin
+								if(blank(IVr.Objects)) then begin
 									errcode = CheckObjs("",ORr.AuthorizationCode,errstr);
 									if(errcode==0) then begin
-										Retr.Objects = ORr.AuthorizationCode;
+										IVr.Objects = ORr.AuthorizationCode;
 									end;
 								end else begin
-									errcode = CheckObjs("",Retr.Objects & "," & ORr.AuthorizationCode,errstr);
+									errcode = CheckObjs("",IVr.Objects & "," & ORr.AuthorizationCode,errstr);
 									if(errcode==0) then begin
-										Retr.Objects = Retr.Objects & "," & ORr.AuthorizationCode;
+										IVr.Objects = IVr.Objects & "," & ORr.AuthorizationCode;
 									end else begin
 										i = 0;
 										pos = 0;
 										set = "";
-										ExtractObj(Retr.Objects,i,obj);
+										ExtractObj(IVr.Objects,i,obj);
 										while(nonblank(obj)) begin
 											Objr.Code = obj;
 											if(pos!=0) then begin
@@ -2696,12 +2773,12 @@ end;
 													set = set & obj;
 												end;
 											end;
-											ExtractObj(Retr.Objects,i,obj);
+											ExtractObj(IVr.Objects,i,obj);
 										end;
-										Retr.Objects = set;
+										IVr.Objects = set;
 									end;
 								end;
-								RecordStore(Retr,true);
+								RecordStore(IVr,true);
 							end;
 							for(i=0;i<matrowcnt(TRr);i=i+1) begin
 								matrowget(TRr,i,TRrw);
@@ -2719,10 +2796,75 @@ end;
 						if(RecordUpdate(tempTRr,TRr,true)) then begin
 							logtext(0,"upd");
 						end;	
+				end;	
+			end;
+		end;	
+		ResetLoop(IVr);
+		Retr.OrdNr = ORr.SerNr;
+		TrHs1 = true;
+		while(LoopKey("OrdNr",Retr,1,TrHs1)) begin	
+			if(Retr.OrdNr!=ORr.SerNr) then begin TrHs1 = false; end;
+			if(TrHs1) begin
+				TRr.Number = Retr.SerNr;
+				TRr.IntYc = RetYc;
+				if (ReadFirstMain(TRr,2,true)) then begin
+					RecordCopy(tempTRr,TRr);
+					if(nonblank(ORr.AuthorizationCode)) then begin
+						if(!SetInSet(ORr.AuthorizationCode,Retr.Objects)) then begin
+							if(blank(Retr.Objects)) then begin
+								errcode = CheckObjs("",ORr.AuthorizationCode,errstr);
+								if(errcode==0) then begin
+									Retr.Objects = ORr.AuthorizationCode;
+								end;
+							end else begin
+								errcode = CheckObjs("",Retr.Objects & "," & ORr.AuthorizationCode,errstr);
+								if(errcode==0) then begin
+									Retr.Objects = Retr.Objects & "," & ORr.AuthorizationCode;
+								end else begin
+									i = 0;
+									pos = 0;
+									set = "";
+									ExtractObj(Retr.Objects,i,obj);
+									while(nonblank(obj)) begin
+										Objr.Code = obj;
+										if(pos!=0) then begin
+											set = set & ",";
+										end;
+										pos = pos+1;
+										if(ReadFirstMain(Objr,1,true)) then begin
+											if(Objr.OTCode=="PRC") then begin
+												set = set & ORr.AuthorizationCode;
+											end else begin
+												set = set & obj;
+											end;
+										end;
+										ExtractObj(Retr.Objects,i,obj);
+									end;
+									Retr.Objects = set;
+								end;
+							end;
+							RecordStore(Retr,true);
+						end;
+						for(i=0;i<matrowcnt(TRr);i=i+1) begin
+							matrowget(TRr,i,TRrw);
+							if(!SetInSet(ORr.AuthorizationCode,TRrw.Objects)) then begin
+								if(nonblank(TRrw.Objects)) then begin
+									TRrw.Objects = TRrw.Objects & "," & ORr.AuthorizationCode;
+								end else begin
+									TRrw.Objects = ORr.AuthorizationCode;
+								end;	
+								logtext(0,TRrw.Objects);
+								matrowput(TRr,i,TRrw);
+							end;	
+						end;
+					end;
+					if(RecordUpdate(tempTRr,TRr,true)) then begin
+						logtext(0,"upd");
 					end;	
-				end;
-			end;	
-			Resetloop(Retr);	
+				end;	
+			end;
+		end;	
+		Resetloop(Retr);	
 	end;
 
 return;
