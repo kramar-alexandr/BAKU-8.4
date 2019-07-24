@@ -62,8 +62,8 @@ remote updating function LongInt RecordAction_raPastePOInPUFromBPU(var record PO
 remote updating function integer Remote_ORFromPOConsDsm(var record POVc,var record ORVc,var string);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 26 06 2019 y. at 2:42:07 PM
 remote procedure PODClassWeightRow(var record POVc,integer);
 remote procedure PODClassCaratRow(var record POVc,integer);
-
-
+remote updating function Integer IDCreateVIFromPU(LongInt,record RcVc,var record VIVc,LongInt);
+external updating procedure VIFromPUDsm();
 
 global
 procedure PrintOSDD(Integer wn,Boolean previewf)
@@ -301,7 +301,7 @@ BEGIN
 								testVI = false;
 							end;
 						end;
-						if(!testVI) then begin testf1 = false;  MessageBox(36236,""); end;
+						if(!testVI and currentcompany!=28) then begin testf1 = false;  MessageBox(36236,""); end;
 					end;	
 					if(testf1) then begin
 						r = RecordAction_raPastePOInPU(POr,PUr);
@@ -915,6 +915,97 @@ begin
   return;
 end;
 
+
+
+
+
+
+global
+updating procedure VIFromPUDExecute(LongInt PONr, LongInt PUNr)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record POSettingBlock POSb;
+  record VIVc VIr;
+  Integer r;
+
+  // if (UserCanAction("POToVI",true)) then begin
+    BlockLoad(POSb);
+    ReportDefaults(RepSpec,"VIFromPOVClass");
+    RepSpec.repname = "";
+    RepSpec.FirstVer = PONr;
+		RepSpec.BaseWidth = PUNr;
+    RepSpec.flags[0] = 1;
+    if (POSb.OpenCreateVIFromPO!=0) then begin
+      nwn = OpenWindow("IDVIFromPUVClass",1,0,"","",RepSpec);
+      PutWindowRecord(nwn,RepSpec);
+      SelectWindow(nwn);
+    end else begin
+      RepSpec.flags[0] = 1;
+      RepSpec.flags[1] = 1;
+      RepSpec.flags[2] = 1;
+      RepSpec.flags[3] = 1;
+      RepSpec.flags[4] = 1;
+      RepSpec.flags[5] = 1;
+      RepSpec.flags[6] = 1;
+      RepSpec.flags[7] = 1;
+      r = IDCreateVIFromPU(RepSpec.FirstVer,RepSpec,VIr,PUNr);
+      if (r!=0) begin
+        if (r>0) then begin
+          MessageBox(r,"");
+        end else begin
+          Beep;
+        end;
+      end else begin
+        nwn = OpenWindow("VIDClass",1,0,"","",VIr);
+        VIOpenPrepExists(VIr.VECode);        
+        UpdateBrowses("POVc");    
+        if (DateWarned(VIr.TransDate,"VIVc")) then begin
+          MessageBox(1045,"");
+        end;
+      end;      
+    end;
+  // end else begin
+    // MessageBox(1274,StringFromStringSet(3,"POToVI"));
+  // end;
+  return;
+end;
+
+
+
+
+global
+updating procedure IDVIFromPUDsm()
+BEGIN
+  record PUVc PUr;
+  record VIVc VIr;
+  LongInt r;
+  Integer wn,nwn;
+  string 255 errmsg;
+	record POVc POr;
+  
+  wn = CurWindow;
+  if (WindowState(wn)==Rs_normal) then begin
+    GetWindowRecord(wn,PUr);
+		if(PUr.OKFlag==1)then begin
+			POr.SerNr = PUr.PONr;
+			if(ReadFIrstMain(POr,1,true))then begin end;
+			if(POr.ExtraCostInPU==1)then begin
+				VIFromPUDExecute(PUr.PONr, PUr.SerNr);
+			end else begin
+				VIFromPUDsm;
+			end;
+		end else begin
+			Beep;
+		end;
+  end else begin
+    Beep;
+  end;
+  RETURN;
+END;
+
+
+
 global
 updating procedure VIFromPODsm()
 begin
@@ -967,6 +1058,48 @@ LVIFromPOVClassOnOKWindow:;
   VIFromPOVClassOnOKWindow = false;
   RETURN;
 END;
+
+
+
+global
+updating function Boolean IDVIFromPUVClassOnOKWindow(Integer wn)
+BEGIN
+  record RcVc RepSpec;
+  record VIVc VIr;
+  Integer nwn,mwn;
+  Integer r;
+  mwn = MotherWindow(wn);
+  GetWindowRecord(wn,RepSpec);
+  if (blank(RepSpec.f1)) then begin
+    if (RepSpec.flags[0]==0) then begin
+//      if ((RepSpec.flags[1]!=0) or (RepSpec.flags[2]!=0) or (RepSpec.flags[3]!=0) or (RepSpec.flags[4]!=0) or (RepSpec.flags[5]!=0) or (RepSpec.flags[6]!=0) or (RepSpec.flags[7]!=0)) then begin
+      if ((RepSpec.flags[6]!=0) or (RepSpec.flags[7]!=0)) then begin
+        MessageBox(0,USetStr(10426));
+        WindowFieldGoto(wn,RepSpec,-1,"f1",true);        
+        goto LVIFromPOVClassOnOKWindow;
+      end;
+    end;
+  end;
+  r = IDCreateVIFromPU(RepSpec.FirstVer,RepSpec,VIr,RepSpec.BaseWidth);
+  if (r!=0) begin
+    if (r>0) then begin
+      MessageBox(r,"");
+    end else begin
+      Beep;
+    end;
+  end else begin
+    nwn = OpenWindow("VIDClass",1,0,"","",VIr);
+    VIOpenPrepExists(VIr.VECode);        
+    UpdateBrowses("POVc");    
+  end;
+  CloseWindow(wn);
+LVIFromPOVClassOnOKWindow:;  
+  IDVIFromPUVClassOnOKWindow = false;
+  RETURN;
+END;
+
+
+
 
 procedure PODSwitchRow(Integer wn,Integer rownr)
 BEGIN
