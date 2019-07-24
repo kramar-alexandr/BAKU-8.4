@@ -14,6 +14,8 @@ external procedure NextM4Number(string,var string);
 external procedure NextM4SerialNumber(string,var string);
 remote function boolean CompanyIsJWLikeCompany(Integer);
 remote procedure CheckItemCCBeforCreate(var record newINVc, integer);
+external procedure INCatSClassArrayOnOpen(var Array string,var Integer);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:55 06.08.2018
+external procedure NextM4SerialNumber(string,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -508,13 +510,29 @@ begin
   NewINVcRecordSave = res; 
   return;
 end;
+global
+updating function LongInt NewINVcRecordUpdateAfter(var record NewINVc newINr,record NewINVc newIN2r,LongInt stat,LongInt long4)
+BEGIN
+  row NewINVc newINrw;
+	integer i,cnt;
+  LongInt res;
+	Integer acnt,strlen,y,j,rwcnt,k;
+	record IdINSNOneBlock IINSNOb;
+	row IdINSNOneBlock IINSNOrw;
+	string 255 SNOneNumber;
+	val SNMiddleval;
+	boolean Catef;
+	Array string 255 astr;
+	
+	
+  NewINVcRecordUpdateAfter = res;
+  RETURN;
+END;
 
 global
 function LongInt NewINVcRecordUpdate(var record NewINVc newINr,record NewINVc newIN2r,LongInt stat,LongInt long4)
 BEGIN
-  LongInt res;
-
-  
+  longint res;
   NewINVcRecordUpdate = res; 
   RETURN;
 END;
@@ -629,6 +647,18 @@ end;
 updating procedure FullFillINVc(var record INVc INr,record NewINVc newINr,row NewINVc newINrw,string group,string type,Boolean insertDispNameNotCode)
 begin
   record DIVc DIr;
+	Integer acnt,strlen,y,j,rwcnt,i;
+	record IdINSNOneBlock IINSNOb;
+	row IdINSNOneBlock IINSNOrw;
+	string 255 SNOneNumber;
+	val SNMiddleval;
+	boolean Catef;
+	Array string 255 astr;
+		if(CurrentCompany==28  and nonblank(newINrw.Category)) then begin
+				INr.Code = NewINrw.Code;
+				INr.CompletCode = 1;				
+			end;
+			
   	  if(nonblank(newINr.Name))then begin INr.Name=newINr.Name;  end; if(nonblank(newINrw.Name))then begin INr.Name=newINrw.Name;  end;
   		if(nonblank(newINr.Unittext))then begin INr.Unittext=newINr.Unittext;  end; if(nonblank(newINrw.Unittext))then begin INr.Unittext=newINrw.Unittext;  end;
   		if(nonblank(newINr.Objects))then begin INr.Objects=newINr.Objects;  end; if(nonblank(newINrw.Objects))then begin INr.Objects=newINrw.Objects;  end;
@@ -665,7 +695,7 @@ begin
 		  if(nonblank(newINr.Brand))then begin
 				INr.DispGroups = INr.DispGroups & "," & newINr.Brand;     
 		  end;     
-
+			if(nonblank(newINrw.Category))then begin INr.Category = newINrw.Category; end;
 			if(nonblank(newINrw.GroupCl))then begin INr.BPIGroup = newINrw.GroupCl; INr.DispGroups = INr.DispGroups & "," & newINrw.GroupCl; end;
 			if(nonblank(newINrw.SubGroupCl))then begin INr.BPISubGroup = newINrw.SubGroupCl; INr.DispGroups = INr.DispGroups & "," & newINrw.SubGroupCl;  end;
 			if(nonblank(newINrw.classif31))then begin INr.BPICategory = newINrw.classif31; INr.DispGroups = INr.DispGroups & "," & newINrw.classif31;  end;
@@ -850,7 +880,7 @@ BEGIN
 	string 100 lastSerNr,newSerNr;
   LongInt stat1,long41;
   string 200 rawclass,uloc,group;
-  integer pos,rwcnt, t,tcnt,oldComp,CompQty;
+  integer pos,rwcnt, t,tcnt,oldComp,CompQty,k;
   record DIVc DIr;
   boolean upd,insertDispNameNotCode,TrHs,TrHs1,testf;
   record DiCheckBlock DiCb; //Edit***************************Sasha2,16:52 07.12.2015
@@ -886,9 +916,19 @@ BEGIN
 	record ConsCompBlock CCB;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
+	Array string 255 astr;
+  Integer acnt,strlen,y;
+	record IdINSNOneBlock IINSNOb;
+	row IdINSNOneBlock IINSNOrw;
+	string 255 SNOneNumber;
+	val SNMiddleval;
+	boolean Catef;
 
 	BlockLoad(Compb);
 	
+	
+		
+
 	BlockLoad(CCB);
 	NewValidClassif = false;
   res = 0;
@@ -1222,7 +1262,7 @@ BEGIN
 				end;
 			end;
 			
-  	  if(nonblank(newINrw.BrandSC) and currentcompany != 9)then begin
+  	  if(nonblank(newINrw.BrandSC) and currentcompany != 9 and currentcompany!=28)then begin
 				if(newINrw.BrandSC != newINr.Brand) then begin
 					INr.Code = newINrw.Code;
 					if(readfirstmain(INr,1,true))then begin
@@ -1238,7 +1278,7 @@ BEGIN
 				end;	
   	  end;
 			
-  	  if(blank(newINrw.Code))then begin
+  	  if(blank(newINrw.Code) and currentcompany!=28)then begin
   	  	RecordCheckError(1058,"",i,"Code");      
         res = -1; 
         goto LNewINVcRecordCheck;
@@ -1866,10 +1906,69 @@ BEGIN
         goto LNewINVcRecordCheck;
 	    end;*/
 		end;
+		mtrw = matrowcnt(newINr);
 		For(i=0;i<mtrw;i=i+1) begin
+			blockload(IINSNOb);
   	  matrowget(newINr,i,newINrw);
   	  type = newINrw.Type;
   	  upd = false;
+			if(CurrentCompany==28 and blank(newINrw.Code) and nonblank(newINrw.Category)) then begin
+				Catef = false;
+				INCatSClassArrayOnOpen(astr,acnt);
+				if(newINrw.ConsgType==0) then begin
+					newINrw.SerNrf = 2;
+				end else begin
+					newINrw.SerNrf = 0;
+				end;
+				for (j=0;j<acnt;j=j+1) begin
+					if(left(astr[j],4)==newINrw.Category)then begin
+						rwcnt = matrowcnt(IINSNOb);
+						for (y=rwcnt;y>=0;y=y-1) begin
+							matrowget(IINSNOb,y-1,IINSNOrw);
+							if(IINSNOrw.Category==newINrw.Category)then begin
+								Catef = true;
+								SNMiddleval = IINSNOrw.SNMiddle + 1;
+								IINSNOrw.SNMiddle = IINSNOrw.SNMiddle + 1;
+								IINSNOrw.Category = newINrw.Category;
+								matrowput(IINSNOb,rwcnt,IINSNOrw);
+								SNOneNumber = ValToString(SNMiddleval,M4val,"","",1);
+								SNOneNumber = left(SNOneNumber,len(SNOneNumber)-2);
+								for (k=0;k<5;k=k+1) begin
+									strlen = len(SNOneNumber);
+									if(strlen<5)then begin 
+										SNOneNumber = "0" & SNOneNumber;
+									end else begin
+										k = 5;
+									end;
+								end;
+								newINrw.Code = newINrw.Category & "-" & SNOneNumber & "-1";
+								matrowput(newINr,i,newINrw);
+								BlockStore(IINSNOb);
+								y=0;
+							end;
+						end;
+						if (!Catef) then begin
+							IINSNOrw.SNMiddle = 0;
+							SNMiddleval = IINSNOrw.SNMiddle;
+							IINSNOrw.Category = newINrw.Category;
+							matrowput(IINSNOb,rwcnt,IINSNOrw);
+							SNOneNumber = ValToString(SNMiddleval,M4val,"","",1);
+							SNOneNumber = left(SNOneNumber,len(SNOneNumber)-2);
+							for (k=0;k<5;k=k+1) begin
+								strlen = len(SNOneNumber);
+								if(strlen<5)then begin 
+									SNOneNumber = "0" & SNOneNumber;
+								end else begin
+									k = 5;
+								end;
+							end;
+							newINrw.Code = newINrw.Category & "-" & SNOneNumber & "-1";
+							matrowput(newINr,i,newINrw);
+							BlockStore(IINSNOb);
+						end;
+					end;
+				end;
+			end;		
   	  INr.Code = newINrw.Code;
   	  if(readfirstmain(INr,1,true))then begin
   	  	recordcopy(IN2r,INr);
@@ -1902,6 +2001,7 @@ BEGIN
 						INr.ConsgType = newINrw.ConsgType;
 						if(recordStore(INr,true)==false)then begin
 							res = -1; 
+							RecordCheckError(1058,"",i,"Name"); 
 							goto LNewINVcRecordCheck;
 						end;
 					end;
