@@ -17,7 +17,8 @@ remote procedure CheckItemCCBeforCreate(var record newINVc, integer);
 external procedure INCatSClassArrayOnOpen(var Array string,var Integer);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:55 06.08.2018
 external procedure NextM4SerialNumber(string,var string);
 external function boolean CheckChangesCodeNewINVc(Integer);
-
+ external procedure INCatSClassArrayOnOpen(var Array string,var Integer);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:55 06.08.2018
+ 
 SetLangMode(LangRussian,"RUS",0);
 
 
@@ -68,6 +69,93 @@ begin
   return;
 end; //Edit***************************Sasha2,12:12 18.12.2015 }
 
+global
+function boolean CheckAndPasteName(integer rownr,var row NewINVc newINrw)
+begin
+integer i;
+array string 100 asnt;
+integer acnt;
+boolean res;
+record DIVc DIr;
+record ITVc ITr;
+res = true;
+INCatSClassArrayOnOpen(asnt,acnt);
+	if(nonblank(newINrw.Category)) then begin res = false; end;
+	for(i=0;i<acnt;i=i+1) begin
+		if(newINrw.Category==Right(asnt[i],len(asnt[i])-16))then begin
+			newINrw.Category = left(asnt[i],4);
+			res = true;
+		end;
+		if(newINrw.Category==left(asnt[i],4)) then begin
+			res = true;
+		end;
+	end;
+	if(!res) then begin messagebox(0,"Такой Категории не существует строка -" & rownr); end;
+	if(nonblank(newINrw.Category) and res) then begin res = false; 
+		DIr.Name = newINrw.classif30;
+		if (readfirstKey("Name",DIr,1,true)) then begin
+			if(DIr.CType=="MODEL") then begin
+				newINrw.classif30 = DIr.Code;
+				res = true;
+			end;	
+		end else begin
+			DIr.CType = "MODEL";
+			DIr.Code = newINrw.classif30;
+			if(readfirstKey("CType",DIr,2,true)) then begin
+				res = true;
+			end;	
+		end;
+		if(!res) then begin messagebox(0,"Такой Модели не существует строка -" & rownr); end;
+	end;	
+	if(nonblank(newINrw.Colour) and res) then begin res = false; 
+		DIr.Name = newINrw.Colour;
+		if (readfirstKey("Name",DIr,1,true)) then begin
+			if(DIr.CType=="COLOUR") then begin
+				newINrw.Colour = DIr.Code;
+				res = true;
+			end;	
+		end else begin
+			DIr.CType = "COLOUR";
+			DIr.Code = newINrw.Colour;
+			if(readfirstKey("CType",DIr,2,true)) then begin
+					res = true;
+			end;	
+		end;
+		if(!res) then begin messagebox(0,"Такого Цвета не существует строка -" & rownr);  end;
+	end;	
+		if(nonblank(newINrw.BrandSC) and res) then begin res = false; 
+			DIr.Name = newINrw.BrandSC;
+			if (readfirstKey("Name",DIr,1,true)) then begin
+				if(DIr.CType=="BRAND") then begin
+					newINrw.BrandSC = DIr.Code;
+					res = true;
+				end;	
+			end else begin
+				DIr.CType = "BRAND";
+				DIr.Code = newINrw.BrandSC;
+				if(ReadFirstKey("CType",DIr,2,true)) then begin
+					res = true;
+				end;
+			end;
+			if(!res) then begin messagebox(0,"Такого Бренда не существует строка -" & rownr);  end;
+		end;	
+		if(nonblank(newINrw.GroupCl) and res) then begin res = false; 
+			ITr.Comment = newINrw.GroupCl;
+			if (readfirstKey("Comment",ITr,1,true)) then begin
+				newINrw.GroupCl = ITr.Code;	
+				res = true;
+			end else begin
+				ITr.Code = newINrw.Code;
+				if(ReadFirstMain(ITr,1,true)) then begin
+					res = true;
+				end;
+			end;
+			if(!res) then begin messagebox(0,"Такой Группы не существует строка -" & rownr); end;
+		end;
+		CheckAndPasteName = res;
+		
+	return;
+end;
 //Edit***************************Sasha2,15:11 14.06.2016 {
 updating //For non JW companies. No type control
 function boolean CheckDispAndCreateIfNeeded(string indisps,var string outdisps,string inType,var string mes)
@@ -657,7 +745,10 @@ begin
 	Array string 255 astr;
 		if(CurrentCompany==28  and nonblank(newINrw.Category)) then begin
 				INr.Code = NewINrw.Code;
-				INr.CompletCode = 1;				
+				INr.CompletCode = 1;	
+				if(nonblank(newINrw.Colour))then begin  INr.DispGroups = INr.DispGroups & "," & newINrw.Colour;  end;
+				if(nonblank(newINrw.BrandSC))then begin  INr.DispGroups = INr.DispGroups & "," & newINrw.BrandSC;  end;
+				if(nonblank(newINrw.classif30))then begin  INr.DispGroups = INr.DispGroups & "," & newINrw.BrandSC;  end;
 			end;
 			
   	  if(nonblank(newINr.Name))then begin INr.Name=newINr.Name;  end; if(nonblank(newINrw.Name))then begin INr.Name=newINrw.Name;  end;
@@ -697,7 +788,9 @@ begin
 				INr.DispGroups = INr.DispGroups & "," & newINr.Brand;     
 		  end;     
 			if(nonblank(newINrw.Category))then begin INr.Category = newINrw.Category; end;
-			if(nonblank(newINrw.GroupCl))then begin INr.BPIGroup = newINrw.GroupCl; INr.DispGroups = INr.DispGroups & "," & newINrw.GroupCl; end;
+			if(currentcompany!=28) then begin
+				if(nonblank(newINrw.GroupCl))then begin INr.BPIGroup = newINrw.GroupCl; INr.DispGroups = INr.DispGroups & "," & newINrw.GroupCl; end;
+			end;	
 			if(nonblank(newINrw.SubGroupCl))then begin INr.BPISubGroup = newINrw.SubGroupCl; INr.DispGroups = INr.DispGroups & "," & newINrw.SubGroupCl;  end;
 			if(nonblank(newINrw.classif31))then begin INr.BPICategory = newINrw.classif31; INr.DispGroups = INr.DispGroups & "," & newINrw.classif31;  end;
 			if(nonblank(newINrw.Material))then begin INr.BPIMaterial = newINrw.Material; INr.DispGroups = INr.DispGroups & "," & newINrw.Material;  end;
@@ -924,6 +1017,8 @@ BEGIN
 	string 255 SNOneNumber;
 	val SNMiddleval;
 	boolean Catef;
+	array string 100 asnt;
+	integer check;
 
 	BlockLoad(Compb);
 	
@@ -1939,12 +2034,12 @@ BEGIN
   	  matrowget(newINr,i,newINrw);
   	  type = newINrw.Type;
   	  upd = false;
-			/*if(CurrentCompany==28) then begin
-				if(!CheckChangesCodeNewINVc(i)) then begin
+			if(CurrentCompany==28 and newINr.OKFlag!=0) then begin
+				if(!CheckAndPasteName(i,newINrw)) then begin
 					res = -1; 
 					goto LNewINVcRecordCheck;
 				end;
-			end;*/
+			end;
 			if(CurrentCompany==28 and blank(newINrw.Code) and nonblank(newINrw.Category)) then begin
 				Catef = false;
 				INCatSClassArrayOnOpen(astr,acnt);
