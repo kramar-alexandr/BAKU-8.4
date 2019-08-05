@@ -25,7 +25,8 @@ remote function Boolean PasteRetInInv2(var record IVVc,record RetVc,Boolean);
 external function LongInt GetCurUserLastNr(string);
 remote procedure RetPUVc_PasteQuant(var record RetPUVc,Integer);
 external function val CalculateVINettVal(record VIVc,Boolean);
-
+external function Integer CheckObjs(string,string,var string);
+external procedure ExtractObj(string,var Integer,var string);
 
 /*
 function val AlreadyReturned(LongInt sernr,Integer rownr)
@@ -468,6 +469,9 @@ BEGIN
   record CostAccBlock CAb;
   record AccBlock ARb;  
   record CUVc VEr;
+	string 255 errstr,obj,set;
+	integer errcode,pos;
+	record ObjVc Objr;
   
   res = 20088;
   BlockLoad(MSb);    
@@ -477,6 +481,44 @@ BEGIN
   POr.SerNr = ordnr;
   if (ReadFirstMain(POr,1,true)) then begin
   end;
+	if(currentcompany==28)then begin
+		if(nonblank(POr.IDPrjNum)) then begin
+			if(!SetInSet(POr.IDPrjNum,RetPUp.Objects)) then begin
+				if(blank(RetPUp.Objects)) then begin
+					errcode = CheckObjs("",POr.IDPrjNum,errstr);
+					if(errcode==0) then begin
+						RetPUp.Objects = POr.IDPrjNum;
+					end;
+				end else begin
+					errcode = CheckObjs("",RetPUp.Objects & "," & POr.IDPrjNum,errstr);
+					if(errcode==0) then begin
+						RetPUp.Objects = RetPUp.Objects & "," & POr.IDPrjNum;
+					end else begin
+						i = 0;
+						pos = 0;
+						set = "";
+						ExtractObj(RetPUp.Objects,i,obj);
+						while(nonblank(obj)) begin
+							Objr.Code = obj;
+							if(pos!=0) then begin
+								set = set & ",";
+							end;
+							pos = pos+1;
+							if(ReadFirstMain(Objr,1,true)) then begin
+								if(Objr.OTCode=="PRC") then begin
+									set = set & POr.IDPrjNum;
+								end else begin
+									set = set & obj;
+								end;
+							end;
+							ExtractObj(RetPUp.Objects,i,obj);
+						end;
+						RetPUp.Objects = set;
+					end;
+				end;
+			end;	
+		end;	
+	end;	
   RetPUp.PONr = POr.SerNr;
   RetPUp.Type = RGb.ReduceDefault;
   RetPUp.UpdStockFlag = 1;  

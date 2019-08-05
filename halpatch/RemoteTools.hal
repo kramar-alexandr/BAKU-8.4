@@ -59,7 +59,8 @@ external function Boolean FindTheUser(var record UserVc);
 external procedure IVVc_PasteLoyaltyCardNr(var record IVVc,record LocalMachineBlock);// Edit ************************** Thursday, 20 March 2014 13:07:07
 external procedure VIVc_PastePrepayNr(var record VIVc,Integer);//Edit----------------------Dima  06.03.2015
 remote function Boolean DenyOperationsWithBlockedCustomer(record CUVc,string); //Edit***************************Sasha2,11:15 08.09.2017
-
+external function Integer CheckObjs(string,string,var string);
+external procedure ExtractObj(string,var Integer,var string);
 global
 procedure GetItemSalesAccFromOR(record ORVc ORr,var string salesacc)
 BEGIN
@@ -2147,7 +2148,7 @@ begin
   val from,to1,to2,base1,base2;
   val FrBase,FrGP,FrPrice,costprice;
   string 255 tstr,curcode;
-  string 255 compitem,VATCode,taxtemplatecode;
+  string 255 compitem,VATCode,taxtemplatecode,errstr,set,obj;
   record FreightBlock FreightRec;
   record GeneralOptionBlock GOb;
   Boolean fiscalf;
@@ -2157,7 +2158,7 @@ begin
   record SHVc lastSHr;
   Boolean found,subvatf;
   Integer hiddenrow;
-  Integer acnt,adscnt,oldstyle;
+  Integer acnt,adscnt,oldstyle,pos,errcode;
   array record SHVc aSHr;
   array record SHVc aDropSHr;
   record TaxMatrixVc TMr;
@@ -2178,7 +2179,8 @@ begin
 	row IVVc dIVrw;// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 29 05 2019 y. at 11:49:04 AM
   integer j;
   boolean TrHs;
-  
+  record ObjVc Objr;
+	
   lastrwcnt = MatRowCnt(IVp);
   orsum = blankval;
   res = false;  
@@ -2210,6 +2212,42 @@ begin
   end;
 	
   //IVp.UpdStockFlag = ARAccRec.InvUpdStock;// Edit ************************** Friday, 22 November 2013 16:52:47
+	if(Currentcompany==28) then begin
+		if(!SetInSet(ORp.AuthorizationCode,IVp.Objects)) then begin
+			if(blank(IVp.Objects)) then begin
+				errcode = CheckObjs("",ORp.AuthorizationCode,errstr);
+				if(errcode==0) then begin
+					IVp.Objects = ORp.AuthorizationCode;
+				end;
+			end else begin
+				errcode = CheckObjs("",IVp.Objects & "," & ORp.AuthorizationCode,errstr);
+				if(errcode==0) then begin
+					IVp.Objects = IVp.Objects & "," & ORp.AuthorizationCode;
+				end else begin
+					i = 0;
+					pos = 0;
+					set = "";
+					ExtractObj(IVp.Objects,i,obj);
+					while(nonblank(obj)) begin
+						Objr.Code = obj;
+						if(pos!=0) then begin
+							set = set & ",";
+						end;
+						pos = pos+1;
+						if(ReadFirstMain(Objr,1,true)) then begin
+							if(Objr.OTCode=="PRC") then begin
+								set = set & ORp.AuthorizationCode;
+							end else begin
+								set = set & obj;
+							end;
+						end;
+						ExtractObj(IVp.Objects,i,obj);
+					end;
+					IVp.Objects = set;
+				end;
+			end;
+		end;
+	end;	
   IVp.OrderNr = ORp.SerNr;
   IVp.SVONr = -1;
   IVp.TREONr = ORp.TREONr;

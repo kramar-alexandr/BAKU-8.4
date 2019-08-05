@@ -77,7 +77,7 @@ remote function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var
 remote procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
 external procedure NextM4SerialNumber(string,var string);
 external updating procedure VIFromPUDExecute(LongInt,LongInt); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:22 24.07.2019
-
+external function Integer CheckObjs(string,string,var string);
 
 procedure CreateNewPUFromPO(record PUVc PUp,record POVc POp,LongInt ponr)
 BEGIN
@@ -743,8 +743,9 @@ BEGIN
 	record ORVc ORr;// Edit ************************** Thursday, 12 September 2013 10:15:32
 	integer maxrows1;
 	vector integer vRepserialNrMat;
-	string 255 SerialNr;
-	
+	string 255 SerialNr,errstr,obj,set;
+	integer errcode,pos;
+	record ObjVc Objr;
 	maxrows1 = 999;
 	
   res = -1;
@@ -769,7 +770,44 @@ BEGIN
   end else begin
     PUp.PONr = -1;
   end;
-	
+	if(currentcompany==28)then begin
+		if(nonblank(POp.IDPrjNum)) then begin
+			if(!SetInSet(POp.IDPrjNum,PUp.Objects)) then begin
+				if(blank(PUp.Objects)) then begin
+					errcode = CheckObjs("",POp.IDPrjNum,errstr);
+					if(errcode==0) then begin
+						PUp.Objects = POp.IDPrjNum;
+					end;
+				end else begin
+					errcode = CheckObjs("",PUp.Objects & "," & POp.IDPrjNum,errstr);
+					if(errcode==0) then begin
+						PUp.Objects = PUp.Objects & "," & POp.IDPrjNum;
+					end else begin
+						i = 0;
+						pos = 0;
+						set = "";
+						ExtractObj(PUp.Objects,i,obj);
+						while(nonblank(obj)) begin
+							Objr.Code = obj;
+							if(pos!=0) then begin
+								set = set & ",";
+							end;
+							pos = pos+1;
+							if(ReadFirstMain(Objr,1,true)) then begin
+								if(Objr.OTCode=="PRC") then begin
+									set = set & POp.IDPrjNum;
+								end else begin
+									set = set & obj;
+								end;
+							end;
+							ExtractObj(PUp.Objects,i,obj);
+						end;
+						PUp.Objects = set;
+					end;
+				end;
+			end;	
+		end;	
+	end;	
   PUp.PUClass = POp.POClass;
   PUp.POCOSerNr = POp.POCOSerNr;
   PUp.VECode = POp.VECode;
@@ -2818,7 +2856,7 @@ updating function Integer PastePOInVI(var record POVc POp,var record VIVc VIp,st
                                       Boolean cost1f,Boolean cost2f,Boolean cost3f,Boolean cost4f,Boolean cost5f)
 begin
   Integer i,rwcnt,vatcnt;
-  Integer j,virwcnt;
+  Integer j,virwcnt,errcode,pos;
   row VIVc VIrw;
   row POVc POrw;
   Integer nrwcnt;
@@ -2835,7 +2873,7 @@ begin
   Boolean itemfoundf,othersupf;
   val from,to1,to2,base1,base2,tmp;
   record SMVc VATr;
-  string 255 tstr;  
+  string 255 tstr,errstr,set,obj;  
   record AcceptSetBlock AcceptSet;
   string 20 viitgroup;
   string 20 lvecode,crncy;
@@ -2847,7 +2885,8 @@ begin
   record CYBlock CYb;
   Boolean testf,addedaccf;
   record MainStockBlock MSb;
-
+	record ObjVc Objr;
+	
   BlockLoad(VITb);
   BlockLoad(BCb);
   BlockLoad(POSb);
@@ -2899,6 +2938,44 @@ begin
   end;
 //  if (POp.Closed!=0) then goto LPastePOInVI;// the same as OR
   res = 0;
+	if(currentcompany==28)then begin
+		if(nonblank(POp.IDPrjNum)) then begin
+			if(!SetInSet(POp.IDPrjNum,VIp.Objects)) then begin
+				if(blank(VIp.Objects)) then begin
+					errcode = CheckObjs("",POp.IDPrjNum,errstr);
+					if(errcode==0) then begin
+						VIp.Objects = POp.IDPrjNum;
+					end;
+				end else begin
+					errcode = CheckObjs("",VIp.Objects & "," & POp.IDPrjNum,errstr);
+					if(errcode==0) then begin
+						VIp.Objects = VIp.Objects & "," & POp.IDPrjNum;
+					end else begin
+						i = 0;
+						pos = 0;
+						set = "";
+						ExtractObj(VIp.Objects,i,obj);
+						while(nonblank(obj)) begin
+							Objr.Code = obj;
+							if(pos!=0) then begin
+								set = set & ",";
+							end;
+							pos = pos+1;
+							if(ReadFirstMain(Objr,1,true)) then begin
+								if(Objr.OTCode=="PRC") then begin
+									set = set & POp.IDPrjNum;
+								end else begin
+									set = set & obj;
+								end;
+							end;
+							ExtractObj(VIp.Objects,i,obj);
+						end;
+						VIp.Objects = set;
+					end;
+				end;
+			end;	
+		end;	
+	end;	
   VIp.OrderType = POp.OrderType;
   VIp.ExportFlag = POp.ExportFlag;
   VIp.POSerNr = POp.SerNr;
