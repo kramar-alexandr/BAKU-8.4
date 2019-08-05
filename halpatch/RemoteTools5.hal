@@ -29,6 +29,8 @@ external function Boolean GetItemStatus(string,string,string,Integer,var val,var
 external procedure GetUserName(string,var string);
 external procedure NextM4Number(string,var string);
 remote function Boolean DenyOperationsWithBlockedCustomer(record CUVc,string); //Edit***************************Sasha2,11:15 08.09.2017
+external function Integer CheckObjs(string,string,var string);
+external procedure ExtractObj(string,var Integer,var string);
 
 global
 function Boolean SerialNumberOnPU()
@@ -731,7 +733,7 @@ begin
   record SHVc NILSHr;
   row ORVc ORrw;
   row SHVc SHrw;
-  Integer i,rwcnt;
+  Integer i,rwcnt,pos;
   Integer srw,shrwcnt;
   val remn,totq,totw,totv,t,prepaid;
   val bal,limit;
@@ -741,15 +743,16 @@ begin
   Date dat,planneddeliverydat;
   LongInt res;
   record LocationVc Locr;
-  string 50 frin,toin,tstr;
+  string 50 frin,toin,tstr,set,obj,errstr;
   Date curbestbef,bd;
   record ItemSettingBlock ISb;
   record SupersessionINVc SINr;
   Boolean limitdaysf;
   record SerNrTrackBlock SNrb;
   record OrdSettBlock OSb;
-  Integer OrderType;
-  
+  Integer OrderType,errcode;
+  record ObjVc Objr;
+	
   frin = FirstInRange(onlyforitems,20);
   toin = LastInRange(onlyforitems,20);
   res = -1;  
@@ -853,6 +856,42 @@ begin
   totq = blankval;
   totv = blankval;
   totw = blankval;
+	if(Currentcompany==28) then begin
+		if(!SetInSet(ORr.AuthorizationCode,SHp.Objects)) then begin
+			if(blank(SHp.Objects)) then begin
+				errcode = CheckObjs("",ORr.AuthorizationCode,errstr);
+				if(errcode==0) then begin
+					SHp.Objects = ORr.AuthorizationCode;
+				end;
+			end else begin
+				errcode = CheckObjs("",SHp.Objects & "," & ORr.AuthorizationCode,errstr);
+				if(errcode==0) then begin
+					SHp.Objects = SHp.Objects & "," & ORr.AuthorizationCode;
+				end else begin
+					i = 0;
+					pos = 0;
+					set = "";
+					ExtractObj(SHp.Objects,i,obj);
+					while(nonblank(obj)) begin
+						Objr.Code = obj;
+						if(pos!=0) then begin
+							set = set & ",";
+						end;
+						pos = pos+1;
+						if(ReadFirstMain(Objr,1,true)) then begin
+							if(Objr.OTCode=="PRC") then begin
+								set = set & ORr.AuthorizationCode;
+							end else begin
+								set = set & obj;
+							end;
+						end;
+						ExtractObj(SHp.Objects,i,obj);
+					end;
+					SHp.Objects = set;
+				end;
+			end;
+		end;
+	end;	
   SHp.ShipMode = ORr.ShipMode;
   SHp.TransportNumber = NextTransportSerNr("SHVc",SHp.SerNr,SHp.ShipMode);
   SHp.LangCode = ORr.LangCode;

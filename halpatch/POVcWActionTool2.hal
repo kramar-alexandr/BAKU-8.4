@@ -59,6 +59,8 @@ external procedure SetupVATBase(var record SMVc,var Integer);
 external procedure AddVATBase(var record SMVc,string,val,val,Integer,Integer,Integer);
 external procedure CalcVATBaseVAT(record SMVc,Integer,Integer,Integer,var val,var val);
 external function string 255 OverrideTaxMatrix(string,var record TaxMatrixVc);
+external function Integer CheckObjs(string,string,var string);
+external procedure ExtractObj(string,var Integer,var string);
 
 global
 function Boolean PODchrsum(record POVc POp,Integer rownr)
@@ -1895,13 +1897,14 @@ begin
   row VIVc VIrw;
   val t,t2,baseprice;
   val percentage;
-  Integer i,rwcnt,rownr;
-  string 255 tstr,vewarn;
+  Integer i,rwcnt,rownr,pos,errcode;
+  string 255 tstr,vewarn,errstr,set,obj;
   string 10 VATCode;
   string 5 ipcurncy;
   record RoundBlock Roundb;
   record TaxMatrixVc TMr;
   val RemainPerc,price,vrebate;
+	record ObjVc Objr;
   
   BlockLoad(Roundb);
   ipcurncy = VIp.CurncyCode;
@@ -1911,6 +1914,44 @@ begin
   VIp.POSerNr = POr.SerNr;
 //  VIp.InclVAT = POr.InclVAT;
   VIp.NoTAXonVAT = POr.NoTAXonVAT;
+	if(currentcompany==28)then begin
+		if(nonblank(POr.IDPrjNum)) then begin
+			if(!SetInSet(POr.IDPrjNum,VIp.Objects)) then begin
+				if(blank(VIp.Objects)) then begin
+					errcode = CheckObjs("",POr.IDPrjNum,errstr);
+					if(errcode==0) then begin
+						VIp.Objects = POr.IDPrjNum;
+					end;
+				end else begin
+					errcode = CheckObjs("",VIp.Objects & "," & POr.IDPrjNum,errstr);
+					if(errcode==0) then begin
+						VIp.Objects = VIp.Objects & "," & POr.IDPrjNum;
+					end else begin
+						i = 0;
+						pos = 0;
+						set = "";
+						ExtractObj(VIp.Objects,i,obj);
+						while(nonblank(obj)) begin
+							Objr.Code = obj;
+							if(pos!=0) then begin
+								set = set & ",";
+							end;
+							pos = pos+1;
+							if(ReadFirstMain(Objr,1,true)) then begin
+								if(Objr.OTCode=="PRC") then begin
+									set = set & POr.IDPrjNum;
+								end else begin
+									set = set & obj;
+								end;
+							end;
+							ExtractObj(VIp.Objects,i,obj);
+						end;
+						VIp.Objects = set;
+					end;
+				end;
+			end;	
+		end;	
+	end;	
   if (nonblank(POr.InvoiceToCode)) then begin
     VIp.VECode = POr.InvoiceToCode;
   end else begin
