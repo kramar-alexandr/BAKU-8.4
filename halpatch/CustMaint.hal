@@ -2,6 +2,8 @@
 external function string 60 AddObjectToObjectList(string,string);
 external procedure NextM4SerialNumber(string,var string);
 external procedure ExtractObj(string,var Integer,var string);
+external procedure NormalizeObjstr(var string);
+
 //external procedure MyExtractObj(string,var Integer,var string);
 
 
@@ -737,7 +739,7 @@ end;
 
 
 webpublic global
-procedure WebCalcRHist()
+procedure WebCalcRHist_off()
 begin
 	record RHistVc RHr;
 	vector longint cnter;
@@ -973,5 +975,115 @@ begin
   
   Logtext(0,"WebCalcRHistWithDeleting end");
   
+return;
+end;
+
+function string 100 fixPhone(string inpphone)
+begin
+	string 100 res;
+	integer i;
+	string 1 c;
+	
+	for(i=0;i<len(inpphone);i=i+1)begin
+		c = mid(inpphone,i,1);
+		if(asc(c)>47 and asc(c)<58)then begin	
+			res = res & c;
+		end;
+	end;
+	
+	if(len(res)==10)then begin
+		res = right(res,9);
+	end;
+	if(len(res)==20)then begin
+		res = mid(res,1,9) & "," & mid(res,11,9);
+	end;
+	
+	fixPhone = res;
+return;
+end;
+
+function string 255 CheckCustomersWithSamePhnes(record CUVc origCUr,string phone)
+begin
+	boolean TrHs,testf;
+	string 255 res;
+	record CUVc CUr;
+	
+	if(nonblank(phone))then begin
+		CUr.Phone = phone;
+		TrHs = true;
+		while(loopkey("Phone",CUr,1,TrHs))begin
+			if(CUr.Phone!=phone)then begin TrHs = false; end;
+			
+			if(CUr.blockedFlag==0 and CUr.Code!=origCUr.Code and TrHs)then begin
+				res = res & CUr.Code & ",";
+			end;
+		end;
+		resetloop(CUr);
+		
+		CUr.Mobile = phone;
+		TrHs = true;
+		while(loopkey("Mobile",CUr,1,TrHs))begin
+			if(CUr.Mobile!=phone)then begin TrHs = false; end;
+			
+			if(CUr.blockedFlag==0 and CUr.Code!=origCUr.Code and TrHs)then begin
+				res = res & CUr.Code & ",";
+			end;
+		end;
+		resetloop(CUr);
+		
+		CUr.AltPhone = phone;
+		TrHs = true;
+		while(loopkey("AltPhone",CUr,1,TrHs))begin
+			if(CUr.AltPhone!=phone)then begin TrHs = false; end;
+			
+			if(CUr.blockedFlag==0 and CUr.Code!=origCUr.Code and TrHs)then begin
+				res = res & CUr.Code & ",";
+			end;
+		end;
+		resetloop(CUr);
+	end;
+	
+	CheckCustomersWithSamePhnes = res;
+return;
+end;
+
+global webpublic procedure WebGetDuplClient()
+begin
+	record CUVc CUr,oldCUr;
+	boolean TrHs,testf;
+	integer i,pos;
+	string 100 tstr,normphone,dupcust;
+	
+	setcompany(28,false);
+	
+	CUr.CustCat = "IDEA";
+	TrHs = true;
+	while(loopkey("Group",CUr,1,TrHs))begin
+		testf = true;
+		if(CUr.CustCat!="IDEA")then begin TrHs = false; testf = false; end;
+		if(CUr.blockedFlag==1)then begin testf = false; end;
+		if(CUr.CUType==0)then begin testf = false; end;
+		
+		
+		if(testf)then begin
+			normphone = fixPhone(CUr.Phone);
+			tstr = "";
+			pos = 0;
+			dupcust = "";
+			if(nonblank(normphone))then begin
+				ExtractObj(normphone,pos,tstr);
+				while(nonblank(tstr))begin
+					dupcust = dupcust & CheckCustomersWithSamePhnes(CUr,normphone);
+					ExtractObj(normphone,pos,tstr);
+				end;
+			end;
+			NormalizeObjstr(dupcust);
+			if(nonblank(dupcust))then begin
+				weboutstring(CUr.Code & "&nbsp|&nbsp" & CUr.Name & "&nbsp|&nbsp" & fixPhone(CUr.Phone) & "&nbsp|&nbspDuplicates " & dupcust);
+				weboutstring("<BR>");
+			end;
+		end;
+	end;
+	
 return;
 end;
