@@ -16014,15 +16014,16 @@ begin
 	array string 255 INCode,arBR;
 	vector string 255 INmatstrv, CalculatedLeadTime,MonName,vItemComp;
 	vector integer arComp, YearMonSep;
-	vector boolean vDemComp, SalesThrYf, SalesOneYf;
+	vector boolean vDemComp, SalesThrYf, SalesOneYf,vPOItems;
 	record UserVc USr;
 	boolean CompItemf, TrHs2, TrHs1;
 	integer OldComp,stop;
 	record ConsItemVc CIr;
+	record POVc POr;
+	row POVc POrw;
 	longint curtick;
 	
 	curtick = getcurtick();
-	
 	
 	
 	backdate = AddYear(CurrentDate,-3);
@@ -16037,6 +16038,24 @@ begin
 		if(Comprw.ActiveStatus==0 and ((j+1)!=32) and (((j+1)<29) or (j+1)==31))then begin
 			SetCompany(j+1,false);
 			logtext(0,"SetCompany " & j+1);
+			TrHs = true;
+			POr.TransDate = CurrentDate;
+			POr.SerNr = 99999999999999999;
+			while (loopbackkey("TransDate",POr,2,TrHs)) begin
+				logtext(0,POr.SerNr);
+				if(POr.TransDate < AddYear(CurrentDate,-1))then begin TrHs = false; end;
+				if(TrHs)then begin
+					mtrw = matrowcnt(POr);
+					for (i=0;i<mtrw;i=i+1) begin
+						matrowget(POr,i,POrw);
+						if(nonblank(POrw.ArtCode))then begin
+							vPOItems[POrw.ArtCode] = true;
+							logtext(0,"POItem " & POr.SerNr & " " & POrw.ArtCode);
+						end;
+					end;
+				end;
+			end;
+			resetloop(POr);
 			resetloop(INr);
 			INr.Code = "";
 			TrHs1 = true;
@@ -16113,7 +16132,7 @@ begin
 					end;
 					resetloop(IHr);
 					OldComp = currentcompany;
-					if(CustCodef)then begin
+					if(CustCodef or vPOItems[INr.Code])then begin
 						SetCompany(33,false);
 						recordNew(UINr);
 						recordNew(ConsINr);
