@@ -1858,11 +1858,22 @@ begin
 	record ConsCompBlock CCB;
 	record CUVc CUr;
 	longint curtick;
+	record AccBlock AccB;
+	vector boolean vecVI;
+	vector boolean vecVItest;
+	array string 255 tags;
+	record VIVc VIr;
+	row VIVc VIrw;
+	Integer wn,nwn,err,cntIV,cntORIV;
+  Boolean TsTr,testf1,testVI;
+	
+	
+	BlockLoad(AccB);
+	BlockLoad(CCB);
 	
 	curtick = getcurtick();
 	
 	logtext(0,"PUVcRecordCheck"); 
-	blockload(CCB);
 	
   res = 0;
   oldnr = PUr.SerNr;
@@ -1884,6 +1895,100 @@ begin
       if (PU2r.OKFlag==1) then begin unokf = true; end;
     end;
   end;
+	if (PUr.OKFlag==1 and PU2r.OKFlag==0) then begin
+		testf1 = true;
+		if(CCB.OKFlagPOr!=0) then begin
+			testVI = true;
+			i = 0;
+			if(nonblank(PUr.CustomsCost) and PUr.CustomsCost!=0) then begin vecVI["CustomsCost"] = true; vecVItest["CustomsCost"] = false; end;
+			if(nonblank(PUr.ShipCost) and PUr.ShipCost!=0) then begin vecVI["ShipCost"] = true; vecVItest["ShipCost"] = false;  end;
+			if(nonblank(PUr.Cost1) and PUr.Cost1!=0) then begin vecVI["Cost1"] = true; vecVItest["Cost1"] = false;  end;
+			if(nonblank(PUr.Cost2) and PUr.Cost2!=0) then begin vecVI["Cost2"] = true; vecVItest["Cost2"] = false;  end;
+			if(nonblank(PUr.Cost3) and PUr.Cost3!=0) then begin vecVI["Cost3"] = true; vecVItest["Cost3"] = false;  end;
+			if(nonblank(PUr.Cost4) and PUr.Cost4!=0) then begin vecVI["Cost4"] = true; vecVItest["Cost4"] = false;  end;
+			if(nonblank(PUr.Cost5) and PUr.Cost5!=0) then begin vecVI["Cost5"] = true; vecVItest["Cost5"] = false;  end;
+			VIr.POSerNr = PUr.PONr;
+			TsTr = true;
+			getvectortags(vecVItest,tags);
+			while(LoopKey("POSerNr",VIr,1,TsTr)) begin
+				if(VIr.POSerNr!=PUr.PONr) then begin TsTr = false; end;
+				if(TsTr) then begin
+					for(i=0;i<matrowcnt(VIr);i=i+1) begin
+						matrowget(VIr,i,VIrw);
+						if(vecVI["CustomsCost"]) then begin 
+							if(AccB.PUCustomsAcc==VIrw.AccNumber) then begin
+								vecVItest["CustomsCost"] = true;
+							end;
+						end;
+						if(vecVI["ShipCost"]) then begin 
+							if(AccB.PUFreightAcc==VIrw.AccNumber) then begin
+								vecVItest["ShipCost"] = true;
+							end;
+						end;
+						if(vecVI["Cost1"]) then begin 
+							if(AccB.PUCost1==VIrw.AccNumber) then begin
+								vecVItest["Cost1"] = true;
+							end;
+						end;
+						if(vecVI["Cost2"]) then begin 
+							if(AccB.PUCost2==VIrw.AccNumber) then begin
+								vecVItest["Cost2"] = true; 
+							end;
+						end;
+						if(vecVI["Cost3"]) then begin 
+							if(AccB.PUCost3==VIrw.AccNumber) then begin
+								vecVItest["Cost3"] = true;
+							end;
+						end;
+						if(vecVI["Cost4"]) then begin 
+							if(AccB.PUCost4==VIrw.AccNumber and VIr.VECode=="TMT_AKTSIZ") then begin
+								vecVItest["Cost4"] = true; 
+							end;
+						end;
+						if(vecVI["Cost5"]) then begin 
+							if(AccB.PUCost5==VIrw.AccNumber and VIr.VECode=="TMT_AKTSIZ") then begin
+								vecVItest["Cost5"] = true;
+							end;
+						end;
+					end;	
+				end;
+			end;
+			logtext(0,vecVItest["Cost1"]);
+			logtext(0,vecVItest["Cost2"]);
+			logtext(0,vecVItest["Cost3"]);
+			logtext(0,vecVItest["Cost4"]);
+			logtext(0,vecVItest["Cost5"]);
+			logtext(0,vecVItest["CustomsCost"]);
+			logtext(0,vecVItest["ShipCost"]);
+			ResetLoop(VIr);
+			POr.SerNr = PUr.PONr;
+			if(ReadFirstMAin(POr,1,true))then begin end;
+			if(POr.ExtraCostInPU==1)then begin
+				if(PUr.ShipCostOKFlag!=0) then begin
+					if(blank(PUr.ShipCost)) then begin testf1 = false;  MessageBox(36234,""); end;
+				end else begin	
+					if(blank(PUr.ShipCost) or PUr.ShipCost==0) then begin testf1 = false;  MessageBox(36234,""); end;
+				end;
+				if(PUr.CustomsCostOKFlag!=0) then begin
+					if(blank(PUr.CustomsCost)) then begin testf1 = false;  MessageBox(36235,""); end;
+				end else begin
+					if(blank(PUr.CustomsCost) or PUr.CustomsCost==0) then begin testf1 = false;  MessageBox(36235,""); end;
+				end;
+				if(blank(PUr.Location)) then begin testf1 = false;  MessageBox(36208,""); end;
+				for(i=0;i<tags.length;i=i+1) begin
+					if(vecVItest[tags[i]]==false) then begin
+						testVI = false;
+					end;
+				end;
+			end;
+			if(!testVI and (PUr.ShipCostOKFlag==0 or PUr.CustomsCostOKFlag==0)) then begin 
+				testf1 = false; 
+				RecordCheckError(36236,"",-1,"SerNr");      
+				res = -1; 
+				goto L99PUVcRecordCheck;
+			end;
+		end;
+	end;
   if (unokf) then begin
     errcode = IsUnOKAllowed_PUVc(PUr);
     if (errcode!=0) then begin
@@ -2636,17 +2741,17 @@ begin
   end;
   end;
 	
-	POr.SerNr = PUr.PONr;
-	if(ReadFirstMain(POr,1,true))then begin end;
-	if (PUr.OKFlag==1 and PU2r.OKFlag==0) then begin
-		if(/*currentcompany==28 and */POr.ExtraCostInPU==1)then begin
-			if(PUr.ShipCostOKFlag==0 or PUr.CustomsCostOKFlag==0/* or PUr.ItemsCostOKFlag==0*/)then begin  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 12:18 25.07.2019
-				RecordCheckError(36282,"",-1,"SerNr");      
-				res = -1;
-				goto L99PUVcRecordCheck;
-			end;
-		end;
-  end;
+	// POr.SerNr = PUr.PONr;
+	// if(ReadFirstMain(POr,1,true))then begin end;
+	// if (PUr.OKFlag==1 and PU2r.OKFlag==0) then begin
+		// if(/*currentcompany==28 and */POr.ExtraCostInPU==1)then begin
+			// if(PUr.ShipCostOKFlag==0 or PUr.CustomsCostOKFlag==0/* or PUr.ItemsCostOKFlag==0*/)then begin  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 12:18 25.07.2019
+				// RecordCheckError(36282,"",-1,"SerNr");      
+				// res = -1;
+				// goto L99PUVcRecordCheck;
+			// end;
+		// end;
+  // end;
 	
   if (DateWarned(PUr.TransDate,"PUVc")) then begin
     MessageBox(1045,"");
