@@ -4067,7 +4067,7 @@ end;
 
 global updating procedure GlobalItemVcRecStPrMn(record RcVc RepSpec)//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:31 21.08.2018
 begin
-  record GlobalItemVc GIr,mainGIr;
+ record GlobalItemVc GIr,mainGIr;
 	row GlobalItemVc GIrw;
 	record INVc INr,oldINr;
 	record DIVc DIr;
@@ -4079,7 +4079,7 @@ begin
 	row RebVc Rebrw;
 	record LocationVc LCr;
 	integer CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant;
-	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1, locfnd, entf;
+	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1;
 	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
 	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
 	integer flcnt,flushcnt,li;
@@ -4089,105 +4089,74 @@ begin
 	vector string 255 vbrandname;
 	record BPIBrandVc BPIBr;
 	record WEBReservStock WRSb;
-	longint curtick;
+	boolean entf,locfnd;
 	
-	curtick = getcurtick();
 	CompQty = 29;
 	OldComp = CurrentCompany;
 	BlockLoad(Compb);
 	
 	TrHs1=true;
-if(nonblank(RepSpec.f1)) then begin
-	GIr.Code = RepSpec.f1;
-end else begin
-	GIr.Code = "";
-end;	
-while(loopmain(GIr,1,TrHs1))begin
 	if(nonblank(RepSpec.f1)) then begin
-		TrHs1=false;
+		GIr.Code = RepSpec.f1;
+	end else begin
+		GIr.Code = "";
 	end;	
-	logtext(0,GIr.Code);
-	for (i=0;i<CompQty;i=i+1)begin
-		matrowget(Compb,i+1,Comprw);
-		if(Comprw.ActiveStatus==0)then begin
-			SetCompany(i+1,false);
-			
-			blockload(WRSb);
-			aloccnt = 0;
-			LCr.Code = "";
-			while (LoopMain(LCr,1,true)) begin
-				aloc[aloccnt] = LCr.Code;
-				aloccnt = aloccnt + 1;
-			end;
-			resetloop(LCr);
-			
-			TrHs = true;
-			For(li=0;li<aloccnt;li=li+1) begin
-				locfnd = false;
-				if(setinset(aloc[li],WRSb.ResStockSet))then begin
-					ISr.Code = GIr.HansaCode;
-					ISr.Location = aloc[li];
-					for(j=0;j<matrowcnt(GIr);j=j+1) begin
-						MatRowGet(GIr,j,GIrw);
-						if(GIrw.Location==ISr.Location) then begin
-							locfnd = true;
-							if(ReadFirstMain(ISr,2,true))then begin
-								if(GIrw.Instock!=(ISr.Instock-ISr.RsrvQty))then begin
-									logtext(0,ISr.Code & "<> Old" & GIrw.Instock & "<> New" & (ISr.Instock - ISr.RsrvQty));
+	while(loopmain(GIr,1,TrHs1))begin
+		if(GIr.Code!=RepSpec.f1)then begin TrHs1 = false; end;
+		if(TrHs1)then begin
+			for (i=0;i<CompQty;i=i+1)begin
+				matrowget(Compb,i+1,Comprw);
+				if(Comprw.ActiveStatus==0)then begin
+					entf = false;
+					SetCompany(i+1,false);
+					blockload(WRSb);
+					aloccnt = 0;
+					LCr.Code = "";
+					while (LoopMain(LCr,1,true)) begin
+						aloc[aloccnt] = LCr.Code;
+						aloccnt = aloccnt + 1;
+					end;
+					resetloop(LCr);
+					
+					TrHs = true;
+					
+					For(li=0;li<aloccnt;li=li+1) begin
+						locfnd = false;
+						if(setinset(aloc[li],WRSb.ResStockSet))then begin
+							ISr.Code = GIr.HansaCode;
+							ISr.Location = aloc[li];
+							for(j=0;j<matrowcnt(GIr);j=j+1) begin
+								MatRowGet(GIr,j,GIrw);
+								if(GIrw.Location==ISr.Location) then begin
+									locfnd = true;
+									if(ReadFirstMain(ISr,2,true))then begin
+										if(GIrw.Instock!=(ISr.Instock-ISr.RsrvQty))then begin
+											logtext(0,ISr.Code & "<> Old" & GIrw.Instock & "<> New" & (ISr.Instock - ISr.RsrvQty));
+											GIrw.Instock = ISr.Instock - ISr.RsrvQty;
+											MatRowPut(GIr,j,GIrw);
+											entf = true;
+										end;
+									end;	
+								end;
+							end;
+							if(locfnd==false)then begin
+								GIrw.Location = aloc[li];
+								if(ReadFirstMain(ISr,2,true))then begin
 									GIrw.Instock = ISr.Instock - ISr.RsrvQty;
-									MatRowPut(GIr,j,GIrw);
 									entf = true;
+									MatRowPut(GIr,matrowcnt(GIr),GIrw);
 								end;
 							end;	
-						end;
-					end;
-					if(locfnd==false)then begin
-						GIrw.Location = aloc[li];
-						if(ReadFirstMain(ISr,2,true))then begin
-							GIrw.Instock = ISr.Instock - ISr.RsrvQty;
-							entf = true;
-							MatRowPut(GIr,matrowcnt(GIr),GIrw);
-						end;
+						end; 
 					end;	
-				end; 
-			end;	
-			if(entf)then begin
-				RecordStore(GIr,true);
+					if(entf)then begin
+						RecordStore(GIr,true);
+					end;
+				end;
 			end;
-			/*
-			RecordStore(GIr,true);
-			INr.Code =GIr.HansaCode;
-			if (ReadFirstMain(INr,1,true)) then begin
-				ISr.Code = INr.Code;
-				ISr.Location = ";;;";
-				testf = false;
-				if(ReadFirstMain(ISr,2,true))then begin end;
-				if(ISr.Instock>0)then begin 
-					testf = true; 
-					logtext(0,"true");
-				end;
-
-				if(testf)then begin
-					CurCode = "AZN";
-					GetFullCurncyRate(CurCode,CurrentDate,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2);
-					quant = 1;
-					recordcopy(oldINr,INr);
-					//if (GetItemPriceDiscount3(oldINr.Code,quant,oldINr,CurCode,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,"","","RRP","0%",price,curitemname,ITRebate,vatcode,baseprice,salesacc,exportflag,calcprice,currentdate,currenttime,"NONAME",true,dummyf,"",tax2code,tax2prc,"","",taxtemplatecode)) then begin
-					GetPriceItem(INr.Code,price,ITRebate);
-					//end;
-					logtext(0,"GlobalItemVcRecStPrMn Code:" & GIr.Code & " Global item price = " & price);
-					GIr.Price = price;
-					logtext(0,GIr.Code & " " & GIr.Price);
-					RecordStore(GIr,true);
-					CheckFlush(flushcnt,1000);
-				end;
-			end;*/
 		end;
-	end;
-//CheckFlush(flushcnt,1000);	
-end;	
+	end;	
 	ResetCompany(OldComp);
-	LogProcTime("GlobalItemVcRecStPrMn",getcurtick()-curtick);
   return;
 end;
 
