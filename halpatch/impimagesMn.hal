@@ -4079,7 +4079,7 @@ begin
 	row RebVc Rebrw;
 	record LocationVc LCr;
 	integer CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant;
-	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1;
+	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1, locfnd, entf;
 	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
 	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
 	integer flcnt,flushcnt,li;
@@ -4109,7 +4109,7 @@ while(loopmain(GIr,1,TrHs1))begin
 	logtext(0,GIr.Code);
 	for (i=0;i<CompQty;i=i+1)begin
 		matrowget(Compb,i+1,Comprw);
-		if(Comprw.ActiveStatus==0 and i==3)then begin
+		if(Comprw.ActiveStatus==0)then begin
 			SetCompany(i+1,false);
 			
 			blockload(WRSb);
@@ -4123,23 +4123,37 @@ while(loopmain(GIr,1,TrHs1))begin
 			
 			TrHs = true;
 			For(li=0;li<aloccnt;li=li+1) begin
+				locfnd = false;
 				if(setinset(aloc[li],WRSb.ResStockSet))then begin
 					ISr.Code = GIr.HansaCode;
 					ISr.Location = aloc[li];
 					for(j=0;j<matrowcnt(GIr);j=j+1) begin
 						MatRowGet(GIr,j,GIrw);
-						logtext(0,GIrw.Location & " " & ISr.Location);
 						if(GIrw.Location==ISr.Location) then begin
+							locfnd = true;
 							if(ReadFirstMain(ISr,2,true))then begin
-								GIrw.Instock = ISr.Instock - ISr.RsrvQty;
-								//if(ISr.RsrvQty>0)then begin logtext(0,ISr.Code & "<>" & ISr.RsrvQty); end;
-								logtext(0,"cstock - " & GIrw.Instock);
-								MatRowPut(GIr,j,GIrw);
+								if(GIrw.Instock!=(ISr.Instock-ISr.RsrvQty))then begin
+									logtext(0,ISr.Code & "<> Old" & GIrw.Instock & "<> New" & (ISr.Instock - ISr.RsrvQty));
+									GIrw.Instock = ISr.Instock - ISr.RsrvQty;
+									MatRowPut(GIr,j,GIrw);
+									entf = true;
+								end;
 							end;	
+						end;
+					end;
+					if(locfnd==false)then begin
+						GIrw.Location = aloc[li];
+						if(ReadFirstMain(ISr,2,true))then begin
+							GIrw.Instock = ISr.Instock - ISr.RsrvQty;
+							entf = true;
+							MatRowPut(GIr,matrowcnt(GIr),GIrw);
 						end;
 					end;	
 				end; 
 			end;	
+			if(entf)then begin
+				RecordStore(GIr,true);
+			end;
 			/*
 			RecordStore(GIr,true);
 			INr.Code =GIr.HansaCode;
