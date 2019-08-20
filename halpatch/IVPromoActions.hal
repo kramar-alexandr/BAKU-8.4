@@ -1,0 +1,135 @@
+//server-only
+external function Boolean IVVc_PasteQuantity(var record IVVc,Integer);
+external function Boolean IVDchrsum(var record IVVc,Integer); 
+external procedure IVDchsum(var record IVVc,Integer);
+external function Boolean GetItemPriceDiscount3(string,val,var record INVc,string,val,val,val,val,val,string,string,string,string,
+                                                var val,var string,var val,var string,var val,var string,Integer,var Boolean,Date,Time,
+                                                string,Boolean,var Boolean,string,var string,var val,string,string,var string);
+external function string 60 RemoveObjectFromObjectList(string,string);
+external function string 60 AddObjectToObjectList(string,string);
+
+global //Edit***************************Sasha2,13:44 01.06.2016 {
+function string 255 Acia50ForSecondBrandItem(var record IVVc IVr,string opearation)
+begin
+  string 255 res,artList,brand;
+  record INVc INr;
+  row IVVc IVrw;
+  integer i,rwcnt,k,j,aki;
+  val saboSum;
+  Boolean foundBrasletf;
+  array integer rowwithbrand;
+  array val rowprice;
+  vector boolean rowisbrand,rowused;
+  val tempprice;
+  integer temprow;
+  record Akcia50ForSecondBrandVc Akcr;
+  row Akcia50ForSecondBrandVc Akcrw;
+  val t,s,price,vreb,baseprice,temp,tax2prc;
+  val prevRebate;
+  record FreightBlock FreightRec;
+  string 255 tstr,tax2code,location,dummystr;
+  Boolean calcprice;
+  Integer exportflag;
+  Boolean dummyf;
+  record SerNrTrackBlock SNrb;
+  	  	
+  	while(loopmain(Akcr,1,true))begin  	
+  		if(blankdate(Akcr.FromDate) or dateinrange(IVr.InvDate,Akcr.FromDate,Akcr.ToDate))then begin
+				for(aki=0;aki<matrowcnt(Akcr);aki=aki+1)begin
+					matrowget(Akcr,aki,Akcrw);
+					if(IVr.OKFlag==0)then begin
+						brand = Akcrw.Brand;
+						res = "";
+						rwcnt = MatRowCnt(IVr);
+						for (i=0;i<rwcnt;i=i+1) begin
+							MatRowGet(IVr,i,IVrw);
+							if (NonBlank(IVrw.ArtCode) and IVrw.stp==kInvoiceRowTypeNormal) then begin
+								if(IVrw.Quant==1)then begin
+									INr.Code = IVrw.ArtCode;
+									if (ReadFirstMain(INr,1,true)) then begin
+										if(setinset(brand,INr.DispGroups))then begin
+											rowwithbrand[k] = i;
+											rowprice[k] = IVrw.Price;
+											rowisbrand[i] = true;
+											k = k+1;
+										end;
+									end;
+								end;
+							end;
+						end;
+			
+			
+			
+						if(k>1)then begin
+							for(i=0;i<k;i=i+1)begin
+								for(j=0;j<i;j=j+1)begin
+									if(rowprice[j]>rowprice[i])then begin
+										tempprice = rowprice[j];
+										temprow = rowwithbrand[j];
+										rowprice[j] = rowprice[i];
+										rowwithbrand[j] = rowwithbrand[i];
+										rowprice[i] = tempprice;
+										rowwithbrand[i] = temprow;
+									end;
+								end;
+							end;
+				
+				
+							for (i=0;i<k;i=i+1) begin
+								MatRowGet(IVr,rowwithbrand[i],IVrw);
+									if (GetItemPriceDiscount3(IVrw.ArtCode,IVrw.Quant,INr,IVr.CurncyCode,
+																	IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,
+																	IVr.LangCode,IVr.CustCat,IVr.PriceList,IVr.RebCode,
+																	price,tstr,vreb,dummystr,baseprice,dummystr,
+																	exportflag,calcprice,IVr.TransDate,IVr.TransTime,IVr.CustCode,true,dummyf,IVr.PayDeal,
+																	tax2code,tax2prc,IVr.Region,location,dummystr)) then begin
+									end;
+									IVrw.vRebate = vreb;
+									IVrw.Objects =  RemoveObjectFromObjectList(IVrw.Objects,"50%");
+								MatRowPut(IVr,rowwithbrand[i],IVrw);
+							end;
+				
+							for (i=0;i<k;i=i+1) begin
+								if(rowisbrand[rowwithbrand[i]])then begin
+									if(rowused[i]==false)then begin
+										for(j=k-1;j>i;j=j-1)begin
+											if(rowused[j]==false and i!=j)then begin
+												rowused[j] = true;
+												rowused[i] = true;
+												MatRowGet(IVr,rowwithbrand[j],IVrw);
+													IVrw.vRebate = 0;
+												MatRowPut(IVr,rowwithbrand[j],IVrw);
+												IVVc_PasteQuantity(IVr,rowwithbrand[j]);		
+												IVDchrsum(IVr,rowwithbrand[j]);
+												IVDchsum(IVr,rowwithbrand[j]);
+									
+												MatRowGet(IVr,rowwithbrand[i],IVrw);
+													IVrw.vRebate = Akcrw.Rebate;
+													IVrw.Objects =  AddObjectToObjectList(IVrw.Objects,"50%");
+												MatRowPut(IVr,rowwithbrand[i],IVrw);
+												IVVc_PasteQuantity(IVr,rowwithbrand[i]);		
+												IVDchrsum(IVr,rowwithbrand[i]);
+												IVDchsum(IVr,rowwithbrand[i]);
+												j=-1;
+											end;
+										end;
+									end;
+								end;
+							end;
+						end;
+						switch (opearation) begin
+							case "paste":
+				
+							case "check":
+				
+							case "deletedrow":
+				
+						end;
+					end;
+				end;	
+			end;
+		end;
+  
+  Acia50ForSecondBrandItem = res;
+  return;
+end; //Edit***************************Sasha2,13:44 01.06.2016 }
