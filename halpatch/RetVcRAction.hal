@@ -81,6 +81,7 @@ remote updating function Integer CreateLocalRetFromECRet(record RetVc);//Edit_-_
 remote function Boolean PasteRetInInv2(var record IVVc,record RetVc,Boolean);
 external function LongInt GetCurUserLastNr(string);
 external procedure LogProcTime(string,longint);
+remote updating function integer CreateBackStockMov(record StockMovVc, var record StockMovVc);
 
 function Integer ValidateBulkSerialNoRow(record SerNrTrackBlock SNrb,record RetVc Retr,row RetVc Retrw,Integer currow,var string gotofield,var Integer gotorow)
 begin
@@ -1452,16 +1453,20 @@ end;
 global
 updating function LongInt RetVcRecordUpdateAfter(var record RetVc Retr,record RetVc Ret2r,LongInt stat,LongInt long4)
 BEGIN 
-  LongInt res, mtrw, i;
+  LongInt res, mtrw, i, warn;
   Boolean ihef, testf;
   record IVVc IVr, offIVr;
 	row IVVc IVrw;
   record IVVc oldIVr;
-  Integer errcode, IVOFFCnt;
+  Integer errcode, IVOFFCnt, pos;
   record OrdSettBlock OSb;
   vector val dummy_retvc;
 	record ORVc ORr;
   record AccBlock ACb;
+	record RLinkVc RLr;
+	record PUVc PUr;
+	record StockMovVc SMr, newStockMovr;
+	record RcVc RepSpec;
 	
 	BlockLoad(ACb);
 	
@@ -1489,6 +1494,25 @@ BEGIN
     if ((Retr.OKFlag!=0) and (Ret2r.OKFlag==0)) then begin
       if (ihef==false) then begin
         if (OSb.CreateIVonRetOK!=0 or Retr.CustCode=="FOBE_COMMERCE" or currentcompany==29) then begin
+					ORr.SerNr = Retr.OrdNr;
+					if(readfirstmain(ORr,1,true))then begin 
+						if(ReadRecordLink(ORr,1,PUr,RLr))then begin
+							if(PUr.Location!=Retr.Location)then begin
+								if(ReadRecordLink(ORr,1,SMr,RLr))then begin
+									readfirstmain(SMr,1,true);
+									recordCopy(newStockMovr,SMr);
+									newStockMovr.OrdTransDate = CurrentDate;
+									newStockMovr.SentTransDate = "";
+									newStockMovr.TransDate = CurrentDate;
+									warn = CreateBackStockMov(SMr,newStockMovr);
+									if(warn==0)then begin
+										CreateRecordLink(newStockMovr,CurrentCompany,ORr,CurrentCompany);  
+										CreateRecordLink(ORr,CurrentCompany,newStockMovr,CurrentCompany);  
+									end;
+								end;
+							end;
+						end;
+					end;
           if (RecordAction_raPasteRetInInv(IVr,Retr.SerNr)==1) then begin
             RecordCopy(oldIVr,IVr);
             IVr.OKFlag = 1;
