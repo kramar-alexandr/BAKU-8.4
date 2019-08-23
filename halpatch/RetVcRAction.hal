@@ -82,6 +82,8 @@ remote function Boolean PasteRetInInv2(var record IVVc,record RetVc,Boolean);
 external function LongInt GetCurUserLastNr(string);
 external procedure LogProcTime(string,longint);
 remote updating function integer CreateBackStockMov(record StockMovVc, var record StockMovVc);
+external procedure StockMovSumUp(var record StockMovVc);
+
 
 function Integer ValidateBulkSerialNoRow(record SerNrTrackBlock SNrb,record RetVc Retr,row RetVc Retrw,Integer currow,var string gotofield,var Integer gotorow)
 begin
@@ -1453,7 +1455,7 @@ end;
 global
 updating function LongInt RetVcRecordUpdateAfter(var record RetVc Retr,record RetVc Ret2r,LongInt stat,LongInt long4)
 BEGIN 
-  LongInt res, mtrw, i, warn;
+  LongInt res, mtrw, i, warn, k, rwcnt;
   Boolean ihef, testf;
   record IVVc IVr, offIVr;
 	row IVVc IVrw;
@@ -1462,11 +1464,22 @@ BEGIN
   record OrdSettBlock OSb;
   vector val dummy_retvc;
 	record ORVc ORr;
+	row ORVc ORrw;
   record AccBlock ACb;
 	record RLinkVc RLr;
 	record PUVc PUr;
 	record StockMovVc SMr, newStockMovr;
+	row StockMovVc newStockMovrw;
 	record RcVc RepSpec;
+	record ECCasierDocSetBlock ECCDSb;
+	row ECCasierDocSetBlock ECCDSrw;
+	vector string 255 vNotSMcompLoc, vNotSMcompLocItem;
+	vector boolean LocSHCompltdf, vNotSMcomp, vNotSMItemFCash;
+	vector integer RetSMItemQuant;
+	row RetVc Retrw;
+
+	
+	BlockLoad(ECCDSb);
 	
 	BlockLoad(ACb);
 	
@@ -1497,17 +1510,59 @@ BEGIN
 					ORr.SerNr = Retr.OrdNr;
 					if(readfirstmain(ORr,1,true))then begin 
 						if(ReadRecordLink(ORr,1,PUr,RLr))then begin
+							rwcnt = matrowcnt(ECCDSb);
+							for (i=0;i<rwcnt;i=i+1) begin
+								matrowget(ECCDSb,i,ECCDSrw);
+								vNotSMcomp[ECCDSrw.CompNr] = true;
+								vNotSMcompLoc[ECCDSrw.CompNr] = ECCDSrw.LocCode;
+							end;
+							
+							rwcnt = matrowcnt(ORr);
+							for (i=0;i<rwcnt;i=i+1) begin
+								matrowget(ORr,i,ORrw);
+								if(vNotSMcomp[ORrw.ECReservComp]) then begin
+									vNotSMItemFCash[ORrw.SerialNr] = true;
+									vNotSMcompLocItem[ORrw.SerialNr] = vNotSMcompLoc[ORrw.ECReservComp];
+								end;
+							end;
 							if(PUr.Location!=Retr.Location)then begin
 								if(ReadRecordLink(ORr,1,SMr,RLr))then begin
-									readfirstmain(SMr,1,true);
-									recordCopy(newStockMovr,SMr);
-									newStockMovr.OrdTransDate = CurrentDate;
-									newStockMovr.SentTransDate = "";
-									newStockMovr.TransDate = CurrentDate;
-									warn = CreateBackStockMov(SMr,newStockMovr);
-									if(warn==0)then begin
-										CreateRecordLink(newStockMovr,CurrentCompany,ORr,CurrentCompany);  
-										CreateRecordLink(ORr,CurrentCompany,newStockMovr,CurrentCompany);  
+									if(SMr.OKFlag==1)then begin
+										readfirstmain(SMr,1,true);
+										recordCopy(newStockMovr,SMr);
+										newStockMovr.OrdTransDate = CurrentDate;
+										newStockMovr.SentTransDate = "";
+										newStockMovr.TransDate = CurrentDate;
+										rwcnt = matrowcnt(Retr);
+										for (i=rwcnt-1;i>=0;i=i-1) begin
+											matrowget(Retr,i,Retrw);
+											RetSMItemQuant[Retrw.SerialNr] = Retrw.Quant;
+										end;
+										warn = CreateBackStockMov(SMr,newStockMovr);
+										rwcnt = matrowcnt(newStockMovr);
+										for (i=rwcnt-1;i>=0;i=i-1) begin
+											matrowget(newStockMovr,i,newStockMovrw);
+											newStockMovrw.OrdQuant = RetSMItemQuant[newStockMovrw.SerialNr];
+											newStockMovrw.Quant = RetSMItemQuant[newStockMovrw.SerialNr];
+											matrowput(newStockMovr,i,newStockMovrw);
+											if(vNotSMItemFCash[newStockMovrw.SerialNr] and newStockMovr.FrLocation==vNotSMcompLocItem[newStockMovrw.SerialNr])then begin
+												matrowdelete(newStockMovr,i);
+											end;
+											if(newStockMovr.FrLocation!=vNotSMcompLocItem[newStockMovrw.SerialNr])then begin
+												vNotSMItemFCash[newStockMovrw.SerialNr] = false;
+											end;
+										end;
+										if(matrowcnt(newStockMovr)>=1)then begin
+											StockMovSumUp(newStockMovr); 
+											RecordStore(newStockMovr,true);
+										end else begin
+											RecordDelete(newStockMovr);
+											warn = 1;
+										end;
+										if(warn==0)then begin
+											CreateRecordLink(newStockMovr,CurrentCompany,ORr,CurrentCompany);  
+											CreateRecordLink(ORr,CurrentCompany,newStockMovr,CurrentCompany);  
+										end;
 									end;
 								end;
 							end;

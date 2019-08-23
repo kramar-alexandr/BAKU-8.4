@@ -58,6 +58,11 @@ remote function Boolean PasteOrdInInv(var record IVVc,record ORVc,Boolean,string
                                var Integer,Boolean,array record XSrsVc,var Integer);
 remote function Integer CreateCreditNoteIV(record IVVc,Integer,var record IVVc,string,Boolean);
 remote procedure IPPastePayMode2(var record IPVc,string);
+remote updating function integer CreateBackStockMov(record StockMovVc, var record StockMovVc);
+external procedure StockMovSumUp(var record StockMovVc);
+remote procedure RetPUVc_PasteLocation(var record RetPUVc,Integer);
+
+
 															 
 															 
 SetLangMode(LangRussian,"RUS",0);
@@ -777,27 +782,34 @@ begin
 	row ORVc ORrw, LocORrw;
 	record SHVc SHr;
 	record PUVc PUr;
-	integer OldComp, MaxCompCode, rwcnt, i, j, PUcnt, y, LocComp, VIOFFCnt;
+	row PUVc PUrw;
+	integer OldComp, MaxCompCode, rwcnt, i, j, PUcnt, y, LocComp, VIOFFCnt, k;
 	vector boolean Compf;
 	record RLinkVc RLr;
-	vector boolean LocSHCompltdf;
+	vector boolean LocSHCompltdf, vNotSMcomp, vNotSMItemFCash;
 	record ActVc Actr, oldActr;
 	vector integer DeletedSH;
 	record LocalMachineBlock LMb;
 	record RetVc LocRetr;
 	record SRBlock SRb;
-	LongInt newnr;
+	LongInt newnr, warn;
 	string 255 tstr;
 	Boolean nousersernr,testf;
 	record CUVc CUr;
 	longint r, res, IVOFFCnt;
 	record RetPUVc RetPUr;
+	row RetPUVc RetPUrw;
 	record VIVc VIr, credVIr, offVIr;
 	record ECommManUserBlock ECMUb;
 	record IVVc IVCreditr,offIVr, OldIVcreditr;
 	row IVVc IVCreditrw;
+	record StockMovVc SMr, newStockMovr;
+	row StockMovVc newStockMovrw;
+	record ECCasierDocSetBlock ECCDSb;
+	row ECCasierDocSetBlock ECCDSrw;
+	vector string 255 vNotSMcompLoc, vNotSMcompLocItem;
 	
-	
+	BlockLoad(ECCDSb);
 	
 	if (ReadRecordLink(ORr,1,IVr,RLr)) then begin
 		if(IVr.PayDeal=="O1")then begin
@@ -827,6 +839,54 @@ begin
 		end;
 	end;
 	
+	rwcnt = matrowcnt(ECCDSb);
+	for (i=0;i<rwcnt;i=i+1) begin
+		matrowget(ECCDSb,i,ECCDSrw);
+		vNotSMcomp[ECCDSrw.CompNr] = true;
+		vNotSMcompLoc[ECCDSrw.CompNr] = ECCDSrw.LocCode;
+	end;
+	
+	rwcnt = matrowcnt(ORr);
+	for (i=0;i<rwcnt;i=i+1) begin
+		matrowget(ORr,i,ORrw);
+		if(vNotSMcomp[ORrw.ECReservComp]) then begin
+			vNotSMItemFCash[ORrw.SerialNr] = true;
+			vNotSMcompLocItem[ORrw.SerialNr] = vNotSMcompLoc[ORrw.ECReservComp];
+		end;
+	end;
+	
+	
+	if(ReadRecordLink(ORr,1,SMr,RLr))then begin
+		if(SMr.OKFlag==1)then begin
+			readfirstmain(SMr,1,true);
+			recordCopy(newStockMovr,SMr);
+			newStockMovr.OrdTransDate = CurrentDate;
+			newStockMovr.SentTransDate = "";
+			newStockMovr.TransDate = CurrentDate;
+			warn = CreateBackStockMov(SMr,newStockMovr);
+			rwcnt = matrowcnt(newStockMovr);
+			for (i=rwcnt-1;i>=0;i=i-1) begin
+				matrowget(newStockMovr,i,newStockMovrw);
+				if(vNotSMItemFCash[newStockMovrw.SerialNr] and newStockMovr.FrLocation==vNotSMcompLocItem[newStockMovrw.SerialNr])then begin
+					matrowdelete(newStockMovr,i);
+				end;
+				if(newStockMovr.FrLocation!=vNotSMcompLocItem[newStockMovrw.SerialNr])then begin
+					vNotSMItemFCash[newStockMovrw.SerialNr] = false;
+				end;
+			end;
+			if(matrowcnt(newStockMovr)>0)then begin
+				StockMovSumUp(newStockMovr);  
+				RecordStore(newStockMovr,true);
+			end else begin
+				RecordDelete(newStockMovr);
+				warn = 1;
+			end;
+			if(warn==0)then begin
+				CreateRecordLink(newStockMovr,CurrentCompany,ORr,CurrentCompany);  
+				CreateRecordLink(ORr,CurrentCompany,newStockMovr,CurrentCompany);  
+			end;
+		end;
+	end;
 	
 	
 	OldComp = CurrentCompany;
@@ -883,12 +943,20 @@ begin
 								PUcnt = 1;
 								LocComp = CurrentCompany;
 								while (ReadRecordLink(SHr,PUcnt,PUr,RLr))begin
+									
 									if(SetCompany(OldComp,false))then begin end;
-									RecordNew(RetPUr);
-									r = PastePUInRetPU(PUr,RetPUr);
-									if (RetPUr.SerNr<=0) then begin
-										RetPUr.SerNr = NextSerNr("RetPUVc",RetPUr.TransDate,-1,false,"");
-									end;  
+										RecordNew(RetPUr);
+										rwcnt = matrowcnt(PUr);
+										for (k=rwcnt-1;k>=0;k=k-1) begin
+											matrowget(PUr,k,PUrw);
+											if(vNotSMItemFCash[PUrw.SerialNr])then begin
+												PUr.Location = vNotSMcompLocItem[PUrw.SerialNr];
+											end;
+										end;
+										r = PastePUInRetPU(PUr,RetPUr);
+										if (RetPUr.SerNr<=0) then begin
+											RetPUr.SerNr = NextSerNr("RetPUVc",RetPUr.TransDate,-1,false,"");
+										end;  
 										RetPUr.Location = PUr.Location;
 										RetPUr.OfficialSerNr = ORr.CustOrdNr;
 										RetPUr.PONr = "";
