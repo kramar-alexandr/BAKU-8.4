@@ -291,7 +291,7 @@ begin
   return;
 end;
 
-global 
+
 function Boolean BPUDClassShipCostEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf)
 begin
   record BigPUVc BPUr;
@@ -320,7 +320,7 @@ begin
 end;
 
 global 
-function Boolean BPUDClassCustomsCostEFAfter(Integer wn)
+function Boolean BPUDClassCustomsCostEFAfter(Integer wn,boolean changedf)
 begin
   record BigPUVc BPUr;
   row BigPUVc BPUrw;
@@ -331,27 +331,28 @@ begin
 	
 	BlockLoad(CCBb);
 	
-  
-	GetWindowRecord(wn,BPUr);
-	for(i=0;i<matrowcnt(BPUr);i=i+1) begin
-		MatRowGet(BPUr,i,BPUrw);
-		total = total + BPUrw.Quant * BPUrw.CostPrice;
-	end;
-	if(nonblank(BPUr.CurrencyT)) then begin
-		FInBase = MulRateToBase1(BPUr.CurrencyT,BPUr.CustomsCost,BPUr.FrRateT,BPUr.ToRateT,BPUr.ToRateT,BPUr.FrRateT,BPUr.ToRateT,SetROundModeD(2));
-	end else begin 	FInBase = BPUr.CustomsCost; end;
-	for(i=0;i<matrowcnt(BPUr);i=i+1) begin
-		if(CCBb.ConsAddShipCost==1 and BPUr.ConsManualCost==0)then begin
+  if(changedf) then begin
+		GetWindowRecord(wn,BPUr);
+		for(i=0;i<matrowcnt(BPUr);i=i+1) begin
 			MatRowGet(BPUr,i,BPUrw);
-			BPUrw.CustomsCost = FInBase * (BPUrw.Quant * BPUrw.CostPrice/total);
-			MatRowPut(BPUr,i,BPUrw);
-		end else begin
-			MatRowGet(BPUr,i,BPUrw);
-			BPUrw.CustomsCost = FInBase * (BPUrw.Quant * BPUrw.CostPrice/total);
-			MatRowPut(BPUr,i,BPUrw);
+			total = total + BPUrw.Quant * BPUrw.CostPrice;
 		end;
-	end;
-	PutWindowRecord(wn,BPUr);     
+		if(nonblank(BPUr.CurrencyT)) then begin
+			FInBase = MulRateToBase1(BPUr.CurrencyT,BPUr.CustomsCost,BPUr.FrRateT,BPUr.ToRateT,BPUr.ToRateT,BPUr.FrRateT,BPUr.ToRateT,SetROundModeD(2));
+		end else begin 	FInBase = BPUr.CustomsCost; end;
+		for(i=0;i<matrowcnt(BPUr);i=i+1) begin
+			if(CCBb.ConsAddShipCost==1 and BPUr.ConsManualCost==0)then begin
+				MatRowGet(BPUr,i,BPUrw);
+				BPUrw.CustomsCost = FInBase * (BPUrw.Quant * BPUrw.CostPrice/total);
+				MatRowPut(BPUr,i,BPUrw);
+			end else begin
+				MatRowGet(BPUr,i,BPUrw);
+				BPUrw.CustomsCost = FInBase * (BPUrw.Quant * BPUrw.CostPrice/total);
+				MatRowPut(BPUr,i,BPUrw);
+			end;
+		end;
+		PutWindowRecord(wn,BPUr);   
+	end;	
   BPUDClassCustomsCostEFAfter = true;
   return;
 end;
@@ -385,7 +386,7 @@ record BigPUVc BPUr;
 	BPUr.FrRateT = fr;
 	BPUr.ToRateT = to1;
 	PutWindowRecord(wn,BPUr);
-	BPUDClassCustomsCostEFAfter(wn);
+	BPUDClassCustomsCostEFAfter(wn,true);
 	BPUDClassCurrencyTEFAfter = true;
 return;
 end;
@@ -499,7 +500,7 @@ BEGIN
   res = true;
  	
  	getwindowrecord(wn,BigPUr);
- 	res = BPUDClassCustomsCostEFAfter(wn);
+ 	res = BPUDClassCustomsCostEFAfter(wn,true);
   
 LPODClassOKFlagButtonAction:;   
   BigPUDClassConsManualCostButtonAction = res;
@@ -517,12 +518,15 @@ BEGIN
     
     case "ArtCode": res = BPUDClassArtCodeEFAfter(wn,fn,rownr,changed);
 		case "ShipCost": res = BPUDClassShipCostEFAfter(wn,fn,rownr,changed);
+		case "CustomsCost": res = BPUDClassCustomsCostEFAfter(wn,changed);
 		case "CurrencyF": res = BPUDClassCurrencyFEFAfter(wn,fn,rownr,changed);
 		case "CurrencyT": res = BPUDClassCurrencyTEFAfter(wn,fn,rownr,changed);
 		case "WeightRow": res = PUDClassWeightRowEFAfter(wn,fn,rownr,changed,4);
     case "CaratRow": res = PUDClassCaratRowEFAfter(wn,fn,rownr,changed,5);
 		case "CaratplacerRow": res = PUDClassCaratRowEFAfter(wn,fn,rownr,changed,5);
 		case "FromOrds": res = BPUDClassFromOrdsEFAfter(wn,fn,changed);
+		case "ToRateF": res = BPUDClassShipCostEFAfter(wn,fn,rownr,changed);
+		case "ToRateT": res = BPUDClassCustomsCostEFAfter(wn,changed);
   end;
   BigPUDClassAfterEditField = res;
   RETURN;
