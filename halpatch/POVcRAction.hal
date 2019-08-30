@@ -2179,7 +2179,103 @@ begin
         		goto LPOVcRecordCheck;
         	end;
         end;
-        
+        if (UseTaxTemplatesforTaxCalc) then begin
+          if (nonblank(POrw.ArtCode)) then begin
+            if (blank(POrw.TaxTemplateCode)) then begin
+              if (disperrf) then begin
+                RecordCheckError(24201,"",i,"TaxTemplateCode");      
+              end;
+              res = 24201;
+              goto LPOVcRecordCheck;
+            end;
+            errcode = VerifyTaxTemplateCode(POrw.TaxTemplateCode,tstr);
+            if (errcode!=0) then begin
+              if (disperrf) then begin
+                RecordCheckError(errcode,tstr,i,"TaxTemplateCode");                
+              end;
+              res = 1120; 
+              goto LPOVcRecordCheck;
+            end;
+          end;
+        end else begin
+          if (blank(POrw.VATCode) and (POrw.Sum!=0)) and (VEr.ExportFlag==0) then begin
+            if (disperrf) then begin
+              RecordCheckError(1134,"",i,"VATCode");      
+            end;
+            res = 1134; 
+            goto LPOVcRecordCheck;
+          end;
+        end;
+        if (CorrectM4ValProc(POrw.vRebate)==false) then begin
+          if (disperrf) then begin
+            RecordCheckError(1019,"",i,"vRebate");      
+          end;
+          res = 1019; 
+          goto LPOVcRecordCheck;
+        end;
+        if (nonblank(POrw.PRCode)) then begin
+          PRr.Code = POrw.PRCode;
+          if (ReadFirstMain(PRr,1,true)==false) then begin
+            if (disperrf) then begin
+              RecordCheckError(1232,"",i,"PRCode");      
+            end;
+            res = 1232; 
+            goto LPOVcRecordCheck;
+          end;
+          if (PRr.Terminated!=0) then begin
+            if (disperrf) then begin
+              RecordCheckError(1232,"",i,"PRCode");      
+            end;
+            res = 1232; 
+            goto LPOVcRecordCheck;
+          end;        
+        end;  
+//        if (nonblank(POrw.Objects)) then begin     
+          VerifyRowObjects("PL",POr.Objects,POrw.Objects,POrw.CostAcc,errcode,errstr,initotcheckf,otcheckaccs,otcheckobjtyps,otcheckcnt);                        
+          if (errcode!=0) then begin
+            if (disperrf) then begin
+              RecordCheckError(errcode,errstr,i,"Objects");      
+            end;
+            res = errcode; 
+            goto LPOVcRecordCheck;
+          end;
+//        end;          
+        if (nonblank(POrw.ArtCode)) and (gRuniningMaint!="GenPOFromORMn1") then begin     
+          if (blank(POr.PlanShip)) then begin
+            if (blank(POrw.PlanShipRow)) then begin
+              if (check) then begin
+                BlockLoad(PDb);
+                if (PDb.ForcePlanDelDate!=0) then begin
+                  if (disperrf) then begin
+                    RecordCheckError(1058," " & USetStr(2040),i,"PlanShipRow"); 
+                  end;
+                  res = 1058; 
+                  goto LPOVcRecordCheck;
+                end;
+              end;
+            end;
+          end;
+        end;
+        if (nonblank(POrw.CostAcc)) then begin
+          Accr.AccNumber = POrw.CostAcc;
+          if (ReadFirstMain(Accr,1,true)==false) then begin
+            RecordCheckError(1007,POrw.CostAcc,i,"CostAcc");      
+            res = -1; 
+            goto LPOVcRecordCheck;
+          end else begin
+            if (Accr.blockedFlag!=0) then begin
+              RecordCheckError(1258,POrw.CostAcc,i,"CostAcc");      
+              res = -1; 
+              goto LPOVcRecordCheck;
+            end;
+            if (Accr.GroupAcc!=0) then begin
+              RecordCheckError(1084,POrw.CostAcc,i,"CostAcc");      
+              res = -1; 
+              goto LPOVcRecordCheck;
+            end;
+          end;
+        end;
+				
         if (nonblank(POrw.ArtCode)) then begin
           if (POrw.Quant<0) then begin
             if (disperrf) then begin
@@ -2382,38 +2478,6 @@ begin
 							goto LPOVcRecordCheck;
 						end;
           end;
-					
-          if ((POrw.Quant>0) and (POr.Closed==0)) then begin
-						switch(currentcompany)begin
-							case 1:NewINSwarowski(POr,i,found,INr,fr,to1,to2,br1,br2);// Edit ************************** Monday, 18 February 2013 09:36:54// Edit ************************** Monday, 18 February 2013 09:36:55// Edit ************************** Monday, 18 February 2013 09:36:57
-							case 2:NewINLLardo(POr,i,found,INr,fr,to1,to2,br1,br2);
-
-							case 4:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
-							case 5:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
-							case 6:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
-							case 7:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
-							case 8:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
-							
-							case 10:NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);
-							case 11:NewINSwarowski(POr,i,found,INr,fr,to1,to2,br1,br2);	// Edit by Victor 08.12.14	
-							case 12:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);	// Edit by Victor 08.12.14	
-							case 13:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);	// Edit ************************** Wednesday, 25 March 2015 15:46:51
-							case 14:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2); // Edit ************************** Wednesday, 6 May 2015 10:24:06
-							case 15:NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);		//Edit-------------------Vitalii 13:08 09.12.2015
-							case 16:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
-							case 17:NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);
-							case 25:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);// Edit ************************** Thursday, 19 May 2016 12:30:51
-							otherwise
-							  if (CompanyIsJWLikeCompany(currentcompany)) then begin
-									if(BOb.BackOrderMark==1)then begin
-										NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);
-									end;
-							    UpdateINOnly_NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);
-							  end;
-						end;
-						matrowget(POr,i,POrw);
-					end;
-				
 					if(CurrentCompany==9) then begin
 						found = ReadFirstItem(POrw.ArtCode,INr,true,true);// Edit ************************** Friday, 31 August 2012 16:21:48
 						if (found==false or blank(POrw.Spec)) then begin
@@ -2501,102 +2565,36 @@ begin
             res = 1285; 
             goto LPOVcRecordCheck;
           end;
-        end;
-        if (UseTaxTemplatesforTaxCalc) then begin
-          if (nonblank(POrw.ArtCode)) then begin
-            if (blank(POrw.TaxTemplateCode)) then begin
-              if (disperrf) then begin
-                RecordCheckError(24201,"",i,"TaxTemplateCode");      
-              end;
-              res = 24201;
-              goto LPOVcRecordCheck;
-            end;
-            errcode = VerifyTaxTemplateCode(POrw.TaxTemplateCode,tstr);
-            if (errcode!=0) then begin
-              if (disperrf) then begin
-                RecordCheckError(errcode,tstr,i,"TaxTemplateCode");                
-              end;
-              res = 1120; 
-              goto LPOVcRecordCheck;
-            end;
-          end;
-        end else begin
-          if (blank(POrw.VATCode) and (POrw.Sum!=0)) and (VEr.ExportFlag==0) then begin
-            if (disperrf) then begin
-              RecordCheckError(1134,"",i,"VATCode");      
-            end;
-            res = 1134; 
-            goto LPOVcRecordCheck;
-          end;
-        end;
-        if (CorrectM4ValProc(POrw.vRebate)==false) then begin
-          if (disperrf) then begin
-            RecordCheckError(1019,"",i,"vRebate");      
-          end;
-          res = 1019; 
-          goto LPOVcRecordCheck;
-        end;
-        if (nonblank(POrw.PRCode)) then begin
-          PRr.Code = POrw.PRCode;
-          if (ReadFirstMain(PRr,1,true)==false) then begin
-            if (disperrf) then begin
-              RecordCheckError(1232,"",i,"PRCode");      
-            end;
-            res = 1232; 
-            goto LPOVcRecordCheck;
-          end;
-          if (PRr.Terminated!=0) then begin
-            if (disperrf) then begin
-              RecordCheckError(1232,"",i,"PRCode");      
-            end;
-            res = 1232; 
-            goto LPOVcRecordCheck;
-          end;        
-        end;  
-//        if (nonblank(POrw.Objects)) then begin     
-          VerifyRowObjects("PL",POr.Objects,POrw.Objects,POrw.CostAcc,errcode,errstr,initotcheckf,otcheckaccs,otcheckobjtyps,otcheckcnt);                        
-          if (errcode!=0) then begin
-            if (disperrf) then begin
-              RecordCheckError(errcode,errstr,i,"Objects");      
-            end;
-            res = errcode; 
-            goto LPOVcRecordCheck;
-          end;
-//        end;          
-        if (nonblank(POrw.ArtCode)) and (gRuniningMaint!="GenPOFromORMn1") then begin     
-          if (blank(POr.PlanShip)) then begin
-            if (blank(POrw.PlanShipRow)) then begin
-              if (check) then begin
-                BlockLoad(PDb);
-                if (PDb.ForcePlanDelDate!=0) then begin
-                  if (disperrf) then begin
-                    RecordCheckError(1058," " & USetStr(2040),i,"PlanShipRow"); 
-                  end;
-                  res = 1058; 
-                  goto LPOVcRecordCheck;
-                end;
-              end;
-            end;
-          end;
-        end;
-        if (nonblank(POrw.CostAcc)) then begin
-          Accr.AccNumber = POrw.CostAcc;
-          if (ReadFirstMain(Accr,1,true)==false) then begin
-            RecordCheckError(1007,POrw.CostAcc,i,"CostAcc");      
-            res = -1; 
-            goto LPOVcRecordCheck;
-          end else begin
-            if (Accr.blockedFlag!=0) then begin
-              RecordCheckError(1258,POrw.CostAcc,i,"CostAcc");      
-              res = -1; 
-              goto LPOVcRecordCheck;
-            end;
-            if (Accr.GroupAcc!=0) then begin
-              RecordCheckError(1084,POrw.CostAcc,i,"CostAcc");      
-              res = -1; 
-              goto LPOVcRecordCheck;
-            end;
-          end;
+          if ((POrw.Quant>0) and (POr.Closed==0)) then begin
+						switch(currentcompany)begin
+							case 1:NewINSwarowski(POr,i,found,INr,fr,to1,to2,br1,br2);// Edit ************************** Monday, 18 February 2013 09:36:54// Edit ************************** Monday, 18 February 2013 09:36:55// Edit ************************** Monday, 18 February 2013 09:36:57
+							case 2:NewINLLardo(POr,i,found,INr,fr,to1,to2,br1,br2);
+
+							case 4:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
+							case 5:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
+							case 6:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
+							case 7:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
+							case 8:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
+							
+							case 10:NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);
+							case 11:NewINSwarowski(POr,i,found,INr,fr,to1,to2,br1,br2);	// Edit by Victor 08.12.14	
+							case 12:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);	// Edit by Victor 08.12.14	
+							case 13:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);	// Edit ************************** Wednesday, 25 March 2015 15:46:51
+							case 14:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2); // Edit ************************** Wednesday, 6 May 2015 10:24:06
+							case 15:NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);		//Edit-------------------Vitalii 13:08 09.12.2015
+							case 16:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);
+							case 17:NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);
+							case 25:NewINVilleroy(POr,i,found,INr,fr,to1,to2,br1,br2);// Edit ************************** Thursday, 19 May 2016 12:30:51
+							otherwise
+							  if (CompanyIsJWLikeCompany(currentcompany)) then begin
+									if(BOb.BackOrderMark==1)then begin
+										NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);
+									end;
+							    UpdateINOnly_NewINJW(POr,i,found,INr,fr,to1,to2,br1,br2);
+							  end;
+						end;
+						matrowget(POr,i,POrw);
+					end;
         end;
     end;
     //POrw.UnitCode = INr.UnitCode;
