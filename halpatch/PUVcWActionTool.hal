@@ -575,6 +575,346 @@ LAddFreightRow:;
 END;
 
 global
+updating function Integer PasteBigPUInVI(var record BigPUVc BPUp,var record VIVc VIp,string vecode,
+                                      Boolean itempricef,Boolean customsf,Boolean freightf,
+                                      Boolean cost1f,Boolean cost2f,Boolean cost3f,Boolean cost4f,Boolean cost5f)
+  begin
+  LongInt res;
+  Integer i,rwcnt,vatcnt;
+  row VIVc VIrw;
+  row BigPUVc BPUrw;  
+  Integer nrwcnt,virow;
+  record INVc INr;
+  val net,sum,t,q;
+  record CUVc VEr;
+  record APAccBlock APb;
+  record AccBlock ARb;
+  record CostAccBlock CAb;
+  record BaseCurBlock BCb;
+  record VITBlock VITb;
+  val from,to1,to2,base1,base2;
+  string 255 tstr,viitgroup;
+  val purowsum,puqinvd,puqord,powopuqtyinvd;
+  record POVc POr;
+  record POVc rPOr;
+  record POVc oldPOr;
+  row POVc POrw;
+  Boolean vifound;
+  record TaxMatrixVc TMr;
+  record SMVc VATr;
+  record CYBlock CYb;
+		
+  res = 0;
+  BlockLoad(BCb);
+  BlockLoad(ARb);
+  BlockLoad(APb);
+  BlockLoad(VITb);
+  BlockLoad(CYb);
+  BlockLoad(CAb);  
+  
+
+  VIp.POCQStatNr = -1;
+  //VIp.POSerNr = PUp.PONr;
+  VIp.TransDate = BPUp.TransDate;
+  VIp.InvDate = BPUp.TransDate;  
+  VIp.VECode = vecode;
+
+//  VIp.VEName = PUp.VEName;
+  VIVc_PasteVECode(VIp,0,true,false,vecode);
+  while (MatRowCnt(VIp)>0) begin
+    MatRowDelete(VIp,0);
+  end;
+  
+  
+  if(BCb.BaseCur1==VIp.CurncyCode)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 3 April 2018 11:56:21
+  	VIp.FrRate = blankval;
+    VIp.ToRateB1 = blankval;
+    VIp.ToRateB2 = blankval;
+    VIp.BaseRate1 = blankval;
+    VIp.BaseRate2 = blankval;
+  end;
+  
+  //VIp.CurncyCode = PUp.CurncyCode;// Edit ************************** BPI Ukraine - KramarAlexandr - Thursday, 4 January 2018 18:00:13
+  VIp.LangCode = VEr.LangCode;
+//  VIp.PRCode = VEr.VEInvoiceToCode;
+  VIp.VATNr = VEr.VATNr;
+  VIp.POCQStatNr = -1;
+  VIp.PayDeal = "";
+  //VIp.BranchID = PUp.BranchID;
+  //if (blank(VIp.BranchID)) then begin
+    //VIp.BranchID = POr.BranchID;
+  //end;
+
+  //VIp.NoTAXonVAT = PUp.NoTAXonVAT;
+  if ((APb.UpdBaseRate!=0) or (APb.UpdForeginRate!=0)) then begin
+    GetFullCurncyRate(VIp.CurncyCode,VIp.TransDate,from,to1,to2,base1,base2);
+    if (APb.UpdBaseRate!=0) then begin
+      VIp.BaseRate1 = base1;
+      VIp.BaseRate2 = base2;
+    end;
+    if (APb.UpdForeginRate!=0) then begin
+      VIp.FrRate = from;
+      VIp.ToRateB1 = to1;
+      VIp.ToRateB2 = to2;
+    end;
+  end;
+  //VIp.PayDeal = POr.PayDeal;
+  //if (blank(VIp.PayDeal)) then begin 
+    VIp.PayDeal = VEr.VEPayDeal;
+  //end;
+  VIp.ExportFlag = VEr.ExportFlag;
+  //if (APb.APUseObj!=0) then begin
+    //VIp.Objects = PUp.Objects;
+    //if (blank(VIp.Objects)) then begin
+      VIp.Objects = VEr.VEObjects;
+    //end;
+  //end;
+  //VIp.POCOSerNr = PUp.POCOSerNr;
+  rwcnt = MatRowCnt(BPUp);
+  nrwcnt = 0;
+  ClearRow(VIp,VIrw,1);
+  for (i=0;i<rwcnt;i=i+1) begin  
+    MatRowGet(BPUp,i,BPUrw);
+    ClearRow(VIp,VIrw,1);
+    //POQtyOrdered(PUp.PONr,PUrw.PONr,PUrw.OrdRow,puqord);
+    //vifound = POQtyInvoiced(PUp.SerNr,i,PUp.PONr,puqinvd,powopuqtyinvd);
+    /*if (vifound) then begin
+      q = BPUrw.Quant - puqinvd;
+    end else begin
+      if (VITb.VIBasedOnPU==0) then begin
+        vifound = POQtyInvoiced(PUp.PONr,PUrw.PONr,PUrw.OrdRow,puqinvd,powopuqtyinvd);
+        if (((PUrw.PONr>0) or (PUp.PONr>0)) and (PUrw.OrdRow>=0)) then begin
+          q = puqord - puqinvd;
+        end else begin
+          q = PUrw.Quant - puqinvd;
+        end;
+      end else begin
+        q = PUrw.Quant - puqinvd;
+      end;
+    end;
+    if (PUrw.Quant>q) then begin
+      PUrw.Quant = q;
+    end;*/
+    q = BPUrw.Quant;
+    VIrw.VATCode = BPUrw.VATCode;
+    /*if ((BPUrw.PONr>0) and (PUrw.OrdRow>=0)) then begin
+      //VIrw.PONr = PUrw.PONr;
+      //VIrw.OrdRow = PUrw.OrdRow;
+      /*if (vifound==false) and (VITb.VIBasedOnPU==0) then begin
+        rPOr.SerNr = PUrw.PONr;
+        if (ReadFirstMain(rPOr,1,true)) then begin 
+          if (PUrw.OrdRow>=0) then begin
+            MatRowGet(rPOr,PUrw.OrdRow,POrw);
+            if (q>(POrw.Quant-POrw.Invd)) then begin
+              q = POrw.Quant - POrw.Invd; //inst it done above ? 
+            end;
+          end;
+        end;
+      end;
+      if (q>0) then begin 
+        VIrw.Item = BPUrw.ArtCode;
+        VIrw.qty = q;
+        VIrw.PUNr = BPUp.SerNr;
+        VIrw.PURow = i;
+        VIrw.Objects = PUrw.Objects;
+        VIrw.SerialNr = PUrw.SerialNr;
+        //if (PUrw.PONr>0) then begin
+          //VIrw.PRCode = rPOr.PRCode;
+        //end else begin
+          //VIrw.PRCode = POr.PRCode;
+        //end;
+      end;
+    end else begin
+      if (vifound==false) and (VITb.VIBasedOnPU==0) then begin
+        if (PUrw.OrdRow>=0) then begin
+          MatRowGet(POr,PUrw.OrdRow,POrw);
+          if (q>(POrw.Quant-POrw.Invd)) then begin
+            q = POrw.Quant - POrw.Invd;
+          end;
+        end;
+      end;*/
+      if (q>0) then begin 
+        VIrw.OrdRow = -2; // Row comes from Order, but is not connected to a specific row 
+        if (VITb.TransferItems==2) or (BPUrw.StockType==kStockTypeConsigment) then begin
+          VIrw.Item = BPUrw.ArtCode;
+          VIrw.qty = q;
+          VIrw.OrdRow = BPUrw.OrdRow;
+          VIrw.PUNr = BPUp.SerNr;
+          VIrw.PURow = i;
+          VIrw.Objects = BPUrw.Objects;
+          VIrw.SerialNr = BPUrw.SerialNr;//??
+          //if (PUrw.PONr>0) then begin
+            //VIrw.PRCode = rPOr.PRCode;
+          //end else begin
+            //VIrw.PRCode = POr.PRCode;
+          //end;
+        end;
+        if (BPUrw.StockType!=kStockTypeConsigment) then begin
+          if (VITb.TransferItems==1) then begin
+            VIrw.OrdRow = BPUrw.OrdRow;
+            VIrw.Item = BPUrw.ArtCode;
+            //if (PUrw.PONr>0) then begin
+              //VIrw.PRCode = rPOr.PRCode;
+            //end else begin
+              //VIrw.PRCode = POr.PRCode;
+            //end;
+            VIrw.qty = q;
+            
+            purowsum = BPUrw.Quant*BPUrw.UPrice;
+            //if (PUrw.PONr>0) or (PUp.PONr>0) then begin
+              //purowsum = PUrw.Quant*PUrw.UPrice;
+            //end;
+            sum = FindVAT(VIrw.VATCode,purowsum,BPUp.InclVAT,BPUp.NoTAXonVAT);
+//TaxTemplateCode            
+            if (BPUp.InclVAT!=0) then begin
+              sum = purowsum - sum;
+            end else begin
+              sum = purowsum;
+            end;  
+
+            virow = VIPRRowExists(VIp,VIrw.PRCode,VIrw.Item,VIrw.VATCode,sum,q);
+            if (virow==-1) then begin
+              if (nonblank(VIrw.AccNumber)) then begin
+                VIrw.PUNr = BPUp.SerNr;
+              end;
+            end else begin
+              goto LSKIPROW;
+            end;
+          end;
+          if (VITb.TransferItems==0) then begin
+            VIrw.qty = q;
+            purowsum = BPUrw.Quant*BPUrw.UPrice;
+            //if (PUrw.PONr>0) or (PUp.PONr>0) then begin
+              //purowsum = PUrw.Quant*PUrw.UPrice;
+            //end;
+            sum = FindVAT(VIrw.VATCode,purowsum,BPUp.InclVAT,BPUp.NoTAXonVAT);
+            if (BPUp.InclVAT!=0) then begin
+              sum = purowsum - sum;
+            end else begin
+              sum = purowsum;
+            end;  
+            GetPurchaseControlAcc(BPUrw.CredAcc,CAb.ItemGroupAccounts,BPUrw.ArtCode,ARb,VEr.AccCost,VIrw.AccNumber,BPUp.VECode);
+            GetAccName(VIrw.AccNumber,VIrw.Comment,60);
+            virow = VIRowExists(CYb,VIp,VIrw.AccNumber,VIrw.VATCode,VIrw.TaxTemplateCode,sum,q);
+            if (virow==-1) then begin
+              if (nonblank(VIrw.AccNumber)) then begin 
+              	VIrw.Objects = NormalizeSetString(VIrw.Objects);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 3 April 2018 12:01:50
+                MatRowPut(VIp,nrwcnt,VIrw);
+                VIrw.PUNr = BPUp.SerNr;
+//                nrwcnt = nrwcnt + 1;
+              end;
+            end else begin
+              goto LSKIPROW;
+            end;
+          end;
+        end;
+      end;      
+    //end;
+//TaxTemplateCode    
+    VIrw.StockType = BPUrw.StockType;
+    if (blank(VIrw.VATCode)) then begin
+      VIrw.VATCode = VEr.VEVATCode;
+      VIrw.TaxTemplateCode = VEr.VETaxTemplateCode;
+    end;
+    if (blank(VIrw.VATCode)) then begin
+      GetItemVATCode(BPUrw.ArtCode,VEr.ExportFlag,tstr,false);
+      VIrw.VATCode = tstr;
+    end;  
+    GetPurchaseControlAcc(BPUrw.CredAcc,CAb.ItemGroupAccounts,BPUrw.ArtCode,ARb,VEr.AccCost,tstr,BPUp.VECode);
+    VIrw.AccNumber = tstr;
+    if (GetAccName(VIrw.AccNumber,tstr,60)) then begin end;
+    VIrw.Comment = tstr;    
+    purowsum = BPUrw.Quant*BPUrw.UPrice;
+    //if (PUrw.PONr>0) or (PUp.PONr>0) then begin
+      //purowsum = PUrw.Quant*PUrw.UPrice;
+    //end;
+    //if (pricelist=="FOB36" or pricelist=="FOBR") then begin //Edit***************************Sasha2,17:08 18.03.2016 {
+      //purowsum =  PUrw.Quant*PUrw.CostPrice;
+   // end; //Edit***************************Sasha2,17:08 18.03.2016 }
+    sum = FindVAT(VIrw.VATCode,purowsum,BPUp.InclVAT,BPUp.NoTAXonVAT);
+    if (BPUp.InclVAT!=0) then begin
+      sum = purowsum - sum;
+    end else begin
+      sum = purowsum;
+    end;  
+    VIrw.Sum = Round(sum,DefaultRoundMode);
+    net = net + VIrw.Sum;
+    //if (PUrw.PONr>0) then begin
+      //VIrw.PRCode = rPOr.PRCode;
+    //end else begin
+      //VIrw.PRCode = POr.PRCode;
+    //end;
+    
+    if (nonblank(VIrw.Item)) then begin
+      if (blank(viitgroup)) then begin
+        if (ReadFirstItem(VIrw.Item,INr,true,true)) then begin
+          viitgroup = INr.Group;
+        end;
+      end;    
+    end;
+    //if (VIrw.Sum!=0) then begin// Edit ************************** Friday, 10 November 2017 11:09:42
+      VIrw.TaxTemplateCode = BPUrw.TaxTemplateCode;
+      UnpackRowFieldMatrix(BPUrw,"TaxMatrix",TMr);
+      PackRowFieldMatrix(VIrw,"TaxMatrix",TMr);
+      RowCalculateTaxMatrix_VIVc(VIp,nrwcnt,VIrw,0);
+      
+      VIrw.Objects = NormalizeSetString(VIrw.Objects);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 3 April 2018 12:01:50
+      
+      MatRowPut(VIp,nrwcnt,VIrw);
+      nrwcnt = nrwcnt + 1;         
+    //end;
+LSKIPROW:; 
+
+ 
+  end; 
+//  PUAddFreightRow(PUp,VIp,ARb,APb,BCb,nrwcnt);//setting for this is needed and customs, and PO do not add freight nor Customs to INvoice
+  if (customsf) then begin
+    AddExtraCostRow(ARb,BCb,VIp,"customs",BPUp.CustomsCost,BPUp.InclVAT,VIp.ExportFlag,BPUp.ExportFlag,BPUp.FrRateT,VATr,vatcnt);
+  end;
+  if (freightf) then begin  
+    AddExtraCostRow(ARb,BCb,VIp,"freight",BPUp.ShipCost,BPUp.InclVAT,VIp.ExportFlag,BPUp.ExportFlag,BPUp.FrRateF,VATr,vatcnt);
+  end;
+  if (cost1f) then begin
+    AddExtraCostRow(ARb,BCb,VIp,"pucost1",BPUp.Cost1,BPUp.InclVAT,VIp.ExportFlag,BPUp.ExportFlag,"AZN",VATr,vatcnt);
+  end;
+  if (cost2f) then begin
+    AddExtraCostRow(ARb,BCb,VIp,"pucost2",BPUp.Cost2,BPUp.InclVAT,VIp.ExportFlag,BPUp.ExportFlag,"AZN",VATr,vatcnt);
+  end;
+  if (cost3f) then begin
+    AddExtraCostRow(ARb,BCb,VIp,"pucost3",BPUp.Cost3,BPUp.InclVAT,VIp.ExportFlag,BPUp.ExportFlag,"AZN",VATr,vatcnt);
+  end;
+  if (cost4f) then begin
+    AddExtraCostRow(ARb,BCb,VIp,"pucost4",BPUp.Cost4,BPUp.InclVAT,VIp.ExportFlag,BPUp.ExportFlag,"AZN",VATr,vatcnt);
+  end;
+  if (cost5f) then begin
+    AddExtraCostRow(ARb,BCb,VIp,"pucost5",BPUp.Cost5,BPUp.InclVAT,VIp.ExportFlag,BPUp.ExportFlag,"AZN",VATr,vatcnt);
+  end;
+  VICalcVals(VIp);
+  VISumup(VIp,t);
+  VIp.PayVal = -t;
+  VIp.PayVal = Round(VIp.PayVal,DefaultRoundMode);
+  VICalcEReb(VIp);
+  if (VITb.autoVATflag!=0) then begin
+    if (nonblank(VITb.autoVATVal)) then begin
+      if ((VIp.ExportFlag==0) or (VIp.ExportFlag==3) or (VIp.ExportFlag==4)) then begin
+        MulM4ProcVal(StringToVal(VITb.autoVATVal,M4Rate),VIp.PayVal,t);
+        RoundVATSum(VIp.CurncyCode,VIp.PayDeal,"VIVc",t);      
+        VIp.VATVal = t;
+      end;
+    end;
+  end;
+  if (nonblank(VEr.VEWarnText1)) then begin 
+    MessageBox(0,VEr.VEWarnText1);
+  end;
+  
+  //AddPrepaymentPORows(VIp,PUp.PONr);	//Edit----------------------Dima  11.03.2015
+    
+LPasteBigPUInVI:;
+  PasteBigPUInVI = res;
+  RETURN;
+END;
+
+global
 updating function LongInt PastePUInVI(record PUVc PUp,var record VIVc VIp,var string errmsg,
                                       Boolean customsf,Boolean freightf,Boolean cost1f,Boolean cost2f,
                                       Boolean cost3f,Boolean cost4f,Boolean cost5f,string pricelist) //Edit***************************Sasha2,17:13 18.03.2016
