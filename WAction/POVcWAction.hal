@@ -64,7 +64,7 @@ remote procedure PODClassWeightRow(var record POVc,integer);
 remote procedure PODClassCaratRow(var record POVc,integer);
 remote updating function Integer IDCreateVIFromPU(LongInt,record RcVc,var record VIVc,LongInt);
 external updating procedure VIFromPUDsm();
-external updating function Integer CreateVIFromBigPU(LongInt,record RcVc,var record VIVc);
+
 global
 procedure PrintOSDD(Integer wn,Boolean previewf)
 BEGIN
@@ -272,12 +272,12 @@ BEGIN
 										end;
 									end;
 									if(vecVI["Cost4"]) then begin 
-										if(AccB.PUCost4==VIrw.AccNumber) then begin
+										if(AccB.PUCost4==VIrw.AccNumber and VIr.VECode=="TMT_AKTSIZ") then begin
 											vecVItest["Cost4"] = true; 
 										end;
 									end;
 									if(vecVI["Cost5"]) then begin 
-										if(AccB.PUCost5==VIrw.AccNumber) then begin
+										if(AccB.PUCost5==VIrw.AccNumber and VIr.VECode=="TMT_AKTSIZ") then begin
 											vecVItest["Cost5"] = true;
 										end;
 									end;
@@ -885,57 +885,6 @@ BEGIN
   RETURN;
 END;
 */
-global
-updating procedure VIFromBigPUDExecute(record BigPUVc BPUr)
-begin
-  Integer nwn;
-  record RcVc RepSpec;
-	row BigPUVc BPUrw;
-  record POSettingBlock POSb;
-  record VIVc VIr;
-  Integer r,i;
-	vector boolean createdVI;
-
-  if (UserCanAction("POToVI",true)) then begin
-    BlockLoad(POSb);
-    ReportDefaults(RepSpec,"VIFromPOVClass");
-    RepSpec.repname = "";
-    RepSpec.flags[0] = 1;
-		RepSpec.FirstVer = BPUr.SerNr;
-    if (POSb.OpenCreateVIFromPO!=0) then begin
-      nwn = OpenWindow("VIFromPOVClass",1,0,"","",RepSpec);
-      PutWindowRecord(nwn,RepSpec);
-      SelectWindow(nwn);
-    end else begin
-      RepSpec.flags[0] = 1;
-      RepSpec.flags[1] = 1;
-      RepSpec.flags[2] = 1;
-      RepSpec.flags[3] = 1;
-      RepSpec.flags[4] = 1;
-      RepSpec.flags[5] = 1;
-      RepSpec.flags[6] = 1;
-      RepSpec.flags[7] = 1;
-      r = CreateVIFromPO(RepSpec.FirstVer,RepSpec,VIr);
-      if (r!=0) begin
-        if (r>0) then begin
-          MessageBox(r,"");
-        end else begin
-          Beep;
-        end;
-      end else begin
-        nwn = OpenWindow("VIDClass",1,0,"","",VIr);
-        VIOpenPrepExists(VIr.VECode);        
-        UpdateBrowses("POVc");    
-        if (DateWarned(VIr.TransDate,"VIVc")) then begin
-          MessageBox(1045,"");
-        end;
-      end;      
-    end;
-  end else begin
-    MessageBox(1274,StringFromStringSet(3,"POToVI"));
-  end;
-  return;
-end;
 
 global
 updating procedure VIFromPODExecute(LongInt PONr)
@@ -1130,31 +1079,12 @@ begin
 END;
 
 global
-updating procedure VIFromBigPODsm()
-begin
-  Integer wn;
-  record BigPUVc BPUr;
-	row BigPUVc BPUrw;
-	integer i;
-
-  wn = CurWindow;
-  if (WindowState(wn)==Rs_normal) then begin
-    GetWindowRecord(wn,BPUr);
-		VIFromBigPUDExecute(BPUr);
-  end else begin
-    Beep;
-  end;
-  RETURN;
-END;
-
-global
 updating function Boolean VIFromPOVClassOnOKWindow(Integer wn)
 BEGIN
   record RcVc RepSpec;
   record VIVc VIr;
-  Integer nwn,pos;
+  Integer nwn;
   Integer r;
-	string 255 PONr;
   
   GetWindowRecord(wn,RepSpec);
   if (blank(RepSpec.f1)) then begin
@@ -1167,11 +1097,7 @@ BEGIN
       end;
     end;
   end;
-		if(RepSpec.RegCode=="BigPU") then begin
-			r = CreateVIFromBigPU(RepSpec.FirstVer,RepSpec,VIr);
-		end else begin
-			r = CreateVIFromPO(RepSpec.FirstVer,RepSpec,VIr);
-		end;	
+  r = CreateVIFromPO(RepSpec.FirstVer,RepSpec,VIr);
   if (r!=0) begin
     if (r>0) then begin
       MessageBox(r,"");
