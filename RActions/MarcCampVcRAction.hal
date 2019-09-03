@@ -18,6 +18,7 @@ external function boolean CompanyIsJWLikeCompany(Integer);
 external updating procedure SendIVVisitToCRM(var record IVVc);
 remote updating procedure RDBDoBuildData(LongInt);
 external procedure ParsePhones(string, var integer, var array string); //edited by BPI
+external function string 255 StrReplace(string,string,string);
 
 									
 SetLangMode(LangRussian,"RUS",0);
@@ -2551,7 +2552,6 @@ return;
 end;
 
 
-
 global webpublic updating procedure WebUpdateVisit()
 begin
 	record CUVc CUr,oldCUr;
@@ -2562,14 +2562,47 @@ begin
 	date birthdate;
 	record PhoneVc Phoner;
 	boolean TrHs;
-	integer i,phonesqty;
+	integer i,phonesqty,compnr;
+	longint senr;
 	array string 255 phones;
+	string 100 invnr;
+	record IVVc IVr;
 	
 	logtext(0,"WebUpdateCustomer");
 	
 	webgetpostdata(getpost);
 	
-	
+	writeareatofile(getpost,"UpdateVisit/" & datetostring(currentdate,"DDMMYY") & TimeToString(currenttime,"HHMMSS",false) & ".txt",1);
+	if(getarealength(getpost)>20)then begin
+		jsresponse = ParseJSONArea(getpost);
+		invnr = MyJSGet(jsresponse,"visitId");
+		if(nonblank(invnr))then begin
+			invnr = StrReplace(invnr,"_",":");
+			compnr = stringtoint(firstinrange(invnr,2));
+			senr = stringtolongint(lastinrange(invnr,10));
+			if(compnr>0 and senr>0)then begin
+				setcompany(compnr,false);
+				IVr.SerNr = senr;
+				if(readfirstmain(IVr,1,true))then begin
+					//IVr.CRMCustomer = MyJSGet(jsresponse,"customerId");
+					//IVr.CRMCustomerName = MyJSGet(jsresponse,"customerName");
+					
+					//recordstore(IVr,true);
+					weboutstring("{\"result\":\"OK\"}");
+				end else begin
+					weboutstring("{\"result\":\"error\",\"error\":\"invoice not found\"}");
+				end;
+				logtext(0,"compnr " & compnr);
+				logtext(0,"senr " & senr);
+			end else begin
+				weboutstring("{\"result\":\"error\",\"error\":\"wrong visitId\"}");
+			end;
+		end else begin
+			weboutstring("{\"result\":\"error\",\"error\":\"blank visitId\"}");
+		end;
+	end else begin
+		weboutstring("{\"result\":\"error\",\"error\":\"no data\"}");
+	end;
 return;
 end;
 
