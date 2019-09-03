@@ -574,6 +574,343 @@ LAddFreightRow:;
   RETURN;
 END;
 
+
+
+
+
+
+global 
+updating procedure CreateVIFromBigPU(longint BigPUNr, record RcVc RepSpec,record VIVc VIp)
+begin
+record BigPUVc BPUr;
+record VIVc VIp2;
+record VIVc VIp3;
+record VIVc VIp4;
+record CUVc VEr;
+record APAccBlock APb;
+record AccBlock ARb;
+record CostAccBlock CAb;
+record BaseCurBlock BCb;
+record VITBlock VITb;
+record SMVc VATr;
+record CYBlock CYb;
+row VIVc VIrw;
+val t;
+string 255 tstr,newnr;
+Integer i,rwcnt,vatcnt;
+
+	BlockLoad(BCb);
+  BlockLoad(ARb);
+  BlockLoad(APb);
+  BlockLoad(VITb);
+  BlockLoad(CYb);
+  BlockLoad(CAb);  
+	VEr.Code = RepSpec.f1;
+  BPUr.SerNr = BigPUNr;
+	if(ReadFirstMain(BPUr,1,true)) then begin end;
+	if (ReadFirstMain(VEr,1,true)==false) then begin 
+    goto LPastebigPUInVI; 
+  end;
+	VIp.VECode = RepSpec.f1;
+	VIVc_PasteVECode(VIp,0,true,false,tstr);
+	while (MatRowCnt(VIp)>0) begin
+    MatRowDelete(VIp,0);
+  end;
+	RecordNew(VIp2);
+ if (RepSpec.flags[6]) then begin
+    //AddExtraCostRow(ARb,BCb,VIp,"customs",BPUr.CustomsCost,BPUr.InclVAT,VIp.ExportFlag,BPUr.ExportFlag,BPUr.CurncyCode,VATr,vatcnt);
+		VIrw.AccNumber = ARb.PUCustomsAcc;
+		if (GetAccName(VIrw.AccNumber,tstr,60)==false) then begin end;	
+		VIrw.Comment = tstr;		
+		VIrw.Sum = BPUr.CustomsCost;
+		if(BPUr.CurrencyT!="AZN" and nonblank(BPUr.CurrencyT)) then begin
+			if(BPUr.CurrencyT!=BPUr.CurrencyF) then begin
+				RecordNew(VIp4);
+				VIp4.VECode = RepSpec.f1;
+				VIVc_PasteVECode(VIp4,0,true,false,tstr);
+				while (MatRowCnt(VIp4)>0) begin
+					MatRowDelete(VIp4,0);
+				end;
+				VIp4.TransDate = BPUr.TransDate;
+				VIp4.CurncyCode = BPUr.CurrencyT;
+				VIp4.FrRate =  BPUr.FrRateT;
+				VIp4.ToRateB1 =  BPUr.FrRateT;
+				VIp4.BigPUNr = BPUr.SerNr;
+				VIp4.ExtraCostObj = "customs";
+				MatRowPut(VIp4,MatRowCnt(VIp4),VIrw);
+				VICalcVals(VIp4);
+				VISumup(VIp4,t);
+				VIp4.PayVal = -t;
+				VIp4.PayVal = Round(VIp4.PayVal,DefaultRoundMode);
+				VICalcEReb(VIp4);
+				VIp4.SerNr = NextSerNr("VIVc",VIp4.TransDate,newnr,false,"");
+				RecordStore(VIp4,false);
+				Createrecordlink(BPUr,CurrentCompany,VIp4,CurrentCompany);
+				Createrecordlink(VIp4,CurrentCompany,BPUr,CurrentCompany);
+			end else begin 
+				VIp2.VECode = RepSpec.f1;
+				VIVc_PasteVECode(VIp2,0,true,false,tstr);
+				while (MatRowCnt(VIp2)>0) begin
+					MatRowDelete(VIp2,0);
+				end;
+				VIp2.TransDate = BPUr.TransDate;
+				VIp2.CurncyCode = BPUr.CurrencyT;
+				VIp2.FrRate =  BPUr.FrRateT;
+				VIp2.ToRateB1 =  BPUr.FrRateT;
+				MatRowPut(VIp2,MatRowCnt(VIp2),VIrw);
+				VICalcVals(VIp2);
+				VISumup(VIp2,t);
+				VIp2.BigPUNr = BPUr.SerNr;
+				VIp2.ExtraCostObj = "customs";
+				VIp2.PayVal = -t;
+				VIp2.PayVal = Round(VIp2.PayVal,DefaultRoundMode);
+				VICalcEReb(VIp2);
+				VIp2.SerNr = NextSerNr("VIVc",VIp2.TransDate,newnr,false,"");
+				RecordStore(VIp2,false);
+				Createrecordlink(BPUr,CurrentCompany,VIp2,CurrentCompany);
+				Createrecordlink(VIp2,CurrentCompany,BPUr,CurrentCompany);
+			end;
+		end else begin	
+			MatRowPut(VIp,MatRowCnt(VIp),VIrw);
+			VIp.BigPUNr = BPUr.SerNr;
+			VIp.ExtraCostObj = "customs";
+		end;
+  end;
+  if (RepSpec.flags[7]) then begin  			
+			//AddExtraCostRow(ARb,BCb,VIp,"freight",BPUr.ShipCost,BPUr.InclVAT,VIp.ExportFlag,BPUr.ExportFlag,BPUr.CurncyCode,VATr,vatcnt);
+			 VIrw.AccNumber = ARb.PUFreightAcc;
+			 VIrw.Sum = BPUr.ShipCost;
+		if(BPUr.CurrencyF!="AZN" and nonblank(BPUr.CurrencyF)) then begin
+			if(BPUr.CurrencyT!=BPUr.CurrencyF) then begin
+				RecordNew(VIp3);
+				VIp3.VECode = RepSpec.f1;
+				VIVc_PasteVECode(VIp3,0,true,false,tstr);
+				while (MatRowCnt(VIp3)>0) begin
+					MatRowDelete(VIp3,0);
+				end;
+				VIp3.TransDate = BPUr.TransDate;
+				VIp3.CurncyCode = BPUr.CurrencyF;
+				VIp3.FrRate =  BPUr.FrRateF;
+				VIp3.ToRateB1 =  BPUr.FrRateF;
+				MatRowPut(VIp3,MatRowCnt(VIp3),VIrw);
+				VICalcVals(VIp3);
+				VISumup(VIp3,t);
+				VIp3.BigPUNr = BPUr.SerNr;
+				VIp3.ExtraCostObj = "freight";
+				VIp3.PayVal = -t;
+				VIp3.PayVal = Round(VIp3.PayVal,DefaultRoundMode);
+				VICalcEReb(VIp3);
+				VIp3.SerNr = NextSerNr("VIVc",VIp3.TransDate,newnr,false,"");
+				RecordStore(VIp3,false);
+				Createrecordlink(BPUr,CurrentCompany,VIp3,CurrentCompany);
+				Createrecordlink(VIp3,CurrentCompany,BPUr,CurrentCompany);
+			end else begin 
+				VIp2.VECode = RepSpec.f1;
+				VIp2.TransDate = BPUr.TransDate;
+				VIp2.CurncyCode = BPUr.CurrencyF;
+				MatRowPut(VIp2,MatRowCnt(VIp2),VIrw);
+				VICalcVals(VIp2);
+				VISumup(VIp2,t);
+				VIp2.BigPUNr = BPUr.SerNr;
+				if(Blank(VIp2.ExtraCostObj)) then begin
+					VIp2.ExtraCostObj = "freight";
+				end else begin
+					VIp2.ExtraCostObj = VIp2.ExtraCostObj & "," & "freight";
+				end;
+				VIp2.PayVal = -t;
+				VIp2.PayVal = Round(VIp2.PayVal,DefaultRoundMode);
+				VICalcEReb(VIp2);
+				RecordStore(VIp2,false);
+			end;
+		end else begin	
+			MatRowPut(VIp,MatRowCnt(VIp),VIrw);
+			if(Blank(VIp.ExtraCostObj)) then begin
+				VIp.ExtraCostObj = "freight";
+			end else begin
+				VIp.ExtraCostObj = VIp.ExtraCostObj & "," & "freight";
+			end;
+		end;
+  end;
+  if (RepSpec.flags[1]) then begin
+    //AddExtraCostRow(ARb,BCb,VIp,"pucost1",BPUr.Cost1,BPUr.InclVAT,VIp.ExportFlag,BPUr.ExportFlag,BPUr.CurncyCode,VATr,vatcnt);
+		VIrw.AccNumber = ARb.PUCost1;
+		if (GetAccName(VIrw.AccNumber,tstr,60)==false) then begin end;	
+		VIrw.Comment = tstr;
+		VIrw.Sum = BPUr.Cost1;
+			if(Blank(VIp.ExtraCostObj)) then begin
+				VIp.ExtraCostObj = "cost1";
+			end else begin
+				VIp.ExtraCostObj = VIp.ExtraCostObj & "," & "cost1";
+			end;
+		MatRowPut(VIp,MatRowCnt(VIp),VIrw);
+  end;
+  if (RepSpec.flags[2]) then begin
+    //AddExtraCostRow(ARb,BCb,VIp,"pucost2",BPUr.Cost2,BPUr.InclVAT,VIp.ExportFlag,BPUr.ExportFlag,BPUr.CurncyCode,VATr,vatcnt);
+		VIrw.AccNumber = ARb.PUCost2;
+		if (GetAccName(VIrw.AccNumber,tstr,60)==false) then begin end;	
+		VIrw.Comment = tstr;
+		VIrw.Sum = BPUr.Cost2;
+			if(Blank(VIp.ExtraCostObj)) then begin
+				VIp.ExtraCostObj = "cost2";
+			end else begin
+				VIp.ExtraCostObj = VIp.ExtraCostObj & "," & "cost2";
+			end;
+		MatRowPut(VIp,MatRowCnt(VIp),VIrw);
+  end;
+  if (RepSpec.flags[3]) then begin
+    //AddExtraCostRow(ARb,BCb,VIp,"pucost3",BPUr.Cost3,BPUr.InclVAT,VIp.ExportFlag,BPUr.ExportFlag,BPUr.CurncyCode,VATr,vatcnt);
+		VIrw.AccNumber = ARb.PUCost3;
+		if (GetAccName(VIrw.AccNumber,tstr,60)==false) then begin end;	
+		VIrw.Comment = tstr;
+		VIrw.Sum = BPUr.Cost3;
+			if(Blank(VIp.ExtraCostObj)) then begin
+				VIp.ExtraCostObj = "cost3";
+			end else begin
+				VIp.ExtraCostObj = VIp.ExtraCostObj & "," & "cost3";
+			end;
+		MatRowPut(VIp,MatRowCnt(VIp),VIrw);
+  end;
+  if (RepSpec.flags[4]) then begin
+    //AddExtraCostRow(ARb,BCb,VIp,"pucost4",BPUr.Cost4,BPUr.InclVAT,VIp.ExportFlag,BPUr.ExportFlag,BPUr.CurncyCode,VATr,vatcnt);
+		VIrw.AccNumber = ARb.PUCost4;
+		if (GetAccName(VIrw.AccNumber,tstr,60)==false) then begin end;	
+		VIrw.Comment = tstr;
+		VIrw.Sum = BPUr.Cost4;
+			if(Blank(VIp.ExtraCostObj)) then begin
+				VIp.ExtraCostObj = "cost4";
+			end else begin
+				VIp.ExtraCostObj = VIp.ExtraCostObj & "," & "cost4";
+			end;
+		MatRowPut(VIp,MatRowCnt(VIp),VIrw);
+  end;
+  if (RepSpec.flags[5]) then begin
+    //AddExtraCostRow(ARb,BCb,VIp,"pucost5",BPUr.Cost5,BPUr.InclVAT,VIp.ExportFlag,BPUr.ExportFlag,BPUr.CurncyCode,VATr,vatcnt);
+		VIrw.AccNumber = ARb.PUCost5;
+		if (GetAccName(VIrw.AccNumber,tstr,60)==false) then begin end;	
+		VIrw.Comment = tstr;
+		VIrw.Sum = BPUr.Cost5;
+			if(Blank(VIp.ExtraCostObj)) then begin
+				VIp.ExtraCostObj = "cost5";
+			end else begin
+				VIp.ExtraCostObj = VIp.ExtraCostObj & "," & "cost5";
+			end;
+		MatRowPut(VIp,MatRowCnt(VIp),VIrw);
+  end;
+	VIp.BigPUNr = BPUr.SerNr;
+	VIp.TransDate = BPUr.TransDate;
+	VIp.CurncyCode = "AZN";
+  VICalcVals(VIp);
+  VISumup(VIp,t);
+  VIp.PayVal = -t;
+  VIp.PayVal = Round(VIp.PayVal,DefaultRoundMode);
+  VICalcEReb(VIp);
+  if (VITb.autoVATflag!=0) then begin
+    if (nonblank(VITb.autoVATVal)) then begin
+      if ((VIp.ExportFlag==0) or (VIp.ExportFlag==3) or (VIp.ExportFlag==4)) then begin
+        MulM4ProcVal(StringToVal(VITb.autoVATVal,M4Rate),VIp.PayVal,t);
+        RoundVATSum(VIp.CurncyCode,VIp.PayDeal,"VIVc",t);      
+        VIp.VATVal = t;
+      end;
+    end;
+  end;
+	VIp.SerNr = NextSerNr("VIVc",VIp.TransDate,newnr,false,"");
+	RecordStore(VIp,false);
+	Createrecordlink(BPUr,CurrentCompany,VIp,CurrentCompany);
+	Createrecordlink(VIp,CurrentCompany,BPUr,CurrentCompany);
+	LPastebigPUInVI:;
+	return;
+end;
+
+global
+procedure VIFromBigPUVClassReportDefaults(Integer wn)
+BEGIN
+  record RcVc RepSpec;
+  
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  ReportDefaults(RepSpec,"VIFromBigPUVClass");  
+  PutWindowRecord(wn,RepSpec);
+  SelectWindow(wn);
+  RETURN;
+END;
+
+global
+updating function Boolean VIFromBigPUVClassOnOKWindow(Integer wn)
+BEGIN
+  record RcVc RepSpec;
+  record VIVc VIr;
+  Integer nwn;
+  Integer r;
+  logtext(0,"begin");
+  GetWindowRecord(wn,RepSpec);
+  if (blank(RepSpec.f1)) then begin
+    //if (RepSpec.flags[0]==0) then begin
+//      if ((RepSpec.flags[1]!=0) or (RepSpec.flags[2]!=0) or (RepSpec.flags[3]!=0) or (RepSpec.flags[4]!=0) or (RepSpec.flags[5]!=0) or (RepSpec.flags[6]!=0) or (RepSpec.flags[7]!=0)) then begin
+      if ((RepSpec.flags[6]!=0) or (RepSpec.flags[7]!=0)) then begin
+        MessageBox(0,USetStr(10426));
+        WindowFieldGoto(wn,RepSpec,-1,"f1",true);        
+        goto LVIFromBigPUVClassOnOKWindow;
+      end;
+    //end;
+  end;
+	RecordNew(VIr);
+  CreateVIFromBigPU(RepSpec.FirstVer,RepSpec,VIr);
+  CloseWindow(wn);
+LVIFromBigPUVClassOnOKWindow:;  
+  VIFromBigPUVClassOnOKWindow = false;
+  RETURN;
+END;
+
+global
+updating procedure VIFromBigPUDExecute(LongInt PONr)
+begin
+  Integer nwn;
+  record RcVc RepSpec;
+  record POSettingBlock POSb;
+  record VIVc VIr;
+  Integer r;
+  if (UserCanAction("POToVI",true)) then begin
+    BlockLoad(POSb);
+    ReportDefaults(RepSpec,"VIFromBigPUVClass");
+    RepSpec.repname = "";
+    RepSpec.FirstVer = PONr;
+    if (POSb.OpenCreateVIFromPO!=0) then begin
+      nwn = OpenWindow("VIFromBigPUVClass",1,0,"","",RepSpec);
+      PutWindowRecord(nwn,RepSpec);
+      SelectWindow(nwn);
+    end else begin
+      //RepSpec.flags[0] = 1;
+      RepSpec.flags[1] = 1;
+      RepSpec.flags[2] = 1;
+      RepSpec.flags[3] = 1;
+      RepSpec.flags[4] = 1;
+      RepSpec.flags[5] = 1;
+      RepSpec.flags[6] = 1;
+      RepSpec.flags[7] = 1;
+      CreateVIFromBigPU(RepSpec.FirstVer,RepSpec,VIr);
+    end;
+  end else begin
+    MessageBox(1274,StringFromStringSet(3,"POToVI"));
+  end;
+  return;
+end;
+
+global
+updating procedure VIFromBigPUDsm()
+begin
+  Integer wn;
+  record BigPUVc BPUr;
+
+  wn = CurWindow;
+  if (WindowState(wn)==Rs_normal) then begin
+    GetWindowRecord(wn,BPUr);
+    VIFromBigPUDExecute(BPUr.SerNr);
+  end else begin
+    Beep;
+  end;
+  RETURN;
+END;
+
 global
 updating function LongInt PastePUInVI(record PUVc PUp,var record VIVc VIp,var string errmsg,
                                       Boolean customsf,Boolean freightf,Boolean cost1f,Boolean cost2f,
@@ -616,6 +953,7 @@ begin
     res = 1434;
     goto LPastePUInVI; 
   end;
+
   if (PUp.PONr>0) then begin
     POr.SerNr = PUp.PONr;
     if (ReadFirstMain(POr,1,true)==false) then begin 
