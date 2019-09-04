@@ -64,7 +64,9 @@ remote procedure PODClassWeightRow(var record POVc,integer);
 remote procedure PODClassCaratRow(var record POVc,integer);
 remote updating function Integer IDCreateVIFromPU(LongInt,record RcVc,var record VIVc,LongInt);
 external updating procedure VIFromPUDsm();
+remote procedure CheckVIForPU(LongInt,vector boolean,var vector boolean);
 
+SetLangMode(LangRussian,"RUS",0);
 global
 procedure PrintOSDD(Integer wn,Boolean previewf)
 BEGIN
@@ -198,6 +200,7 @@ BEGIN
 	vector boolean vecVI;
 	vector boolean vecVItest;
 	array string 255 tags;
+	string 255 warning;
 	BlockLoad(CCB);
 	BlockLoad(AccB);
 	
@@ -238,49 +241,9 @@ BEGIN
 						if(nonblank(POr.Cost3) and POr.Cost3!=0) then begin vecVI["Cost3"] = true; vecVItest["Cost3"] = false;  end;
 						if(nonblank(POr.Cost4) and POr.Cost4!=0) then begin vecVI["Cost4"] = true; vecVItest["Cost4"] = false;  end;
 						if(nonblank(POr.Cost5) and POr.Cost5!=0) then begin vecVI["Cost5"] = true; vecVItest["Cost5"] = false;  end;
-						VIr.POSerNr = POr.SerNr;
-						TsTr = true;
+						
 						getvectortags(vecVItest,tags);
-						while(LoopKey("POSerNr",VIr,1,TsTr)) begin
-							if(VIr.POSerNr!=POr.SerNr) then begin TsTr = false; end;
-							if(TsTr) then begin
-								if(vecVI["CustomsCost"]) then begin 
-									if(SetInSet("customs",VIr.ExtraCostObj)or VIr.ExtraCostObj=="customs") then begin
-										vecVItest["CustomsCost"] = true;
-									end;
-								end;
-								if(vecVI["ShipCost"]) then begin 
-									if(SetInSet("freight",VIr.ExtraCostObj)or VIr.ExtraCostObj=="freight") then begin
-										vecVItest["ShipCost"] = true;
-									end;
-								end;
-								if(vecVI["Cost1"]) then begin 
-									if(SetInSet("cost1",VIr.ExtraCostObj) or VIr.ExtraCostObj=="cost1") then begin
-										vecVItest["Cost1"] = true;
-									end;
-								end;
-								if(vecVI["Cost2"]) then begin 
-									if(SetInSet("cost2",VIr.ExtraCostObj)or VIr.ExtraCostObj=="cost2") then begin
-										vecVItest["Cost2"] = true; 
-									end;
-								end;
-								if(vecVI["Cost3"]) then begin 
-									if(SetInSet("cost3",VIr.ExtraCostObj)or VIr.ExtraCostObj=="cost3") then begin
-										vecVItest["Cost3"] = true;
-									end;
-								end;
-								if(vecVI["Cost4"]) then begin 
-									if(SetInSet("cost4",VIr.ExtraCostObj)or VIr.ExtraCostObj=="cost4") then begin
-										vecVItest["Cost4"] = true; 
-									end;
-								end;
-								if(vecVI["Cost5"]) then begin 
-									if(SetInSet("cost5",VIr.ExtraCostObj)or VIr.ExtraCostObj=="cost5") then begin
-										vecVItest["Cost5"] = true;
-									end;
-								end;
-							end;
-						end;
+						CheckVIForPU(POr.SerNr,vecVI,vecVItest);
 						ResetLoop(VIr);
 						// if(currentcompany!=28)then begin
 							// if(POr.ShipCostOKFlag!=0) then begin
@@ -315,11 +278,28 @@ BEGIN
 								for(i=0;i<tags.length;i=i+1) begin
 									if(vecVItest[tags[i]]==false) then begin
 										testVI = false;
+										testf1 = false;
+										switch(tags[i]) begin
+											case "CustomsCost": if(blank(warning)) then begin warning = "Таможня";
+												end else begin warning = warning & ",Таможня"; end;
+											case "ShipCost": if(blank(warning)) then begin warning = "Фрахт";
+												end else begin warning = warning & ",Фрахт"; end;
+											case "Cost1": if(blank(warning)) then begin warning = "Накл. расходы 1";
+												end else begin warning = warning & ",Накл. расходы 1"; end;
+											case "Cost2": if(blank(warning)) then begin warning = "Накл. расходы 2";
+												end else begin warning = warning & ",Накл. расходы 2"; end;
+											case "Cost3": if(blank(warning)) then begin warning = "Накл. расходы 3";
+												end else begin warning = warning & ",Накл. расходы 3"; end;
+											case "Cost4": if(blank(warning)) then begin warning = "Накл. расходы 4";
+												end else begin warning = warning & ",Накл. расходы 4"; end;
+											case "Cost5": if(blank(warning)) then begin warning = "Накл. расходы 5";
+												end else begin warning = warning & ",Накл. расходы 5"; end;
+										end;		
 									end;
 								end;
 							end;
-						// end;
-						if(!testVI) then begin testf1 = false;  MessageBox(36236,""); end;
+							if(!testVI) then begin MessageBox(36236,warning); end; 
+						// end;  MessageBox(36236,""); end;
 					end;	
 					if(testf1) then begin
 						r = RecordAction_raPastePOInPU(POr,PUr);
