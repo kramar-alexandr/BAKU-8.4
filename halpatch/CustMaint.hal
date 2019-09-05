@@ -3,6 +3,9 @@ external function string 60 AddObjectToObjectList(string,string);
 external procedure NextM4SerialNumber(string,var string);
 external procedure ExtractObj(string,var Integer,var string);
 external procedure NormalizeObjstr(var string);
+external function boolean CompanyIsJWLikeCompany(Integer);
+external function string 255 StrReplace(string,string,string);
+
 
 //external procedure MyExtractObj(string,var Integer,var string);
 
@@ -1502,6 +1505,242 @@ begin
 				weboutstring("Custcomer code:" & CUr.Code & "&nbsp| name &nbsp" & CUr.Name & "&nbsp| Phone &nbsp" & fixPhone(CUr.Phone) & "&nbsp|&nbspDuplicates: " & dupcust);
 				weboutstring("<BR>");
 			end;
+		end;
+	end;
+	
+return;
+end;
+
+global updating procedure ChangeAllBrandBPIBrandMn(record RcVc RepSpec)
+begin
+record INVc INr,oldINr;
+integer i,curcomp,cnt,j,k;
+record GlobalItemVc GIr,oldGIr;
+string 100 item,oldBrand,newBrand,code,glCode;
+record BPIBrandVc BPIBrandr;
+record BPIBrandVc BPIBrand1r;
+array string 100 abrand,anewbrand;
+boolean tochan;
+
+
+	curcomp = currentcompany;
+	logtext(0,"start");
+
+		cnt = cnt + 1;
+		oldBrand = RepSpec.f1;
+		newBrand = RepSpec.f2;
+		BPIBrandr.Code = oldBrand;
+		logtext(0,"oldBrand " & oldBrand);
+		logtext(0,"newBrand " & newBrand);
+		if(readfirstkey("Code",BPIBrandr,1,true))then begin
+			if(uppercase(oldBrand)==uppercase(BPIBrandr.Code))then begin		
+				BPIBrand1r.Code = newBrand;
+				if(readfirstkey("Code",BPIBrand1r,1,true))then begin						
+					for(i=1;i<33; i=i+1) begin
+						if((!CompanyIsJWLikeCompany(i) or i==3) and i!=10) then begin
+							SetCompany(i,false);
+							resetloop(INr);
+							INr.Code = "";
+							while(LoopMain(INr,1,true))begin
+								if(nonblank(INr.BPIBrand))then begin
+									if(INr.BPIBrand==BPIBrandr.Code)then begin;
+										tochan = true;
+										logtext(0,INr.Code & " " & INr.BPIBrand & " " & INr.GlobalArtCode);
+										if(setinset(INr.BPIBrand,INr.DispGroups))then begin										
+											INr.DispGroups = StrReplace(INr.DispGroups,INr.BPIBrand,BPIBrand1r.Code);
+										end;
+										glCode = INr.GlobalArtCode;
+										INr.GlobalArtCode = "";
+										INr.BPIBrand = BPIBrand1r.Code;
+										GIr.Code = glCode;										
+										if(ReadFirstMain(GIr,1,true)) then begin
+											logtext(0,"del" & GIr.Code);
+											oldGIr.Code = INr.Code & "_" & INr.BPIBrand;
+											if(readfirstmain(oldGIr,1,true))then begin
+												tochan = false;
+												logtext(0,"Failed to change brand for " & INr.Code & " in company " & currentcompany);
+											end else begin
+												recordcopy(oldGIr,GIr);
+											 GIr.Code = INr.BPIBrand & "_" & INr.Code;
+											 INr.GlobalArtCode = GIr.Code;
+											 GIr.Brand = BPIBrand1r.Name;
+											 GIr.BPIBrand = BPIBrand1r.Code;
+											 if(nonblank(GIr.MainCode))then begin
+											 	if(left(GIr.MainCode,8)!=left(GIr.Code,8))then begin
+											 		GIr.MainCode = GIr.BPIBrand & right(GIr.MainCode,len(GIr.MainCode)-8);
+											 	end;
+											 end;
+											 GIr.Classification = INr.DispGroups;
+											 recordupdate(oldGIr,GIr,false);
+											end;
+										end;
+										if(tochan)then begin
+											logtext(0,"Brand Changed for item " & INr.Code & " in company " & currentcompany);
+											if(recordStore(INr,true)) then begin  end;
+										end;
+									end; 
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+	SetCompany(curcomp,false);
+	
+logtext(0,"end");
+return;
+end;
+
+updating procedure LoopItemsInOtherCom(record INVc INr,integer orgcomp)
+begin
+	record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  integer i,rwcnt;
+  record INVc IN2r;
+  boolean diff;
+  
+  BlockLoad(Compb);
+  rwcnt = MatRowCnt(Compb);
+  for (i=0;i<rwcnt;i=i+1) begin
+    MatRowGet(Compb,i,Comprw);
+  	if((i+1)!=orgcomp)then begin
+  		setcompany(i+1,false);
+  		IN2r.Code = INr.Code;
+  		if(readfirstmain(IN2r,1,true))then begin
+  			
+  			diff = false;
+  			if(IN2r.BPIBrand==INr.BPIBrand)then begin
+					if(IN2r.BPICollection!=INr.BPICollection)then begin diff = true; logtext(0,"BPICollection"); end;
+					if(IN2r.BPIGroup!=INr.BPIGroup)then begin diff = true; logtext(0,"BPIGroup"); end;
+					if(IN2r.BPISubGroup!=INr.BPISubGroup)then begin diff = true; logtext(0,"BPISubGroup"); end;
+					if(IN2r.BPICategory!=INr.BPICategory)then begin diff = true; logtext(0,"BPICategory"); end;
+					if(IN2r.BPIMaterial!=INr.BPIMaterial)then begin diff = true; logtext(0,"BPIMaterial"); end;
+					if(IN2r.BPIColor!=INr.BPIColor)then begin diff = true; logtext(0,"BPIColor"); end;
+					if(IN2r.BPIShape!=INr.BPIShape)then begin diff = true; logtext(0,"BPIShape"); end;
+					if(IN2r.BPISize!=INr.BPISize)then begin diff = true; logtext(0,"BPISize"); end;
+					if(IN2r.BPIUse!=INr.BPIUse)then begin diff = true; logtext(0,"BPIUse"); end;
+					if(IN2r.BPISex!=INr.BPISex)then begin diff = true; logtext(0,"BPISex"); end;
+					if(IN2r.BPIPlating!=INr.BPIPlating)then begin diff = true; logtext(0,"BPIPlating"); end;
+					if(IN2r.BPIClarity!=INr.BPIClarity)then begin diff = true; logtext(0,"BPIClarity"); end;
+					if(IN2r.BPIWeight!=INr.BPIWeight)then begin diff = true; logtext(0,"BPIWeight"); end;
+					if(IN2r.BPICut!=INr.BPICut)then begin diff = true; logtext(0,"BPICut"); end;
+					if(IN2r.BPIStone!=INr.BPIStone)then begin diff = true; logtext(0,"BPIStone"); end;
+					if(IN2r.BPIStrap!=INr.BPIStrap)then begin diff = true; logtext(0,"BPIStrap"); end;
+					if(IN2r.BPIOdour!=INr.BPIOdour)then begin diff = true; logtext(0,"BPIOdour"); end;
+  				
+  				if(diff)then begin
+						logtext(0,"LoopItemsInOtherCom " & currentcompany & "  " & IN2r.Code);
+						IN2r.BPICollection = INr.BPICollection;
+						IN2r.BPIGroup = INr.BPIGroup;
+						IN2r.BPISubGroup = INr.BPISubGroup;
+						IN2r.BPICategory = INr.BPICategory;
+						IN2r.BPIMaterial = INr.BPIMaterial;
+						IN2r.BPIColor = INr.BPIColor;
+						IN2r.BPIShape = INr.BPIShape;
+						IN2r.BPISize = INr.BPISize;
+						IN2r.BPIUse = INr.BPIUse;
+						IN2r.BPISex = INr.BPISex;
+						IN2r.BPIPlating = INr.BPIPlating;
+						IN2r.BPIClarity = INr.BPIClarity;
+						IN2r.BPIWeight = INr.BPIWeight;
+						IN2r.BPICut = INr.BPICut;
+						IN2r.BPIStone = INr.BPIStone;
+						IN2r.BPIStrap = INr.BPIStrap;
+						IN2r.BPIOdour = INr.BPIOdour;
+						IN2r.Name = INr.Name;
+						recordstore(IN2r,true);
+  				end;
+  				
+  			end;
+  		end;
+  	end;
+  end;
+  
+  resetcompany(orgcomp);
+
+return;
+end;
+
+global webpublic updating  procedure offUpdateAllBenchmarkingInItemMn()
+begin
+	record IVVc IVr,IVr1;
+	row IVVc IVrw;
+	integer i,mtrw,curcomp;
+	record INVc INr;
+	
+	curcomp = 6;
+	
+	setcompany(curcomp,false);
+	IVr.SerNr = 4826;
+	IVr1.SerNr = 4827;
+	
+	readfirstmain(IVr,1,true);
+	readfirstmain(IVr1,1,true);
+	
+	mtrw = matrowcnt(IVr);
+	for(i=0;i<mtrw;i=i+1)begin
+		matrowget(IVr,i,IVrw);
+		INr.Code = IVrw.ArtCode;
+		if(readfirstmain(INr,1,true))then begin
+			LoopItemsInOtherCom(INr,curcomp);
+		end;
+	end;
+	
+	mtrw = matrowcnt(IVr1);
+	for(i=0;i<mtrw;i=i+1)begin
+		matrowget(IVr1,i,IVrw);
+		INr.Code = IVrw.ArtCode;
+		if(readfirstmain(INr,1,true))then begin
+			LoopItemsInOtherCom(INr,curcomp);
+		end;
+	end;
+	
+	IVr.SerNr = 4828;
+	IVr1.SerNr = 4829;
+	
+	readfirstmain(IVr,1,true);
+	readfirstmain(IVr1,1,true);
+	
+	mtrw = matrowcnt(IVr);
+	for(i=0;i<mtrw;i=i+1)begin
+		matrowget(IVr,i,IVrw);
+		INr.Code = IVrw.ArtCode;
+		if(readfirstmain(INr,1,true))then begin
+			LoopItemsInOtherCom(INr,curcomp);
+		end;
+	end;
+	
+	mtrw = matrowcnt(IVr1);
+	for(i=0;i<mtrw;i=i+1)begin
+		matrowget(IVr1,i,IVrw);
+		INr.Code = IVrw.ArtCode;
+		if(readfirstmain(INr,1,true))then begin
+			LoopItemsInOtherCom(INr,curcomp);
+		end;
+	end;
+	
+	IVr.SerNr = 4830;
+	IVr1.SerNr = 4831;
+	
+	readfirstmain(IVr,1,true);
+	readfirstmain(IVr1,1,true);
+	
+	mtrw = matrowcnt(IVr);
+	for(i=0;i<mtrw;i=i+1)begin
+		matrowget(IVr,i,IVrw);
+		INr.Code = IVrw.ArtCode;
+		if(readfirstmain(INr,1,true))then begin
+			LoopItemsInOtherCom(INr,curcomp);
+		end;
+	end;
+	
+	mtrw = matrowcnt(IVr1);
+	for(i=0;i<mtrw;i=i+1)begin
+		matrowget(IVr1,i,IVrw);
+		INr.Code = IVrw.ArtCode;
+		if(readfirstmain(INr,1,true))then begin
+			LoopItemsInOtherCom(INr,curcomp);
 		end;
 	end;
 	
