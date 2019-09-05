@@ -1559,6 +1559,321 @@ begin
   return;
 end;
 
+
+
+
+
+updating procedure RecalculatePricesfromConsComp(record INVc INr)
+begin
+  record ORVc ORr;
+  record ORVc oldORr;
+  row ORVc ORrw;
+  Boolean found,updf,ractiontrigersf;
+  string 255 index;
+  Integer i,rwcnt, mtrw1, j;
+  record MainStockBlock MSb;
+  Boolean testf;
+	record INVc LocalINr, OldINr, prevINr;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBrw;
+	integer mtrw, pos, Oldcomp;
+	record NewClassifChBlock NCb;
+	record DateRnBlock DRB;
+	record BPIBrandVc Brndr;
+	string 255 tstr, brndname;
+	boolean TrHs;
+	record DIVc DIr;
+	record ConsItemVc ConsIr,CIr;
+	record PLvc PLr;
+	LongInt res;
+  string 255 autmsgfunciontags;
+  record RcVc RepSpec;// Edit ************************** Thursday, 21 February 2013 09:43:50
+  record PLDefVc PLDr;// Edit ************************** Thursday, 21 February 2013 09:45:29
+  record PricePointListVc PPLr; // Edit ************************** Thursday, 21 February 2013 09:43:50
+  row PricePointListVc PPLrw; // Edit ************************** Thursday, 21 February 2013 09:43:50
+  record PricePointListVc oldPPLr; // Edit ************************** Thursday, 21 February 2013 09:43:50
+  boolean testf1,foundfVEitem; // Edit ************************** Thursday, 21 February 2013 09:43:50
+  record PIVc PIr; // Edit ************************** Thursday, 21 February 2013 09:43:50
+	
+	
+	blockload(CBb);
+	testf = false;
+	CIr.Code = INr.Code;
+	if(ReadFIrstMain(CIr,1,true))then begin  
+		mtrw1 = matrowcnt(CBb);
+		For(j=0;j<mtrw1;j=j+1) begin
+			matrowget(CBb,j,CBrw);
+			if(CBrw.ActiveStatus==0 and j+1!=9 and j+1!=28 and (j+1==3 or !CompanyIsJWLikeCompany(j+1)) and j+1!=29 and j+1!=33)then begin
+				logtext(0,j+1 & " <--Company");
+				SetCompany(j+1,false);
+				LocalINr.Code = CIr.LocCode;
+				TrHs = true;
+				while (loopmain(LocalINr,1,TrHs)) begin
+					if(LocalINr.Code!=CIr.LocCode)then begin TrHs = false; end;
+					if(LocalINr.BPIBrand==CIr.BrandCode and TrHs)then begin
+						TrHs = false;
+						RecordCopy(OldINr,LocalINr);
+						LocalINr.LastPurchPrice2 = INr.LastPurchPrice2;
+						LocalINr.LastPurchCurncyCode = INr.LastPurchCurncyCode;
+						testf = true;
+						if(RecordUpdate(OldINr,LocalINr,false)==0 and OldINr.LastPurchPrice2!=LocalINr.LastPurchPrice2)then begin
+							logtext(0,"Upd price from consol. company. ItemCode: " & LocalINr.Code);
+							if(currentcompany!=1)then begin //edited by BPI {
+								PLr.ArtCode = LocalINr.Code;
+								PLr.PLCode  = "RRP";
+								readfirstmain(PLr,2,true);
+								if(PLr.CurncyCode!=LocalINr.LastPurchCurncyCode or prevINr.LastPurchPrice2!=LocalINr.LastPurchPrice2 or prevINr.InPrice!=LocalINr.InPrice or prevINr.LastPurchCurncyCode!=LocalINr.LastPurchCurncyCode or prevINr.Group!=LocalINr.Group or prevINr.CPSCode!=LocalINr.CPSCode)then begin
+									PLr.ArtCode = LocalINr.Code;
+									PLr.PLCode  = "RRP";
+									if(blank(PLr.CurncyCode))then begin
+										PLr.CurncyCode = LocalINr.LastPurchCurncyCode;
+									end;
+									recordstore(PLr,true);
+									UpdatePrice(PLr);
+									PLDr.Code="";
+									While(loopmain(PLDr,1,true))begin
+										RepSpec.f1 = PLDr.Code;
+										RepSpec.f2 = LocalINr.Code;
+										CalcPriceListsMn(RepSpec);// Edit ************************** Thursday, 21 February 2013 09:43:32
+										if(nonblank(LocalINr.CPSCode) and stringtoint(LocalINr.CPSCode)>0)then begin
+											foundfVEitem = false;
+											PIr.ItemCode = LocalINr.Code;
+											if(readfirstmain(PIr,1,true))then begin
+												if(LocalINr.Code==PIr.ItemCode)then begin
+													foundfVEitem = true;
+												end;
+											end;        
+											if(nonblank(LocalINr.CPSCode) and stringtoint(LocalINr.CPSCode)>0)then begin
+												i = StringToInt(LocalINr.CPSCode);
+												PPLr.TransDate = CurrentDate;
+												readlastkey("TransDate",PPLr,1,true);
+												mtrw = matrowcnt(PPLr);
+												if(i<=mtrw)then begin
+													matrowget(PPLr,i-1,PPLrw);
+													if(PPLrw.Cost>0)then begin
+														if(foundfVEitem)then begin
+															PIr.PurPrice = PPLrw.Cost;
+															LocalINr.InPrice = PPLrw.Cost/PIr.PIFactor;
+															RecordStore(PIr,true);
+														end else begin
+															LocalINr.InPrice = PPLrw.Cost;
+														end;
+													end;
+													RecordStore(LocalINr,true);
+													PLr.PLCode  = "RRP";
+													PLr.ArtCode = LocalINr.Code;
+													PLr.CurncyCode = "";
+													if(readfirstmain(PLr,2,true))then begin     
+														if(PLr.DonotRecalculate==0)then begin         
+															if(foundfVEitem)then begin
+																if (LocalINr.LastPurchCurncyCode=="USD") then begin
+																	PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
+																end else begin
+																	PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+																end;
+															end else begin
+																if (LocalINr.LastPurchCurncyCode=="USD") then begin
+																	PLr.ExVatPrice = PPLrw.PriceUSD;
+																end else begin
+																	PLr.ExVatPrice = PPLrw.Price;
+																end;
+															end;
+															recordStore(PLr,true);
+															UpdatePrice(PLr);
+														end;
+													end else begin
+														recordNew(PLr);
+														PLr.PLCode  = "RRP";
+														PLr.ArtCode = LocalINr.Code;
+														PLr.Comment = LocalINr.Name;
+														if(foundfVEitem)then begin
+															if (LocalINr.LastPurchCurncyCode=="USD") then begin
+																PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
+															end else begin
+																PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+															end;
+														end else begin
+															if (LocalINr.LastPurchCurncyCode=="USD") then begin
+																PLr.ExVatPrice = PPLrw.PriceUSD;
+															end else begin
+																PLr.ExVatPrice = PPLrw.Price;
+															end;
+														end;
+														recordStore(PLr,true);
+														UpdatePrice(PLr);
+													end;
+												end;
+											end;
+										end;
+									end;
+								end;
+							end else begin
+								recordNew(PLr);
+								PLr.PLCode  = "RRP";
+								PLr.ArtCode = LocalINr.Code;
+								PLr.Comment = LocalINr.Name;
+								PPLr.TransDate = CurrentDate;
+								if(nonblank(LocalINr.CPSCode))then begin
+									i = StringToInt(LocalINr.CPSCode);
+									PPLr.TransDate = CurrentDate;
+									loopbackkey("TransDate",PPLr,1,true);
+									mtrw = matrowcnt(PPLr);
+									logtext(0,mtrw);
+									if(i<=mtrw)then begin
+										matrowget(PPLr,i-1,PPLrw);
+										PLr.ExVatPrice = PPLrw.Price;
+										PLr.ExVatPrice = round(PLr.ExVatPrice,SetRoundModeD(0));
+										if(PLr.ExVatPrice==0)then begin PLr.ExVatPrice=1; end;
+										LocalINr.InPrice = PPLrw.Cost;
+										RecordStore(LocalINr,true);
+										recordStore(PLr,true);
+										UpdatePrice(PLr);
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+				resetloop(LocalINr);
+				if(!testf)then begin
+					LocalINr.Code = CIr.Code;
+					TrHs = true;
+					while (loopmain(LocalINr,1,TrHs)) begin
+						if(LocalINr.Code!=CIr.Code)then begin TrHs = false; end;
+						if(LocalINr.AlternativeCode==CIr.LocCode and LocalINr.BPIBrand==CIr.BrandCode and TrHs)then begin
+							TrHs = false;
+							RecordCopy(OldINr,LocalINr);
+							LocalINr.LastPurchPrice2 = INr.LastPurchPrice2;
+							LocalINr.LastPurchCurncyCode = INr.LastPurchCurncyCode;
+							testf = true;
+							if(RecordUpdate(OldINr,LocalINr,true)==0 and OldINr.LastPurchPrice2!=LocalINr.LastPurchPrice2)then begin
+								logtext(0,"Upd price from consol. company" & LocalINr.Code);
+								if(currentcompany!=1)then begin //edited by BPI {
+								PLr.ArtCode = LocalINr.Code;
+								PLr.PLCode  = "RRP";
+								readfirstmain(PLr,2,true);
+								if(PLr.CurncyCode!=LocalINr.LastPurchCurncyCode or prevINr.LastPurchPrice2!=LocalINr.LastPurchPrice2 or prevINr.InPrice!=LocalINr.InPrice or prevINr.LastPurchCurncyCode!=LocalINr.LastPurchCurncyCode or prevINr.Group!=LocalINr.Group or prevINr.CPSCode!=LocalINr.CPSCode)then begin
+									PLr.ArtCode = LocalINr.Code;
+									PLr.PLCode  = "RRP";
+									if(blank(PLr.CurncyCode))then begin
+										PLr.CurncyCode = LocalINr.LastPurchCurncyCode;
+									end;
+									recordstore(PLr,true);
+									UpdatePrice(PLr);
+									PLDr.Code="";
+									While(loopmain(PLDr,1,true))begin
+										RepSpec.f1 = PLDr.Code;
+										RepSpec.f2 = LocalINr.Code;
+										CalcPriceListsMn(RepSpec);// Edit ************************** Thursday, 21 February 2013 09:43:32
+										if(nonblank(LocalINr.CPSCode) and stringtoint(LocalINr.CPSCode)>0)then begin
+											foundfVEitem = false;
+											PIr.ItemCode = LocalINr.Code;
+											if(readfirstmain(PIr,1,true))then begin
+												if(LocalINr.Code==PIr.ItemCode)then begin
+													foundfVEitem = true;
+												end;
+											end;        
+											if(nonblank(LocalINr.CPSCode) and stringtoint(LocalINr.CPSCode)>0)then begin
+												i = StringToInt(LocalINr.CPSCode);
+												PPLr.TransDate = CurrentDate;
+												readlastkey("TransDate",PPLr,1,true);
+												mtrw = matrowcnt(PPLr);
+												if(i<=mtrw)then begin
+													matrowget(PPLr,i-1,PPLrw);
+													if(PPLrw.Cost>0)then begin
+														if(foundfVEitem)then begin
+															PIr.PurPrice = PPLrw.Cost;
+															LocalINr.InPrice = PPLrw.Cost/PIr.PIFactor;
+															RecordStore(PIr,true);
+														end else begin
+															LocalINr.InPrice = PPLrw.Cost;
+														end;
+													end;
+													RecordStore(LocalINr,true);
+													PLr.PLCode  = "RRP";
+													PLr.ArtCode = LocalINr.Code;
+													PLr.CurncyCode = "";
+													if(readfirstmain(PLr,2,true))then begin     
+														if(PLr.DonotRecalculate==0)then begin         
+															if(foundfVEitem)then begin
+																if (LocalINr.LastPurchCurncyCode=="USD") then begin
+																	PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
+																end else begin
+																	PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+																end;
+															end else begin
+																if (LocalINr.LastPurchCurncyCode=="USD") then begin
+																	PLr.ExVatPrice = PPLrw.PriceUSD;
+																end else begin
+																	PLr.ExVatPrice = PPLrw.Price;
+																end;
+															end;
+															recordStore(PLr,true);
+															UpdatePrice(PLr);
+														end;
+													end else begin
+														recordNew(PLr);
+														PLr.PLCode  = "RRP";
+														PLr.ArtCode = LocalINr.Code;
+														PLr.Comment = LocalINr.Name;
+														if(foundfVEitem)then begin
+															if (LocalINr.LastPurchCurncyCode=="USD") then begin
+																PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
+															end else begin
+																PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+															end;
+														end else begin
+															if (LocalINr.LastPurchCurncyCode=="USD") then begin
+																PLr.ExVatPrice = PPLrw.PriceUSD;
+															end else begin
+																PLr.ExVatPrice = PPLrw.Price;
+															end;
+														end;
+														recordStore(PLr,true);
+														UpdatePrice(PLr);
+													end;
+												end;
+											end;
+										end;
+									end;
+								end;
+							end else begin
+								recordNew(PLr);
+								PLr.PLCode  = "RRP";
+								PLr.ArtCode = LocalINr.Code;
+								PLr.Comment = LocalINr.Name;
+								PPLr.TransDate = CurrentDate;
+								if(nonblank(LocalINr.CPSCode))then begin
+									i = StringToInt(LocalINr.CPSCode);
+									PPLr.TransDate = CurrentDate;
+									loopbackkey("TransDate",PPLr,1,true);
+									mtrw = matrowcnt(PPLr);
+									if(i<=mtrw)then begin
+										matrowget(PPLr,i-1,PPLrw);
+										PLr.ExVatPrice = PPLrw.Price;
+										PLr.ExVatPrice = round(PLr.ExVatPrice,SetRoundModeD(0));
+										if(PLr.ExVatPrice==0)then begin PLr.ExVatPrice=1; end;
+										LocalINr.InPrice = PPLrw.Cost;
+										RecordStore(LocalINr,true);
+									end;
+								end;
+							end;
+							end;
+						end;
+					end;
+					ResetLoop(LocalINr);
+				end;
+			end;
+		end;
+	end;
+
+  return;
+end;
+
+
+
+
+
 global
 updating function LongInt INVcRecordUpdateAfter(var record INVc INr,record INVc prevINr,LongInt stat,LongInt long4) //edited by BPI
 begin
@@ -1610,6 +1925,13 @@ begin
     autmsgfunciontags = AddStringToStringList(autmsgfunciontags,"HasModSVO+OK_INVc");
   end;
   
+	
+	if(currentcompany==33)then begin
+		RecalculatePricesfromConsComp(INr);
+	end;
+	
+	
+	
   AutomatedSales(autmsgfunciontags,kAutomatedSalesTagRandom);
   threadasync.SugarCRM_PUT_INVc(INr);
   SiteMinder_Update_INVc(INr,prevINr);
