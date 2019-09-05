@@ -82,9 +82,8 @@ remote updating function LongInt NewINVcRecordCheck(var record NewINVc,record Ne
 remote procedure HandleNewINDClassmCode(var record NewINVc,integer);
 remote updating procedure CreateNewGlobalItem(var record INVc);
 external function string 60 AddLocationObject(string,string,boolean); //EBS
-remote procedure PUFromBigPUDsm(record BigPUVc);
 external procedure LogProcTime(string,longint);
-
+remote function LongInt PUFromBigPUDsm(record BigPUVc,var array LongInt);
 SetLangMode(LangRussian,"RUS",0);
  
 
@@ -604,16 +603,7 @@ begin
   PUVcRecordSaveAfter = res;
   return;
 end;
-global
-updating function LongInt BigPUVcRecordUpdate(var record BigPUVc BPUr,record BigPUVc BPU2r,LongInt stat,LongInt long4)
-	begin
-	LongInt res;
-	if(BPUr.OKFlag!=0 and BPU2r.OKFlag==0) then begin
-		PUFromBigPUDsm(BPUr);		
-	end;	 
-  BigPUVcRecordUpdate = res;
-  return;
-end;
+
 global
 updating function LongInt PUVcRecordUpdate(var record PUVc PUr,record PUVc PU2r,LongInt stat,LongInt long4)
 begin
@@ -730,6 +720,43 @@ begin
     PUVc_UpdateTR(PUr,PU2r);
   end;
   PUVcRecordUpdateAfter = res;
+  return;
+end;
+
+global
+updating function LongInt BigPUVcRecordUpdateAfter(var record BigPUVc BPUr,record BigPUVc BPU2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  Boolean ihf;
+	integer i;
+  record VIVc VIr;
+  record VIVc oldVIr;
+  record POSettingBlock POSb;
+  record RcVc RepSpec;
+	array LongInt PUNr;
+	boolean checkOK;
+	string 255 warning;
+	record PUVc PUr;
+  val bc1v;
+	if(BPUr.OKFlag!=0) then begin
+		PUFromBigPUDsm(BPUr,PUNr);
+		checkOK = true;
+		for(i=0;i<PUNr.length;i=i+1) begin
+			PUr.SerNr = PUNr[i];
+			if(ReadFirstMain(PUr,1,true)) then begin
+				if(PUr.OKFlag==0) then begin
+					checkOK = false;
+					if(Blank(warning)) then begin warning = PUNr[i]; end else begin
+						warning = warning & PUNr[i]; 
+					end;	
+				end;
+			end;
+		end;
+		if(!checkOK) then begin
+			MessageBox(0,"Purchase number " & warning & " is incorrect please check it");
+		end;	
+	end;	
+  BigPUVcRecordUpdateAfter = res;
   return;
 end;
 
@@ -907,7 +934,6 @@ global
 	ResetLoop(VIr);
 	for(i=0;i<tags.length;i=i+1) begin
 		if(vecVItest[tags[i]]==false) then begin
-			logtext(0,tags[i]);
 			res = false;
 		end;
 	end;
@@ -980,7 +1006,11 @@ begin
 	BlockLoad(CCB);
 	
 	logtext(0,"BigPUVcRecordCheck"); 
-	
+	if(CurrentCompany!=33) then begin
+		res = -1; 
+		RecordCheckError(36290,"",-1,"SerNr");
+		goto L99BPUVcRecordCheck;
+	end;
 	if(BPUr.OKFlag==0 and BPU2r.OKFlag!=0) then begin
 		res = -1; 
 		RecordCheckError(20884,"",-1,"SerNr");
@@ -997,7 +1027,7 @@ begin
 			end;
     end;
   end;
-	if(BPUr.OKFlag!=0 and BPU2r.OKFlag==0) then begin
+	if(BPUr.OKFlag!=0) then begin
 		cnt = matrowcnt(BPUr);
 		for(i=0;i<cnt;i=i+1) begin
 			matrowget(BPUr,i,BPUrw);
@@ -1044,12 +1074,12 @@ begin
   end;
 	if(BPUr.OKFlag!=0) then begin
 		If(Blank(BPUr.ShipCost)) then begin
-			RecordCheckError(36262,BPUr.Location,-1,"ShipCost");      
+			RecordCheckError(36262,"",-1,"ShipCost");      
       res = -1;
       goto L99BPUVcRecordCheck;
 		end;
 		If(Blank(BPUr.CustomsCost)) then begin
-			RecordCheckError(36263,BPUr.Location,-1,"CustomsCost");      
+			RecordCheckError(36263,"",-1,"CustomsCost");      
       res = -1;
       goto L99BPUVcRecordCheck;
 		end;
@@ -1907,10 +1937,10 @@ LPUVcRecordCheck_GenTrans:;
 			end;
 		end;
 	end;*/
-	
+
 
 L99BPUVcRecordCheck:;
-  if (res!=0) then begin BPUr.SerNr = oldnr; end;
+  if (res!=0) then begin  end;
 	LogProcTime("BigPUVcRecordCheck",getcurtick()-curtick); 
   BigPUVcRecordCheck = res;
   return;
@@ -2030,44 +2060,41 @@ begin
 			while(LoopKey("POSerNr",VIr,1,TsTr)) begin
 				if(VIr.POSerNr!=PUr.PONr) then begin TsTr = false; end;
 				if(TsTr and VIr.PartPUSerNr==PUr.SerNr) then begin
-					for(i=0;i<matrowcnt(VIr);i=i+1) begin
-						matrowget(VIr,i,VIrw);
-						if(vecVI["CustomsCost"]) then begin 
-							if(AccB.PUCustomsAcc==VIrw.AccNumber) then begin
-								vecVItest["CustomsCost"] = true;
-							end;
+					if(vecVI["CustomsCost"]) then begin 
+						if(SetInSet("customs",VIr.ExtraCostObj)or VIr.ExtraCostObj=="customs") then begin
+							vecVItest["CustomsCost"] = true;
 						end;
-						if(vecVI["ShipCost"]) then begin 
-							if(AccB.PUFreightAcc==VIrw.AccNumber) then begin
-								vecVItest["ShipCost"] = true;
-							end;
+					end;
+					if(vecVI["ShipCost"]) then begin 
+						if(SetInSet("freight",VIr.ExtraCostObj)or VIr.ExtraCostObj=="freight") then begin
+							vecVItest["ShipCost"] = true;
 						end;
-						if(vecVI["Cost1"]) then begin 
-							if(AccB.PUCost1==VIrw.AccNumber) then begin
-								vecVItest["Cost1"] = true;
-							end;
+					end;
+					if(vecVI["Cost1"]) then begin 
+						if(SetInSet("cost1",VIr.ExtraCostObj)or VIr.ExtraCostObj=="cost1") then begin
+							vecVItest["Cost1"] = true;
 						end;
-						if(vecVI["Cost2"]) then begin 
-							if(AccB.PUCost2==VIrw.AccNumber) then begin
-								vecVItest["Cost2"] = true; 
-							end;
+					end;
+					if(vecVI["Cost2"]) then begin 
+						if(SetInSet("cost2",VIr.ExtraCostObj)or VIr.ExtraCostObj=="cost2") then begin
+							vecVItest["Cost2"] = true; 
 						end;
-						if(vecVI["Cost3"]) then begin 
-							if(AccB.PUCost3==VIrw.AccNumber) then begin
-								vecVItest["Cost3"] = true;
-							end;
+					end;
+					if(vecVI["Cost3"]) then begin 
+						if(SetInSet("cost3",VIr.ExtraCostObj)or VIr.ExtraCostObj=="cost3") then begin
+							vecVItest["Cost3"] = true;
 						end;
-						if(vecVI["Cost4"]) then begin 
-							if(AccB.PUCost4==VIrw.AccNumber and VIr.VECode=="TMT_AKTSIZ") then begin
-								vecVItest["Cost4"] = true; 
-							end;
+					end;
+					if(vecVI["Cost4"]) then begin 
+						if(SetInSet("cost4",VIr.ExtraCostObj)or VIr.ExtraCostObj=="cost4") then begin
+							vecVItest["Cost4"] = true; 
 						end;
-						if(vecVI["Cost5"]) then begin 
-							if(AccB.PUCost5==VIrw.AccNumber and VIr.VECode=="TMT_AKTSIZ") then begin
-								vecVItest["Cost5"] = true;
-							end;
+					end;
+					if(vecVI["Cost5"]) then begin 
+						if(SetInSet("cost5",VIr.ExtraCostObj)or VIr.ExtraCostObj=="cost5") then begin
+							vecVItest["Cost5"] = true;
 						end;
-					end;	
+					end;
 				end;
 			end;
 			ResetLoop(VIr);

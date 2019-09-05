@@ -596,6 +596,9 @@ record SMVc VATr;
 record CYBlock CYb;
 row VIVc VIrw;
 val t;
+record VIVc oldVIp;
+string 255 obj;
+record LocationVc Locr;
 boolean createVi;
 string 255 tstr,newnr;
 Integer i,rwcnt,vatcnt;
@@ -614,6 +617,17 @@ Integer i,rwcnt,vatcnt;
     goto LPastebigPUInVI; 
   end;
 	VIp.VECode = RepSpec.f1;
+	Locr.Code = BPUr.Location;
+	if(ReadFirstMain(Locr,1,true)) then begin
+		obj = Locr.Objects;
+	end;
+	if(!SetInSet(obj,VIp.Objects)) then begin
+		if(blank(VIp.Objects)) then begin
+			VIp.Objects = obj;
+		end else begin
+			VIp.Objects = VIp.Objects & obj;
+		end;
+	end;	
 	VIVc_PasteVECode(VIp,0,true,false,tstr);
 	while (MatRowCnt(VIp)>0) begin
     MatRowDelete(VIp,0);
@@ -646,6 +660,13 @@ Integer i,rwcnt,vatcnt;
 				VIp4.PayVal = Round(VIp4.PayVal,DefaultRoundMode);
 				VICalcEReb(VIp4);
 				VIp4.SerNr = NextSerNr("VIVc",VIp4.TransDate,newnr,false,"");
+				if(!SetInSet(obj,VIp4.Objects)) then begin
+					if(blank(VIp4.Objects)) then begin
+						VIp4.Objects = obj;
+					end else begin
+						VIp4.Objects = VIp4.Objects & obj;
+					end;
+				end;	
 				RecordStore(VIp4,false);
 				Createrecordlink(BPUr,CurrentCompany,VIp4,CurrentCompany);
 				Createrecordlink(VIp4,CurrentCompany,BPUr,CurrentCompany);
@@ -668,6 +689,13 @@ Integer i,rwcnt,vatcnt;
 				VIp2.PayVal = Round(VIp2.PayVal,DefaultRoundMode);
 				VICalcEReb(VIp2);
 				VIp2.SerNr = NextSerNr("VIVc",VIp2.TransDate,newnr,false,"");
+				if(!SetInSet(obj,VIp2.Objects)) then begin
+					if(blank(VIp2.Objects)) then begin
+						VIp2.Objects = obj;
+					end else begin
+						VIp2.Objects = VIp2.Objects & obj;
+					end;
+				end;	
 				RecordStore(VIp2,false);
 				Createrecordlink(BPUr,CurrentCompany,VIp2,CurrentCompany);
 				Createrecordlink(VIp2,CurrentCompany,BPUr,CurrentCompany);
@@ -704,10 +732,18 @@ Integer i,rwcnt,vatcnt;
 				VIp3.PayVal = Round(VIp3.PayVal,DefaultRoundMode);
 				VICalcEReb(VIp3);
 				VIp3.SerNr = NextSerNr("VIVc",VIp3.TransDate,newnr,false,"");
+				if(!SetInSet(obj,VIp3.Objects)) then begin
+					if(blank(VIp3.Objects)) then begin
+						VIp3.Objects = obj;
+					end else begin
+						VIp3.Objects = VIp3.Objects & obj;
+					end;
+				end;	
 				RecordStore(VIp3,false);
 				Createrecordlink(BPUr,CurrentCompany,VIp3,CurrentCompany);
 				Createrecordlink(VIp3,CurrentCompany,BPUr,CurrentCompany);
 			end else begin 
+				RecordCopy(oldVIp,VIp2);
 				VIp2.VECode = RepSpec.f1;
 				VIp2.TransDate = BPUr.TransDate;
 				VIp2.CurncyCode = BPUr.CurrencyF;
@@ -720,10 +756,24 @@ Integer i,rwcnt,vatcnt;
 				end else begin
 					VIp2.ExtraCostObj = VIp2.ExtraCostObj & "," & "freight";
 				end;
-				VIp2.PayVal = -t;
+				VIp2.PayVal = VIp2.PayVal-t;
 				VIp2.PayVal = Round(VIp2.PayVal,DefaultRoundMode);
 				VICalcEReb(VIp2);
-				RecordStore(VIp2,false);
+				if(!SetInSet(obj,VIp2.Objects)) then begin
+					if(blank(VIp2.Objects)) then begin
+						VIp2.Objects = obj;
+					end else begin
+						VIp2.Objects = VIp2.Objects & obj;
+					end;
+				end;	
+				if(VIp2.SerNr!=-1) then begin
+					RecordUpdate(oldVIp,VIp2,false);
+				end else begin
+					VIp2.SerNr = NextSerNr("VIVc",VIp2.TransDate,newnr,false,"");
+					RecordStore(VIp2,false);
+					Createrecordlink(BPUr,CurrentCompany,VIp2,CurrentCompany);
+					Createrecordlink(VIp2,CurrentCompany,BPUr,CurrentCompany);
+				end;				
 			end;
 		end else begin	
 			createVi = true;
@@ -873,7 +923,7 @@ LVIFromBigPUVClassOnOKWindow:;
 END;
 
 global
-updating procedure VIFromBigPUDExecute(LongInt PONr)
+updating procedure VIFromBigPUDExecute(LongInt BigPUNr)
 begin
   Integer nwn;
   record RcVc RepSpec;
@@ -884,7 +934,7 @@ begin
     BlockLoad(POSb);
     ReportDefaults(RepSpec,"VIFromBigPUVClass");
     RepSpec.repname = "";
-    RepSpec.FirstVer = PONr;
+    RepSpec.FirstVer = BigPUNr;
     if (POSb.OpenCreateVIFromPO!=0) then begin
       nwn = OpenWindow("VIFromBigPUVClass",1,0,"","",RepSpec);
       PutWindowRecord(nwn,RepSpec);
