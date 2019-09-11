@@ -840,7 +840,7 @@ begin
 	row CompaniesBlock CBrw;
 	vector boolean vArtCodeRepeat, IVArtCodef, ORRowf;
 	vector integer vArtCodeQTY, ECArt,priceinorcnt;
-	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant, vItemHTotCostPr, ItemORPriseWRebate, ORRowPrice, IVRowPrice;
+	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant,vItemRowQuantNew, vItemHTotCostPr, ItemORPriseWRebate, ORRowPrice, IVRowPrice;
 	record VIVc VIr, OldVIr, offVIr;
 	row VIVc VIrw, OldVIrw;
 	record RcVc RepSpec;
@@ -882,6 +882,20 @@ begin
 		shmtrw = matrowcnt(SHr);
 		loccode = SHr.Location;
 		cmpnmb = currentcompany;
+		for(j=0;j<shmtrw;j=j+1) begin
+			matrowget(SHr,j,SH2rw);
+			IHr.FileName = "SHVc";
+			IHr.TransNr = SHr.SerNr;
+			IHr.Row = j;
+			if (ReadFirstKey("FNTransNr",IHr,3,true))then begin
+				vItemRowCostCurrPrice[SH2rw.ArtCode] = vItemRowCostCurrPrice[SH2rw.ArtCode] + IHr.TotCostPriceCurncy;
+				vItemHTotCostPr[SH2rw.ArtCode] = vItemHTotCostPr[SH2rw.ArtCode] + SH2rw.FIFORowVal;
+				vItemRowQuant[SH2rw.ArtCode] = vItemRowQuant[SH2rw.ArtCode] - IHr.Qty;
+				ORRowPrice[SH2rw.OrdRow] = SH2rw.FIFORowVal;
+				ORRowf[SH2rw.OrdRow] = true;
+				IVRowPrice[SH2rw.ArtCode] = SH2rw.FIFORowVal;
+			end;
+		end;
 		for(i=0;i<shmtrw;i=i+1) begin
 			cuf = true;
 			matrowget(SHr,i,SHrw);
@@ -897,20 +911,6 @@ begin
 					end;
 				end;
 				vItemCurrency[SHrw.ArtCode] = INr.LastPurchCurncyCode;
-				for(j=0;j<shmtrw;j=j+1) begin
-					matrowget(SH2r,j,SH2rw);
-					IHr.FileName = "SHVc";
-					IHr.TransNr = SHr.SerNr;
-					IHr.Row = j;
-					if (ReadFirstKey("FNTransNr",IHr,3,true))then begin
-						vItemRowCostCurrPrice[SH2rw.ArtCode] = vItemRowCostCurrPrice[SH2rw.ArtCode] + IHr.TotCostPriceCurncy;
-						vItemHTotCostPr[SHrw.ArtCode] = vItemHTotCostPr[SHrw.ArtCode] + SH2rw.FIFORowVal;
-						vItemRowQuant[SH2rw.ArtCode] = vItemRowQuant[SH2rw.ArtCode] - IHr.Qty;
-						ORRowPrice[SH2rw.OrdRow] = SH2rw.FIFORowVal;
-						ORRowf[SH2rw.OrdRow] = true;
-						IVRowPrice[SH2rw.ArtCode] = SH2rw.FIFORowVal;
-					end;
-				end;
 				IVArtCodef[SHrw.ArtCode] = true;
 				vItemPrice[SHrw.ArtCode] = vItemRowCostCurrPrice[SHrw.ArtCode] / vItemRowQuant[SHrw.ArtCode];
 				vItemFifo[SHrw.ArtCode] = vItemHTotCostPr[SHrw.ArtCode] / vItemRowQuant[SHrw.ArtCode];
@@ -928,8 +928,11 @@ begin
 				vArtCodeQTY[ORrw.GlobalItemArtCode] = ECArt[ORrw.ArtCode];
 			end;
 			if(ORRowf[i])then begin
+			 logtext(0,ORrw.Quant);
+				logtext(0,"Price-" & ORrw.Price & " Price finded-" & vItemFifo[ORrw.ArtCode]);
 				ORrw.Price = vItemFifo[ORrw.ArtCode];
 				ORrw.Sum = vItemFifo[ORrw.ArtCode] * ORrw.Quant;
+				logtext(0,"Price-" & ORrw.Price & " Price finded-" & vItemFifo[ORrw.ArtCode]);
 				ORrw.vRebate = 0;
 				matrowput(ORr,i,ORrw); 
 			end;
@@ -956,8 +959,8 @@ begin
 			for (i=0;i<ivrcnt;i=i+1) begin
 				matrowget(IVr,i,IVrw);
 				if(IVArtCodef[IVrw.ArtCode])then begin
-					IVrw.Price = IVRowPrice[SHrw.ArtCode] / IVrw.Quant;
-					IVrw.Sum = IVRowPrice[SHrw.ArtCode];
+					IVrw.Price = IVRowPrice[IVrw.ArtCode] / IVrw.Quant; 
+					IVrw.Sum = IVRowPrice[IVrw.ArtCode];
 					matrowput(IVr,i,IVrw);
 				end;
 			end;
