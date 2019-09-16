@@ -97,6 +97,104 @@ begin
   return;
 end;
 
+
+
+
+
+global
+procedure CCFinishedSHRn(record RcVc RepSpec)
+begin
+	record ORVc ORr;
+	row ORVc ORrw;
+	record SerBalVc SBr;
+  record LocationVc Locr;
+  Boolean TrHs;
+  Boolean testf;
+  Integer i,j,k;
+  Integer rwcnt, ordcnt, stockcnt;
+  array string 255 StockName, OrNo;
+	vector boolean Stockf, StockOrdNo;
+	vector date Ordate;
+	vector integer vItQty;
+	vector string 255 vOrType;
+	
+	StartReportnoheaderjob("Cписок заказов готовых к отгрузке");
+	startformat(15);
+		outstring(0,0,"Заказ №",false);
+		outstring(70,0,"Магазин",false);
+		outstring(220,0,"Дата закзаза",false);
+		outstring(300,0,"Кол. тов",false);
+		outstring(340,0,"Тип заказа",false);
+	endformat;
+	
+	j = 0;
+	k = 0;
+	ORr.ShipFlag = 0;
+	TrHs = true;
+	while (LoopKey("ShipFlag",ORr,1,TrHs)) begin
+		testf = true;
+		if(ORr.ShipFlag!=0)then begin TrHs = false; testf = false; end;		
+		if(nonblank(RepSpec.f1) and ORr.CustCode!=RepSpec.f1)then begin testf = false; end;
+		if(testf)then begin
+			rwcnt = matrowcnt(ORr);
+			for (i=0;i<rwcnt;i=i+1) begin
+				matrowget(ORr,i,ORrw);
+				SBr.Item = ORrw.ArtCode;
+				SBr.Serial = ORr.OrderClass & ORr.SerNr;
+				if(ReadFirstKey("ItemSerial",SBr,1,true))then begin
+					if(ORrw.Quant>SBr.Quant)then begin testf = false; end;
+				end else begin
+					testf = false;
+				end;
+				vItQty[ORr.SerNr] = vItQty[ORr.SerNr] + ORrw.Quant;
+			end;
+			if(testf)then begin
+				if(!Stockf[ORr.Addr0])then begin
+					Stockf[ORr.Addr0] = true;
+					StockName[j] = ORr.Addr0;
+					j=j+1;
+				end;
+				StockOrdNo[ORr.Addr0 & ORr.SerNr] = true;
+				OrNo[k] = ORr.SerNr;
+				k = k + 1;
+				Ordate[ORr.SerNr] = ORr.OrdDate;
+				vOrType[ORr.SerNr] = ORr.OrderClass;
+			end;
+		end;
+	end;
+	
+	ordcnt = k;
+	stockcnt = j;
+	
+	for (j=0;j<stockcnt;j=j+1) begin	
+		for (k=0;k<ordcnt;k=k+1) begin
+			if(StockOrdNo[StockName[j] & OrNo[k]])then begin
+				startformat(15);
+					outstring(0,"DblORVc",OrNo[k],false);
+					outstring(70,0,StockName[j],false);
+					outstring(220,0,Ordate[OrNo[k]],false);
+					outstring(300,0,vItQty[OrNo[k]],false);
+					outstring(340,0,vOrType[OrNo[k]],false);
+				endformat;
+			end;
+		end;
+	end;
+	
+	
+	
+	
+	
+	endjob;
+	return;
+end;
+
+
+
+
+
+
+
+
 global
 procedure ShipRn(record RcVc RepSpec)
 begin
