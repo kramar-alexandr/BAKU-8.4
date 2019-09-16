@@ -115,8 +115,11 @@ begin
   array string 255 StockName, OrNo;
 	vector boolean Stockf, StockOrdNo;
 	vector date Ordate;
-	vector integer vItQty;
+	vector integer vItQty, AccumulatedItemsMinus;
 	vector string 255 vOrType;
+	record ItemStatusVc ISr;
+	record CUVc CUr;
+	string 255 CompName;
 	
 	StartReportnoheaderjob("Cписок заказов готовых к отгрузке");
 	startformat(15);
@@ -134,27 +137,47 @@ begin
 	while (LoopKey("ShipFlag",ORr,1,TrHs)) begin
 		testf = true;
 		if(ORr.ShipFlag!=0)then begin TrHs = false; testf = false; end;		
-		if(nonblank(RepSpec.f1) and ORr.CustCode!=RepSpec.f1)then begin testf = false; end;
 		if(testf)then begin
 			rwcnt = matrowcnt(ORr);
 			for (i=0;i<rwcnt;i=i+1) begin
 				matrowget(ORr,i,ORrw);
 				SBr.Item = ORrw.ArtCode;
 				SBr.Serial = ORr.OrderClass & ORr.SerNr;
-				if(ReadFirstKey("ItemSerial",SBr,1,true))then begin
+				if(ReadFirstKey("ItemSerial",SBr,2,true))then begin
 					if(ORrw.Quant>SBr.Quant)then begin testf = false; end;
 				end else begin
-					testf = false;
+					ISr.Code = ORrw.ArtCode;
+					ISr.Location = ORr.Location;
+					if(ReadFirstMain(ISr,2,true))then begin
+						if(ISr.Instock>0)then begin
+							SBr.Item = ORrw.ArtCode;
+							SBr.Location = ORr.Location;
+							while (LoopKey("ItemQuant",SBr,2,true)) begin
+								ISr.Instock = ISr.Instock - SBr.Quant;
+							end;
+							resetloop(SBr);
+						end;
+						if(AccumulatedItemsMinus[ORrw.ArtCode & ORr.Location] > 0)then begin
+							ISr.Instock = ISr.Instock - AccumulatedItemsMinus[ORrw.ArtCode & ORr.Location];
+						end;
+						if(ORrw.Quant>ISr.Instock)then begin 
+							testf = false;
+						end else begin
+							AccumulatedItemsMinus[ORrw.ArtCode & ORr.Location] = AccumulatedItemsMinus[ORrw.ArtCode & ORr.Location] + ORrw.Quant;
+						end;
+					end else begin
+						testf = false;
+					end;
 				end;
 				vItQty[ORr.SerNr] = vItQty[ORr.SerNr] + ORrw.Quant;
 			end;
 			if(testf)then begin
-				if(!Stockf[ORr.Addr0])then begin
-					Stockf[ORr.Addr0] = true;
-					StockName[j] = ORr.Addr0;
+				if(!Stockf[ORr.CustCode])then begin
+					Stockf[ORr.CustCode] = true;
+					StockName[j] = ORr.CustCode;
 					j=j+1;
 				end;
-				StockOrdNo[ORr.Addr0 & ORr.SerNr] = true;
+				StockOrdNo[ORr.CustCode & ORr.SerNr] = true;
 				OrNo[k] = ORr.SerNr;
 				k = k + 1;
 				Ordate[ORr.SerNr] = ORr.OrdDate;
@@ -167,15 +190,25 @@ begin
 	stockcnt = j;
 	
 	for (j=0;j<stockcnt;j=j+1) begin	
-		for (k=0;k<ordcnt;k=k+1) begin
-			if(StockOrdNo[StockName[j] & OrNo[k]])then begin
-				startformat(15);
-					outstring(0,"DblORVc",OrNo[k],false);
-					outstring(70,0,StockName[j],false);
-					outstring(220,0,Ordate[OrNo[k]],false);
-					outstring(300,0,vItQty[OrNo[k]],false);
-					outstring(340,0,vOrType[OrNo[k]],false);
-				endformat;
+		testf = true;
+		if(nonblank(RepSpec.f1) and StockName[j]!=RepSpec.f1)then begin testf = false; end;
+		if(testf)then begin
+			for (k=0;k<ordcnt;k=k+1) begin
+				if(StockOrdNo[StockName[j] & OrNo[k]])then begin
+					CUr.Code = StockName[j];
+					if(ReadFirstMain(CUr,1,true))then begin 
+						CompName = CUr.Name; 
+					end else begin 
+						CompName = StockName[j]; 
+					end;
+					startformat(15);
+						outstring(0,"DblORVc",OrNo[k],false);
+						outstring(70,0,CompName,false);
+						outstring(220,0,Ordate[OrNo[k]],false);
+						outstring(300,0,vItQty[OrNo[k]],false);
+						outstring(340,0,vOrType[OrNo[k]],false);
+					endformat;
+				end;
 			end;
 		end;
 	end;
