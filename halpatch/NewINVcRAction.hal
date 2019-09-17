@@ -988,7 +988,7 @@ BEGIN
   row NewINVc newINrw;
 	record INVc OldINr,tmpINr,OldConsINr;
 	record NewINVc OthCompnewINr;
-  record INVc INr,IN2r,INConsr,IN3r;
+  record INVc INr,IN2r,INConsr,IN3r, testINr, UINr;
 	record NewINVc newINr2;
   record ITVc ITr;
   integer mtrw,i,insertmode,updatemode,j; //Edit***************************Sasha2,17:50 07.12.2015
@@ -1036,9 +1036,9 @@ BEGIN
   Integer acnt,strlen,y;
 	record IdINSNOneBlock IINSNOb;
 	row IdINSNOneBlock IINSNOrw;
-	string 255 SNOneNumber, compstr, comp;
+	string 255 SNOneNumber, compstr, comp, consItcode;
 	val SNMiddleval;
-	boolean Catef,TrHs2;
+	boolean Catef,TrHs2,INConsCodef;
 	array string 100 asnt;
 	integer check,curcomp;
 	record ConsItemVc ConsIr,CIr;
@@ -2228,26 +2228,6 @@ BEGIN
 				end;	
   	  end;
   	  FullFillINVc(INConsr,newINr,newINrw,group,type,insertDispNameNotCode);
-			if(curcomp==33)then begin
-				pos = 0;
-				compstr = newINr.UserStr5;
-				ExtractObj(compstr,pos,comp);
-				while (nonblank(comp)) begin
-					for (k=0;k<CompQty;k=k+1) begin
-						matrowget (Compb,k,Comprw);
-						if(Comprw.ShortName==comp)then begin
-							k = CompQty;
-						end;
-					end;
-					if (SetCompanyCode(Comprw.CompCode,false)) then begin
-						logtext(0,CurrentCompany);
-						FullFillINVc(INConsr,newINr,newINrw,group,type,insertDispNameNotCode);
-						ResetCompany(curcomp);
-					end;
-					ExtractObj(compstr,pos,comp);
-				end;
-				ResetCompany(curcomp);
-			end;
 			if(stat==1)then begin
 				if(newINr.OKFlag==1)then begin
 					INConsr.Group=newINrw.Group;
@@ -2295,6 +2275,55 @@ BEGIN
 					end;
 				end;
 			end;
+			
+			
+			if(curcomp==33)then begin  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:55 17.09.2019
+				INConsCodef = false;
+				pos = 0;
+				compstr = newINr.UserStr5;
+				ExtractObj(compstr,pos,comp);
+				while (nonblank(comp)) begin
+					for (k=0;k<CompQty;k=k+1) begin
+						matrowget (Compb,k,Comprw);
+						if(Comprw.ShortName==comp)then begin
+							k = CompQty;
+						end;
+					end;
+					if (SetCompanyCode(Comprw.CompCode,false)) then begin
+						testINr.Code = newINrw.AlternativeCode;
+						if(ReadFirstMain(testINr,1,true))then begin
+							INConsCodef = true;
+						end;
+						ResetCompany(curcomp);
+					end;
+					ExtractObj(compstr,pos,comp);
+				end;
+				ResetCompany(curcomp);
+				pos = 0;
+				compstr = newINr.UserStr5;
+				ExtractObj(compstr,pos,comp);
+				while (nonblank(comp)) begin
+					for (k=0;k<CompQty;k=k+1) begin
+						matrowget (Compb,k,Comprw);
+						if(Comprw.ShortName==comp)then begin
+							k = CompQty;
+						end;
+					end;
+					if (SetCompanyCode(Comprw.CompCode,false)) then begin
+						FullFillINVc(INConsr,newINr,newINrw,group,type,insertDispNameNotCode);
+						if(!INConsCodef)then begin
+							recordNew(UINr);
+							INConsr.Code = newINrw.AlternativeCode;
+							INConsr.UUID = UINr.UUID;
+						end;
+						if(recordStore(INConsr,true)==false)then begin end;
+						ResetCompany(curcomp);
+					end;
+					ExtractObj(compstr,pos,comp);
+				end;
+				ResetCompany(curcomp);
+			end;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:55 17.09.2019
+			
 			//Create or update item in Consolidate Company ABR End
 			SetCompany(curcomp,false);
   	end;
