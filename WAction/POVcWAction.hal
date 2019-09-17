@@ -65,6 +65,7 @@ remote procedure PODClassCaratRow(var record POVc,integer);
 remote updating function Integer IDCreateVIFromPU(LongInt,record RcVc,var record VIVc,LongInt);
 external updating procedure VIFromPUDsm();
 remote procedure CheckVIForPU(LongInt,vector boolean,var vector boolean);
+remote function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
 
 SetLangMode(LangRussian,"RUS",0);
 global
@@ -351,6 +352,10 @@ BEGIN
 	record PUVc oldPUr;
 	row PUVc PUrw;
 	record ClientItemStatusVc CISr;
+	record ORVc ORr;
+	integer orcnt,k;
+	row ORVc ORrw;
+	string 255 warning;
 	BlockLoad(CCB);
 	BlockLoad(AccB);
 	
@@ -395,9 +400,42 @@ BEGIN
 			if(ReadFirstMain(PUr,1,true)) then begin
 				recordCopy(oldPUr,PUr);
 				PUr.OKFlag = 1;
-				if(RecordUpdate(oldPUr,PUr,true)) then begin
+				if(RecordUpdate(oldPUr,PUr,true)==0) then begin
+						POr.SerNr = PONr[j];
+						if(ReadFirstMain(POr,1,true)) then begin 
+							ORr.SerNr = POr.OrdNr;
+							if(readfirstmain(ORr,1,true))then begin
+								if(ORr.OrderClass=="CLIEN") then begin
+									for(i=0;i<matrowcnt(PUr);i=i+1) begin
+										matrowget(PUr,i,PUrw);
+										CISr.ItemCode = PUrw.ArtCode;
+										CISr.OrderNr = POr.OrdNr;
+										if(readfirstmain(CISr,2,true))then begin
+											CISr.Quant = CISr.Quant + PUrw.Quant;
+											RecordStore(CISr,true);
+										end;
+									end;
+								end;	
+								orcnt = matrowcnt(ORr);
+								for (k=0;k<orcnt;k=k+1)begin
+									//price = ORrw.Price;
+									matrowget(ORr,k,ORrw);
+									ORVc_PasteArtCode(ORr,k,warning,warning,false);							
+									matrowget(ORr,k,ORrw);
+									matrowput(ORr,k,ORrw);
+									logtext(0,ORrw.IDAmount);
+									//matrowget(ORr,k,ORrw);
+									//matrowput(ORr,k,ORrw);
+									//ORrw.Price = price;
+									//matrowput(ORr,k,ORrw);
+									//ORVc_PasteQuant(ORr,k,true,chsum);
+									//matrowget(ORr,k,ORrw);
+								end;
+								RecordStore(ORr,true);
+							end;	
+					end;	
 				end;
-			end;	
+			end;
 		end;
 		PUFromBigPUDsm = r;		
   return;
