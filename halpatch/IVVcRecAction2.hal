@@ -117,6 +117,7 @@ begin
 	integer i,mtrw;
 	record BaseCurBlock BCb;
 	
+	logtext (0,"111");
 	mtrw = matrowcnt(IVr);
 	For(i=0;i<mtrw;i=i+1) begin
 	  matrowget(IVr,i,IVrw);
@@ -127,15 +128,17 @@ begin
 				GGVr.Bal = GGVr.Bal + IVrw.Price;
 				GGVr.TotBalance = GGVr.TotBalance + IVrw.Price;
 				if(blankdate(GGVr.StartDate) or blankdate(GGVr.EndDate))then begin
-				GGVr.StartDate = IVr.InvDate;
-				GGVr.EndDate = addyear(IVr.InvDate,1);
+					GGVr.StartDate = IVr.InvDate;
+					GGVr.EndDate = addyear(IVr.InvDate,1);
 				end;
-				
 				GGVrw.CompNr = currentcompany;
 				GGVrw.InvoiceNr = IVr.SerNr;
 				GGVrw.Sum = IVrw.Price;
 				GGVrw.Location = IVr.Location;
 				matrowput(GGVr,matrowcnt(GGVr),GGVrw);
+				if(GGVr.OnceUsed==1)then begin
+					GGVr.Closed = 0;
+				end;
 				RECORDSTORE(GGVr,true);
 	  	end;/* else begin
 	  		GGVr.SerNr = NextSerNr("GlobalGiftVaucherVc",CurrentDate,-1,false,"");  
@@ -159,7 +162,9 @@ begin
 				GGVr.Program = "FIRST";
 				if(readfirstkey("BarCode",GGVr,2,true))then begin
 					BlockLoad(BCb);
-					
+					if(GGVr.OnceUsed==1)then begin
+							GGVr.Closed = 1;
+					end;
 					if(IVrw.CurncyCode!=BCb.BaseCur1)then begin
 						IVrw.Sum = round(IVrw.Sum/IVrw.FrRate*IVrw.ToRateB1,SetRoundModeD(2));
 					end;
@@ -310,10 +315,14 @@ begin
 	For(i=0;i<mtrw;i=i+1) begin
 	  matrowget(IVr,i,IVrw);
 	  if(IVrw.ArtCode=="GLOBALGIFTCARD")then begin
+			logtext(0,IVr.SerNr);
 	  	GGVr.BarCode = IVrw.SerialNr;
 	  	GGVr.Program = "FIRST";
 	  	if(readfirstkey("BarCode",GGVr,2,true))then begin
-	  		GGVr.Bal = GGVr.Bal - IVrw.Price;
+				if(GGVr.OnceUsed==1)then begin
+					GGVr.Closed = 1;
+				end;
+				GGVr.Bal = GGVr.Bal - IVrw.Price;
 				GGVr.TotBalance = GGVr.TotBalance - IVrw.Price;
 				gmtrw = matrowcnt(GGVr);
 				For(j=0;j<gmtrw;j=j+1) begin
@@ -337,6 +346,9 @@ begin
 	  			GGVr.BarCode = IVrw.SerialNr;
 					GGVr.Program = "FIRST";
 					if(readfirstkey("BarCode",GGVr,2,true))then begin
+						if(GGVr.OnceUsed==1)then begin
+							GGVr.Closed = 0;
+						end;
 						GGVr.Bal = GGVr.Bal + IVrw.Sum;
 						gmtrw = matrowcnt(GGVr);
 						For(j=0;j<gmtrw;j=j+1) begin

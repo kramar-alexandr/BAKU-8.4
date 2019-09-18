@@ -298,7 +298,7 @@ begin
   LongInt oldnr,newnr,sernr;
   val bal,limit,prev,quant,prevsn;
   val prepaysum,t;
-  string 255 tstr,tstr2,location,errstr,oldOfficialSerNr,c,OffserNr,curobj,mainobj;
+  string 255 tstr,tstr2,location,errstr,oldOfficialSerNr,c,OffserNr,curobj,mainobj,compstr,comp;
   LongInt dummyl,errcode2;  
   record TRVc gTRp;
   record SMVc gSMp;
@@ -345,7 +345,7 @@ begin
   record UsedRebateCardsVc URCr;// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 8 May 2019 16:44:30
   record SHVc SHr;
 	record RLinkVc RLr;
-	boolean TrHs3;
+	boolean TrHs3, testf2;
 	longint curtick;
 	
 	curtick = getcurtick();
@@ -457,7 +457,24 @@ begin
 			GGVr.BarCode = IVrw.SerialNr;
 			GGVr.Program = "FIRST";
 			if(readfirstkey("BarCode",GGVr,2,true))then begin
-				if(GGVr.Closed==1)then begin
+				if(GGVr.OnceUsed==1)then begin
+					testf2 = false;
+					pos = 0;
+					compstr = GGVr.Locations;
+					ExtractObj(compstr,pos,comp);
+					while (nonblank(comp)) begin
+						if(comp==IVp.Location)then begin
+							testf2 = true;
+						end;
+						ExtractObj(compstr,pos,comp);
+					end;
+					if(!testf2)then begin
+						RecordCheckError(36298,"",i,"SerialNr");      
+						res = -1; 
+						goto L99;
+					end;
+				end;
+				if(GGVr.Closed==1 and !(GGVr.OnceUsed==1 and IVp.OKFlag==0 and IV2p.OKFlag==1))then begin
 					RecordCheckError(35118,"",i,"SerialNr");      
 					res = -1; 
 					goto L99;
@@ -538,7 +555,7 @@ begin
 				GGVr.BarCode = IVrw.SerialNr;
 				GGVr.Program = "FIRST";
 				if(readfirstkey("BarCode",GGVr,2,true))then begin
-					if(GGVr.Closed==1)then begin
+					if(GGVr.Closed==1 and !(GGVr.OnceUsed==1 and IVp.OKFlag==0 and IV2p.OKFlag==1))then begin
 						RecordCheckError(35118," " & GGVr.BarCode,i,"SerialNr");      
 						res = -1; 
 						goto L99;
