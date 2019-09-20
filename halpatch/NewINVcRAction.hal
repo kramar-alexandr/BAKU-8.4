@@ -1376,17 +1376,17 @@ BEGIN
 							tmpINr.Code = newINrw.VendorCode;
 							if(ReadFirstMain(tmpINr,1,true)) then begin
 									CompFlag = false;
-									companies = companies &  Comprw.CompName;
+									if(blank(Companies)) then begin
+										companies = Comprw.ShortName;
+									end else begin
+										companies = companies & "," & Comprw.ShortName;
+									end;	
 							end;	
 						end;
 					end;
 					SetCompany(oldComp,false);
 				end;
-				if(!CompFlag) then begin
-					res = -1;
-					RecordCheckError(31231," существует в другой компании -" & companies,i,"VendorCode");
-					goto LNewINVcRecordCheck;
-				end;	
+
 				
 				//if(blank(NewINrw.BrandSC))then begin
 					newINrw.BrandSC = NewINr.Brand;
@@ -2532,19 +2532,21 @@ BEGIN
 				ExtractObj(compstr,pos,comp);
 				locompcritemf = false;
 				while (nonblank(comp)) begin
-					for (k=0;k<CompQty;k=k+1) begin
-						matrowget (Compb,k,Comprw);
-						if(Comprw.ShortName==comp)then begin
-							k = CompQty;
+					if(!SetInSet(comp,companies)) then begin
+						for (k=0;k<CompQty;k=k+1) begin
+							matrowget (Compb,k,Comprw);
+							if(Comprw.ShortName==comp)then begin
+								k = CompQty;
+							end;
 						end;
-					end;
-					if (SetCompanyCode(Comprw.CompCode,false)) then begin
-						testINr.Code = newINrw.VendorCode;
-						if(ReadFirstMain(testINr,1,true))then begin
-							INConsCodef = true;
+						if (SetCompanyCode(Comprw.CompCode,false)) then begin
+							testINr.Code = newINrw.VendorCode;
+							if(ReadFirstMain(testINr,1,true))then begin
+								INConsCodef = true;
+							end;
+							ResetCompany(curcomp);
 						end;
-						ResetCompany(curcomp);
-					end;
+					end;	
 					ExtractObj(compstr,pos,comp);
 				end;
 				ResetCompany(curcomp);
@@ -2558,23 +2560,25 @@ BEGIN
 							k = CompQty;
 						end;
 					end;
-					if (SetCompanyCode(Comprw.CompCode,false)) then begin
-						FullFillINVc(INConsr,newINr,newINrw,group,type,insertDispNameNotCode);
-						if(!INConsCodef)then begin
-							recordNew(UINr);
-							INConsr.Code = newINrw.VendorCode;
-							INConsr.UUID = UINr.UUID;
-						end;
-						if(recordStore(INConsr,true))then begin 
-							locompcritemf = true;
+					if(!SetInSet(comp,companies)) then begin
+						if (SetCompanyCode(Comprw.CompCode,false)) then begin
+							FullFillINVc(INConsr,newINr,newINrw,group,type,insertDispNameNotCode);
+							if(!INConsCodef)then begin
+								recordNew(UINr);
+								INConsr.Code = newINrw.VendorCode;
+								INConsr.UUID = UINr.UUID;
+							end;
+							if(recordStore(INConsr,true))then begin 
+								locompcritemf = true;
+								ResetCompany(curcomp);
+								CIr.Code = consItcode;
+								CIr.LocCode = INConsr.Code;
+								CIr.BrandCode = INConsr.BPIBrand;
+								recordStore(CIr,true);
+							end;
 							ResetCompany(curcomp);
-							CIr.Code = consItcode;
-							CIr.LocCode = INConsr.Code;
-							CIr.BrandCode = INConsr.BPIBrand;
-							recordStore(CIr,true);
 						end;
-						ResetCompany(curcomp);
-					end;
+					end;	
 					ExtractObj(compstr,pos,comp);
 				end;
 				
@@ -2586,7 +2590,27 @@ BEGIN
 					recordStore(CIr,true);
 				end;
 				ResetCompany(curcomp);
-	
+				
+				for (k=0;k<CompQty;k=k+1) begin
+					matrowget (Compb,k,Comprw);
+					if(SetInSet(Comprw.ShortName,companies) or Comprw.ShortName==companies)then begin
+						SetCompany(k+1,false);
+						INr.Code = NewINrw.VendorCode;
+						if(ReadFirstMain(INr,1,true) and INr.BPIBrand==newINr.Brand) then begin
+							recordcopy(IN2r,INr);
+							NewINrw.Code = INr.Code;
+							FullFillINVc(INr,newINr,newINrw,group,type,insertDispNameNotCode);
+							if(newINr.OKFlag==1)then begin
+								INr.Group=newINrw.Group;
+								INr.ConsgType = newINrw.ConsgType;
+								if (recordupdate(IN2r,INr,true)!=0) then begin
+									res = -1; 
+									goto LNewINVcRecordCheck;
+								end;
+							end;
+						end;	
+					end;
+				end;		
 			end;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:55 17.09.2019
 			
 			//Create or update item in Consolidate Company ABR End
