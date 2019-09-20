@@ -79,7 +79,7 @@ remote procedure HandleNewIN2DClassCode(var record NewINVc, integer);
 remote function Boolean GetTempItemPrice(var val,string,var string, date,var string); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:04 19.06.2019
 external procedure LogProcTime(string,longint);
 external updating procedure SendUpdateLoyaltyCardToCRM(var record LoyaltyCardVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 13:07 12.09.2018
-
+remote updating procedure CollectConsItemsMn(record RcVc);
 SetLangMode(LangRussian,"RUS",0);
 
 global //Edit***************************Sasha2,14:27 02.08.2016 {
@@ -16070,6 +16070,7 @@ begin
 	record ConsItemVc CIr;
 	record POVc POr;
 	row POVc POrw;
+	integer company;
 	longint curtick;
 	
 	curtick = getcurtick();
@@ -16078,19 +16079,21 @@ begin
 	backdate = AddYear(CurrentDate,-3);
 	backdate.month = 1;
 	backdate.day = 1;
-	
+	if(nonblank(RepSpec.f1)) then begin
+		company = stringtoint(RepSpec.f1);
+	end else begin company = 0; end;
 	BlockLoad(Compb);
 	compmtrw = matrowcnt(Compb);
 	for (j=0;j<compmtrw;j=j+1)begin
 		matrowget(Compb,j,Comprw);
 		logtext(0,j+1);
-		if(Comprw.ActiveStatus==0 and ((j+1)!=32) and (((j+1)<29) or (j+1)==31))then begin
+		if(Comprw.ActiveStatus==0 and ((j+1)!=32) and (((j+1)<29) and((company==0) or (company==j+1)) or (j+1)==31))then begin
 			SetCompany(j+1,false);
 			logtext(0,"SetCompany " & j+1);
 			TrHs = true;
 			POr.TransDate = CurrentDate;
 			POr.SerNr = 99999999999999999;
-			while (loopbackkey("TransDate",POr,2,TrHs)) begin
+			while (loopbackkey("TransDate",POr,2,TrHs) and blank(RepSpec.f4)) begin
 				logtext(0,POr.SerNr);
 				if(POr.TransDate < AddYear(CurrentDate,-1))then begin TrHs = false; end;
 				if(TrHs)then begin
@@ -16106,13 +16109,16 @@ begin
 			end;
 			resetloop(POr);
 			resetloop(INr);
-			INr.Code = "";
+			if(nonblank(RepSpec.f2)) then begin 
+				INr.Code = RepSpec.f2;
+			end else begin INr.Code  = ""; end;
 			TrHs1 = true;
 			while(loopmain(INr,1,TrHs1))begin
 				if(fileexists("stop"))then begin 
 					TrHs1 = false; 
 					logtext(0,"stop file exists");
 				end;
+				if(nonblank(RepSpec.f2) and INr.Code!=RepSpec.f2) then begin TrHs1=false; end;
 				testf = true;
 				if(INr.Terminated==1)then begin testf = false; end;
 				if(setinset("30",INr.DispGroups))then begin testf = false; end;
@@ -16155,7 +16161,7 @@ begin
 					TrHs = true;
 					quant = 0;
 					CustCodef = false;
-					while (loopbackkey("ArtCode",IHr,2,TrHs)) begin
+					while (loopbackkey("ArtCode",IHr,2,TrHs) and blank(RepSpec.f4)) begin
 						if(IHr.ArtCode!=INr.Code)then begin TrHs = false; end;
 						if(IHr.TransDate<backdate)then begin TrHs = false; end;
 						/*INCodef = true;
@@ -16221,7 +16227,7 @@ return;
 end;
 
 
-global procedure CheckItemCC(var record newINVc newINr, integer rownr)
+global updating procedure CheckItemCC(var record newINVc newINr, integer rownr)
 begin
 	integer i,mtrw,oldComp,CompQty;
 	record INVc OldINr,tmpINr,INr;
@@ -16232,6 +16238,7 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	record ConsItemVc CIr;
+	record RcVc RepSpec;
 	BlockLoad(Compb);
 	
 	oldComp = CurrentCompany;
@@ -16283,7 +16290,11 @@ begin
 								matrowget(newINr,rownr-1,newIN2rw);
 								NextM4SerialNumber(newIN2rw.Code,newINrw.Code);
 								matrowput(newINr,rownr,newINrw);
-							end;	
+							end;
+							RepSpec.f1 = currentcompany;
+							RepSpec.f2 = tmpINr.Code;
+							RepSpec.f3 = 1;
+							CollectConsItemsMn(RepSpec);
 						end;	
 					end;	
 				end;
