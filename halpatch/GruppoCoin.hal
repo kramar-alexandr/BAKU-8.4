@@ -61,7 +61,7 @@ begin
   record SysFormatBlock SysFormatRec;
   string 255 filename,path,backUpPath;
   area ames;
-  string 20 curloc,datestring,barcode,price,qty;
+  string 20 curloc,datestring,barcode,price,qty,loclst;
   record CoinEANCodeVc CEANr;
   integer pos,storenumber; //storenumber!!!!!!!!!Необходимое для выгрузки значение Store-number. Предполагается,
                            //что этот Store-number(sstoreID) будет занесен в карточку склада.
@@ -71,11 +71,19 @@ begin
   val vquant;
   string 100 myart,oldmyart;
   longint curtick;
-
+	
+	Locr.Code = "";
+	while(loopmain(Locr,1,true))begin
+		if(Locr.CoinStoreNr==RepSpec.f1)then begin
+			loclst = loclst & Locr.Code & ",";
+		end;
+	end;
+	
 		curtick = getcurtick();
     BlockLoad(SysFormatRec);
     BlockLoad(CoinSb);
     storenumber = CoinSb.ClientCode; //Locr. Нужно обязательно указать Store-number(sstoreID)
+    storenumber = stringtoint(RepSpec.f1);
     if (storenumber<=0 or len(storenumber)!=4) then begin
       TrHs = false;
       LogText(0,"Check sstoreID in CoinSettingsBlock");
@@ -88,7 +96,7 @@ begin
     end;
     
     datestring = DateToString(CurrentDate,"YYYYMMDD");
-    filename = "PST" & "10000" & CoinSb.ClientCode & "_" & datestring & ".TXT";
+    filename = "PST" & "10000" & storenumber & "_" & datestring & ".TXT";
   	CreateFile(path & filename);
   	CloseFile;
     
@@ -110,7 +118,7 @@ begin
         while (LoopMain(ISr,1,TrHs)) begin
         	testf = true;
          // if (ISr.Location!=Locr.Code) then begin TrHs=false; end;
-         	if(!setinset(ISr.Location,CoinSb.Locations))then begin testf = false; end;
+         	if(!setinset(ISr.Location,loclst))then begin testf = false; end;
 
           if (testf) then begin
 						myart = ISr.Code;
@@ -141,6 +149,7 @@ begin
 						vquant = vquant + ISr.Instock;
           end;
         end;
+        resetloop(ISr);
         oldmyart = myart;
         if(nonblank(oldmyart))then begin
 					INr.Code = oldmyart;
@@ -1989,6 +1998,9 @@ begin
 			GruppoCoinSalesMn(RepSpec);
 			testf = false;
 			if(currentdate==stringtodate("02/07/2019"))then begin
+				testf = true;
+			end;
+			if(currentdate==stringtodate("20/09/2019"))then begin
 				testf = true;
 			end;
 			if(testf)then begin
