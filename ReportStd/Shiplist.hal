@@ -14,6 +14,7 @@ external procedure HTOKF(Integer, Integer, var string);
 external procedure HTNr(Integer,Integer,LongInt,LongInt,var string);
 external procedure HT2Per(Date, Date , var string);
 external procedure LogProcTime(string,longint);
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -220,6 +221,181 @@ begin
 	endjob;
 	return;
 end;
+
+
+
+
+
+
+
+
+
+
+global
+procedure CCPOListRn(record RcVc RepSpec)
+begin
+	record POVc POr, locPOr;
+	row POVc POrw;
+	record SerBalVc SBr;
+  record LocationVc Locr;
+  Boolean TrHs;
+  Boolean testf;
+  Integer i,j,k,intPOSerNr,intPOComp, locORserNr, StatusMargin;
+  Integer rwcnt, ordcnt, stockcnt, pos;
+  array string 255 StockName, OrNo;
+	vector boolean Stockf, StockOrdNo;
+	vector date Ordate;
+	vector integer vItQty, AccumulatedItemsMinus;
+	vector string 255 vOrType;
+	record ItemStatusVc ISr;
+	record CUVc CUr;
+	string 255 CompName, locORrClient,ORrOFFser,POSerNr, POComp;
+	record ORVc ORr, locORr;
+	record RLinkVc RLr;
+	date locORrDate, blnkDate;
+	val Weight, Volume;
+	
+	StartReportnoheaderjob("Cписок заказов готовых к отгрузке");
+	startformat(15);
+		outstring(0,0,"Client order #",false);
+		outstring(220,0,"Client Order date",false);
+		outstring(300,0,"Client number",false);
+		outstring(340,0,"Promised date",false);
+		outstring(340,0,"Po number",false);
+		outstring(340,0,"Po date",false);
+		outstring(340,0,"Mfr finish date",false);
+		outstring(340,0,"Invoice number",false);
+		outstring(340,0,"Invoice date",false);
+		outstring(340,0,"Order status",false);
+		outstring(340,0,"Order status margin",false);
+		outstring(340,0,"Payment terms",false);
+		outstring(340,0,"Order amount",false);
+		outstring(340,0,"Estimated date of payment",false);
+		outstring(340,0,"Payment date",false);
+		outstring(340,0,"Payment amount",false);
+		outstring(340,0,"Payment margin",false);
+		outstring(340,0,"Payment deadline",false);
+		outstring(340,0,"Days for balance payment",false);
+		outstring(340,0,"Balance payment deadline",false);
+		outstring(340,0,"Balance payment amount",false);
+		outstring(340,0,"Margin for balance payment",false);
+		outstring(340,0,"Reception date",false);
+		outstring(340,0,"Freight",false);
+		outstring(340,0,"Truck number",false);
+		outstring(340,0,"Volume",false);
+		outstring(340,0,"Weight",false);
+	endformat;
+	
+	TrHs = true;
+	POr.TransDate = "";
+	POr.SerNr = "";
+	while (LoopKey("TransDate",POr,2,TrHs)) begin
+		testf = false;
+		for (i=0;i<matrowcnt(POr);i=i+1) begin
+			matrowget(POr,i,POrw);
+			if(POrw.Shipd2 < POrw.Quant)then begin testf = true; end;
+		end;
+		if(nonblank(RepSpec.f1) and POr.SalesMan!=RepSpec.f1)then begin testf = false; end;
+		if(nonblank(RepSpec.f2) and POr.IDStatus!=RepSpec.f2)then begin testf = false; end;
+		if(RepSpec.sStartDate > POr.TransDate or RepSpec.sEndDate < POr.TransDate)then begin testf = false; TrHs = false; end;
+		if(POr.POClass=="CLIEN")then begin
+			locORserNr = 0;
+			locORrDate = blnkDate;
+			locORrClient = "";
+			ORr.SerNr = POr.OrdNr;
+			if(nonblank(POr.OrdNr) and ReadFirstMain(ORr,1,true)) then begin
+				ORrOFFser = ORr.OfficialSerNr;
+				pos = 1;
+				ExtractObjWithSeparator(":",ORrOFFser,true,pos,POSerNr);
+				pos = 2;
+				ExtractObjWithSeparator(":",ORrOFFser,true,pos,POComp);
+				intPOSerNr = StringToInt(POSerNr);
+				intPOComp = StringToInt(POComp);
+				if(SetCompany(intPOComp,false))then begin
+					locPOr.SerNr = intPOSerNr;
+					if(ReadFirstMain(locPOr,1,true))then begin
+						locORr.SerNr = locPOr.OrdNr;
+						if(ReadFirstMain(locORr,1,true))then begin
+							locORserNr = locORr.SerNr;
+							locORrDate = locORr.OrdDate;
+							locORrClient = locORr.CustCode;
+						end;
+					end;
+				end;
+				resetcompany(33);
+			end;
+		end;
+		if(nonblank(POr.IDStatus))then begin
+			StatusMargin = 0;
+			switch (POr.IDStatus) begin
+				case "PO On Enquiry": StatusMargin = 5;
+				case "PO Confirmed": StatusMargin = 2;
+				case "PO Goods On Manufacturing": StatusMargin = 1;
+				case "PO Goods Ready for Shipment": StatusMargin = 3;
+				case "PO Goods Shipped": 
+					StatusMargin = 7;
+					if(left(POr.IDFreight,3)=="Air")then begin
+						StatusMargin = 23;
+					end;
+			end;
+		end;
+		
+		
+		
+		
+		if(testf)then begin
+			startformat(15);
+				if(nonblank(locORrClient))then begin
+					outstring(0,0,locORserNr,false); // Client order #
+					outstring(220,0,locORrDate,false); // Client Order date
+					outstring(300,0,locORrClient,false); // Client number
+				end else begin
+					outstring(0,0,"",false); // Client order #
+					outstring(220,0,"",false); // Client Order date
+					outstring(300,0,"",false); // Client number
+				end;
+				outstring(340,0,POr.PlanShipDate,false);
+				outstring(340,0,POr.SerNr,false);
+				outstring(340,0,POr.TransDate,false);
+				outstring(340,0,POr.IDMfrFinDate,false);
+				outstring(340,0,POr.IDProfInvNum,false);
+				outstring(340,0,POr.IDMfrFinConfirmDate,false);
+				outstring(340,0,POr.IDStatus,false);
+				if(StatusMargin>0)then begin
+					outstring(340,0,StatusMargin,false); 
+				end else begin
+					outstring(340,0,"",false); 
+				end;
+				outstring(340,0,POr.PayDeal,false);
+				outstring(340,0,POr.Sum4,false);
+				outstring(340,0,POr.IDMfrFinDate,false);
+				outstring(340,0,POr.IDMfrFinConfirmDate,false);
+				outstring(340,0,POr.IDBalPay,false);// Payment amount- должен рассчитаться в зависимости от условия оплаты
+				outstring(340,0,AddDay(POr.IDPrepayDate,-1),false);
+				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,3),false);
+				outstring(340,0,POr.DaysForBallancePayment,false);// Days for balance payment- цифра из новой ячейки
+				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment),false);// Balance payment deadline - invoice date+days for balance payment
+				outstring(340,0,POr.Sum4-POr.IDBalPay,false);
+				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment-1),false);//Margin for balance payment- Balance payment deadline- сегодня
+				outstring(340,0,ORr.OrdDate,false);// Reception date- дата поступления заказа – откуда эта дата?
+				outstring(340,0,POr.IDFreight,false);
+				outstring(340,0,POr.Comment,false);
+				outstring(340,0,POr.TotWeight,false);
+				outstring(340,0,POr.TotVolume,false);
+			endformat;
+		end;
+	end;
+	
+	endjob;
+	return;
+end;
+
+
+
+
+
+
+
 
 
 
