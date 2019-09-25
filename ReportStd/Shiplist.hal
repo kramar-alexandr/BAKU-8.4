@@ -239,7 +239,7 @@ begin
 	record SerBalVc SBr;
   record LocationVc Locr;
   Boolean TrHs;
-  Boolean testf;
+  Boolean testf, TrLf;
   Integer i,j,k,intPOSerNr,intPOComp, locORserNr, StatusMargin;
   Integer rwcnt, ordcnt, stockcnt, pos;
   array string 255 StockName, OrNo;
@@ -249,11 +249,13 @@ begin
 	vector string 255 vOrType;
 	record ItemStatusVc ISr;
 	record CUVc CUr;
-	string 255 CompName, locORrClient,ORrOFFser,POSerNr, POComp;
+	string 255 CompName, locORrClient,ORrOFFser,POSerNr, POComp, TrackSet;
 	record ORVc ORr, locORr;
 	record RLinkVc RLr;
 	date locORrDate, blnkDate;
 	val Weight, Volume;
+	record POShipmDataVc POSDr;
+	row POShipmDataVc POSDrw;
 	
 	StartReportnoheaderjob("Cписок заказов готовых к отгрузке");
 	startformat(15);
@@ -338,8 +340,21 @@ begin
 					end;
 			end;
 		end;
-		
-		
+		Weight = blankval;
+		Volume = blankval;
+		TrackSet = "";
+		POSDr.POSerNr = POr.SerNr;
+		TrLf = false;
+		if(ReadFirstMain(POSDr,1,true))then begin
+			for (i=0;i<matrowcnt(POSDr);i=i+1)begin
+				matrowget(POSDr,i,POSDrw);
+				if(nonblank(TrackSet))then begin TrackSet = TrackSet & ","; end;
+				TrackSet = TrackSet & POSDrw.TruckNo;
+				Weight = Weight + POSDrw.Weight;
+				Volume = Volume + POSDrw.Volume;
+				TrLf = true;
+			end;
+		end;
 		
 		
 		if(testf)then begin
@@ -378,9 +393,15 @@ begin
 				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment-1),false);//Margin for balance payment- Balance payment deadline- сегодня
 				outstring(340,0,ORr.OrdDate,false);// Reception date- дата поступления заказа – откуда эта дата?
 				outstring(340,0,POr.IDFreight,false);
-				outstring(340,0,POr.Comment,false);
-				outstring(340,0,POr.TotWeight,false);
-				outstring(340,0,POr.TotVolume,false);
+				if(TrLf)then begin
+					outstring(340,0,TrackSet,false);
+					outstring(340,0,Weight,false);
+					outstring(340,0,Volume,false);
+				end else begin
+					outstring(340,0,"",false);
+					outstring(340,0,"",false);
+					outstring(340,0,"",false);
+				end;
 			endformat;
 		end;
 	end;
