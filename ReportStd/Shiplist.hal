@@ -238,7 +238,7 @@ begin
 	row POVc POrw;
 	record SerBalVc SBr;
   record LocationVc Locr;
-  Boolean TrHs;
+  Boolean TrHs, TrHs2;
   Boolean testf, TrLf, locf;
   Integer i,j,k,intPOSerNr,intPOComp, locORserNr, StatusMargin;
   Integer rwcnt, ordcnt, stockcnt, pos;
@@ -253,9 +253,13 @@ begin
 	record ORVc ORr, locORr;
 	record RLinkVc RLr;
 	date locORrDate, blnkDate;
-	val Weight, Volume;
+	val Weight, Volume, PPSum, PSum;
 	record POShipmDataVc POSDr;
 	row POShipmDataVc POSDrw;
+	record APPayHistVc APPayHistr;
+	record VIVc VIr;
+	record APVc APr;
+	
 	
 	StartReportnoheaderjob("Cписок заказов готовых к отгрузке");
 	startformat(15);
@@ -271,6 +275,7 @@ begin
 		outstring(340,0,"Order status",false);
 		outstring(340,0,"Order status margin",false);
 		outstring(340,0,"Payment terms",false);
+		outstring(340,0,"Curerency code",false);
 		outstring(340,0,"Order amount",false);
 		outstring(340,0,"Estimated date of payment",false);
 		outstring(340,0,"Payment date",false);
@@ -359,6 +364,31 @@ begin
 			end;
 		end;
 		
+		PPSum = 0;
+		PSum = 0;
+		APPayHistr.OrderNr = POr.SerNr;
+		TrHs2 = true;
+		While(LoopKey("OrderNr",APPayHistr,1,TrHs2)) begin
+			if (APPayHistr.OrderNr!=POr.SerNr) then begin TrHs2 = false; end;
+			if (TrHs2 and APPayHistr.FileName=="OPVc") then begin
+				PPSum = PPSum + APPayHistr.Val;
+			end;
+		end;
+		Resetloop(APPayHistr);
+		
+		VIr.POSerNr = POr.SerNr;
+		TrHs2 = true;
+		While(LoopKey("POSerNr",VIr,1,TrHs2)) begin
+			if (VIr.POSerNr!=POr.SerNr) then begin TrHs2 = false; end;
+			if (TrHs2) then begin
+				APr.InvoiceNr = VIr.SerNr;
+				if(ReadFirstKey("InvoiceNr",APr,1,true))then begin
+					PSum = PSum + (VIr.PayVal - APr.RVal);
+				end;
+			end;
+		end;
+		Resetloop(VIr);
+		
 		
 		if(testf)then begin
 			startformat(15);
@@ -387,12 +417,13 @@ begin
 				outstring(340,0,POr.Sum4,false);
 				outstring(340,0,POr.IDMfrFinDate,false);
 				outstring(340,0,POr.IDMfrFinConfirmDate,false);
-				outstring(340,0,POr.IDPrepay,false);// Payment amount- должен рассчитаться в зависимости от условия оплаты
+				outstring(340,0,POr.CurncyCode,false);
+				outstring(340,0,PPSum+PSum,false);// Payment amount- должен рассчитаться в зависимости от условия оплаты
 				outstring(340,0,AddDay(POr.IDPrepayDate,-1),false);
 				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,3),false);
 				outstring(340,0,POr.DaysForBallancePayment,false);// Days for balance payment- цифра из новой ячейки
 				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment),false);// Balance payment deadline - invoice date+days for balance payment
-				outstring(340,0,POr.Sum4-POr.IDPrepay,false);
+				outstring(340,0,POr.Sum4-(PPSum+PSum),false);
 				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment-1),false);//Margin for balance payment- Balance payment deadline- сегодня
 				outstring(340,0,ORr.OrdDate,false);// Reception date- дата поступления заказа – откуда эта дата?
 				outstring(340,0,POr.IDFreight,false);
