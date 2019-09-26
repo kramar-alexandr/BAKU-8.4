@@ -239,7 +239,7 @@ begin
 	record SerBalVc SBr;
   record LocationVc Locr;
   Boolean TrHs, TrHs2;
-  Boolean testf, TrLf, locf;
+  Boolean testf, TrLf, locf, IVCredVithStatf;
   Integer i,j,k,intPOSerNr,intPOComp, locORserNr, StatusMargin;
   Integer rwcnt, ordcnt, stockcnt, pos;
   array string 255 StockName, OrNo;
@@ -253,7 +253,7 @@ begin
 	record ORVc ORr, locORr;
 	record RLinkVc RLr;
 	date locORrDate, blnkDate;
-	val Weight, Volume, PPSum, PSum, Sum;
+	val Weight, Volume, PPSum, PSum, Sum, credPO;
 	record POShipmDataVc POSDr;
 	row POShipmDataVc POSDrw;
 	record APPayHistVc APPayHistr;
@@ -377,19 +377,29 @@ begin
 		end;
 		Resetloop(APPayHistr);
 		
+		IVCredVithStatf = false;
+		credPO = 0;
 		VIr.POSerNr = POr.SerNr;
 		TrHs2 = true;
 		While(LoopKey("POSerNr",VIr,1,TrHs2)) begin
 			if (VIr.POSerNr!=POr.SerNr) then begin TrHs2 = false; end;
 			matrowget(VIr,0,VIrw);
-			if (matrowcnt(VIr)>0 and TrHs2 and VIrw.AccNumber!="44/21") then begin
+			if(VIr.PayDeal=="CN" and blank(VIr.CredInv))then begin
+				IVCredVithStatf = true;
+			end;
+			if (matrowcnt(VIr)>0 and TrHs2 and VIrw.AccNumber!="44/21" and !IVCredVithStatf) then begin
 				APr.SerNr = VIr.SerNr;
 				if(ReadFirstMain(APr,1,true))then begin
 					logtext(0,APr.RVal);
 					PSum = PSum + (VIr.PayVal - APr.RVal);
 				end else begin
 					if(VIr.OKFlag==1)then begin
-						PSum = VIr.PayVal;
+						if(VIr.PayDeal!="CN")then begin
+							PSum = PSum + VIr.PayVal;
+						end else begin
+							PSum = PSum - VIr.PayVal;
+							credPO = credPO + VIr.PayVal;
+						end;
 					end;
 				end;
 			end;
@@ -427,7 +437,7 @@ begin
 				end;
 				outstring(340,0,POr.PayDeal,false);
 				outstring(340,0,POr.CurncyCode,false);
-				outstring(340,0,POr.Sum4,false);
+				outstring(340,0,POr.Sum4-credPO,false);
 				outstring(340,0,POr.IDMfrFinDate,false);
 				outstring(340,0,POr.IDMfrFinConfirmDate,false);
 				outstring(340,0,Sum,false);// Payment amount- должен рассчитаться в зависимости от условия оплаты
