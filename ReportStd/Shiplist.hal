@@ -15,6 +15,7 @@ external procedure HTNr(Integer,Integer,LongInt,LongInt,var string);
 external procedure HT2Per(Date, Date , var string);
 external procedure LogProcTime(string,longint);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function longint DateDiff(date,date);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -249,7 +250,7 @@ begin
 	vector string 255 vOrType;
 	record ItemStatusVc ISr;
 	record CUVc CUr;
-	string 255 CompName, locORrClient,ORrOFFser,POSerNr, POComp, TrackSet, IDlocORserNr;
+	string 255 CompName, locORrClient,ORrOFFser,POSerNr, POComp, TrackSet, IDlocORserNr, ClientName;
 	record ORVc ORr, locORr;
 	record RLinkVc RLr;
 	date locORrDate, blnkDate;
@@ -270,11 +271,13 @@ begin
 		outstring(300,0,"Client number",false);
 		outstring(340,0,"Promised date",false);
 		outstring(340,0,"Po number",false);
+		outstring(340,0,"Manufacturer name",false);
 		outstring(340,0,"Po date",false);
 		outstring(340,0,"Mfr finish date",false);
 		outstring(340,0,"Invoice number",false);
 		outstring(340,0,"Invoice date",false);
 		outstring(340,0,"Order status",false);
+		outstring(340,0,"Update Ord. Status Date",false);
 		outstring(340,0,"Order status margin",false);
 		outstring(340,0,"Payment terms",false);
 		outstring(340,0,"Currency code",false);
@@ -293,6 +296,8 @@ begin
 		outstring(340,0,"Truck number",false);
 		outstring(340,0,"Volume",false);
 		outstring(340,0,"Weight",false);
+		outstring(340,0,"Freight sum",false);
+		outstring(340,0,"Customs sum",false);
 	endformat;
 	
 	TrHs = true;
@@ -352,17 +357,18 @@ begin
 		if(nonblank(POr.IDStatus))then begin
 			StatusMargin = 0;
 			switch (POr.IDStatus) begin
-				case "PO On Enquiry": StatusMargin = 5;
-				case "PO Confirmed": StatusMargin = 2;
-				case "PO Goods On Manufacturing": StatusMargin = 1;
-				case "PO Goods Ready for Shipment": StatusMargin = 3;
+				case "PO On Enquiry": StatusMargin = datediff(addday(POr.UpdStatDate,5),currentdate);
+				case "PO Confirmed": StatusMargin = datediff(addday(POr.UpdStatDate,2),currentdate);
+				case "PO Goods On Manufacturing": StatusMargin = datediff(POr.IDMfrFinDate,currentdate);
+				case "PO Goods Ready for Shipment": StatusMargin = datediff(addday(POr.UpdStatDate,3),currentdate);
 				case "PO Goods Shipped": 
-					StatusMargin = 7;
+					StatusMargin = datediff(addday(POr.UpdStatDate,23),currentdate);
 					if(left(POr.IDFreight,3)=="Air")then begin
-						StatusMargin = 23;
+						StatusMargin = datediff(addday(POr.UpdStatDate,7),currentdate);
 					end;
 			end;
 		end;
+
 
 		Weight = blankval;
 		Volume = blankval;
@@ -426,7 +432,12 @@ begin
 		end else begin
 			Sum = PPSum;
 		end;
-		// Sum = PPSum + PSum;
+		
+		
+		// ClientName
+		
+		
+		
 		if(testf)then begin
 			startformat(15);
 				if(locf)then begin
@@ -448,11 +459,13 @@ begin
 				end else begin
 					outstring(340,0,POr.Reference,false);
 				end;
+				outstring(340,0,POr.Addr0,false);
 				outstring(340,0,POr.TransDate,false);
-				outstring(340,0,POr.IDMfrFinDate,false);
+				outdate(340,0,POr.IDMfrFinDate,false);
 				outstring(340,0,POr.IDProfInvNum,false);
-				outstring(340,0,POr.IDMfrFinConfirmDate,false);
+				outdate(340,0,POr.IDMfrFinConfirmDate,false);
 				outstring(340,0,POr.IDStatus,false);
+				outstring(340,0,POr.UpdStatDate,false);
 				if(StatusMargin>0)then begin
 					outstring(340,0,StatusMargin,false); 
 				end else begin
@@ -461,15 +474,15 @@ begin
 				outstring(340,0,POr.PayDeal,false);
 				outstring(340,0,POr.CurncyCode,false);
 				outstring(340,0,POr.Sum4,false);
-				outstring(340,0,POr.IDMfrFinDate,false);
-				outstring(340,0,POr.IDMfrFinConfirmDate,false);
+				outdate(340,0,POr.IDMfrFinDate,false);
+				outdate(340,0,POr.IDMfrFinConfirmDate,false);
 				outstring(340,0,Sum,false);// Payment amount- должен рассчитаться в зависимости от условия оплаты
-				outstring(340,0,AddDay(POr.IDPrepayDate,-1),false);
-				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,3),false);
+				outdate(340,0,AddDay(POr.IDPrepayDate,-1),false);
+				outdate(340,0,AddDay(POr.IDMfrFinConfirmDate,3),false);
 				outstring(340,0,POr.DaysForBallancePayment,false);// Days for balance payment- цифра из новой ячейки
-				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment),false);// Balance payment deadline - invoice date+days for balance payment
+				outdate(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment),false);// Balance payment deadline - invoice date+days for balance payment
 				outstring(340,0,POr.Sum4-Sum,false);
-				outstring(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment-1),false);//Margin for balance payment- Balance payment deadline- сегодня
+				outdate(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment-1),false);//Margin for balance payment- Balance payment deadline- сегодня
 				outstring(340,0,ORr.OrdDate,false);// Reception date- дата поступления заказа – откуда эта дата?
 				outstring(340,0,POr.IDFreight,false);
 				if(TrLf)then begin
@@ -481,6 +494,8 @@ begin
 					outstring(340,0,"",false);
 					outstring(340,0,"",false);
 				end;
+				outstring(340,0,POr.ShipCost,false);
+				outstring(340,0,POr.CustomsCost,false);
 			endformat;
 		end;
 	end;
