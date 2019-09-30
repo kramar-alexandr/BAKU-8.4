@@ -42,6 +42,11 @@ external function Boolean GetAccName(string,var string,Integer);
 external procedure ConvertSalesAcc(var string,Integer);
 external procedure GetItemSalesAcc(string,Integer,var string);
 external procedure AddEuroCurncyNomTrRow(record TRVc,string,string,string,string,val,Boolean,Boolean,var val,string,val,val,val,val,val,val,val,val,LongInt,Boolean,string,string,string,Integer); //Edit***************************Sasha2,11:44 17.03.2015
+external function roundmode SetRoundModeD(Integer);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 15:52:41
+
+
+SetLangMode(LangRussian,"RUS",0);
+
 
 global
 procedure GetConsigmentStockAcc(string artcode,string serialnr,var string res)
@@ -428,7 +433,7 @@ begin
   row VATCodeBlock VATCbrw;
   val trev,tvat,btvat,t1,t2,rs,nilv;
   string 255 objstr,vatcodes;
-  Boolean simneeded,opvataccf,negamf,UseTaxTemplatesforTaxCalcf;
+  Boolean simneeded,opvataccf,negamf,UseTaxTemplatesforTaxCalcf,testf;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 15:50:37
   string 255 tstr,tstr2;
   string 2 vatcod,rvrsvatcode,taxtemplatecode;
   string 10 vatacc,revacc;
@@ -438,6 +443,15 @@ begin
   val salessum,quant,rowsum;
   string 10 taccnumber;
   record TaxMatrixVc TMr;
+  string 200 cuobj1;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 15:44:57
+	val comisTotSum,comisrs;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 15:44:58
+	record NewComissPrcBlock CPb;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 15:45:01
+	record NewComissArrBlock CABb;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 15:45:02
+	row NewComissArrBlock CABrw;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 15:45:03
+	val PRCNT;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 15:51:40
+  
+  blockload(CPb);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 16:00:40
+  blockload(CABb);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 30 September 2019 16:00:46
   
   UseTaxTemplatesforTaxCalcf = UseTaxTemplatesforTaxCalc;
   opvataccf = false;
@@ -660,6 +674,38 @@ retention change
             if(IVp.PriceList=="FOBR")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 3 May 2019 14:45:26
 							ivraccno = "";
 						end; 
+						// Edit Start ---------------------------------------------- Edit Start
+	//Monday, 30 September 2019 15:48:48
+						if(IVp.InvDate>=stringtodate("01/10/2019"))then begin
+							if(CPb.Enable==1 and nonblank(CPb.CorrAcc) and left(IVp.CustCode,3)!="FOB")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 07 06 2018 y. о 12:46:21
+								if(ivraccno=="46" or ivraccno=="47")then begin
+									BlockLoad(CABb);
+									rwcnt = MatRowCnt(CABb);
+									testf = false;
+									for(i=0;i<rwcnt;i=i+1)begin
+										MatRowGet(CABb,i,CABrw);
+										if(SetInSet(CABrw.Obj,cuobj1))then begin
+											PRCNT = CABrw.PercentRow;
+											testf = true;
+										end;
+									end;
+									if(!testf)then begin
+										PRCNT = CPb.Percent;
+									end;
+									comisrs = round(rs/100*PRCNT,SetRoundModeD(2));
+									AddEuroCurncyTrRow(gTRp,CPb.CorrAcc,cuobj1,"","Комиссия " & PRCNT & "% в ID Group-" & PRCNT & "% ID Group's commission",comisrs,false,dc2,comisTotSum,
+																		 "AZN",blankval,blankval,blankval,blankval,
+																		 blankval,comisrs,blankval,-1,IVp.InvType==kInvoiceTypeCredit or IVp.InvType==kInvoiceTypeCreditSpecialSales,";54");// Edit ************************** Friday, 20 October 2017 17:41:27
+
+									AddEuroCurncyTrRow(gTRp,"44/11",cuobj1,"","Комиссия " & PRCNT & "% в ID Group-" & PRCNT & "% ID Group's commission",comisrs,false,dc1,comisTotSum,
+																		 "AZN",blankval,blankval,blankval,blankval,
+																		 blankval,comisrs,blankval,-1,IVp.InvType==kInvoiceTypeCredit or IVp.InvType==kInvoiceTypeCreditSpecialSales,";54");// Edit ************************** Friday, 20 October 2017 17:41:27
+								end;
+							end;
+						end;
+						
+	// Edit End ---------------------------------------------- Edit End
+	
             if (inclqty) then begin
 							AddEuroCurncyTrRow(gTRp,ivraccno,objstr,vatcodes,tstr,rs,true,dc2,TotSum,IVp.CurncyCode,
 																 frrate,torate1,torate2,baserate1,baserate2,trev,quant,-1,negamf,taccnumber);
