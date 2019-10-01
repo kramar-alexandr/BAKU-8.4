@@ -14,6 +14,8 @@ external procedure HTOKF(Integer, Integer, var string);
 external procedure HTNr(Integer,Integer,LongInt,LongInt,var string);
 external procedure HT2Per(Date, Date , var string);
 external procedure LogProcTime(string,longint);
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function longint DateDiff(date,date);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -220,6 +222,295 @@ begin
 	endjob;
 	return;
 end;
+
+
+
+
+
+
+
+
+
+
+global
+procedure CCPOListRn(record RcVc RepSpec)
+begin
+	record POVc POr, locPOr;
+	row POVc POrw;
+	record SerBalVc SBr;
+  record LocationVc Locr;
+  Boolean TrHs, TrHs2;
+  Boolean testf, TrLf, locf, IVCredVithStatf,SMf;
+  Integer i,j,k,intPOSerNr,intPOComp, locORserNr, StatusMargin, curcomp;
+  Integer rwcnt, ordcnt, stockcnt, pos;
+  array string 255 StockName, OrNo;
+	vector boolean Stockf, StockOrdNo;
+	vector date Ordate;
+	vector integer vItQty, AccumulatedItemsMinus;
+	vector string 255 vOrType;
+	record ItemStatusVc ISr;
+	record CUVc CUr;
+	string 255 CompName, locORrClient,ORrOFFser,POSerNr, POComp, TrackSet, IDlocORserNr, ClientName;
+	record ORVc ORr, locORr;
+	record RLinkVc RLr;
+	date locORrDate, blnkDate;
+	val Weight, Volume, PPSum, PSum, Sum, credPO;
+	record POShipmDataVc POSDr;
+	row POShipmDataVc POSDrw;
+	record APPayHistVc APPayHistr;
+	record VIVc VIr;
+	row VIVc VIrw;
+	record APVc APr;
+	
+	curcomp = currentcompany;
+	
+	StartReportnoheaderjob("Cписок заказов готовых к отгрузке");
+	startformat(15);
+		outstring(0,0,"Client order #",false);
+		outstring(220,0,"Client Order date",false);
+		outstring(300,0,"Client number",false);
+		outstring(340,0,"Promised date",false);
+		outstring(340,0,"Po number",false);
+		outstring(340,0,"Manufacturer name",false);
+		outstring(340,0,"Po date",false);
+		outstring(340,0,"Mfr finish date",false);
+		outstring(340,0,"Invoice number",false);
+		outstring(340,0,"Invoice date",false);
+		outstring(340,0,"Order status",false);
+		outstring(340,0,"Update Ord. Status Date",false);
+		outstring(340,0,"Order status margin",false);
+		outstring(340,0,"Payment terms",false);
+		outstring(340,0,"Currency code",false);
+		outstring(340,0,"Order amount",false);
+		outstring(340,0,"Estimated date of payment",false);
+		outstring(340,0,"Payment date",false);
+		outstring(340,0,"Payment amount",false);
+		outstring(340,0,"Payment margin",false);
+		outstring(340,0,"Payment deadline",false);
+		outstring(340,0,"Days for balance payment",false);
+		outstring(340,0,"Balance payment deadline",false);
+		outstring(340,0,"Balance payment amount",false);
+		outstring(340,0,"Margin for balance payment",false);
+		outstring(340,0,"Reception date",false);
+		outstring(340,0,"Freight",false);
+		outstring(340,0,"Truck number",false);
+		outstring(340,0,"Volume",false);
+		outstring(340,0,"Weight",false);
+		outstring(340,0,"Freight sum",false);
+		outstring(340,0,"Customs sum",false);
+	endformat;
+	
+	TrHs = true;
+	POr.TransDate = RepSpec.sStartDate;
+	POr.SerNr = "";
+	while (LoopKey("TransDate",POr,2,TrHs)) begin
+		testf = true;
+		// for (i=0;i<matrowcnt(POr);i=i+1) begin
+			// matrowget(POr,i,POrw);
+			// if(POrw.Shipd2 < POrw.Quant)then begin testf = true; end;
+		// end;
+		if(nonblank(RepSpec.f1) and POr.SalesMan!=RepSpec.f1)then begin testf = false; end;
+		if(nonblank(RepSpec.f2) and POr.IDStatus!=RepSpec.f2)then begin testf = false; end;
+		if(RepSpec.sStartDate > POr.TransDate)then begin testf = false; TrHs = false; end;  
+		if(RepSpec.sEndDate < POr.TransDate)then begin testf = false; TrHs = false; end;
+		locf = false;
+		if(POr.POClass=="CLIEN" and currentcompany==33)then begin
+			locORserNr = 0;
+			locORrDate = blnkDate;
+			locORrClient = "";
+			ORr.SerNr = POr.OrdNr;
+			if(nonblank(POr.OrdNr) and ReadFirstMain(ORr,1,true)) then begin
+				ORrOFFser = ORr.OfficialSerNr;
+				pos = 0;
+				ExtractObjWithSeparator(":",ORrOFFser,true,pos,POSerNr);
+				ExtractObjWithSeparator(":",ORrOFFser,true,pos,POComp);
+				intPOSerNr = StringToInt(POSerNr);
+				intPOComp = StringToInt(POComp);
+				if(SetCompany(intPOComp,false))then begin
+					locPOr.SerNr = intPOSerNr;
+					if(ReadFirstMain(locPOr,1,true))then begin
+						locORr.SerNr = locPOr.OrdNr;
+						if(ReadFirstMain(locORr,1,true))then begin
+							locORserNr = locORr.SerNr;
+							locORrDate = locORr.OrdDate;
+							locORrClient = locORr.CustCode;
+							locf = true;
+						end;
+					end;
+				end;
+				resetcompany(curcomp);
+			end;
+		end;
+		
+		
+		if(currentcompany==28)then begin
+			ORr.CustOrdNr = POr.IDRefPRNum;
+			if(ReadFirstKey("CustOrdNr",ORr,1,true))then begin
+				IDlocORserNr = ORr.CustOrdNr;
+				locORrDate = ORr.OrdDate;
+				locORrClient = ORr.CustCode;
+				locf = true;
+			end;
+		end;
+		
+		SMf = true;
+		if(nonblank(POr.IDStatus))then begin
+			StatusMargin = 0;
+			switch (POr.IDStatus) begin
+				case "PO On Enquiry": StatusMargin = datediff(addday(POr.UpdStatDate,5),currentdate);
+				case "PO Confirmed": StatusMargin = datediff(addday(POr.UpdStatDate,2),currentdate);
+				case "PO Goods On Manufacturing": StatusMargin = datediff(POr.IDMfrFinDate,currentdate);
+				case "PO Goods Ready for Shipment": StatusMargin = datediff(addday(POr.UpdStatDate,3),currentdate);
+				case "PO Goods Shipped": 
+					StatusMargin = datediff(addday(POr.UpdStatDate,23),currentdate);
+					if(left(POr.IDFreight,3)=="Air")then begin
+						StatusMargin = datediff(addday(POr.UpdStatDate,7),currentdate);
+					end;
+				otherwise SMf = false;
+			end;
+		end;
+
+
+		Weight = blankval;
+		Volume = blankval;
+		TrackSet = "";
+		POSDr.POSerNr = POr.SerNr;
+		TrLf = false;
+		if(ReadFirstMain(POSDr,1,true))then begin
+			for (i=0;i<matrowcnt(POSDr);i=i+1)begin
+				matrowget(POSDr,i,POSDrw);
+				if(nonblank(TrackSet))then begin TrackSet = TrackSet & ","; end;
+				TrackSet = TrackSet & POSDrw.TruckNo;
+				Weight = Weight + POSDrw.Weight;
+				Volume = Volume + POSDrw.Volume;
+				TrLf = true;
+			end;
+		end;
+		
+		PPSum = 0;
+		PSum = 0;
+		APPayHistr.OrderNr = POr.SerNr;
+		TrHs2 = true;
+		While(LoopKey("OrderNr",APPayHistr,1,TrHs2)) begin
+			if (APPayHistr.OrderNr!=POr.SerNr) then begin TrHs2 = false; end;
+			if (TrHs2 and APPayHistr.FileName=="OPVc") then begin
+				PPSum = PPSum + APPayHistr.Val;
+			end;
+		end;
+		Resetloop(APPayHistr);
+		
+		IVCredVithStatf = false;
+		credPO = 0;
+		VIr.POSerNr = POr.SerNr;
+		TrHs2 = true;
+		While(LoopKey("POSerNr",VIr,1,TrHs2)) begin
+			if (VIr.POSerNr!=POr.SerNr) then begin TrHs2 = false; end;
+			matrowget(VIr,0,VIrw);
+			if(VIr.PayDeal=="CN" and blank(VIr.CredInv))then begin
+				IVCredVithStatf = true;
+			end;
+			if (matrowcnt(VIr)>0 and TrHs2 and VIrw.AccNumber!="44/21" and !IVCredVithStatf) then begin
+				APr.SerNr = VIr.SerNr;
+				if(ReadFirstMain(APr,1,true))then begin
+					logtext(0,APr.RVal);
+					PSum = PSum + (VIr.PayVal - APr.RVal);
+				end else begin
+					if(VIr.OKFlag==1)then begin
+						if(VIr.PayDeal!="CN")then begin
+							PSum = PSum + VIr.PayVal;
+						end else begin
+							PSum = PSum - VIr.PayVal;
+							credPO = credPO + VIr.PayVal;
+						end;
+					end;
+				end;
+			end;
+		end;
+		Resetloop(VIr);
+		
+		if(PSum>0)then begin
+			Sum = PSum;
+		end else begin
+			Sum = PPSum;
+		end;
+		
+		
+		// ClientName
+		
+		
+		
+		if(testf)then begin
+			startformat(15);
+				if(locf)then begin
+					if(currentcompany!=28)then begin
+						outstring(0,0,locORserNr,false); // Client order #
+					end else begin
+						outstring(0,0,IDlocORserNr,false);
+					end;
+					outstring(220,0,locORrDate,false); // Client Order date
+					outstring(300,0,locORrClient,false); // Client number
+				end else begin
+					outstring(0,0,"",false); // Client order #
+					outstring(220,0,"",false); // Client Order date
+					outstring(300,0,"",false); // Client number
+				end;
+				outstring(340,0,POr.PlanShipDate,false);
+				if(currentcompany!=28)then begin
+					outstring(340,0,POr.SerNr,false);
+				end else begin
+					outstring(340,0,POr.Reference,false);
+				end;
+				outstring(340,0,POr.Addr0,false);
+				outstring(340,0,POr.TransDate,false);
+				outdate(340,0,POr.IDMfrFinDate,false);
+				outstring(340,0,POr.IDProfInvNum,false);
+				outdate(340,0,POr.IDMfrFinConfirmDate,false);
+				outstring(340,0,POr.IDStatus,false);
+				outstring(340,0,POr.UpdStatDate,false);
+				if(SMf)then begin
+					outstring(340,0,StatusMargin,false); 
+				end else begin
+					outstring(340,0,"",false); 
+				end;
+				outstring(340,0,POr.PayDeal,false);
+				outstring(340,0,POr.CurncyCode,false);
+				outstring(340,0,POr.Sum4,false);
+				outdate(340,0,POr.IDMfrFinDate,false);
+				outdate(340,0,POr.IDMfrFinConfirmDate,false);
+				outstring(340,0,Sum,false);// Payment amount- должен рассчитаться в зависимости от условия оплаты
+				outdate(340,0,AddDay(POr.IDPrepayDate,-1),false);
+				outdate(340,0,AddDay(POr.IDMfrFinConfirmDate,3),false);
+				outstring(340,0,POr.DaysForBallancePayment,false);// Days for balance payment- цифра из новой ячейки
+				outdate(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment),false);// Balance payment deadline - invoice date+days for balance payment
+				outstring(340,0,POr.Sum4-Sum,false);
+				outdate(340,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment-1),false);//Margin for balance payment- Balance payment deadline- сегодня
+				outstring(340,0,ORr.OrdDate,false);// Reception date- дата поступления заказа – откуда эта дата?
+				outstring(340,0,POr.IDFreight,false);
+				if(TrLf)then begin
+					outstring(340,0,TrackSet,false);
+					outstring(340,0,Weight,false);
+					outstring(340,0,Volume,false);
+				end else begin
+					outstring(340,0,"",false);
+					outstring(340,0,"",false);
+					outstring(340,0,"",false);
+				end;
+				outstring(340,0,POr.ShipCost,false);
+				outstring(340,0,POr.CustomsCost,false);
+			endformat;
+		end;
+	end;
+	
+	endjob;
+	return;
+end;
+
+
+
+
+
+
+
 
 
 
