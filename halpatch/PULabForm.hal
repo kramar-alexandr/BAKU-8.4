@@ -23,8 +23,8 @@ remote updating procedure Handle_Zebra_Printing(record RcVc,var area,var integer
 remote function boolean CompanyIsJWLikeCompany(Integer);// Edit ************************** Tuesday, 22 August 2017 11:26:52
 external function Boolean GetItemPriceDiscount3(string,val,var record INVc,string,val,val,val,val,val,string,string,string,string,
                                                 var val,var string,var val,var string,var val,var string,Integer,var Boolean,Date,Time,
-                                                string,Boolean,var Boolean,string,var string,var val,string,string,var string);
-												
+                                                string,Boolean,var Boolean,string,var string,var val,string,string,var string);												
+remote function Boolean GetTempItemPrice(var val,string,var string, date,var string); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:04 19.06.2019
 
 global procedure CreateEAN128(var string str)// Edit ************************** Tuesday, 22 August 2017 11:26:54
 begin
@@ -65,7 +65,7 @@ end;
 procedure PULab(record PUVc PUr,row PUVc PUrw,record LangNrVc LangNrr,record SysFormatBlock SysFormatRec,
                 var val totcostprice)
 BEGIN
-  string 255 tstr;
+  string 255 tstr,obj,printprice;
   val t;
   record CUVc VEr;
   record INVc INr;
@@ -81,6 +81,8 @@ BEGIN
   string 5 cur;// Edit ************************** Tuesday, 22 August 2017 11:27:01
   val tstv,vreb;
   boolean dummyf,calcpricef;
+  val newprice;
+  string 10 newcur;
   
   PrintCurrencyCode("F_VALUTA",PUr.CurncyCode);
   GetFullCurncyRateText(true,tstr,PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2);
@@ -151,7 +153,13 @@ BEGIN
 	  PLr.PLCode = "RRP";
 	  PLr.ArtCode = INr.Code;
 	  if(readfirstmain(PLr,2,true))then begin
-			OUTFORMFIELD("F_MYRETAILPRICE",PLr.ExVatPrice);// Edit ************************** Tuesday, 1 April 2014 13:15:55
+	  	price = PLr.ExVatPrice;
+	  	cur = PLr.CurncyCode;
+	  	if(GetTempItemPrice(newprice,INr.Code,newcur,currentdate,obj))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 01 07 2019 y. at 11:15:47 AM
+				price = newprice;
+				cur = newcur;
+			end;
+			OUTFORMFIELD("F_MYRETAILPRICE",price);// Edit ************************** Tuesday, 1 April 2014 13:15:55
 	  end;
 	end;
 	
@@ -179,12 +187,26 @@ BEGIN
 				rnd.step = kRoundingStep5;
 			end;*/
 			if(cur!=BCb.BaseCur1)then begin
+				rnd = DefaultValRoundoff;
+				rnd.decimals = 0;
+				rnd.mode = kRoundingModeHalfUp;
 				GetFullCurncyRate(cur,CurrentDate,fr,to1,to2,br1,br2);// Edit ************************** Monday, 25 March 2013 17:43:28
 				price = MulRateToBase1(cur,PLr.ExVatPrice,fr,to1,to2,br1,br2,rnd);
 			end else begin
 				price = PLr.ExVatPrice;
 			end;
-			OUTFORMFIELD("F_MYRETAILPRICEAZN",price & " AZN");// Edit ************************** Tuesday, 1 April 2014 13:15:55
+			printprice = price & " AZN";
+			if(GetTempItemPrice(newprice,INr.Code,newcur,currentdate,obj))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 01 07 2019 y. at 11:15:47 AM
+				if(newprice!=0)then begin
+					price = newprice;
+					if(blank(newcur))then begin
+						newcur = "AZN";
+					end;
+					printprice = price & " " & newcur;
+				end;
+			end;
+			
+			OUTFORMFIELD("F_MYRETAILPRICEAZN",printprice);// Edit ************************** Tuesday, 1 April 2014 13:15:55
 	  end;
 	end;
 	
@@ -231,8 +253,25 @@ BEGIN
 				price = price * (1-vreb/100);
 				price = round(price,rnd);
 			end;
+			
+			
+			printprice = price & " AZN";
+			if(GetTempItemPrice(newprice,INr.Code,newcur,currentdate,obj))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 01 07 2019 y. at 11:15:47 AM
+				if(newprice!=0)then begin
+					price = newprice;
+					if(vreb>0)then begin
+						price = price * (1-vreb/100);
+						price = round(price,rnd);
+					end;
+					if(blank(newcur))then begin
+						newcur = "AZN";
+					end;
+					printprice = price & " " & newcur;
+				end;
+			end;
+			
 			OUTFORMFIELD("F_MYRETAILTEXT",USetStr(10435));
-			OUTFORMFIELD("F_MYRETAILPRICEAZNWITHREB",price & " AZN");
+			OUTFORMFIELD("F_MYRETAILPRICEAZNWITHREB",printprice);
 	  end;
 	end;
 	

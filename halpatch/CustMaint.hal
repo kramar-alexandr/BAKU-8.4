@@ -2209,6 +2209,69 @@ weboutstring("Done");
 return;
 end;*/
 
+
+global webpublic procedure WebWriteRegistersFiles()
+begin
+integer i,curcomp,CompQty;
+record CompaniesBlock Compb;
+row CompaniesBlock Comprw;
+area PayMode,PayDeal,Buttons,Controll;
+string 255 filename;
+record PDVc PayDealr; //условия оплаты
+record PMBlock PMRec;
+record POSButtonsVc POSr;
+record OTCheckBlock OTCr;
+BlockLoad(PMRec);
+	BlockLoad(Compb);	
+	BlockLoad(OTCr);	
+	CompQty = matrowcnt(Compb);
+	curcomp = currentcompany;
+	
+	filename = "NewFileData\\";
+		for (i=0;i<CompQty;i=i+1) begin
+			matrowget(Compb,i,Comprw);
+			if(Comprw.ActiveStatus==0) then begin
+				SetCompany(i+1,false);
+					PayDealr.Code = "";
+					While(LoopMain(PayDealr,1,true)) begin 
+						AddRecordToArea(PayDealr,"PDVc",PayDeal);
+					end;
+					if(CountRecords("PDVc")>0) then begin
+						writeareatofile(PayDeal,filename & i+1 & "PayDeal.txt",0);
+					end;	
+					setareazerosize(PayDeal);
+					ResetLoop(PayDealr);
+				//AddRecordToArea(PMRec,"PMBlock",PayMode);
+				//writeareatofile(PayMode,filename & "PayMode.txt",0);
+					POSr.Page = -1;
+					While(LoopKey("Page",POSr,1,true)) begin 
+						AddRecordToArea(POSr,"POSButtonsVc",Buttons);
+					end;
+					ResetLoop(POSr);
+					if(CountRecords("POSButtonsVc")>0) then begin
+						writeareatofile(Buttons,filename & i+1 & "POSButton.txt",0);
+					end;	
+					setareazerosize(Buttons);
+					createfile(filename & i+1 & "OTCheckBlock.txt");
+					CloseFile;
+					openexportfile(filename & i+1 & "OTCheckBlock.txt",true);
+					BlockExport("OTCheckBlock");
+					closefile
+					
+					createfile(filename & i+1 & "PMBlock.txt");
+					CloseFile;
+					openexportfile(filename & i+1 & "PMBlock.txt",true);
+					BlockExport("PMBlock");
+					closefile
+				if(CompanyIsJWLikeCompany(i+1)) then begin
+					//AddRecordToArea(OTCr,"OTCheckBlock",Controll);
+					//writeareatofile(Controll,filename & "ControolObjects.txt",0);
+				end;	
+			end;
+		end;	
+return;
+end;
+
 global 
 webpublic procedure WebFindINV()
 begin
