@@ -448,7 +448,7 @@ begin
   area ames;
   string 20 curloc,datestring;
   integer pos,storenumber,sstoreID,rwcnt,i,intValue;
-  boolean TrHs,testf,foundf;
+  boolean TrHs,testf,foundf, testf1;
   LongInt count;
   string 5 nextline;
   record LocationVc  ToLocr;
@@ -539,32 +539,65 @@ begin
   	While(LoopBackKey("SerNr",StockMovr,1,TrHs)) begin
       //foundf = false;
   		testf = true;
-  		if (StockMovr.OrdFlag==0 and StockMovr.TypeCoin!=3) then begin testf = false; end;
+  		if (StockMovr.OrdFlag==0 and (StockMovr.TypeCoin!=3 and StockMovr.TypeCoin!=5)) then begin testf = false; end; // не пров
   		if(StockMovr.TypeCoin==3 and blank(StockMovr.TransBillCoin))then begin
   			StockMovr.TransBillCoin = StockMovr.SerNr;
   		end;
-
+			
+			if(StockMovr.SerNr==1753331605)then begin
+				logtext(0,testf & " 1");
+			end;	
+			
+			if(StockMovr.TypeCoin==5 and blank(StockMovr.TransBillCoin))then begin
+  			StockMovr.TransBillCoin = StockMovr.SerNr;
+  		end;
+				
+			if(StockMovr.SerNr==1753331605)then begin
+				logtext(0,testf & " 2");
+			end;	
+			
   		if (StockMovr.SentCoin==0 or NonBlank(StockMovr.FileNameCoin) or Blank(StockMovr.TransBillCoin)) then begin testf = false; end;
+			
+			if(StockMovr.SerNr==1753331605)then begin
+				logtext(0,testf & " 5");
+			end;	
+			
 			Locr.Code = StockMovr.FrLocation;
 			if(readfirstmain(Locr,1,true))then begin
 				if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
 			end;
-
-  		if (testf and StockMovr.TypeCoin!=3) then begin
+				
+			if(StockMovr.SerNr==1753331605)then begin
+				logtext(0,testf & " 3");
+			end;	
+			
+  		if (testf and StockMovr.TypeCoin!=3 and StockMovr.TypeCoin!=5) then begin
   		  CoinPackListHistr.TransportBill = StockMovr.TransBillCoin;
   		  testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
   		end;
+				
+			if(StockMovr.SerNr==1753331605)then begin
+				logtext(0,testf & " 4");
+			end;	
+			
   		if (testf) then begin
   			Logtext(0,"GruppoCoinManageGoodsMn StockMov " & StockMovr.SerNr);
   		  rwcnt = MatRowCnt(StockMovr);
   			for(i=0;i<rwcnt;i=i+1) begin
   				MatRowGet(StockMovr,i,StockMovrw);
-  				if (Blank(StockMovrw.ArtCode) or Blank(StockMovrw.BarCode)) then begin testf = false; end;
-          if (testf) then begin
+					testf1 = true;
+  				if (Blank(StockMovrw.ArtCode) or Blank(StockMovrw.BarCode)) then begin testf1 = false; end;
+					if(StockMovr.SerNr==1753331605)then begin
+						logtext(0,testf1 & " 12");
+					end;	
+          if (testf1) then begin
   				  CoinEANCoder.EANNumber = StockMovrw.BarCode;
-  				  testf = ReadFirstKey("EANNumber",CoinEANCoder,1,true);
+  				  testf1 = ReadFirstKey("EANNumber",CoinEANCoder,1,true);
   				end;
-  				if (testf) then begin
+					if(StockMovr.SerNr==1753331605)then begin
+						logtext(0,testf1 & " 11");
+					end;	
+  				if (testf1) then begin
   				  if (foundf==false) then begin
   				    foundf = true;
   				    //Header
@@ -581,10 +614,11 @@ begin
                 rowdata = rowdata & "0351";
 							case 4:
                 rowdata = rowdata & "0105";
+							case 5:
+                rowdata = rowdata & "0351";
             end;
-            
   				  intValue = StockMovrw.Quant;
-  				  if(StockMovr.TypeCoin!=3)then begin
+  				  if(StockMovr.TypeCoin!=3 and StockMovr.TypeCoin!=5)then begin
 							if(StockMovr.TypeCoin!=2)then begin
 								rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
 							end else begin
@@ -599,6 +633,8 @@ begin
   				  		rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & ToLocr.CoinStoreNr;
   				  	end;
   				  end;
+						
+						
   				  rowdata = rowdata & NewM4PadString(CoinPackListHistr.TransportBill,16,"0",true) & CoinPackListHistr.TransportBillDate;
             rowdata = rowdata & "0000000000000" & "0000000000000" & "000000000" & "000000000" & " ";
   				  intValue = Round(StockMovrw.NewPrice,SetRoundModeD(2))*100;
