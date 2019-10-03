@@ -346,8 +346,11 @@ begin
   record SHVc SHr;
 	record RLinkVc RLr;
 	boolean TrHs3, testf2;
+	record VaucherVc Vr;
+	record VaucherProgVc VPr;
 	longint curtick;
-	
+	boolean checkVaucher;
+	string 255 warningText;
 	curtick = getcurtick();
   logtext(0,"IVVcRecordCheck" & IVp.SerNr);
   
@@ -438,6 +441,63 @@ begin
 		res = -1; 
 		goto L999;
 	end;
+	
+	if(nonblank(IVp.VaucherCode)) then begin // Edit_________________ABR 02.10.2019
+		checkVaucher = true;
+		warningText = "";
+		Vr.BarCode = IVp.VaucherCode;
+		if(ReadFIrstMain(Vr,1,true)) then begin
+			if(Vr.Closed!=0) then begin
+				checkVaucher = false;
+				warningText = " закрыт";
+			end;
+			if(checkVaucher) then begin
+				if(nonblank(Vr.Locations)) then begin
+					if(!SetInSet(IVp.Location,Vr.Locations)) then begin
+						checkVaucher = false;
+						warningText = " не разрешен длЯ данного склада";
+					end;
+				end else begin
+					VPr.Code = Vr.VaucherProgCode;
+					if(ReadFirstMain(VPr,1,true)) then begin
+						if(nonblank(VPr.Locations)) then begin
+							if(!SetInSet(IVp.Location,VPr.Locations)) then begin
+								checkVaucher = false;
+								warningText = " не разрешен длЯ данного склада";
+							end;
+						end;
+					end;
+				end;
+			end;	
+			if(checkVaucher) then begin
+				if(nonblank(Vr.StartDate) and nonblank(Vr.EndDate)) then begin
+					if(IVp.InvDate<Vr.StartDate or IVp.InvDate>Vr.EndDate) then begin
+						checkVaucher = false;
+						warningText = " не соответствует времени счет/фактуры";
+					end;
+				end else begin
+					VPr.Code = Vr.VaucherProgCode;
+					if(ReadFirstMain(VPr,1,true)) then begin
+						if(nonblank(VPr.StartDate) and nonblank(VPr.EndDate)) then begin
+							if(IVp.InvDate<VPr.StartDate or IVp.InvDate>VPr.EndDate) then begin
+								checkVaucher = false;
+								warningText = " не соответствует времени счет/фактуры";
+							end;
+						end;	
+					end;
+				end;
+			end;
+		end else begin
+			checkVaucher = false;
+			warningText = " не существует";
+		end;
+		if(!checkVaucher) then begin
+			RecordCheckError(36300,warningText,-1,"VaucherCode");      
+			res = -1; 
+			goto L999;
+		end;
+	end;
+	
 	
   rwcnt = matrowcnt(IVp);
 	For(i=0;i<rwcnt;i=i+1) begin
