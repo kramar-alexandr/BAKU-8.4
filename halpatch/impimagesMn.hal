@@ -6308,6 +6308,9 @@ begin
   record StockMovVc StockMovr;
 	row StockMovVc StockMovrw;
 	array string 255 aWarning;
+	boolean testCoinItems;
+	record CoinEANCodeVc CoinEANCoder;
+	integer stockRow;
 	
 		BlockLoad(CCBb);
     IVr.SerNr = RepSpec.long1;
@@ -6569,27 +6572,41 @@ begin
 							StockMovr.TransDate = CurrentDate;
 							StockMovr.SentCoin = 1;
 							StockMovr.SerNr = NextSerNr("StockMovVc",StockMovr.TransDate,-1,false,"");
+							StockMovr.Comment = "Transfer to DROMAS";
 							rwcnt = MatRowCnt(IVr);
+							stockRow = 0;
 							for (i=0;i<rwcnt;i=i+1) begin
 								matrowget(IVr,i,IVrw);
+								testCoinItems = true;
 								INr.Code = IVrw.ArtCode;
 								if(ReadFirstMain(INr,1,true)) then begin
 									StockMovrw.BarCode = INr.BarCode;
-									matrowput(StockMovr,i,StockMovrw);
+									if(len(StockMovrw.BarCode)!=13) then begin
+										testCoinItems = false;
+									end;
+								end;
+								if(testCoinItems) then begin
+									CoinEANCoder.EANNumber = StockMovrw.BarCode;
+									if(ReadFirstKey("EANNumber",CoinEANCoder,1,true)) then begin
+										matrowput(StockMovr,stockRow,StockMovrw);
+										StockMovrw.Quant = IVrw.Quant;
+										matrowput(StockMovr,stockRow,StockMovrw);
+										StockMovVc_PasteQuant(StockMovr,stockRow);
+										StockMovrw.ArtCode = IVrw.ArtCode;
+										matrowput(StockMovr,stockRow,StockMovrw);
+										StockMovVc_PasteArtCode(StockMovr,stockRow,1,aWarning);
+										matrowget(StockMovr,stockRow,StockMovrw);
+										matrowput(StockMovr,stockRow,StockMovrw);
+										stockRow = stockRow + 1;
+									end;	
 								end;	
-								StockMovrw.Quant = IVrw.Quant;
-								matrowput(StockMovr,i,StockMovrw);
-								StockMovVc_PasteQuant(StockMovr,i);
-								StockMovrw.ArtCode = IVrw.ArtCode;
-								matrowput(StockMovr,i,StockMovrw);
-								StockMovVc_PasteArtCode(StockMovr,i,1,aWarning);
-								matrowget(StockMovr,i,StockMovrw);
-								matrowput(StockMovr,i,StockMovrw);
 							end;	
-							if(RecordStore(StockMovr,true)) then begin 
-								CreateRecordLink(IVr,CurrentCompany,StockMovr,CurrentCompany);  
-                CreateRecordLink(StockMovr,CurrentCompany,IVr,CurrentCompany);  
-							end;
+							if(matrowcnt(StockMovr)>0)then begin
+								if(RecordStore(StockMovr,true)) then begin 
+									CreateRecordLink(IVr,CurrentCompany,StockMovr,CurrentCompany);  
+									CreateRecordLink(StockMovr,CurrentCompany,IVr,CurrentCompany);  
+								end;
+							end;	
 						end;
             RECORDNEW(VIr);
             PastePUInVI(PUr,VIr,warning,false,false,false,false,false,false,false,IVr.PriceList); //Edit***************************Sasha2,17:13 18.03.2016
