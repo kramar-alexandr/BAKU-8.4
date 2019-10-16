@@ -80,6 +80,12 @@ remote function Boolean GetTempItemPrice(var val,string,var string, date,var str
 external procedure LogProcTime(string,longint);
 external updating procedure SendUpdateLoyaltyCardToCRM(var record LoyaltyCardVc);//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 13:07 12.09.2018
 remote updating procedure CollectConsItemsMn(record RcVc);
+external procedure FindUserMailboxName(string,var string,var string);
+external updating function Boolean SendMailFromSystem(string,string,string,string,LongInt,Integer,string);
+external updating function Boolean SendSMSFromSystem(string,string,string,string);
+external procedure ExtractObj(string,var Integer,var string);
+external function Boolean SendNotificationToUser(string,string);
+
 SetLangMode(LangRussian,"RUS",0);
 
 global //Edit***************************Sasha2,14:27 02.08.2016 {
@@ -6925,6 +6931,11 @@ begin
 	record AlarmVc Alr, OldAlr;
 	boolean TrHs,testf;
 	integer err;
+	Boolean res;
+  string 255 person;
+  Integer pos;
+  string 255 mailboxnr,to,recidstr;
+  Integer oldcomp;
 	
 	TrHs = true;
 	Actr.OKFlag = 0;
@@ -6944,7 +6955,19 @@ begin
 				RecordCopy(OldAlr,Alr);
 				Alr.OKFlag = 0;
 				err = RecordUpdate(OldAlr,Alr,true);
-				SetNextAlarmTaskFlag(false);
+				
+				recidstr = BuildRecordIdStr(Actr,Alr.CompNo);
+				pos = 0;
+				ExtractObj(Alr.MainPersons,pos,person);
+				while (nonblank(person)) begin
+					FindUserMailboxName(person,mailboxnr,to);
+					if (nonblank(to)) then begin
+						if (SendAlarmMessage(Alr.Comment,"",to,recidstr)) then begin
+							res = true;
+						end;      
+					end;
+					ExtractObj(Alr.MainPersons,pos,person);
+				end;  
 				if(currentcompany==2)then begin logtext(0, CurrentCompany & "<- compny   " & err); end;
 			end;
 		end;
