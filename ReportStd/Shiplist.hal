@@ -19,6 +19,113 @@ external function longint DateDiff(date,date);
 
 SetLangMode(LangRussian,"RUS",0);
 
+
+
+
+global
+procedure ECSldItRn(record RcVc RepSpec) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 15:20 17.10.2019
+begin
+  Integer i,rwcnt;
+	record SHVc SHr;
+  row SHVc SHrw;
+	record RetVc Retr;
+	row RetVc Retrw;
+	record ORVc ORr;
+	row ORVc ORrw;
+  Boolean testf, TrHs;
+  string 20 frit,toit;
+  string 20 frin,toin;
+  record INVc INr;
+  string 255 tstr;
+  string 255 itsz,mask,subsets,mskrep;
+	vector val vRetItems;
+	val SaleTotal;
+
+	StartReportnoheaderjob("Отчет по продажам Е-Коммерс");
+	startformat(15);
+		outstring(0,0,"Отгр. №",false);
+		outstring(70,0,"Дата",false);
+		outstring(220,0,"№ сч.Btrx",false);
+		outstring(300,0,"Код. кл",false);
+		outstring(340,0,"Наименование",false);
+		outstring(340,0,"Всего",false);
+	endformat;
+	
+	TrHs = true;
+	SHr.ShipDate = RepSpec.sStartDate;
+	while (loopkey("ShipDate",SHr,1,TrHs))begin
+		if(SHr.ShipDate>RepSpec.sEndDate)then begin TrHs = false; end;
+		if(TrHs)then begin
+			Retr.SHNr = SHr.SerNr;
+			SaleTotal = 0;
+			if(ReadFirstMain(Retr,1,true))then begin
+				for (i=0;i<matrowcnt(Retr);i=i+1) begin
+					matrowget(Retr,i,Retrw);
+					vRetItems [Retrw.ArtCode & "_" & SHr.SerNr] = Retrw.Quant;
+				end;
+			end;
+			
+			ORr.SerNr = SHr.OrderNr;
+			if(ReadFirstMain(ORr,1,true))then begin
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					if(vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]==blankval)then begin
+						vRetItems [ORrw.ArtCode & "_" & SHr.SerNr] = 0;
+					end;
+					SaleTotal = SaleTotal + (ORrw.Sum / ORrw.Quant * (ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]));
+				end;
+			end;
+			
+			startformat(15);
+				outstring(0,0,SHr.SerNr,false);
+				outstring(70,0,SHr.ShipDate,false);
+				ORr.SerNr = SHr.OrderNr;
+				if(ReadFirstMain(ORr,1,true))then begin
+					outstring(220,0,ORr.SerNr,false);
+				end else begin
+					outstring(220,0,"",false);
+				end;
+				outstring(300,0,SHr.CustCode,false);
+				outstring(340,0,SHr.Addr0,false);
+				outstring(340,0,SaleTotal,false);
+			endformat;
+			
+			startformat(15);
+				outstring(0,0,"Товар",false);
+				outstring(70,0,"Наимен.",false);
+				outstring(220,0,"Сер.№",false);
+				outstring(300,0,"Кол.",false);
+				outstring(340,0,"Цена",false);
+				outstring(340,0,"Арт.К.И.",false);
+				outstring(340,0,"Скидка",false);
+				outstring(340,0,"Сумма",false);
+			endformat;
+			ORr.SerNr = SHr.OrderNr;
+			if(ReadFirstMain(ORr,1,true))then begin
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					startformat(15);
+						outstring(0,0,ORrw.ArtCode,false);
+						outstring(70,0,ORrw.Spec,false);
+						outstring(220,0,ORrw.SerialNr,false);
+						outstring(300,0,ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr],false);
+						outstring(340,0,ORrw.Price,false);
+						outstring(340,0,right(ORrw.GlobalItemArtCode,(len(ORrw.GlobalItemArtCode)-9)),false);
+						outstring(340,0,ORrw.vRebate,false);
+						outstring(340,0,ORrw.Sum / ORrw.Quant * (ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]),false);
+					endformat;
+				end;
+			end;
+		end;
+	end;
+	endjob;
+return;
+end;
+
+
+
+
+
 procedure RepShip(record RcVc RepSpec,record SHVc SHp,var val ordtot,var val shptot)
 begin
   Integer i,rwcnt;
