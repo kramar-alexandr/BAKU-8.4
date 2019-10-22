@@ -19,6 +19,241 @@ external function longint DateDiff(date,date);
 
 SetLangMode(LangRussian,"RUS",0);
 
+
+
+
+global
+procedure ECSldItRn(record RcVc RepSpec) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 15:20 17.10.2019
+begin
+  Integer i,rwcnt;
+	record SHVc SHr;
+  row SHVc SHrw;
+	record RetVc Retr;
+	row RetVc Retrw;
+	record ORVc ORr;
+	row ORVc ORrw;
+  Boolean testf, TrHs;
+  string 20 frit,toit;
+  string 20 frin,toin;
+  record INVc INr;
+  string 255 tstr;
+  string 255 itsz,mask,subsets,mskrep;
+	vector val vRetItems, vRetOutItems;
+	vector boolean vInPerReturns;
+	val SaleTotal, Total, TotQty;
+
+	StartReportnoheaderjob("Отчет по продажам Е-Коммерс");
+	startformat(15);
+		outstring(0,0,"Отгр. №",false);
+		outstring(70,0,"Дата",false);
+		outstring(220,0,"№ сч.Btrx",false);
+		outstring(300,0,"Код. кл",false);
+		outstring(340,0,"Наименование",false);
+		outstring(340,0,"",false);
+		outstring(340,0,"",false);
+		outstring(340,0,"",false);
+		outstring(340,0,"Всего",false);
+	endformat;
+	
+	Total = 0;
+	TrHs = true;
+	SHr.ShipDate = RepSpec.sStartDate;
+	while (loopkey("ShipDate",SHr,1,TrHs))begin
+		testf = true;
+		if(SHr.ShipDate>RepSpec.sEndDate)then begin TrHs = false; testf = false; end;
+		if(SHr.OKFlag==0)then begin testf = false; end;
+		if(testf)then begin
+			Retr.SHNr = SHr.SerNr;
+			SaleTotal = 0;
+			if(ReadFirstKey("SHNr",Retr,1,true))then begin
+				if(Retr.Location!="RETURN")then begin
+					vInPerReturns [Retr.SerNr] = true;
+					for (i=0;i<matrowcnt(Retr);i=i+1) begin
+						matrowget(Retr,i,Retrw);
+						vRetItems [Retrw.ArtCode & "_" & SHr.SerNr] = Retrw.Quant;
+					end;
+				end;
+			end;
+			TotQty = 0;
+			ORr.SerNr = SHr.OrderNr;
+			if(ReadFirstMain(ORr,1,true))then begin
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					if(vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]==blankval)then begin
+						vRetItems [ORrw.ArtCode & "_" & SHr.SerNr] = 0;
+					end;
+					SaleTotal = SaleTotal + (ORrw.Sum / ORrw.Quant * (ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]));
+					TotQty = TotQty + (ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]);
+				end;
+			end;
+			if (TotQty>0) then begin
+				Total = Total + SaleTotal;
+				startformat(15);
+					outstring(0,0,SHr.SerNr,false);
+					outstring(70,0,SHr.ShipDate,false);
+					ORr.SerNr = SHr.OrderNr;
+					if(ReadFirstMain(ORr,1,true))then begin
+						outstring(220,0,ORr.SerNr,false);
+					end else begin
+						outstring(220,0,"",false);
+					end;
+					outstring(300,0,SHr.CustCode,false);
+					outstring(340,0,SHr.Addr0,false);
+					outstring(340,0,"",false);
+					outstring(340,0,"",false);
+					outstring(340,0,"",false);
+					outstring(340,0,SaleTotal,false);
+				endformat;
+				
+				startformat(15);
+					outstring(0,0,"Товар",false);
+					outstring(70,0,"Наимен.",false);
+					outstring(220,0,"Сер.№",false);
+					outstring(300,0,"Кол.",false);
+					outstring(340,0,"Цена",false);
+					outstring(340,0,"Арт.К.И.",false);
+					outstring(340,0,"Скидка",false);
+					outstring(340,0,"Сумма",false);
+				endformat;
+				ORr.SerNr = SHr.OrderNr;
+				if(ReadFirstMain(ORr,1,true))then begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						if(ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr] > 0)then begin
+							startformat(15);
+								outstring(0,0,ORrw.ArtCode,false);
+								outstring(70,0,ORrw.Spec,false);
+								outstring(220,0,ORrw.SerialNr,false);
+								outstring(300,0,ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr],false);
+								outstring(340,0,ORrw.Price,false);
+								outstring(340,0,right(ORrw.GlobalItemArtCode,(len(ORrw.GlobalItemArtCode)-9)),false);
+								outstring(340,0,ORrw.vRebate,false);
+								outstring(340,0,ORrw.Sum / ORrw.Quant * (ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]),false);
+							endformat;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	TrHs = true;
+	
+	
+	startformat(15);
+		outstring(0,0," ",false);
+	endformat;
+	
+	
+	
+	startformat(15);
+		outstring(0,0,"Возвр. №",false);
+		outstring(70,0,"Дата",false);
+		outstring(220,0,"№ сч.Btrx",false);
+		outstring(300,0,"Код. кл",false);
+		outstring(340,0,"Наименование",false);
+		outstring(340,0,"",false);
+		outstring(340,0,"",false);
+		outstring(340,0,"",false);
+		outstring(340,0,"Всего",false);
+	endformat;
+	
+	
+	Retr.TransDate = RepSpec.sStartDate;
+	while (loopkey("TransDate",Retr,1,TrHs))begin
+		testf = true;
+		if(Retr.TransDate>RepSpec.sEndDate)then begin TrHs = false; testf = false; end;
+		if(vInPerReturns [Retr.SerNr])then begin testf = false; end;
+		if(Retr.OKFlag==0)then begin testf = false; end;
+		if(testf)then begin
+		
+			for (i=0;i<matrowcnt(Retr);i=i+1) begin
+				matrowget(Retr,i,Retrw);
+				vRetOutItems[Retrw.ArtCode & "_" & Retr.SerNr] = Retrw.Quant;
+			end;
+		
+			SaleTotal = 0;
+		
+			ORr.SerNr = Retr.OrdNr;
+			if(ReadFirstMain(ORr,1,true))then begin
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					SaleTotal = SaleTotal + (ORrw.Sum / ORrw.Quant * vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr]);
+				end;
+			end;
+			
+			Total = Total - SaleTotal;
+			
+			
+			startformat(15);
+				outstring(0,0,Retr.SerNr,false);
+				outstring(70,0,Retr.TransDate,false);
+				ORr.SerNr = Retr.OrdNr;
+				if(ReadFirstMain(ORr,1,true))then begin
+					outstring(220,0,ORr.SerNr,false);
+				end else begin
+					outstring(220,0,"",false);
+				end;
+				outstring(300,0,Retr.CustCode,false);
+				outstring(340,0,Retr.CustName,false);
+				outstring(340,0,"",false);
+				outstring(340,0,"",false);
+				outstring(340,0,"",false);
+				outstring(340,0,-SaleTotal,false);
+			endformat;
+			
+			startformat(15);
+				outstring(0,0,"Товар",false);
+				outstring(70,0,"Наимен.",false);
+				outstring(220,0,"Сер.№",false);
+				outstring(300,0,"Кол.",false);
+				outstring(340,0,"Цена",false);
+				outstring(340,0,"Арт.К.И.",false);
+				outstring(340,0,"Скидка",false);
+				outstring(340,0,"Сумма",false);
+			endformat;
+			ORr.SerNr = Retr.OrdNr;
+			if(ReadFirstMain(ORr,1,true))then begin
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					if(vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr] > 0)then begin
+						startformat(15);
+							outstring(0,0,ORrw.ArtCode,false);
+							outstring(70,0,ORrw.Spec,false);
+							outstring(220,0,ORrw.SerialNr,false);
+							outstring(300,0,-vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr],false);
+							outstring(340,0,ORrw.Price,false);
+							outstring(340,0,right(ORrw.GlobalItemArtCode,(len(ORrw.GlobalItemArtCode)-9)),false);
+							outstring(340,0,ORrw.vRebate,false);
+							outstring(340,0,-(ORrw.Sum / ORrw.Quant * vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr]),false);
+						endformat;
+					end;
+				end;
+			end;
+			
+			
+		end;
+	end;
+	
+	startformat(15);
+		outstring(0,0,"",false);
+		outstring(70,0,"",false);
+		outstring(220,0,"",false);
+		outstring(300,0,"",false);
+		outstring(340,0,"",false);
+		outstring(340,0,"",false);
+		outstring(340,0,"",false);
+		outstring(340,0,"ИТОГО:",false);
+		outstring(340,0,Total,false);
+	endformat;
+	
+	endjob;
+return;
+end;
+
+
+
+
+
 procedure RepShip(record RcVc RepSpec,record SHVc SHp,var val ordtot,var val shptot)
 begin
   Integer i,rwcnt;
