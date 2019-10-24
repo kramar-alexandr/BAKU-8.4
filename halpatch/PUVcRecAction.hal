@@ -655,12 +655,14 @@ end;
 global
 updating function LongInt PUVcRecordUpdateAfter(var record PUVc PUr,record PUVc PU2r,LongInt stat,LongInt long4)
 begin
-  LongInt res;
-  Boolean ihf;
+  LongInt res, i;
+  Boolean ihf, shipdf, shipd0f;
   record VIVc VIr;
   record VIVc oldVIr;
   record POSettingBlock POSb;
   record RcVc RepSpec;
+	record POVc POr;
+	row POVc POrw;
   val bc1v;
 	LOGTEXT(0,currentcompany & "PUVcRecordUpdateAfter");	
   ihf = ItemHistExists("PUVc",PUr.SerNr);
@@ -725,6 +727,26 @@ begin
   if ((PUr.OKFlag!=0) and (PU2r.OKFlag!=0)) then begin//overstrike
     PUVc_UpdateTR(PUr,PU2r);
   end;
+	if ((PUr.OKFlag==1) and (PU2r.OKFlag==0) and CurrentCompany==33) then begin
+		POr.SerNr = PUr.PONr;
+		if(ReadFirstMain(POr,1,true))then begin
+			shipdf = true;
+			shipd0f = true;
+			for (i=0;i<matrowcnt(POr);i=i+1) begin
+				matrowget(POr,i,POrw);
+				if(POrw.Shipd2 < POrw.Quant) then begin shipdf = false; end;
+				if(POrw.Shipd2 > 0) then begin shipd0f = false; end; 
+			end;		
+			if (shipdf and !shipd0f) then begin
+				POr.IDStatus = "PO Completed";
+				RecordStore (POr,true);
+			end;
+			if (!shipdf and !shipd0f) then begin
+				POr.IDStatus = "PO Goods Delivered Partial";
+				RecordStore (POr,true);
+			end;
+		end;
+  end;  
   PUVcRecordUpdateAfter = res;
   return;
 end;
