@@ -4547,12 +4547,13 @@ begin
 	record ConsItemVc CIr;
 	record INVc INr, UINr, ConsIN, OldConsINr, ConsINr;
 	vector string 255 Brands;
-	boolean chsum, TrHs2, testf;
+	boolean chsum, TrHs2, testf, testfrowf;
 	integer comp;
 	record BPIBrandVc BBr;
 	record ConsCompBlock CCB;
 	record PosVc Posr;	
 	string 255 obj;
+	record ItemStatusVc ISr;
 	
 	BlockLoad(CCB);
 	curcomp = currentcompany;
@@ -4609,39 +4610,47 @@ begin
 				end;	
 			end;
 			if(ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
-				//clearrow(ORr,ORrw,rowor);
-				ORrw.ArtCode = CIr.Code;
-				ORrw.ECReceived = POr.SerNr;
-				ORrw.ECReservComp = comp;
-				ORrw.Quant = POrw.Quant;	
-				//ORrw.Price = POrw.Price;
-				ORrw.GlobalItemArtCode = CIr.LocCode;
-				ORrw.IDAltCode = CIr.BrandCode;
-				ORrw.Price = BlankVal;
-				ORrw.BasePrice = BlankVal;
-				matrowput(ORr,rowor,ORrw);	
-				if(POrw.ItemConsgType!=0) then begin
-					ORr.OrderClass = "CLIEN";
-				end	 else begin
-					ORr.OrderClass = "STOCK";
-				end;
-				ORVc_PasteArtCode(ORr,rowor,inwarning,warning,false);
-				matrowget(ORr,rowor,ORrw);
-				//ORrw.Price = POrw.Price;
-				matrowput(ORr,rowor,ORrw);
-				ORVc_PasteQuant(ORr,rowor,true,chsum);
-				matrowget(ORr,rowor,ORrw);
-				ORrw.Price = BlankVal;
-				ORrw.BasePrice = BlankVal;
-				ORrw.rowGP = BlankVal;
-				matrowput(ORr,rowor,ORrw);
-				rowor = rowor + 1;
-			end else begin
+				testfrowf = true;
 				if(POrw.ItemConsgType==0) then begin
-					warn = "Товар: " & POrw.ArtCode & " нельзя заказать для склада !";
-					res = -1;
-					goto LRemote_ORFromPOConsDsm;
+					ISr.Code = CIr.Code;
+					ISr.Location = ";;;";
+					if(ReadFirstMain(ISr,2,true)) then begin end;
+					if(ISr.Instock<1) then begin testfrowf = false; end;
 				end;
+				if(testfrowf)then begin
+					//clearrow(ORr,ORrw,rowor);
+					ORrw.ArtCode = CIr.Code;
+					ORrw.ECReceived = POr.SerNr;
+					ORrw.ECReservComp = comp;
+					if(POrw.ItemConsgType==0 and ISr.Instock<POrw.Quant)then begin
+						ORrw.Quant = ISr.Instock;	
+					end else begin
+						ORrw.Quant = POrw.Quant;	
+					end;
+					//ORrw.Price = POrw.Price;
+					ORrw.GlobalItemArtCode = CIr.LocCode;
+					ORrw.IDAltCode = CIr.BrandCode;
+					ORrw.Price = BlankVal;
+					ORrw.BasePrice = BlankVal;
+					matrowput(ORr,rowor,ORrw);	
+					if(POrw.ItemConsgType!=0) then begin
+						ORr.OrderClass = "CLIEN";
+					end	 else begin
+						ORr.OrderClass = "STOCK";
+					end;
+					ORVc_PasteArtCode(ORr,rowor,inwarning,warning,false);
+					matrowget(ORr,rowor,ORrw);
+					//ORrw.Price = POrw.Price;
+					matrowput(ORr,rowor,ORrw);
+					ORVc_PasteQuant(ORr,rowor,true,chsum);
+					matrowget(ORr,rowor,ORrw);
+					ORrw.Price = BlankVal;
+					ORrw.BasePrice = BlankVal;
+					ORrw.rowGP = BlankVal;
+					matrowput(ORr,rowor,ORrw);
+					rowor = rowor + 1;
+				end;
+			end else begin
 				testf = false;
 				if(SetCompany(curcomp,false))then begin
 					INr.Code = POrw.ArtCode;
@@ -4649,6 +4658,9 @@ begin
 						testf = true;
 						SetCompany(33,false)
 					end;
+				end;
+				if(POrw.ItemConsgType==0) then begin
+					testf = false;
 				end;
 				if(testf)then begin
 					recordNew(UINr);
@@ -4707,6 +4719,15 @@ begin
 				end;
 			end;
 		end;
+		
+		if(matrowcnt(ORr)<1)then begin
+			warn = "Товаров по заказу на склад нет на косолидированном складе !";
+			res = -1;
+			goto LRemote_ORFromPOConsDsm;
+		end;
+		
+		
+		
 		ORSumup(ORr);
 		ORr.SerNr = NextSerNr("ORVc",ORr.OrdDate,-1,false,"");
 		ORr.OfficialSerNr = POr.SerNr & ":" & curcomp;
