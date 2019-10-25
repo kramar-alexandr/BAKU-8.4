@@ -1217,11 +1217,11 @@ begin
 	row POVc POrw;
 	string 50 ostr;
 	array string 100 class,artcode,itemcurrency;
-	record INVc INr;
-	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf;
+	record INVc INr, LINr, UUINr;
+	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf,ccItemf;
 	record CUVc CUr;
 	record DIVc DIr;
-	string 200 vendor,loccode,errmsg,OffserNr;
+	string 200 vendor,loccode,errmsg,OffserNr, PUstock;
 	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode,vLocCashier;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
@@ -1250,7 +1250,6 @@ begin
 	record ConsItemVc CIr;
 	
 	BlockLoad(CBb);
-	BlockLoad(ECVFSBb);
 	BlockLoad(ECCDSb);
 	
 	lcnt = matrowcnt(ECCDSb);
@@ -1258,7 +1257,7 @@ begin
 		matrowget(ECCDSb,i,ECCDSrw);
 		vLocCashier[ECCDSrw.LocCode] = ECCDSrw.CashierName;
 	end;
-	
+	OldComp = CurrentCompany;
 	logtext(0,"SHr.OrderNr 1 " & SHr.OrderNr);
 	ORr.SerNr = SHr.OrderNr;
 	if(ReadFirstMain(ORr,1,true))then begin
@@ -1271,10 +1270,9 @@ begin
 		for(i=0;i<shmtrw;i=i+1) begin
 			cuf = true;
 			matrowget(SHr,i,SHrw);
+			artcode[i] = SHrw.ArtCode;
 			ECArt[SHrw.ArtCode] = SHrw.Ship;
-			logtext(0,"SHrw.ArtCode 1 " & SHrw.ArtCode & "  " & ECArt[SHrw.ArtCode]);
 			vItemFifo[SHrw.ArtCode] = SHrw.FIFORowVal/SHrw.Ship;
-			Logtext(0,"ифо по отгрузке строка " & i & " - " & vItemFifo[SHrw.ArtCode]);
 		end;
 		For(i=0;i<mtrw;i=i+1) begin
 			matrowget(ORr,i,ORrw); 
@@ -1298,11 +1296,24 @@ begin
 				Logtext(0,"Цена по счету клиента дл€ заказа поставщика строка " & i & " - " & ItemORPriseWRebate[ORrw.ArtCode]);
 			end;
 		end;
+		if(POComp<=0)then begin
+			SetCompany(29,false);
+			BlockLoad(ECVFSBb);
+			ecvcnt = matrowcnt(ECVFSBb);
+			for(v=0;v<ecvcnt;v=v+1)begin
+				matrowget (ECVFSBb,v,ECVFSBrw);
+				if(ECVFSBrw.VendName==ORr.CustCode)then begin
+					POComp = ECVFSBrw.CompanyNr;
+					PUstock = ECVFSBrw.LocCode;
+					v = ecvcnt;
+				end;
+			end;
+			ResetCompany(OldComp);
+		end;
 		RecordStore(ORr,true);
 	end;
 	
-	OldComp = CurrentCompany;
-	
+	BlockLoad(ECVFSBb);
 	
 	if(SetCompany(POComp,false))then begin
 		POr.SerNr = PONr; 
@@ -1384,14 +1395,82 @@ begin
 				CreateRecordLink(PUr,CurrentCompany,SHr,33);  
 				CreateRecordLink(SHr,33,PUr,CurrentCompany);  				
 			end;
+		end else begin
+			RecordNew (POr);
+			POr.SerNr = NextSerNr("POVc",CurrentDate,-1,false,""); 
+			POr.VECode = "FOB_SKLAD";
+			POVc_PasteVECode(POr,true);
+			POr.Location = PUstock;
+			TrHs = false;
+			mtrw = matrowcnt(POr);
+			For(i=0;i<shmtrw;i=i+1) begin
+				if(nonblank(artcode[i]))then begin
+					if(SetCompany(33,false)) then begin
+						CIr.Code = artcode[i];
+						if(ReadFirstMain(CIr,1,true))then begin
+							INr.Code = CIr.Code;
+							ccItemf = ReadFirstMain(INr,1,true);
+							if(ECArt[CIr.Code]!=0) then begin
+								ResetCompany(POComp);
+								if(currentcompany!=33 and currentcompany!=29 and currentcompany!=28 and currentcompany!=9) then begin
+									POrw.ItemConsgType = 1;
+									matrowput(POr,i,POrw);	
+								end;	
+								LINr.Code = CIr.LocCode;
+								if(!ReadFirstMain(LINr,1,true))then begin
+									RecordNew (UUINr);
+									RecordNew (LINr);
+									RecordCopy (LINr,INr);
+									LINr.Code = CIr.LocCode;
+									LINr.UUID = UUINr.UUID;
+									RecordStore (LINr,true);
+									logtext(0,LINr.Code & "  Товар");
+									logtext(0,CIr.LocCode & "  Товар");
+								end;
+								POrw.ArtCode = CIr.LocCode;
+								matrowput(POr,i,POrw);							
+								POVc_PasteArtCode(POr,i,false);
+								matrowget(POr,i,POrw);
+								POrw.Quant = ECArt[CIr.Code];
+								matrowput(POr,i,POrw);
+								POVc_PasteQuant(POr,i);
+								matrowget(POr,i,POrw);
+								POrw.Price = ItemORPriseWRebate[CIr.Code];
+								POrw.vRebate = 0;
+								POrw.Sum = POrw.Price * POrw.Quant;
+								matrowput(POr,i,POrw);
+								POVc_PasteQuant(POr,i);
+								matrowget(POr,i,POrw);
+							end;	
+						end;
+					end;
+				end;
+			end;
+			matrowget(CBb,OldComp-1,CBrw);
+			POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
+			ecvcnt = matrowcnt(ECVFSBb);
+			for(v=0;v<ecvcnt;v=v+1)begin
+				matrowget (ECVFSBb,v,ECVFSBrw);
+				if(ECVFSBrw.LocCode==loccode and cmpnmb==ECVFSBrw.CompanyNr)then begin
+					POr.VECode = ECVFSBrw.VendName;
+					v = ecvcnt;
+				end;
+			end;
+			if(RecordStore(POr,true))then begin 
+				logtext(0,POr.SerNr & " Заказ " & currentcompany);
+				CreateRecordLink(POr,CurrentCompany,SHr,33);  
+				CreateRecordLink(SHr,33,POr,CurrentCompany);  
+			end;
+			CCPUFromPODsm(POr,PUr);
+			if(RecordStore(PUr,true))then begin 
+				CreateRecordLink(ORr,33,PUr,CurrentCompany);  
+				CreateRecordLink(PUr,CurrentCompany,ORr,33); 
+				CreateRecordLink(PUr,CurrentCompany,SHr,33);  
+				CreateRecordLink(SHr,33,PUr,CurrentCompany);  				
+			end;
 		end;
 	end;
 	ResetCompany(OldComp);
-//	ORr.SerNr = SHr.OrderNr;//??????????????????????????????????????
-//	if(ReadFirstMain(ORr,1,true))then begin
-//		ORr.Closed = 1;//???????????????????????????????????????????
-//	end;
-	
 return;
 end;//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 
 

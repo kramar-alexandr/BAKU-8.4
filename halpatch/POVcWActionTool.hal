@@ -82,6 +82,10 @@ remote procedure ORSumup(var record ORVc);
 external procedure PUVc_PasteLocation(var record PUVc,Integer); //Edit***************************Sasha2,11:37 07.04.2015
 external function Boolean PUVc_PasteVECode(var record PUVc);
 
+
+SetLangMode(LangRussian,"RUS",0);
+
+
 procedure CreateNewPUFromPO(record PUVc PUp,record POVc POp,LongInt ponr)
 BEGIN
   record SRBlock SRRec;
@@ -1244,7 +1248,7 @@ BEGIN
 					for (j=0;j<matrowcnt(BPUr);j=j+1) begin
 						MatRowGet(BPUr,j,BPUrw);
 						if(i==BPUrw.FromOrdrowNr-1 and stringtolongint(BPUrw.FromOrdNr)==POp.SerNr) then begin 
-							if(BPUrw.Quant-POrw.Shipd1 < 0) then begin messagebox(0,"Товар больше чем необходимо, максимальное кол-во - " & POrw.Quant - POrw.Shipd1); goto LSKIPROWPastePOInPU; end else begin
+							if(BPUrw.Quant-POrw.Shipd1 < 0) then begin messagebox(0,"’овар больше чем необходимо, максимальное кол-во - " & POrw.Quant - POrw.Shipd1); goto LSKIPROWPastePOInPU; end else begin
 								remn = BPUrw.Quant;
 							end;	
 							if (remn>0) then begin
@@ -4543,12 +4547,13 @@ begin
 	record ConsItemVc CIr;
 	record INVc INr, UINr, ConsIN, OldConsINr, ConsINr;
 	vector string 255 Brands;
-	boolean chsum, TrHs2, testf;
+	boolean chsum, TrHs2, testf, testfrowf;
 	integer comp;
 	record BPIBrandVc BBr;
 	record ConsCompBlock CCB;
 	record PosVc Posr;	
 	string 255 obj;
+	record ItemStatusVc ISr;
 	
 	BlockLoad(CCB);
 	curcomp = currentcompany;
@@ -4605,33 +4610,42 @@ begin
 				end;	
 			end;
 			if(ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
-				//clearrow(ORr,ORrw,rowor);
-				ORrw.ArtCode = CIr.Code;
-				ORrw.ECReceived = POr.SerNr;
-				ORrw.ECReservComp = comp;
-				ORrw.Quant = POrw.Quant;	
-				//ORrw.Price = POrw.Price;
-				ORrw.GlobalItemArtCode = CIr.LocCode;
-				ORrw.IDAltCode = CIr.BrandCode;
-				ORrw.Price = BlankVal;
-				ORrw.BasePrice = BlankVal;
-				matrowput(ORr,rowor,ORrw);	
-				if(POrw.ItemConsgType!=0) then begin
-					ORr.OrderClass = "CLIEN";
-				end	 else begin
-					ORr.OrderClass = "STOCK";
+				testfrowf = true;
+				if(POrw.ItemConsgType==0) then begin
+					ISr.Code = CIr.Code;
+					ISr.Location = ";;;";
+					if(ReadFirstMain(ISr,2,true)) then begin end;
+					if(ISr.Instock<1) then begin testfrowf = false; end;
 				end;
-				ORVc_PasteArtCode(ORr,rowor,inwarning,warning,false);
-				matrowget(ORr,rowor,ORrw);
-				//ORrw.Price = POrw.Price;
-				matrowput(ORr,rowor,ORrw);
-				ORVc_PasteQuant(ORr,rowor,true,chsum);
-				matrowget(ORr,rowor,ORrw);
-				ORrw.Price = BlankVal;
-				ORrw.BasePrice = BlankVal;
-				ORrw.rowGP = BlankVal;
-				matrowput(ORr,rowor,ORrw);
-				rowor = rowor + 1;
+				if(testfrowf)then begin
+					//clearrow(ORr,ORrw,rowor);
+					ORrw.ArtCode = CIr.Code;
+					ORrw.ECReceived = POr.SerNr;
+					ORrw.ECReservComp = comp;
+					ORrw.Quant = POrw.Quant;	
+					//ORrw.Price = POrw.Price;
+					ORrw.GlobalItemArtCode = CIr.LocCode;
+					ORrw.IDAltCode = CIr.BrandCode;
+					ORrw.Price = BlankVal;
+					ORrw.BasePrice = BlankVal;
+					matrowput(ORr,rowor,ORrw);	
+					if(POrw.ItemConsgType!=0) then begin
+						ORr.OrderClass = "CLIEN";
+					end	 else begin
+						ORr.OrderClass = "STOCK";
+					end;
+					ORVc_PasteArtCode(ORr,rowor,inwarning,warning,false);
+					matrowget(ORr,rowor,ORrw);
+					//ORrw.Price = POrw.Price;
+					matrowput(ORr,rowor,ORrw);
+					ORVc_PasteQuant(ORr,rowor,true,chsum);
+					matrowget(ORr,rowor,ORrw);
+					ORrw.Price = BlankVal;
+					ORrw.BasePrice = BlankVal;
+					ORrw.rowGP = BlankVal;
+					matrowput(ORr,rowor,ORrw);
+					rowor = rowor + 1;
+				end;
 			end else begin
 				testf = false;
 				if(SetCompany(curcomp,false))then begin
@@ -4640,6 +4654,9 @@ begin
 						testf = true;
 						SetCompany(33,false)
 					end;
+				end;
+				if(POrw.ItemConsgType==0) then begin
+					testf = false;
 				end;
 				if(testf)then begin
 					recordNew(UINr);
@@ -4661,7 +4678,7 @@ begin
 					ConsINr.UUID = UINr.UUID;
 					CIr.LocCode = INr.Code;
 					CIr.BrandCode = ConsINr.BPIBrand;
-					if(!ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
+					if(!ReadFirstKey("LocCodeBrand",CIr,2,true))then begin	
 						if(RecordStore(ConsINr,true))then begin
 							logtext(0,ConsINr.Code & " Code");
 							recordNew(CIr);
@@ -4698,11 +4715,22 @@ begin
 				end;
 			end;
 		end;
+		
+		if(matrowcnt(ORr)<1)then begin
+			warn = "’оваров по заказу на склад нет на косолидированном складе !";
+			res = -1;
+			goto LRemote_ORFromPOConsDsm;
+		end;
+		
+		
+		
 		ORSumup(ORr);
 		ORr.SerNr = NextSerNr("ORVc",ORr.OrdDate,-1,false,"");
 		ORr.OfficialSerNr = POr.SerNr & ":" & curcomp;
 		recordinsert(ORr,true);
-	
+		
+		LRemote_ORFromPOConsDsm:;  
+		
 	resetcompany(curcomp);//++++++++++++++++++++++++ CC out
 	
 	Remote_ORFromPOConsDsm = res;
