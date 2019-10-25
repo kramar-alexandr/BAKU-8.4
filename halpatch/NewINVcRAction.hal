@@ -622,7 +622,55 @@ BEGIN
 	val SNMiddleval;
 	boolean Catef;
 	Array string 255 astr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record INVc tmpINr;
+	record BarCodeVc BCr;
+	record PIVc PIr;
+	record BPIBrandVc Brandr;
+	integer  mtrwNewIN,curcomp,CompQty;
 	
+	BlockLoad(Compb);
+		
+	curcomp = currentcompany;
+	CompQty = matrowcnt(Compb);
+	
+	if(currentcompany==33 and newINr.OKFlag!=0 and newIN2r.OKFlag==0) then begin
+		Brandr.Code = NewINr.Brand;
+		ReadFirstMain(Brandr,1,true);
+		mtrwNewIN = matrowcnt(NewINr);
+		for (i=0;i<mtrwNewIN;i=i+1) begin
+			matrowget(newINr,i,newINrw);
+			RecordNew(BCr);
+			BCr.Barcode = NewINrw.NewBarCode;
+			BCr.Itemcode = NewINrw.Code;
+			RecordStore(BCr,true);
+			RecordNew(PIr);
+			PIr.ItemCode = NewINrw.Code;
+			PIr.VECode = Brandr.Vendor;
+			PIr.VEItemCode = newINrw.NewVECode;
+			RecordStore(PIr,true);
+			for (j=0;j<CompQty;j=j+1)begin
+				matrowget(Compb,j,Comprw);
+				if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3))then begin
+					SetCompany(j+1,false);
+					tmpINr.Code = newINrw.VendorCode;
+					if(ReadFirstMain(tmpINr,1,true)) then begin
+						RecordNew(BCr);
+						BCr.Barcode = NewINrw.NewBarCode;
+						BCr.Itemcode = tmpINr.Code;
+						RecordStore(BCr,true);
+						RecordNew(PIr);
+						PIr.ItemCode = tmpINr.Code;
+						PIr.VECode = Brandr.Vendor;
+						PIr.VEItemCode = newINrw.NewVECode;
+						RecordStore(PIr,true);
+					end;	
+				end;
+			end;
+		end;	
+		SetCompany(curcomp,false);
+	end;
 	
   NewINVcRecordUpdateAfter = res;
   RETURN;
@@ -2378,6 +2426,82 @@ BEGIN
 					end;
 				end;
 			end;		
+			if(currentcompany==33) then begin
+				if(nonblank(newINrw.NewVECode)) then begin
+					PIr.ItemCode = NewINrw.Code;
+					PIr.Location = blankval;
+					Brandr.Code = newINr.Brand;
+					if(ReadFirstMain(Brandr,1,true)) begin
+						if(blank(Brandr.Vendor)) then begin
+							RecordCheckError(36304,"",-1,"Brand"); 
+							goto LNewINVcRecordCheck;
+						end;
+						PIr.VECode = Brandr.Vendor;
+						PIr.VEItemCode = newINrw.NewVECode;
+						if(ReadFirstMain(PIr,4,true)) then begin
+							RecordCheckError(36210,"",i,"NewVECode"); 
+							goto LNewINVcRecordCheck;
+						end;
+					end;	
+				end;	
+				if(nonblank(NewINrw.NewBarCode)) then begin
+					BCr.Barcode = NewINrw.NewBarCode;
+					if(ReadFirstMain(BCr,1,true)) then begin
+						res = -1; 
+					end;
+					INr.BarCode = NewINrw.NewBarCode;
+					if(ReadFirstKey("BarCode",INr,1,true)) then begin
+						res = -1;
+					end;
+					INr.AlternativeCode = NewINrw.NewBarCode;
+					if(ReadFirstKey("AlternativeCode",INr,1,true)) then begin
+						res = -1;
+					end;
+					if(res==-1) then begin
+						RecordCheckError(36210,"",i,"NewBarCode"); 
+						goto LNewINVcRecordCheck;
+					end;	
+				end;
+				CompQty = matrowcnt(Compb);
+				for (j=0;j<CompQty;j=j+1)begin
+					matrowget(Compb,j,Comprw);
+					if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3))then begin
+						SetCompany(j+1,false);
+						testINr.Code = newINrw.VendorCode;
+						if(ReadFirstMain(testINr,1,true))then begin
+							if(nonblank(newINrw.NewVECode)) then begin
+								PIr.ItemCode = NewINrw.Code;
+								PIr.Location = blankval;
+								PIr.VECode = Brandr.Vendor;
+								PIr.VEItemCode = newINrw.NewVECode;
+								if(ReadFirstMain(PIr,4,true)) then begin
+									RecordCheckError(36210," в компании " & Comprw.ShortName,i,"NewVECode"); 
+									goto LNewINVcRecordCheck;
+								end;
+							end;
+							if(nonblank(NewINrw.NewBarCode)) then begin
+								BCr.Barcode = NewINrw.NewBarCode;
+								if(ReadFirstMain(BCr,1,true)) then begin
+									res = -1; 
+								end;
+								INr.BarCode = NewINrw.NewBarCode;
+								if(ReadFirstKey("BarCode",INr,1,true)) then begin
+									res = -1;
+								end;
+								INr.AlternativeCode = NewINrw.NewBarCode;
+								if(ReadFirstKey("AlternativeCode",INr,1,true)) then begin
+									res = -1;
+								end;
+								if(res==-1) then begin
+									RecordCheckError(36210," в компании " & Comprw.ShortName,i,"NewBarCode"); 
+									goto LNewINVcRecordCheck;
+								end;	
+							end;
+						end;	
+					end;	
+				end;
+				ResetCompany(curcomp);
+			end;	
 			INr.Code = NewINrw.Code;
   	  if(readfirstmain(INr,1,true))then begin
   	  	recordcopy(IN2r,INr);
@@ -2443,50 +2567,6 @@ BEGIN
 				readfirstmain(INConsr,1,true);
   	  	//recordcopy(IN3r,INConsr);
   	  	upd = true;
-				if(nonblank(NewINrw.NewBarCode)) then begin
-					BCr.Barcode = NewINrw.NewBarCode;
-					if(ReadFirstMain(BCr,1,true)) then begin
-						res = -1; 
-					end;
-					INr.BarCode = NewINrw.NewBarCode;
-					if(ReadFirstKey("BarCode",INr,1,true)) then begin
-						res = -1;
-					end;
-					INr.AlternativeCode = NewINrw.NewBarCode;
-					if(ReadFirstKey("AlternativeCode",INr,1,true)) then begin
-						res = -1;
-					end;
-					if(res==-1) then begin
-						RecordCheckError(36210,"",i,"NewBarCode"); 
-						goto LNewINVcRecordCheck;
-					end;	
-					RecordNew(BCr);
-					BCr.Barcode = NewINrw.NewBarCode;
-					BCr.Itemcode = ConsIr.Code;
-					RecordStore(BCr,true);
-				end;
-				if(nonblank(newINrw.NewVECode)) then begin
-					PIr.ItemCode = ConsIr.Code;
-					PIr.Location = blankval;
-					Brandr.Code = newINr.Brand;
-					if(ReadFirstMain(Brandr,1,true)) begin
-						if(blank(Brandr.Vendor)) then begin
-							RecordCheckError(36304,"",-1,"Brand"); 
-							goto LNewINVcRecordCheck;
-						end;
-						PIr.VECode = Brandr.Vendor;
-						PIr.VEItemCode = newINrw.NewVECode;
-						if(ReadFirstMain(PIr,4,true)) then begin
-							RecordCheckError(36210,"",i,"NewVECode"); 
-							goto LNewINVcRecordCheck;
-						end;
-						RecordNew(PIr);
-						PIr.ItemCode = ConsIr.Code;
-						PIr.VECode = Brandr.Vendor;
-						PIr.VEItemCode = newINrw.NewVECode;
-						RecordStore(PIr,true);
-					end;	
-				end;
   	  	/*if(blank(newINr.Name) and blank(newINrw.Name))then begin
   	  		newINrw.Name = INr.Name;
   	  		matrowput(newINr,i,newINrw);
@@ -2494,50 +2574,6 @@ BEGIN
   	  end else begin
 				INConsr.Code = newINrw.Code;
 				if(readfirstmain(INConsr,1,true)) then begin upd = true;
-					if(nonblank(NewINrw.NewBarCode)) then begin
-						BCr.Barcode = NewINrw.NewBarCode;
-						if(ReadFirstMain(BCr,1,true)) then begin
-							res = -1; 
-						end;
-						INr.BarCode = NewINrw.NewBarCode;
-						if(ReadFirstKey("BarCode",INr,1,true)) then begin
-							res = -1;
-						end;
-						INr.AlternativeCode = NewINrw.NewBarCode;
-						if(ReadFirstKey("AlternativeCode",INr,1,true)) then begin
-							res = -1;
-						end;
-						if(res==-1) then begin
-							RecordCheckError(36210,"",i,"NewBarCode"); 
-							goto LNewINVcRecordCheck;
-						end;	
-						RecordNew(BCr);
-						BCr.Barcode = NewINrw.NewBarCode;
-						BCr.Itemcode = INConsr.Code;
-						RecordStore(BCr,true);
-					end;
-					if(nonblank(newINrw.NewVECode)) then begin
-						PIr.ItemCode = INConsr.Code;
-						PIr.Location = blankval;
-						Brandr.Code = newINr.Brand;
-						if(ReadFirstMain(Brandr,1,true)) begin
-							if(blank(Brandr.Vendor)) then begin
-								RecordCheckError(36304,"",-1,"Brand"); 
-								goto LNewINVcRecordCheck;
-							end;
-							PIr.VECode = Brandr.Vendor;
-							PIr.VEItemCode = newINrw.NewVECode;
-							if(ReadFirstMain(PIr,4,true)) then begin
-								RecordCheckError(36210,"",i,"NewVECode"); 
-								goto LNewINVcRecordCheck;
-							end;
-							RecordNew(PIr);
-							PIr.ItemCode = INConsr.Code;
-							PIr.VECode = Brandr.Vendor;
-							PIr.VEItemCode = newINrw.NewVECode;
-							RecordStore(PIr,true);
-						end;	
-					end;	
 				end else begin
 					codestring = newINrw.Code;
 					/*NormalizeCodeName(codestring);
@@ -2559,50 +2595,6 @@ BEGIN
 					newINrw.VendorCode = NewINrw.Code;
 					INConsr.Code = ConsIr.Code;
 					INConsr.Group=newINrw.Group;
-					if(nonblank(NewINrw.NewBarCode)) then begin
-						BCr.Barcode = NewINrw.NewBarCode;
-						if(ReadFirstMain(BCr,1,true)) then begin
-							res = -1; 
-						end;
-						INr.BarCode = NewINrw.NewBarCode;
-						if(ReadFirstKey("BarCode",INr,1,true)) then begin
-							res = -1;
-						end;
-						INr.AlternativeCode = NewINrw.NewBarCode;
-						if(ReadFirstKey("AlternativeCode",INr,1,true)) then begin
-							res = -1;
-						end;
-						if(res==-1) then begin
-							RecordCheckError(36210,"",i,"NewBarCode"); 
-							goto LNewINVcRecordCheck;
-						end;	
-						RecordNew(BCr);
-						BCr.Barcode = NewINrw.NewBarCode;
-						BCr.Itemcode = ConsIr.Code;
-						RecordStore(BCr,true);
-					end;
-					if(nonblank(newINrw.NewVECode)) then begin
-					PIr.ItemCode = ConsIr.Code;
-					PIr.Location = blankval;
-					Brandr.Code = newINr.Brand;
-					if(ReadFirstMain(Brandr,1,true)) begin
-						if(blank(Brandr.Vendor)) then begin
-							RecordCheckError(36304,"",-1,"Brand"); 
-							goto LNewINVcRecordCheck;
-						end;
-						PIr.VECode = Brandr.Vendor;
-						PIr.VEItemCode = newINrw.NewVECode;
-						if(ReadFirstMain(PIr,4,true)) then begin
-							RecordCheckError(36210,"",i,"NewVECode"); 
-							goto LNewINVcRecordCheck;
-						end;
-						RecordNew(PIr);
-						PIr.ItemCode = ConsIr.Code;
-						PIr.VECode = Brandr.Vendor;
-						PIr.VEItemCode = newINrw.NewVECode;
-						RecordStore(PIr,true);
-					end;	
-				end;
 				end;	
   	  end;
   	  FullFillCCINVc(INConsr,newINr,newINrw,group,type,insertDispNameNotCode);
@@ -2706,50 +2698,6 @@ BEGIN
 								CIr.LocCode = INConsr.Code;
 								CIr.BrandCode = INConsr.BPIBrand;
 								recordStore(CIr,true);
-								if(nonblank(NewINrw.NewBarCode)) then begin
-									BCr.Barcode = NewINrw.NewBarCode;
-									if(ReadFirstMain(BCr,1,true)) then begin
-										res = -1; 
-									end;
-									INr.BarCode = NewINrw.NewBarCode;
-									if(ReadFirstKey("BarCode",INr,1,true)) then begin
-										res = -1;
-									end;
-									INr.AlternativeCode = NewINrw.NewBarCode;
-									if(ReadFirstKey("AlternativeCode",INr,1,true)) then begin
-										res = -1;
-									end;
-									if(res==-1) then begin
-										RecordCheckError(36210,"",i,"NewBarCode"); 
-										goto LNewINVcRecordCheck;
-									end;	
-									RecordNew(BCr);
-									BCr.Barcode = NewINrw.NewBarCode;
-									BCr.Itemcode = INConsr.Code;
-									RecordStore(BCr,true);
-								end;
-								if(nonblank(newINrw.NewVECode)) then begin
-									PIr.ItemCode = INConsr.Code;
-									PIr.Location = blankval;
-									Brandr.Code = newINr.Brand;
-									if(ReadFirstMain(Brandr,1,true)) begin
-										if(blank(Brandr.Vendor)) then begin
-											RecordCheckError(36304,"",-1,"Brand"); 
-											goto LNewINVcRecordCheck;
-										end;
-										PIr.VECode = Brandr.Vendor;
-										PIr.VEItemCode = newINrw.NewVECode;
-										if(ReadFirstMain(PIr,4,true)) then begin
-											RecordCheckError(36210,"",i,"NewVECode"); 
-											goto LNewINVcRecordCheck;
-										end;
-										RecordNew(PIr);
-										PIr.ItemCode = INConsr.Code;
-										PIr.VECode = Brandr.Vendor;
-										PIr.VEItemCode = newINrw.NewVECode;
-										RecordStore(PIr,true);
-									end;	
-								end;
 							end;
 							ResetCompany(curcomp);
 						end;
@@ -2783,50 +2731,6 @@ BEGIN
 									res = -1; 
 									goto LNewINVcRecordCheck;
 								end;
-							end;
-							if(nonblank(NewINrw.NewBarCode)) then begin
-								BCr.Barcode = NewINrw.NewBarCode;
-								if(ReadFirstMain(BCr,1,true)) then begin
-									res = -1; 
-								end;
-								OldConsINr.BarCode = NewINrw.NewBarCode;
-								if(ReadFirstKey("BarCode",OldConsINr,1,true)) then begin
-									res = -1;
-								end;
-								OldConsINr.AlternativeCode = NewINrw.NewBarCode;
-								if(ReadFirstKey("AlternativeCode",OldConsINr,1,true)) then begin
-									res = -1;
-								end;
-								if(res==-1) then begin
-									RecordCheckError(36210,"",i,"NewBarCode"); 
-									goto LNewINVcRecordCheck;
-								end;	
-								RecordNew(BCr);
-								BCr.Barcode = NewINrw.NewBarCode;
-								BCr.Itemcode = INr.Code;
-								RecordStore(BCr,true);
-							end;
-							if(nonblank(newINrw.NewVECode)) then begin
-								if(blank(Brandr.Vendor)) then begin
-									RecordCheckError(36304,"",-1,"Brand"); 
-									goto LNewINVcRecordCheck;
-								end;
-								PIr.ItemCode = INr.Code;
-								PIr.Location = blankval;
-								Brandr.Code = newINr.Brand;
-								if(ReadFirstMain(Brandr,1,true)) begin
-									PIr.VECode = Brandr.Vendor;
-									PIr.VEItemCode = newINrw.NewVECode;
-									if(ReadFirstMain(PIr,4,true)) then begin
-										RecordCheckError(36210,"",i,"NewVECode"); 
-										goto LNewINVcRecordCheck;
-									end;
-									RecordNew(PIr);
-									PIr.ItemCode = INr.Code;
-									PIr.VECode = Brandr.Vendor;
-									PIr.VEItemCode = newINrw.NewVECode;
-									RecordStore(PIr,true);
-								end;	
 							end;
 						end;	
 					end;
