@@ -475,7 +475,7 @@ begin
 	record SerBalVc SBr;
   record LocationVc Locr;
   Boolean TrHs, TrHs2;
-  Boolean testf, TrLf, locf, IVCredVithStatf,SMf;
+  Boolean testf, TrLf, locf, IVCredVithStatf,SMf, testf2;
   Integer i,j,k,intPOSerNr,intPOComp, locORserNr, StatusMargin, curcomp;
   Integer rwcnt, ordcnt, stockcnt, pos;
   array string 255 StockName, OrNo;
@@ -489,7 +489,7 @@ begin
 	record ORVc ORr, locORr;
 	record RLinkVc RLr;
 	date locORrDate, blnkDate, RecDate;
-	val Weight, Volume, PPSum, PSum, Sum, credPO;
+	val Weight, Volume, PPSum, PSum, PartPSum, Sum, credPO, PartPaymentAmount, OldBalancePayment, OpenPPSum, CurPUSum;
 	record POShipmDataVc POSDr;
 	row POShipmDataVc POSDrw;
 	record APPayHistVc APPayHistr;
@@ -497,6 +497,9 @@ begin
 	row VIVc VIrw;
 	record APVc APr;
 	record PUVc PUr;
+	row PUVc PUrw;
+	longint lastPUSerNr;
+	record OPPVc OPPr;
 	
 	curcomp = currentcompany;
 	
@@ -509,6 +512,7 @@ begin
 		outstring(5,0,"Po number",false);
 		outstring(6,0,"Manufacturer name",false);
 		outstring(7,0,"Po date",false);
+		outstring(34,0,"Project code",false);
 		outstring(8,0,"Mfr finish date",false);
 		outstring(9,0,"Invoice number",false);
 		outstring(10,0,"Invoice date",false);
@@ -518,6 +522,7 @@ begin
 		outstring(14,0,"Payment terms",false);
 		outstring(15,0,"Currency code",false);
 		outstring(16,0,"Order amount",false);
+		outstring(33,0,"Old balance payment",false);
 		outstring(17,0,"Estimated date of payment",false);
 		outstring(18,0,"Payment date",false);
 		outstring(19,0,"Payment amount",false);
@@ -623,12 +628,22 @@ begin
 			end;
 		end;
 		
+		CurPUSum = 0;
 		RecDate = blnkDate;
 		PUr.PONr = POr.SerNr;
 		if(ReadLastKey("PONr",PUr,1,true))then begin
 			RecDate = PUr.TransDate;
+			lastPUSerNr = PUr.SerNr;
+			for (i=0;i<matrowcnt(PUr);i=i+1) begin
+				for (j=0;j<matrowcnt(POr);j=j+1) begin
+					matrowget (PUr,i,PUrw);
+					matrowget (POr,j,POrw);
+					if(PUrw.ArtCode == POrw.ArtCode)then begin
+						CurPUSum = CurPUSum + (PUrw.Quant * (POrw.Sum / POrw.Quant));
+					end;
+				end;
+			end;
 		end;
-		
 		
 		PPSum = 0;
 		PSum = 0;
@@ -641,6 +656,23 @@ begin
 			end;
 		end;
 		Resetloop(APPayHistr);
+		
+		
+		
+		
+		OpenPPSum = 0;
+		OPPr.OrderNr = POr.SerNr;
+		TrHs2 = true;
+		While(LoopKey("OrderNr",OPPr,1,TrHs2)) begin
+			if (OPPr.OrderNr!=POr.SerNr) then begin TrHs2 = false; end;
+			if (TrHs2) then begin
+				OpenPPSum = OpenPPSum + OPPr.PPVal;
+			end;
+		end;
+		Resetloop(OPPr);
+		
+		
+		
 		
 		IVCredVithStatf = false;
 		credPO = 0;
@@ -655,7 +687,6 @@ begin
 			if (matrowcnt(VIr)>0 and TrHs2 and VIrw.AccNumber!="44/21" and !IVCredVithStatf) then begin
 				APr.SerNr = VIr.SerNr;
 				if(ReadFirstMain(APr,1,true))then begin
-					logtext(0,APr.RVal);
 					PSum = PSum + (VIr.PayVal - APr.RVal);
 				end else begin
 					if(VIr.OKFlag==1)then begin
@@ -676,6 +707,61 @@ begin
 		end else begin
 			Sum = PPSum;
 		end;
+		
+		
+		logtext (0,Sum);
+		logtext (0,PSum);
+		logtext (0,PPSum);
+		
+		
+		PartPaymentAmount = 0;
+		TrHs2 = true;
+		PUr.PONr = POr.SerNr;
+		while (loopKey("PONr",PUr,1,TrHs2)) begin
+			if(PUr.PONr != POr.SerNr)then begin TrHs2 = false; end;
+			if(lastPUSerNr==PUr.SerNr)then begin  TrHs2 = false; end;
+			if(TrHs2)then begin
+				for (i=0;i<matrowcnt(PUr);i=i+1) begin
+					for (j=0;j<matrowcnt(POr);j=j+1) begin
+						matrowget (PUr,i,PUrw);
+						matrowget (POr,j,POrw);
+						if(PUrw.ArtCode == POrw.ArtCode)then begin
+							PartPaymentAmount = PartPaymentAmount + (PUrw.Quant * (POrw.Sum / POrw.Quant));
+						end;
+					end;
+				end;
+			end;
+		end;
+		resetloop (PUr);
+		
+		
+		OldBalancePayment = 0;
+		if(PartPaymentAmount > 0)then begin
+			Sum = 0;
+			if(PSum<=PartPaymentAmount)then begin
+				OldBalancePayment = PartPaymentAmount - PSum;
+			end else begin
+				OldBalancePayment = 0;
+				Sum = PSum - PartPaymentAmount;
+			end;
+			if(OpenPPSum > 0)then begin
+				Sum = Sum + OpenPPSum;
+			end;
+		end;
+		
+		if((CurPUSum + PartPaymentAmount)<POr.Sum4)then begin
+			OldBalancePayment = OldBalancePayment + CurPUSum;
+			if(Sum<=CurPUSum)then begin
+				OldBalancePayment = OldBalancePayment - Sum;
+				Sum = 0;
+			end else begin
+				OldBalancePayment = OldBalancePayment - CurPUSum;
+				Sum = Sum - CurPUSum;
+			end;
+		end else begin
+			CurPUSum = 0;
+		end;
+		
 		
 		
 		// ClientName
@@ -705,6 +791,7 @@ begin
 				end;
 				outstring(6,0,POr.Addr0,false);
 				outstring(7,0,POr.TransDate,false);
+				outstring(34,0,POr.IDPrjNum,false);
 				outdate(8,0,POr.IDMfrFinDate,false);
 				outstring(9,0,POr.IDProfInvNum,false);
 				outdate(10,0,POr.IDMfrFinConfirmDate,false);
@@ -718,6 +805,7 @@ begin
 				outstring(14,0,POr.PayDeal,false);
 				outstring(15,0,POr.CurncyCode,false);
 				outstring(16,0,POr.Sum4,false);
+				outstring(33,0,OldBalancePayment,false);
 				outdate(17,0,POr.IDMfrFinDate,false);
 				outdate(18,0,POr.IDMfrFinConfirmDate,false);
 				outstring(19,0,Sum,false);// Payment amount- должен рассчитаться в зависимости от условия оплаты
@@ -725,7 +813,7 @@ begin
 				outdate(21,0,AddDay(POr.IDMfrFinConfirmDate,3),false);
 				outstring(22,0,POr.DaysForBallancePayment,false);// Days for balance payment- цифра из новой ячейки
 				outdate(23,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment),false);// Balance payment deadline - invoice date+days for balance payment
-				outstring(24,0,POr.Sum4-Sum,false);
+				outstring(24,0,POr.Sum4-Sum-PartPaymentAmount-CurPUSum,false);
 				outdate(25,0,AddDay(POr.IDMfrFinConfirmDate,POr.DaysForBallancePayment-1),false);//Margin for balance payment- Balance payment deadline- сегодня
 				outstring(26,0,RecDate,false); // Reception date- дата последнего поступления заказа
 				outstring(27,0,POr.IDFreight,false);
