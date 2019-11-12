@@ -2,6 +2,11 @@ external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var
 external procedure ExtractObj(string,var Integer,var string);
 external function Boolean FindTheUser(var record UserVc);
 
+external procedure AddCharsToString(var string,string,Integer);
+external function string 255 StrReplace(string,string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 17 November 2017 17:04:44
+external function Boolean CorrectItemVAR(string,var string,var string,Boolean); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 12:32 12.11.2019
+
+
 global
 function Integer CheckUsers(string userstr,string ccuserstr,var string resuser,Boolean checkcuf)
 BEGIN
@@ -289,3 +294,107 @@ LCheckVarieties:;
   CheckVarieties = res;
   RETURN;
 END;
+
+
+function Boolean ReadFirstItem2(string artcode,var record INVc INp)
+BEGIN
+  Boolean res;
+  string 60 theitemcode;
+  string 255 comment,name;  
+  
+  RecordNew(INp);
+  if (nonblank(artcode)) then begin
+  if (CorrectItemVAR(artcode,theitemcode,comment,true)) then begin
+    INp.Code = theitemcode;
+    res = ReadFirstMain(INp,1,true);
+    if (true) then begin
+      if (artcode!=theitemcode) then begin
+        name = INp.Name;
+        name = name & comment;
+        if (len(name)>100) then begin//100 INp->Name is 100 only in DB
+          name = Left(name,100);
+        end;
+        INp.Name = name;
+      end;
+    end;
+  end;
+  end;
+  ReadFirstItem2 = res;
+  RETURN;
+END;
+
+
+
+
+global
+function Boolean GetFirstItem(var string ItemCode,var record INVc INr)
+begin
+  Boolean res;
+  string 255 tstr;
+  record ItemSettingBlock ISb;
+  record BarcodeVc Barcoder;
+
+  BlockLoad(ISb);
+//  res = ReadFirstItem(ItemCode,INr,true,false);////makes Variety not working
+  if (res==false) then begin
+    INr.Code = ItemCode;
+    res = ReadFirstMain(INr,1,true);
+  end;
+  if (res==false) then begin
+    if (nonblank(ItemCode)) then begin
+      tstr = ItemCode;
+      if (ISb.BarCodeLength>0) then begin
+        if ( len(tstr) < ISb.BarCodeLength ) then begin
+          AddCharsToString(tstr,'0',ISb.BarCodeLength-len(tstr));
+        end;  
+      end;
+      ItemCode = tstr;
+      INr.BarCode = ItemCode;
+      res = ReadFirstKey("BarCode",INr,1,true);
+      if (res) then begin ItemCode = INr.Code; end;
+      if (res==false) then begin
+//        ItemCode = tstr;
+        INr.AlternativeCode = ItemCode;
+        res = ReadFirstKey("AlternativeCode",INr,1,true);
+        if (res) then begin ItemCode = INr.Code; 
+        end else begin// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 17 November 2017 17:04:03
+        	INr.AlternativeCode = ItemCode;// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 17 November 2017 17:05:47
+        	INr.AlternativeCode = StrReplace(INr.AlternativeCode,"_"," ");// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 17 November 2017 17:05:48
+        	res = ReadFirstKey("AlternativeCode",INr,1,true);// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 17 November 2017 17:05:49
+					if (res) then begin ItemCode = INr.Code; end;// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 17 November 2017 17:05:50
+        end;
+      end;
+    end;
+  end;
+  if (res==false) then begin
+/*
+    Barcoder.Barcode = ItemCode;
+    if (ReadFirstMain(Barcoder,1,true)) then begin
+*/
+    Barcoder.Barcode = ItemCode;
+    if (ReadFirstKey("Barcode",Barcoder,1,true)) then begin
+      ItemCode = Barcoder.Itemcode;
+      if (ReadFirstItem2(Barcoder.Itemcode,INr)) then begin // Can't call ReadFirstItem, Risk for eternal loop
+        INr.Code = Barcoder.Itemcode;
+        INr.BarCode = Barcoder.Barcode;
+        res = true;
+      end;
+    end;
+  end;
+  if (res==false and nonblank(ItemCode)) then begin
+    record PIVc PIr;
+
+    PIr.VEItemCode = ItemCode;
+    if ReadFirstKey("VEItemCode",PIr,1,true) then begin
+      INr.Code = PIr.ItemCode;
+      res = ReadFirstMain(INr,1,true);
+    end;
+  end;
+  if (Importing==false) then begin//close item with some qty in stock, export-import and stock list is wrong  
+    if (INr.Terminated!=0) then begin res = false; end;
+  end;
+  GetFirstItem = res;
+  return;
+end;  
+
+
