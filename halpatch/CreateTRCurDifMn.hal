@@ -10,11 +10,56 @@ external function Boolean TRVc_PasteAccNumber(var record TRVc,Integer,Integer,Bo
 external function roundmode SetRoundModeD(Integer);
 external procedure TRSumup(var record TRVc,var val);
 external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
-external procedure ExtractObjectsByType(string ,string,var array string,var integer);
+//external procedure ExtractObjectsByType(string ,string,var array string,var integer);
 external function Integer TypeOfCurncy(var string,var Integer);
 external procedure LogProcTime(string,longint);
+external function boolean OTCodeMatch(string, string);
+external procedure ExtractObj(string,var Integer,var string);
 
-procedure CountEndSaldoInBase(string accnum, date enddate, var vector val saldo, integer serviceIntYc, var longint corrTRrNum, var array string CurencyList, var array string ObjectList)
+
+
+
+procedure CustExtractObjectsByType(string objstr, string type, var array string res, var integer i,array string addobj)
+begin
+  integer pos;
+  string 50 tstr;
+  integer j;
+  
+  i = 0;
+  pos = 0;
+  ExtractObj(objstr,pos,tstr);
+  while (nonblank(tstr)) begin
+    if (OTCodeMatch(tstr,type)) then begin
+    	for(j=0;j<addobj.length;j=j+1)begin
+    		if(nonblank(addobj[j]))then begin
+    			if(setinset(addobj[j],objstr))then begin
+    				tstr = tstr & "," & addobj[j];
+    			end;
+    		end;
+    	end;
+      res[i] = tstr;
+      i = i + 1;
+    end;
+    ExtractObj(objstr,pos,tstr);
+  end;
+  
+  if(currentcompany!=2 and currentcompany!=9 and currentcompany!=4 and currentcompany!=5 and currentcompany!=6 and currentcompany!=28 and currentcompany!=29)then begin
+	
+	end else begin
+		for(j=0;j<addobj.length;j=j+1)begin
+			if(nonblank(addobj[j]))then begin
+				if(setinset(addobj[j],objstr))then begin
+					tstr = addobj[j];
+					res[i] = tstr;
+					i = i + 1;
+				end;
+			end;
+		end;
+	end;
+  return;
+end;
+
+procedure CountEndSaldoInBase(string accnum, date enddate, var vector val saldo, integer serviceIntYc, var longint corrTRrNum, var array string CurencyList, var array string ObjectList,array string addobj)
 begin
   boolean TrHs;
   record FBVc FBr;
@@ -59,7 +104,7 @@ begin
             for (i=0;i<rwcnt;i=i+1) begin
               MatRowGet(TRr,i,TRrw);
               if ((TRrw.AccNumber == accnum) and (TRrw.ovst <> 1) and (TRrw.stp==1)) then begin
-                ExtractObjectsByType(TRrw.Objects,"STORE",objstores,oscnt);
+                CustExtractObjectsByType(TRrw.Objects,"STORE",objstores,oscnt,addobj);
                 if (oscnt==0) then begin
                   objstores[oscnt] = "BLANK";
                   oscnt = 1;
@@ -113,7 +158,6 @@ begin
                 end;
               end;
             end;
-            
           end;
         end;
       end;
@@ -217,11 +261,14 @@ begin
   array string 255 tags;
   array string 255 tmp1,tmp2;
   boolean TrHs;
-  string 255 t,comment;
+  string 255 t,comment,addobjtypes,addaccount;
   string 20 crn,objstore,tstr;
   array string 5 accnumber;
   longint corrTRrNum;
   longint curtick;
+  record ObjVc Objr;
+  array string 20 addobj;
+	
 	
 	curtick = getcurtick();
   serviceIntYc = 300;
@@ -271,7 +318,7 @@ begin
     ClearArray(tmp1);
     ClearArray(tmp2);
     corrTRrNum = -1;
-    CountEndSaldoInBase(accnumber[ai],RepSpec.d1,saldo,serviceIntYc,corrTRrNum,tmp1,tmp2);
+    CountEndSaldoInBase(accnumber[ai],RepSpec.d1,saldo,serviceIntYc,corrTRrNum,tmp1,tmp2,addobj);
     if (corrTRrNum<0) then begin
       corrTRrNum = 0;
     end;
@@ -366,12 +413,35 @@ begin
   array string 255 tags;
   boolean TrHs;
   date curdate,td;
-  string 100 t,comment;
+  string 100 t,comment,addobjtypes,addaccount;
   string 20 crn,tstr,objstore;
   array string 20 objstores;
   array string 5 accnumber;
   longint corrTRrNum;
   longint curtick;
+  record ObjVc Objr;
+  array string 100 addobj;
+	
+	
+	addobjtypes = RepSpec.f2;
+	addaccount = RepSpec.f3;
+	
+	if(nonblank(RepSpec.f1))then begin
+		addaccount = RepSpec.f1;
+	end;
+	if(nonblank(addobjtypes))then begin
+		Objr.OTCode = addobjtypes;
+		TrHs = true;
+		while(loopkey("OTCode",Objr,1,TrHs))begin
+			if(Objr.OTCode!=addobjtypes)then begin
+				TrHs = false;
+			end;
+			if(TrHs)then begin
+				addobj[addobj.length] = Objr.Code;
+				logtext(0,"Additiuonal objects  " & Objr.Code);
+			end;
+		end;
+	end;
 	
 	curtick = getcurtick();
   BlockLoad(bcur);
@@ -481,19 +551,31 @@ begin
   if nonblank(RepSpec.f1) then begin
     accnumber[0] = RepSpec.f1;
   end else begin
-    accnumber[ai] = "50"; ai = ai + 1;
-    accnumber[ai] = "52"; ai = ai + 1;
-    accnumber[ai] = "52/2"; ai = ai + 1;
-    accnumber[ai] = "53"; ai = ai + 1;
-    accnumber[ai] = "58"; ai = ai + 1;
-    accnumber[ai] = "59"; ai = ai + 1;
-    accnumber[ai] = "59/1"; ai = ai + 1;
-    accnumber[ai] = "59/2"; ai = ai + 1;
-    accnumber[ai] = "59/3"; ai = ai + 1;
+  	if(setinset("50",addaccount) or blank(addaccount))then begin
+    accnumber[ai] = "50"; ai = ai + 1; end;
+    if(setinset("52",addaccount) or blank(addaccount))then begin
+    accnumber[ai] = "52"; ai = ai + 1; end;
+    if(setinset("52/2",addaccount) or blank(addaccount))then begin
+    accnumber[ai] = "52/2"; ai = ai + 1; end;
+    if(setinset("53",addaccount) or blank(addaccount))then begin
+    accnumber[ai] = "53"; ai = ai + 1; end;
+    if(setinset("58",addaccount) or blank(addaccount))then begin
+    accnumber[ai] = "58"; ai = ai + 1; end;
+    if(setinset("59",addaccount) or blank(addaccount))then begin
+    accnumber[ai] = "59"; ai = ai + 1; end;
+    if(setinset("59/1",addaccount) or blank(addaccount))then begin
+    accnumber[ai] = "59/1"; ai = ai + 1; end;
+    if(setinset("59/2",addaccount) or blank(addaccount))then begin
+    accnumber[ai] = "59/2"; ai = ai + 1; end;
+    if(setinset("59/3",addaccount) or blank(addaccount))then begin
+    accnumber[ai] = "59/3"; ai = ai + 1; end;
     if(fileexists("demoserver"))then begin
-    	accnumber[ai] = "60"; ai = ai + 1;
-    	accnumber[ai] = "61"; ai = ai + 1;
-			accnumber[ai] = "64"; ai = ai + 1;
+    	if(setinset("60",addaccount) or blank(addaccount))then begin
+    	accnumber[ai] = "60"; ai = ai + 1; end;
+    	if(setinset("61",addaccount) or blank(addaccount))then begin
+    	accnumber[ai] = "61"; ai = ai + 1; end;
+    	if(setinset("64",addaccount) or blank(addaccount))then begin
+			accnumber[ai] = "64"; ai = ai + 1; end;
     end;
   end;
   RepSpec.ObjStr = UpperCase(RepSpec.ObjStr);
@@ -517,7 +599,6 @@ begin
   end;
   
   for (ai=0;ai<accnumber.length;ai=ai+1) begin
-    logtext(0,"account " & accnumber[ai]);
     comment = USetStr(35147) & " " & accnumber[ai];
     if nonblank(RepSpec.ObjStr) then begin
       comment = comment & " " & RepSpec.ObjStr;
@@ -535,7 +616,7 @@ begin
     if nonblank(RepSpec.ObjStr) then begin
       ObjectList[0] = RepSpec.ObjStr;
     end;
-    CountEndSaldoInBase(accnumber[ai],curdate,saldo,serviceIntYc,corrTRrNum,CurencyList,ObjectList);
+    CountEndSaldoInBase(accnumber[ai],curdate,saldo,serviceIntYc,corrTRrNum,CurencyList,ObjectList,addobj);
     
     for (CLi=0;Cli<CurencyList.length;CLi=CLi+1) begin
       if (CurencyList[CLi]=="BLANK") then begin
@@ -545,6 +626,7 @@ begin
     end;
     CLi = CurencyList.length;
     for (OLi=0;OLi<ObjectList.length;OLi=OLi+1) begin
+    	logtext(0,"ObjectList " & ObjectList[OLi]);
       ObjInArr[ObjectList[OLi]] = true;
     end;
     OLi = ObjectList.length;
@@ -567,6 +649,7 @@ begin
         if ((mainr.AccNumber!=accnumber[ai]) or (mainr.TransDate!=curdate)) then begin
           TrHs = false;
         end;
+        logtext(0,"TrHs " & TrHs);
         if (TrHs) then begin
           if (mainr.FileName=="TRVc") then begin
             TRr.Number = mainr.TransNr;
@@ -577,12 +660,13 @@ begin
                 for (i=0;i<rwcnt;i=i+1) begin
                   MatRowGet(TRr,i,TRrw);
                   if ((TRrw.AccNumber == accnumber[ai]) and (TRrw.ovst <> 1) and (TRrw.stp==1) and (TRrw.Curncy!=bcur.BaseCur1)) then begin
+                    logtext(0,"TRrw.AccNumber " & TRrw.AccNumber);
                     if (!CurInArr[TRrw.Curncy]) then begin
                       CurencyList[CLi] = TRrw.Curncy;
                       CurInArr[CurencyList[CLi]] = true;
                       CLi = CLi + 1;
                     end;
-                    ExtractObjectsByType(TRrw.Objects,"STORE",objstores,oscnt);
+                    CustExtractObjectsByType(TRrw.Objects,"STORE",objstores,oscnt,addobj);
                     if (oscnt==0) then begin
                       objstores[oscnt] = "BLANK";
                       oscnt = 1;
@@ -594,6 +678,7 @@ begin
                         OLi = OLi + 1;
                       end;
                       t = accnumber[ai] & ":" & TRrw.Curncy & ":" & objstores[j];
+                      logtext(0,t);
                       saldo[t] = saldo[t] + TRrw.DebVal - TRrw.CredVal;
                       crn = TRrw.Curncy;
                       switch (TypeOfCurncy(crn,oldstyle)) begin
