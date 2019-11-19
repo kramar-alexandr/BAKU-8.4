@@ -1561,21 +1561,54 @@ global
 updating function LongInt SHVcRecordCheck(var record SHVc SHp,record SHVc SH2p,LongInt stat,LongInt check)
 begin
   LongInt res,error;
-  Boolean UnOKedCheckSerialf;
-  string 255 errorstr,fieldstr;
-  integer rownr, OldComp, ItQty, i, mtrw;
+  Boolean UnOKedCheckSerialf,TrHs;
+  string 255 errorstr,fieldstr,LocCode,sToPosCode;
+  integer rownr, OldComp, ItQty, i, mtrw,j;
 	row SHVc SHrw;
 	record RLinkVc RLr;
 	record ORVc LORr, GORr;
 	record ActVc Actr;
 	record IVVc IVr;
   longint curtick, IVcnt;
+	record PosVc Posr;
 	
 	curtick = getcurtick();
   logtext(0,"SHVcRecordCheck");
-  
+  if(currentcompany==28)then begin
+		for (i=0;i<matrowcnt(SHp);i=i+1)begin
+			matrowget(SHp,i,SHrw);
+			TrHs = false;
+			if(nonblank(SHrw.Location))then begin
+				TrHs = true;
+				LocCode = SHrw.Location;
+			end else begin
+				if(nonblank(SHp.Location))then begin
+					TrHs = true;
+					LocCode = SHp.Location;
+				end;
+			end;
+			j = 0;
+			Posr.Location = LocCode;
+			while (LoopKey("Location",Posr,1,TrHs)) begin
+				if(Posr.Location != LocCode)then begin TrHs = false; end;
+				if(TrHs)then begin
+					sToPosCode = Posr.Code;
+					j = j + 1;
+				end;
+			end;
+			ResetLoop(Posr);
+			if(j==1)then begin
+				SHrw.PosCode = sToPosCode;
+				matrowput(SHp,i,SHrw);
+			end;
+		end;
+	end;
+	
   UnOKedCheckSerialf = false;
+	
   res = DoSHVcRecordCheck(SHp,SH2p,stat,check,error,errorstr,rownr,fieldstr,UnOKedCheckSerialf);
+	
+	
 
   if (res!=0) then begin
     RecordCheckError(error,errorstr,rownr,fieldstr);   

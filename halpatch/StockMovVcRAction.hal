@@ -2188,9 +2188,9 @@ begin
   LongInt oldnr,newnr,sORSerNr;
   string 255 oldOfficialSerNr;
   LongInt error;
-  string 255 errorstr,fieldstr,posNr;
+  string 255 errorstr,fieldstr,posNr,sPosCode,LocCode;
   Integer rownr, i, rcnt, j;
-  Boolean UnOKedCheckSerialf;
+  Boolean UnOKedCheckSerialf, TrHs;
   row StockMovVc StockMovrw;
 	record ActVc Actr, OldActr;
 	record ORVc ORr;
@@ -2204,6 +2204,7 @@ begin
 	record INVc INr;
 	record BPIBrandVc BPIBrandr;
 	longint curtick;
+	record PosVc Posr;
 	
 	curtick = getcurtick();
 	
@@ -2212,6 +2213,56 @@ begin
 	BlockLoad(ECMUb);
 	
 	res = 0;
+	
+	if(currentcompany==28)then begin
+		for (i=0;i<matrowcnt(SMp);i=i+1)begin
+			matrowget(SMp,i,StockMovrw);
+			
+			LocCode = "";
+			sPosCode = "";
+			TrHs = false;
+			if(nonblank(SMp.FrLocation))then begin
+				TrHs = true;
+				LocCode = SMp.FrLocation;
+			end;
+			j = 0;
+			Posr.Location = LocCode;
+			while (LoopKey("Location",Posr,1,TrHs)) begin
+				if(Posr.Location != LocCode)then begin TrHs = false; end;
+				if(TrHs)then begin
+					sPosCode = Posr.Code;
+					j = j + 1;
+				end;
+			end;
+			ResetLoop(Posr);
+			if(j==1)then begin
+				StockMovrw.FrPosCode = sPosCode;
+				matrowput(SMp,i,StockMovrw);
+			end;
+			
+			LocCode = "";
+			sPosCode = "";
+			TrHs = false;
+			if(nonblank(SMp.ToLocation))then begin
+				TrHs = true;
+				LocCode = SMp.ToLocation;
+			end;
+			j = 0;
+			Posr.Location = LocCode;
+			while (LoopKey("Location",Posr,1,TrHs)) begin
+				if(Posr.Location != LocCode)then begin TrHs = false; end;
+				if(TrHs)then begin
+					sPosCode = Posr.Code;
+					j = j + 1;
+				end;
+			end;
+			ResetLoop(Posr);
+			if(j==1)then begin
+				StockMovrw.ToPosCode = sPosCode;
+				matrowput(SMp,i,StockMovrw);
+			end;
+		end;
+	end;
 	
 	if(stat==Rs_update)then begin
 		if(SMp.TypeCoin==5)then begin
