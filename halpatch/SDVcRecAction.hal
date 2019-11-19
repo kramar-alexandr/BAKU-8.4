@@ -342,7 +342,7 @@ begin
   Boolean transf,gentrans,thesamelocf;
   val t,prev,stockreservq;
   string 10 location,loc2,loc3;
-  string 255 objstr,accstr,errstr,errofield,posNr;
+  string 255 objstr,accstr,errstr,errofield,posNr,LocCode,sToPosCode;
   Integer errorrow;
   record PISVc PISr;
   Boolean unokf,testf;
@@ -355,7 +355,7 @@ begin
   Array string 255 otcheckaccs;
   Array string 255 otcheckobjtyps;
   Integer otcheckcnt;
-  Boolean initotcheckf;    
+  Boolean initotcheckf,TrHs;    
   record TRGenBlock TRGb;
 	record BPIBrandVc BPIBrandr;
   
@@ -365,12 +365,49 @@ begin
   BlockLoad(MSb);
   BlockLoad(SNrb);
   BlockLoad(TRGb);
+	
+	
+	
+	if(currentcompany==28)then begin
+		for (i=0;i<matrowcnt(SDp);i=i+1)begin
+			matrowget(SDp,i,SDrw);
+			
+			sToPosCode = "";
+			LocCode = "";
+			TrHs = false;
+			if(nonblank(SDrw.Location))then begin
+				TrHs = true;
+				LocCode = SDrw.Location;
+			end else begin
+				if(nonblank(SDp.Location))then begin
+					TrHs = true;
+					LocCode = SDp.Location;
+				end;
+			end;
+			j = 0;
+			Posr.Location = LocCode;
+			while (LoopKey("Location",Posr,1,TrHs)) begin
+				if(Posr.Location != LocCode)then begin TrHs = false; end;
+				if(TrHs)then begin
+					sToPosCode = Posr.Code;
+					j = j + 1;
+				end;
+			end;
+			ResetLoop(Posr);
+			if(j==1)then begin
+				SDrw.PosCode = sToPosCode;
+				matrowput(SDp,i,SDrw);
+			end;
+		end;
+	end;
+	
+	
   if (stat==updatemode) then begin
     if (SDp.SerNr<=0) and (SD2p.OKFlag==0) then begin
       SDp.SerNr = SD2p.SerNr;
     end;
   end;        
-	
+
 	
 	if(currentcompany==33 and nonblank(SDp.Location))then begin
 		for(i=0;i<MatRowCnt(SDp);i=i+1) begin
