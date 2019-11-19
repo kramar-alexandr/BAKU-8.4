@@ -402,13 +402,13 @@ begin
 return;
 end;
 
-global function val FindAwerageCost(string artcode, string location,string curcode,date todate,string realcur)
+global function val FindAwerageCost(string artcode, string location,string curcode,date todate,string realcur, var date dat)
 begin
 	record ItemHistVc IHr,IH2r;
-	record PUVc PUr;
+	record PUVc PUr,PUIHr;
 	row PUVc PUrw;
 	val curcost,curval;
-	boolean TrHs,testf;
+	boolean TrHs,testf,testDate;
 	longint lastsernr;
 	val fr,to1,to2,br1,br2;
 	string 100 oldartcode,oldfilename;
@@ -422,14 +422,19 @@ begin
 		IHr.ArtCode = artcode;
 		IHr.Location = location;
 		TrHs = true;
-		while(loopkey("ActiveLocQty",IHr,2,TrHs))begin
+		testDate = true;
+		while(loopBackkey("ActiveLocQty",IHr,2,TrHs))begin
 			testf = true;
 			if(IHr.ArtCode!=artcode)then begin TrHs=false; testf = false; end;
 			if(nonblank(location) and IHr.Location!=location)then begin testf = false; end;
 			if(IHr.StockAffectf==0)then begin testf=false; end;
 			if(curcode!=IHr.CurncyCode and nonblank(IHr.CurncyCode))then begin testf=false; end;
 			if(blank(IHr.CurncyCode) and curcode!=realcur)then begin testf=false; end;
-			
+			PUIHr.SerNr = IHr.TransNr;
+			if(ReadFirstMain(PUIHr,1,true) and left(PUIHr.VECode,3)!="FOB" and TrHs and testDate)then begin
+				dat=IHr.TransDate;
+				testDate = false;
+			end;	
 			if(testf)then begin
 				curcost = curcost + IHr.RemCostPrice;
 				curqty = curqty + IHr.RemQty;
@@ -442,14 +447,20 @@ begin
 		IHr.ArtCode = artcode;
 		IHr.Location = location;
 		TrHs = true;
-		while(loopkey("ArtCodeLoc",IHr,2,TrHs))begin
+		testDate = true;
+		while(loopBackkey("ArtCodeLoc",IHr,2,TrHs))begin
 			testf = true;
-			if(IHr.ArtCode!=artcode or IHr.Location!=location)then begin TrHs=false; testf = false; end;
-			if(IHr.TransDate>todate)then begin TrHs=false; testf = false; end;
+			if(IHr.ArtCode!=artcode)then begin TrHs=false; testf = false; end;
+			if(nonblank(location) and IHr.Location!=location)then begin TrHs=false; testf = false; end;
+			if(IHr.TransDate>todate)then begin  testf = false; end;
 			if(IHr.StockAffectf==0)then begin testf=false; end;
 			if(curcode!=IHr.CurncyCode and nonblank(IHr.CurncyCode))then begin testf=false; end;
 			if(blank(IHr.CurncyCode) and curcode!=realcur)then begin testf=false; end;
-			
+			PUIHr.SerNr = IHr.TransNr;
+			if(ReadFirstMain(PUIHr,1,true) and left(PUIHr.VECode,3)!="FOB" and TrHs and testDate)then begin
+				dat=IHr.TransDate;
+				testDate = false;
+			end;	
 			if(testf)then begin
 				if(IHr.Qty>=0)then begin
 					curcost = curcost + IHr.TotCostPrice;
@@ -488,6 +499,7 @@ begin
   string 255 brand,model,tstr;
   Boolean collf,metalf;
   string 20 collstr,metalstr;
+	date dat;
   
   rmode5 = SetRoundMode(0,kRoundingDirectionToFromPosInf,kRoundingModeHalfUp,/*kRoundingStep5*/kRoundingStepNone);	//Edit----------------------Dima  17.04.2015
   
@@ -734,7 +746,7 @@ begin
 		awercost = 0;
 		awercostcur = 0;
 		awercostbrandcur = 0;
-		awercost = FindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur);
+		awercost = FindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,dat);
 		FindAwerageCostCurProc(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,curcost,curcost2);
 		awercostcur = curcost;
 		awercostbrandcur = curcost2;
@@ -918,17 +930,6 @@ begin
 	
   rmode5 = SetRoundMode(0,kRoundingDirectionToFromPosInf,kRoundingModeHalfUp,/*kRoundingStep5*/kRoundingStepNone);	//Edit----------------------Dima  17.04.2015
   
-	IHr.ArtCode=INr.Code;
-	IHr.FileName="PUVc";
-	TrHS = true;
-	while(LoopBackKey("FNArtCode",IHr,2,TrHS)) begin
-		PUIHr.SerNr = IHr.TransNr;
-		if(ReadFirstMain(PUIHr,1,true) and left(PUIHr.VECode,3)!="FOB" and TrHS)then begin
-			dat=IHr.TransDate;
-			TrHS = false;
-		end;	
-	end;
-	ResetLoop(IHr);
   if(serstock==0)then begin
   	instock = ISr.Instock;
   end else begin
@@ -1165,10 +1166,6 @@ begin
 		end else begin
 			outstring(0,0,"",false);
 		end;
-		
-			outstring(0,0,dat,false);
-		outstring(0,0,instock,false);
-		outstring(0,0,INr.Unittext,false);
 		total_qty = total_qty + instock;
 		GetFullCurncyRate(INr.LastPurchCurncyCode,todate,fr,to1,to2,br1,br2);
 		if(fr==0 or to1==0)then begin
@@ -1178,10 +1175,15 @@ begin
 		awercost = 0;
 		awercostcur = 0;
 		awercostbrandcur = 0;
-		awercost = FindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur);
+		awercost = FindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,dat);
 		FindAwerageCostCurProc(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,curcost,curcost2);
 		awercostcur = curcost;
 		awercostbrandcur = curcost2;
+		
+		outstring(0,0,dat,false);
+		outstring(0,0,instock,false);
+		outstring(0,0,INr.Unittext,false);
+		
 		if(costprice>0 and nonblank(serial) and INr.SerNrf>0)then begin
 			awercost = costprice;
 			IHr.ArtCode = INr.Code;
