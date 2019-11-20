@@ -323,6 +323,101 @@ begin
 return;
 end;
 
+
+
+global  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 
+procedure MyFindAwerageCost(string artcode, string location,string curcode,date todate,string realcur,string brandcur,var val cost,var val curcost,var val curcost2)
+begin
+	record ItemHistVc IHr,IH2r;
+	record PUVc PUr;
+	row PUVc PUrw;
+	val curval;
+	boolean TrHs,testf;
+	longint lastsernr;
+	val fr,to1,to2,br1,br2;
+	string 100 oldartcode,oldfilename;
+	longint oldsernr;
+  integer oldrow,oldinvalid;
+  val curqty,tempcost;
+	
+	
+	if(todate>=currentdate)then begin
+		cost = 0;
+		curcost = 0;
+		curcost2 = 0;
+		curqty = 0;
+		IHr.ArtCode = artcode;
+		IHr.Location = location;
+		TrHs = true;
+		while(loopkey("ActiveLocQty",IHr,2,TrHs))begin
+			testf = true;
+			if(IHr.ArtCode!=artcode)then begin TrHs=false; testf = false; end;
+			if(nonblank(location) and IHr.Location!=location)then begin testf = false; end;
+			if(IHr.StockAffectf==0)then begin testf=false; end;
+			if(curcode!=IHr.CurncyCode and nonblank(IHr.CurncyCode))then begin testf=false; end;
+			if(blank(IHr.CurncyCode) and curcode!=realcur)then begin testf=false; end;
+			
+			if(testf)then begin
+				tempcost = 0;
+				curcost = curcost + IHr.RemCostPriceCurncy;
+				cost = cost + IHr.RemCostPrice;
+				CalcCostInCurncyCurDate(IHr,curcost2,brandcur,1);
+				curqty = curqty + IHr.RemQty;
+			end;
+		end;
+		curcost = curcost/curqty;
+		curcost2 = curcost2/curqty;
+	end else begin
+		cost = 0;
+		curcost = 0;
+		curcost2 = 0;
+		curqty = 0;
+		tempcost = 0;
+		IHr.ArtCode = artcode;
+		IHr.Location = location;
+		TrHs = true;
+		while(loopkey("ArtCodeLoc",IHr,2,TrHs))begin
+			testf = true;
+			if(IHr.ArtCode!=artcode or IHr.Location!=location)then begin TrHs=false; testf = false; end;
+			if(IHr.TransDate>todate)then begin TrHs=false; testf = false; end;
+			if(IHr.StockAffectf==0)then begin testf=false; end;
+			if(curcode!=IHr.CurncyCode and nonblank(IHr.CurncyCode))then begin testf=false; end;
+			if(blank(IHr.CurncyCode) and curcode!=realcur)then begin testf=false; end;
+			
+			if(testf)then begin
+				tempcost = 0;
+				if(IHr.Qty>=0)then begin
+					cost = cost + IHr.TotCostPrice;
+					curcost = curcost + IHr.TotCostPriceCurncy;
+					CalcCostInCurncyOldDate(IHr,curcost2,brandcur,1);
+				end else begin
+					tempcost = 0;
+					cost = cost + IHr.TotCostPrice;
+					curcost = curcost - IHr.TotCostPriceCurncy;
+					CalcCostInCurncyOldDate(IHr,curcost2,brandcur,-1);
+				end;
+				curqty = curqty + IHr.Qty;
+				if(curqty==0)then begin
+					curcost = 0;
+					cost = 0;
+				end;
+			end;
+		end;
+		curcost = curcost/curqty;
+		cost = cost/curqty;
+		curcost2 = curcost2/curqty;
+	end;
+	
+return;
+end;
+
+
+
+
+
+
+
+
 global
 procedure FindAwerageCostCurProc(string artcode, string location,string curcode,date todate,string realcur,string brandcur,var val curcost,var val curcost2)
 begin
@@ -899,7 +994,7 @@ begin
   val fr,to1,to2,br1,br2;
   val baseprice,cur,price,baseprice5,brandprice;
   record INConsVc INCr;
-	val instock,awercost,awercostcur,awercostbrandcur,curcost2,curcost;
+	val instock,awercost,awercostcur,awercostbrandcur,curcost2,curcost,cost;
 	record PLDefVc PLDefr;
 	record ItemHistVc IHr;
 	record PUVc PUr,PUIHr;
@@ -1175,14 +1270,23 @@ begin
 		if(fr==0 or to1==0)then begin
 			fr=1; to1=0;
 		end;
-		
-		awercost = 0;
-		awercostcur = 0;
-		awercostbrandcur = 0;
-		awercost = FindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur);
-		FindAwerageCostCurProc(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,curcost,curcost2);
-		awercostcur = curcost;
-		awercostbrandcur = curcost2;
+		if(CurrentUser=="SA")then begin
+			awercost = 0;
+			awercostcur = 0;
+			awercostbrandcur = 0;
+			awercost = FindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur);
+			FindAwerageCostCurProc(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,curcost,curcost2);
+			awercostcur = curcost;
+			awercostbrandcur = curcost2;
+		end else begin
+			awercost = 0;
+			awercostcur = 0;
+			awercostbrandcur = 0;
+			MyFindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,cost,curcost,curcost2);
+			awercost = cost;
+			awercostcur = curcost;
+			awercostbrandcur = curcost2;
+		end;
 		if(costprice>0 and nonblank(serial) and INr.SerNrf>0)then begin
 			awercost = costprice;
 			IHr.ArtCode = INr.Code;
