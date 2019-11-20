@@ -4519,13 +4519,17 @@ record INVc INr;
 integer i,curcomp,cnt;
 string 100 item,brand;
 record BPIBrandVc BPIBrandr;
+boolean error, codeStatus;
 
 	curcomp = currentcompany;
 	logtext(0,"start");
+	LogText(3, "Check OutOfOrder - bulk update by codes and brand names");
+	
+	error = false;
+	codeStatus = false;
 
 	while (TestEOF()==false) begin
 		cnt = cnt + 1;
-		logtext(0,cnt);
 		item = importfield;
 		brand = importfield;
 		BPIBrandr.Name = brand;
@@ -4539,15 +4543,31 @@ record BPIBrandVc BPIBrandr;
 				if(readfirstmain(INr,1,true)) begin
 					if(INr.Code==item and INr.BPIBrand==brand and INr.OutOfOrder==0) then begin
 						INr.OutOfOrder = 1;
-						logtext(0,INr.Code);
+						logtext(0,cnt & ". Updated: " & INr.Code & " " & INr.BPIBrand & " Company code: " & i);
 						RecordStore(INr,true);
+					end else begin
+						error = true;
+						LogText(3, cnt & ". Didn't update: " & item & " " & brand & " ---------- Reason: incorrect brand name! ");
 					end;
+				end else begin
+					codeStatus = true;
 				end;
 			end;
 		end;
+		
+		if(codeStatus) then begin
+			LogText(3, cnt & ". Didn't update: " & item & " " & brand & " ---------- Reason: incorrect item code! ");
+		end;
+		
 		if (NextImportLine(true)) then begin end;
 	end;
 	SetCompany(curcomp,false);
+	
+	if(error) then begin
+		LogText(0, "Imported successfully, but in some rows error occured! Did not import! Please contact administrator - hansa.log");
+	end else begin
+		LogText(0, "Imported successfully!");
+	end;
 	
 logtext(0,"end");
 return;
@@ -4560,13 +4580,18 @@ record INVc INr;
 integer i,curcomp,cnt;
 string 100 item,brand;
 record BPIBrandVc BPIBrandr;
+boolean error, codeStatus;
 
 	curcomp = currentcompany;
 	logtext(0,"start");
+	LogText(3, "Uncheck OutOfOrder - bulk update by codes and brand names");
+
+	
+	error = false;
+	codeStatus = false;
 
 	while (TestEOF()==false) begin
 		cnt = cnt + 1;
-		logtext(0,cnt);
 		item = importfield;
 		brand = importfield;
 		BPIBrandr.Name = brand;
@@ -4580,19 +4605,36 @@ record BPIBrandVc BPIBrandr;
 				if(readfirstmain(INr,1,true)) begin
 					if(INr.Code==item and INr.BPIBrand==brand and INr.OutOfOrder!=0) then begin
 						INr.OutOfOrder = 0;
-						logtext(0,INr.Code);
+						logtext(0,cnt & ". Updated: " & INr.Code & " " & INr.BPIBrand & " Company code: " & i);
 						RecordStore(INr,true);
+					end else begin
+						error = true;
+						LogText(3, cnt & ". Didn't update: " & item & " " & brand & " ---------- Reason: incorrect brand name! ");
 					end;
+				end else begin
+					codeStatus = true;
 				end;
 			end;
 		end;
+		
+		if(codeStatus) then begin
+			LogText(3, cnt & ". Didn't update: " & item & " " & brand & " ---------- Reason: incorrect item code! ");
+		end;
+		
 		if (NextImportLine(true)) then begin end;
 	end;
 	SetCompany(curcomp,false);
 	
+	if(error) then begin
+		error = true;
+		LogText(0, "Imported successfully, but in some rows error occured! Did not import! Please contact administrator - hansa.log");
+	end else begin
+		LogText(0, "Imported successfully!");
+	end;
+	
 logtext(0,"end");
 return;
-end;	
+end;
 
 global updating procedure ChangeBPIGroupIn()
 begin
