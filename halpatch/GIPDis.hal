@@ -205,7 +205,7 @@ BEGIN
 END;
 
 global
-function Boolean GetRebate(record INVc INr,var val pricep,var val qtp,string cucat,string reb2code,var val rebvp,var Boolean foundstaff,Date tdp)
+function Boolean GetRebate(record INVc INr,var val pricep,var val qtp,string cucat,string reb2code,var val rebvp,var Boolean foundstaff,Date tdp,string location)
 BEGIN
   Boolean res;
   record CCatVc CCatr;
@@ -220,7 +220,7 @@ BEGIN
   integer checkin; // Edit ************************** Friday, 30 August 2013 11:45:23
   record MyRebVc MyRebr;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 16 April 2018 10:42:44
   row MyRebVc MyRebrw;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 16 April 2018 10:42:45
-  
+  val origrebvp;
   
   rebvp = 0;
   rebcode = reb2code;
@@ -308,7 +308,8 @@ BEGIN
 	*/
   end;
 LGetRebate:;
-
+	origrebvp = rebvp;
+	
 	if(nonblank(reb2code))then begin
 		MyRebr.Code = "";
 		while(loopmain(MyRebr,1,true))begin
@@ -326,6 +327,12 @@ LGetRebate:;
 						end;
 					end;
 					
+					if(nonblank(MyRebr.Locations))then begin
+						if(!setinset(location,MyRebr.Locations) or blank(location))then begin
+							testf = false;
+						end;
+					end;
+					
 					if(testf)then begin
 						rwcnt = MatRowCnt(MyRebr);
 						for (i=0;i<rwcnt;i=i+1) begin
@@ -334,11 +341,17 @@ LGetRebate:;
 							if(MyRebrw.CodeType==0)then begin
 								if(INr.Group==MyRebrw.ITCode)then begin
 									rebvp = MyRebrw.vra0;
+									if(MyRebrw.vra0==-1)then begin
+										rebvp = origrebvp;
+									end;
 								end;
 							end;
 							if(MyRebrw.CodeType==1)then begin
 								if(INr.Code==MyRebrw.ITCode)then begin
 									rebvp = MyRebrw.vra0;
+									if(MyRebrw.vra0==-1)then begin
+										rebvp = origrebvp;
+									end;
 								end;
 							end;
 						
@@ -625,7 +638,7 @@ BEGIN
   record PLDefVc PLDefr;
   Boolean pldeffound,infound,qtydepf,foundstaff,skipf;
   val tprice,tdisc;
-  string 255 lang2,pricelist2;
+  string 255 lang2,pricelist2,location;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 29 11 2019 y. at 10:37:07 AM
   val fr,to1,to2,br1,br2;  
   
   res = false;
@@ -704,7 +717,7 @@ L44GetItemPriceDiscount2:;
     price = tprice;
     lang2 = langcode;
     if (GetItemNameStr(1,descstr,lang2,INr.Name,INr.Code)) then begin end;
-    if (GetRebate(INr,tprice,qtp,custcat,rebcode,tdisc,foundstaff,tdp)) then begin end;
+    if (GetRebate(INr,tprice,qtp,custcat,rebcode,tdisc,foundstaff,tdp,location)) then begin end;
     if (foundstaff) then begin
       discount = tdisc;
     end else begin
