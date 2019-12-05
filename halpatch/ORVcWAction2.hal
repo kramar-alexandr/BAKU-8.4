@@ -2329,8 +2329,58 @@ BEGIN
   testf = ORDClassSwitchRow(wn,WindowActiveRow(wn));
   RETURN;
 END;
-      
-global 
+
+global
+procedure RecalcIDAmount()     
+begin
+Integer nwn,wn,CISqty,i,cnt;
+record ORVc ORr;
+row ORVc ORrw;
+boolean TrHs;
+record ItemStatusVc ISr;
+record ClientItemStatusVc CISr;
+record ConsItemVc CIr;
+string 255 location;
+
+ wn = CurWindow;
+ GetWindowRecord(wn,ORr);
+ cnt = matrowcnt(ORr);
+	for(i=0;i<cnt;i=i+1) begin
+		matrowget(ORr,i,ORrw);
+		location = ORrw.Location;
+		CISr.ItemCode = ORrw.ArtCode;
+		CIr.Code = ORrw.ArtCode;
+		if(ReadFirstMain(CIr,1,true))then begin
+			ORrw.GlobalItemArtCode = CIr.LocCode;
+			ORrw.IDAltCode = CIr.BrandCode;
+		end;
+		CISqty = 0;
+		TrHs = true;
+		while (loopmain(CISr,1,TrHs)) begin
+			if(CISr.ItemCode!=ORrw.ArtCode)then begin TrHs = false; end;
+			if(CISr.OrderNr!=ORr.SerNr and ORr.OrderClass=="CLIEN" and TrHs)then begin
+				CISqty = CISqty + CISr.Quant;
+			end;
+			if(ORr.OrderClass=="STOCK" and TrHs)then begin
+				CISqty = CISqty + CISr.Quant;
+			end;
+		end;
+		resetloop(CISr);
+		ISr.Code = ORrw.ArtCode;
+		if(blank(location)) then begin 
+			ISr.Location = ";;;"; 
+		end else begin
+			ISr.Location = location; 
+		end;
+		if(readfirstmain(ISr,2,true)) then begin
+			ORrw.IDAmount = ISr.Instock - ISr.RsrvQty - CISqty;
+		end;
+		matrowput(ORr,i,ORrw);
+	end;	
+ PutWindowRecord(wn,ORr); 
+return;
+end;
+
 procedure UpdatePricesORDsm()
 begin
   Integer wn;
