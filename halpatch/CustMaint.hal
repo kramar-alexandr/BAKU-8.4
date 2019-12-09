@@ -6,7 +6,13 @@ external procedure NormalizeObjstr(var string);
 external function boolean CompanyIsJWLikeCompany(Integer);
 external function string 255 StrReplace(string,string,string);
 remote updating procedure CreatePOfromCCSH(record SHVc);
-
+external function Boolean VIVc_PasteVECode(var record VIVc,Integer,Boolean,Boolean,var string);
+external function Boolean GetAccName(string,var string,Integer);
+external procedure ExtractObj(string,var Integer,var string);
+external procedure ExtractObjectsByType(string, string, var array string, var integer);
+remote procedure VICalcVals(var record VIVc);
+external procedure VISumup(record VIVc,var val);
+external procedure VIVc_PastePayVal(var record VIVc);
 //external procedure MyExtractObj(string,var Integer,var string);
 
 
@@ -2751,7 +2757,89 @@ begin
 	return;
 end;
 
-
+global updating 
+procedure CollectVIDaySaleMn(record RcVc RepSpec )
+begin
+record TRVc TRr;
+row TRVc TRrw;
+record VIVc VIr,oldVIr;
+row VIVc VIrw;
+boolean TrHs,testf;
+integer cntrw,i,j,oscnt;
+vector val saleSum;
+val ct;
+string 255 vewarn,tstr,obj,objects;
+array string 255 tags;
+array string 20 stores;
+record SHVc SHr;
+record RetVc Retr;
+record IVVc IVr;
+testf = true;
+TrHs = true;
+TRr.TransDate = RepSpec.sStartDate;
+while(loopkey("TransDate",TRr,1,TrHs)) begin
+	testf = true;
+	if(TRr.TransDate>RepSpec.sEndDate) then begin testf = false; TrHs = false; end;
+	if(TRr.IntYc!=SHYc and TRr.IntYc!=RetYc and TRr.IntYc!=IVYc) then begin testf=false; end;
+	if(testf) then begin 
+		switch(TRr.IntYc) begin
+			case SHYc: SHr.SerNr = TRr.Number;
+					if(ReadFirstMain(SHr,1,true)) then begin
+						if(SHr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+					end;
+			case 	RetYc	: Retr.SerNr = TRr.Number;
+					if(ReadFirstMain(Retr,1,true)) then begin
+						if(Retr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+					end;
+			case 	RetYc	: IVr.SerNr = TRr.Number;
+					if(ReadFirstMain(IVr,1,true)) then begin
+						if(IVr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+					end;
+		end;			
+	end;
+	if(testf) then begin
+		cntrw = matrowcnt(TRr);
+		for(i=0;i<cntrw;i=i+1) begin
+			matrowget(TRr,i,TRrw);
+			if(TRrw.AccNumber=="45" and TRrw.ovst <> 1 and TRrw.stp==1) then begin
+				obj = "";
+				ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
+				obj = stores[0];
+				saleSum[obj] = saleSum[obj] + TRrw.DebVal;
+				saleSum[obj] = saleSum[obj] - TRrw.CredVal;
+			end;
+		end;
+	end;
+end;	
+getvectortags(saleSum,tags);
+if(tags.length>0) then begin 
+	RecordNew(VIr);
+	VIr.VECode = "FOB_SKLAD";
+	VIVc_PasteVECode(VIr,0,false,true,vewarn);
+	VIr.SerNr = NextSerNr("VIVc",currentdate,-1,false,""); 
+	VIr.TransDate = RepSpec.sEndDate;
+	for(i=0;i<tags.length;i=i+1) begin
+		if(blank(VIr.Objects)) then begin VIr.Objects = tags[i]; end;
+		if(!SetInSet(obj,VIr.Objects)) then begin VIr.Objects = VIr.Objects & "," & tags[i]; end;
+		VIrw.Objects = tags[i];
+		VIrw.AccNumber = "45";
+		if (GetAccName(VIrw.AccNumber,tstr,60)) then begin end;
+		VIrw.Comment = tstr; 
+		VIrw.Sum = saleSum[tags[i]];
+		matrowput(VIr,i,VIrw);   
+	end;
+	VICalcVals(VIr);
+  VISumup(VIr,ct); 
+	VIr.PayVal = -ct;
+  VIVc_PastePayVal(VIr);
+	VIr.OKPersons = "AUTO";
+	if (RecordInsert(VIr,true)) then begin end;
+	RecordCopy(oldVIr,VIr);
+	VIr.OKFlag = 1;
+	if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
+end;	
+return;
+end;
 
 
 
