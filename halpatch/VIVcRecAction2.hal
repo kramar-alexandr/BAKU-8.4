@@ -54,7 +54,10 @@ external function Boolean DateWarned(Date,string);
 external updating procedure SaveERecordStatus_WithRow(string,string,LongInt,string,string,Integer,string,string,string,LongInt,Integer,string,string);
 external function string 100 CreateCompID();
 remote updating procedure ORLClassGreenColour(longint);
-
+remote function Boolean PasteCust2InInv(var record IVVc,record LocalMachineBlock,string,Boolean,var string,var string,var string,var string,var string);
+remote function Boolean IVVc_PasteArtCode(var record IVVc,Integer,var string,var string,Boolean,var Integer);
+remote function Boolean IVVc_PasteSum(var record IVVc,Integer,var Boolean,Integer); 
+external procedure ExtractObj(string,var Integer,var string);
 
 procedure VILastTransDate(LongInt vinr,var date tdp)
 BEGIN
@@ -82,6 +85,102 @@ BEGIN
   CLOutforVIExists = res;
   RETURN;
 END;
+
+
+
+
+
+
+global
+updating procedure CreateCCIVFromLocalVI(record VIVc VIr,integer Company)
+begin
+	record IVVc IVr, OldIVr;
+	row IVVc IVrw;
+	row VIVc VIrw;
+	integer rwcnt,i,sernrf;
+	string 100 warning;
+	boolean chsum;
+	integer curcomp;
+	string 255 usr, obj;
+	record UserVc User;
+	record LocalMachineBlock LMb;
+	record ObjVc Objr;
+	
+	
+	IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
+	if(ReadFirstKey("OfficialSerNr",IVr,1,true))then begin
+		if(VIr.OKFlag==1)then begin
+			matrowget(IVr,0,IVrw);
+			IVrw.Quant = 1;
+			IVrw.Price = VIr.PayVal;
+			IVrw.Sum = VIr.PayVal;
+			matrowput(IVr,0,IVrw);
+			matrowget(IVr,0,IVrw);
+			IVVc_PasteSum(IVr,0,chsum,1);
+			matrowput(IVr,0,IVrw);
+			RecordCopy(OldIVr,IVr);
+			IVr.OKFlag = 1;
+			RecordUpdate(OldIVr,IVr,true);
+		end else begin
+			RecordCopy(OldIVr,IVr);
+			IVr.OKFlag = 0;
+			RecordUpdate(OldIVr,IVr,true);
+		end;
+	end else begin
+		if(VIr.OKFlag==1 and VIr.OKPersons=="AUTO")then begin
+			recordnew(IVr);
+			IVr.InvDate = CurrentDate;
+			IVr.TransDate = CurrentDate;
+			IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
+			ExtractObj(VIr.Objects,i,obj);
+			while(nonblank(obj)) begin
+				Objr.Code = obj;
+				if(ReadFirstMain(Objr,1,true)) then begin
+					if(Objr.OTCode=="FOB") then begin
+						IVr.CustCode = Objr.Code;
+					end;
+				end;
+				ExtractObj(VIr.Objects,i,obj);
+			end;
+			
+			IVr.SalesMan = "AUTO";
+			BlockLoad(LMb);
+			PasteCust2InInv(IVr,LMb,"",true,warning,warning,warning,warning,warning);
+			IVr.UpdStockFlag = 0;
+			usr = IVr.SalesMan;
+			User.Code = usr;
+			readfirstmain(User,1,true);
+			IVr.SalesGroup = User.SalesGroup;
+			// For(i=0;i<rwcnt;i=i+1) begin
+				IVrw.ArtCode = "PRODUCT_SOLD";
+				matrowput(IVr,0,IVrw);
+				IVVc_PasteArtCode(IVr,0,warning,warning,false,sernrf);
+				matrowget(IVr,0,IVrw);
+				IVrw.Quant = 1;
+				IVrw.Price = VIr.PayVal;
+				IVrw.Sum = VIr.PayVal;
+				matrowput(IVr,0,IVrw);
+				matrowget(IVr,0,IVrw);
+				IVVc_PasteSum(IVr,0,chsum,1);
+				IVrw.VATCode = "0%";
+				matrowput(IVr,0,IVrw);
+			// end; 
+				IVr.SerNr = NextSerNr("IVVc",IVr.TransDate,User.LastInvNr,false,"");            
+			recordstore(IVr,false);
+			RecordCopy(OldIVr,IVr);
+			IVr.OKFlag = 1;
+			if(RecordUpdate(OldIVr,IVr,true)==0)then begin
+				CreateRecordLink(IVr,CurrentCompany,VIr,Company);
+				CreateRecordLink(VIr,Company,IVr,CurrentCompany);
+			end;
+		end;
+	end;
+	return;
+end;
+
+
+
+
 
 updating procedure UpdateVEIV(record VIVc VIr)
 begin
@@ -679,6 +778,7 @@ begin
   record TRVc oldTRr;
   val bc1v;  
   string 255 autmsgfunciontags;
+	integer CurCompany;
   
   if ((VIr.Invalid==0) and (VI2r.Invalid==0)) then begin
     if ((VIr.OKFlag!=0) and (VI2r.OKFlag==0)) then begin
@@ -782,6 +882,18 @@ begin
 		ORLClassGreenColour(VIr.POSerNr);
 	end;
   
+	
+	if(CurrentCompany!=18)then begin
+		
+		CurCompany = CurrentCompany;
+		if(SetCompany(18,false))then begin
+			CreateCCIVFromLocalVI(VIr,CurCompany);
+			ResetCompany(CurCompany);
+		end;
+		
+	end;
+	
+	
   VIVcRecordUpdateAfter = res;
   return;
 end;
