@@ -21,6 +21,7 @@ external procedure HTSaleMan(string, var string);
 external function Integer TypeOfCurncy(var string,var Integer);
 external procedure HTCustClass(string,var string);
 external procedure HTCustClassType(string,var string);
+external procedure ExtractObj(string,var Integer,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -248,9 +249,18 @@ BEGIN
      end else begin
        OutString(150,0,USetStr(4011),false);
      end;
-     OutString(230,0,USetStr(4044),false);
-     OutString(345,0,USetStr(4045),true);
-     OutString(450,0,USetStr(4046),true);
+		  OutString(180,0,USetStr(36315),false);
+     OutString(200,0,USetStr(4044),false);
+     OutString(250,0,USetStr(4045),true);
+		 if(CurrentCompany==18)then begin
+			OutString(280,0,USetStr(36314),true);
+			OutString(315,0,USetStr(31044),true);
+			OutString(350,0,USetStr(4046),true);
+			OutString(390,0,USetStr(36312),true);
+			OutString(450,0,USetStr(36313),true);
+		 end else begin
+			OutString(450,0,USetStr(4046),true);
+		 end;
     EndFormat;
   end;
   if ((RepSpec.ArtMode==2) or (RepSpec.ArtMode==5)) then begin
@@ -805,6 +815,14 @@ begin
   record AgedBlock Ab;
   record PUVc Pur;
   record RLinkVc RLr;
+	record POVc POr;
+	row POVc POrw;
+	string 255 Object, Brnd, obj;
+	record BPIBrandVc BPIBrandr;
+	record INVc INr;
+	integer i;
+	record ObjVc Objr;
+	
   
   if ((VIr.InstallmentInv==1) and (RepSpec.flags[19]!=0)) then begin
     if (PrintInstallments(VIr,RepSpec,rval,rs,foundclosed)) then begin
@@ -847,6 +865,40 @@ begin
     tstr = tstr & " (*) ";
     foundclosed = true;
   end;
+	
+	
+	
+	if(nonblank(VIr.POSerNr))then begin
+		POr.SerNr = VIr.POSerNr;
+		if(ReadFirstMain(POr,1,true))then begin
+			matrowget(POr,0,POrw);
+			INr.Code = POrw.ArtCode;
+			if(ReadFirstMain(INr,1,true))then begin
+				BPIBrandr.Code = INr.BPIBrand;
+				if(ReadFirstMain(BPIBrandr,1,true))then begin
+					Brnd = BPIBrandr.Name;
+				end;
+			end;
+		end;
+	end;
+	
+	
+	i = 0;
+	ExtractObj(VIr.Objects,i,obj);
+	while(nonblank(obj)) begin
+		Objr.Code = obj;
+		if(ReadFirstMain(Objr,1,true)) then begin
+			logtext(0,Objr.Code);
+			if(Objr.OTCode=="STORE") then begin
+				Object = Objr.Code;
+			end;
+		end;
+		ExtractObj(VIr.Objects,i,obj);
+	end;
+	
+	
+	
+	
   StartFormat(15);
   OutStringID(20,dblstr,tstr,false,tstr2);
   OutString(50,0,VIr.VEName,false);
@@ -858,25 +910,37 @@ begin
   end else begin
     OutDate(150,0,VIr.RebDate,false);
   end;
-  OutString(210,0,VIr.PayDeal,false);
-  OutDate(230,0,VIr.DueDate,false);
+  OutString(180,0,VIr.PayDeal,false);
+  OutDate(200,0,VIr.DueDate,false);
   if (Ab.ShowDelayDays!=0) then begin
     if (latedays<0) then begin
-      OutLongInt(345,0,-latedays,true);
+      OutLongInt(250,0,-latedays,true);
     end else begin
-      OutString(345,0, "0",true);
+      OutString(250,0, "0",true);
     end;  
   end else begin
     if (latedays <> -1) then begin
-      OutLongInt(345,0,latedays,true);
+      OutLongInt(250,0,latedays,true);
     end else begin
-      OutString(345,0, "-1",true);
+      OutString(250,0, "-1",true);
     end;  
   end;
   if (RepSpec.flags[2]==1) then begin
+		if(CurrentCompany==18)then begin
+			OutString(280,0,Object,true);
+			OutString(315,0,Brnd,true);
+			OutVal(350,0,VIr.PayVal,M4Val,true);
+			OutVal(390,0,VIr.PayVal-rval,M4Val,true);
+		end;
     OutVal(450,0,rval,M4Val,true);
     OutString(480,0,VIr.CurncyCode,true);
   end else begin
+		if(CurrentCompany==18)then begin
+			OutString(280,0,Object,true);
+			OutString(315,0,Brnd,true);
+			OutVal(350,0,MulRateToBase1(VIr.CurncyCode,VIr.PayVal,VIr.FrRate,VIr.ToRateB1,VIr.ToRateB2,VIr.BaseRate1,VIr.BaseRate2,DefaultCurRoundOff),M4Val,true);
+			OutVal(390,0,MulRateToBase1(VIr.CurncyCode,VIr.PayVal,VIr.FrRate,VIr.ToRateB1,VIr.ToRateB2,VIr.BaseRate1,VIr.BaseRate2,DefaultCurRoundOff)-rs,M4Val,true);
+		end;
     OutVal(480,0,rs,M4Val,true);
   end;  
   EndFormat;
@@ -905,28 +969,83 @@ procedure PrintAPTotals(record RcVc RepSpec,string curcode,val ivtot,val ivdue,v
 begin
   if (RepSpec.flags[2]==1) and (nonblank(RepSpec.CurncyCode)) then begin
     StartFormat(15);
+		if(CurrentCompany==18)then begin
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+		end;
     OutString(290,0,USetStr(4048),false);
     OutValBiDi(450,0,totCurSum,M4Val,true,480);
     OutString(460,0,RepSpec.CurncyCode,false);
     EndFormat;
   end;
-  StartFormat(15);
+	StartFormat(15);
+	if(CurrentCompany==18)then begin
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+	end;
   OutString(290,0,USetStr(4048),false);
   OutValBiDi(450,0,ivtot,M4Val,true,480);
   OutString(460,0,curcode,false);
   EndFormat;
-  StartFormat(15);
+	StartFormat(15);
+	if(CurrentCompany==18)then begin
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+	end;
   OutString(290,0,USetStr(4060),false);
   OutValBiDi(450,0,ivdue,M4Val,true,480);
   OutString(460,0,curcode,false);
   EndFormat;
-  StartFormat(15);
+	StartFormat(15);
+	if(CurrentCompany==18)then begin
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+	end;
   OutString(290,0,USetStr(4051),false);
   OutValBiDi(450,0,ivnotdue,M4Val,true,480);
   OutString(460,0,curcode,false);
   EndFormat;
   if (onacc!=0) then begin
     StartFormat(15);
+		if(CurrentCompany==18)then begin
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+		end;
     OutString(290,0,USetStr(2497),false);
     OutValBiDi(450,0,onacc,M4Val,true,480);
     OutString(460,0,curcode,false);
