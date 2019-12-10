@@ -16269,7 +16269,6 @@ global updating procedure CollectConsItemsMn(record RcVc RepSpec)
 begin
 	record INVc INr, ConsINr, OldConsINr, UINr;
 	record ItemHistVc IHr;
-	record DIVc DIr;
 	boolean TrHs,testf,datef,anndemaatef,compf,INCodef,CustCodef;
 	record IVVc IVr;
 	row IVVc IVrw;
@@ -16295,6 +16294,9 @@ begin
 	record POVc POr;
 	row POVc POrw;
 	integer company;
+	record ITVc ITr,blITr,newITr,ITTestr;
+	record DIVc DIr,blDIr,newDIr,DITestr;
+	record CTypeVc CTyper,blCTyper,newCTyper,CTypeTestr;
 	longint curtick;
 	
 	curtick = getcurtick();
@@ -16411,7 +16413,7 @@ begin
 					end;
 					resetloop(IHr);
 					OldComp = currentcompany;
-					if(CustCodef or vPOItems[INr.Code])then begin
+					if(CustCodef or vPOItems[INr.Code] and nonblank(INr.BPIBrand))then begin
 						SetCompany(18,false);
 						recordNew(UINr);
 						recordNew(ConsINr);
@@ -16423,9 +16425,13 @@ begin
 							TrHs2 = false;
 						end;
 						ResetLoop(OldConsINr);
-						if(blank(OldCode)) then begin oldCode = "IN_0000000"; end;
+						if(left(OldCode,2)!="IN") then begin oldCode = "IN_0000000"; end;
 						NextM4SerialNumber(OldCode,ConsINr.Code);
 						ConsINr.UUID = UINr.UUID;
+						if(blank(ConsINr.BarCode)) then begin
+							ConsINr.BarCode = ConsINr.AlternativeCode;
+						end;
+						ConsINr.AlternativeCode = INr.Code;
 						CIr.LocCode = INr.Code;
 						CIr.BrandCode = ConsINr.BPIBrand;
 						if(!ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
@@ -16443,6 +16449,58 @@ begin
 				end;
 			end;
 			ResetLoop(INr);
+			SetCompany(j+1,false);
+			ITr.Code = "";
+			while(LoopMain(ITr,1,true)) begin
+				logtext(0,"needtocreate " & ITr.Code);
+				setCompany(18,false);
+				ITTestr.Code = ITr.Code;
+				If(ReadFirstMain(ITTestr,1,true)==false) then begin
+					RecordNew(blITr);
+					recordcopy(newITr,ITr);
+					newITr.UUID = blITr.UUID;
+					logtext(0,"create" & newITr.Code);
+					RecordStore(newITr,true);
+				end else begin
+					logtext(0,"Can't create " & ITr.Code & " This item group was in consygnation company!");
+				end;
+				SetCompany(j+1,false);
+			end;
+			ResetLoop(ITr);
+			SetCompany(j+1,false);
+			DIr.Code = "";
+			while(LoopMain(DIr,1,true)) begin
+				logtext(0,"needtocreate " & DIr.Code);
+				setCompany(18,false);
+				DITestr.Code = DIr.Code;
+				If(ReadFirstMain(DITestr,1,true)==false) then begin
+					RecordNew(blDIr);
+					recordcopy(newDIr,DIr);
+					newDIr.UUID = blDIr.UUID;
+					logtext(0,"create" & newDIr.Code);
+					RecordStore(newDIr,true);
+				end else begin
+					logtext(0,"Can't create " & DIr.Code & " This Classification was in consygnation company!");
+				end;
+				SetCompany(j+1,false);;
+			end;
+			ResetLoop(DIr);
+			SetCompany(j+1,false);
+			CTyper.Code = "";
+			while(LoopMain(CTyper,1,true)) begin
+				logtext(0,"needtocreate " & CTyper.Code);
+				setCompany(18,false);
+				CTypeTestr.Code = CTyper.Code;
+				If(ReadFirstMain(CTypeTestr,1,true)==false) then begin
+					recordcopy(newCTyper,CTyper);
+					logtext(0,"create" & newCTyper.Code);
+					RecordStore(newCTyper,true);
+				end else begin
+					logtext(0,"Can't create " & CTyper.Code & " This Classification was in consygnation company!");
+				end;
+				SetCompany(j+1,false);;
+			end;
+			ResetLoop(CTyper);
 		end;
 	end;
 	ReSetCompany(18);
