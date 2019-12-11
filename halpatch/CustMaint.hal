@@ -2765,7 +2765,7 @@ row TRVc TRrw;
 record VIVc VIr,oldVIr;
 row VIVc VIrw;
 boolean TrHs,testf;
-integer cntrw,i,j,oscnt;
+integer cntrw,i,j,oscnt,di;
 vector val saleSum;
 val ct;
 string 255 vewarn,tstr,obj,objects;
@@ -2774,72 +2774,82 @@ array string 20 stores;
 record SHVc SHr;
 record RetVc Retr;
 record IVVc IVr;
+date loopDate;
 testf = true;
-TrHs = true;
-TRr.TransDate = RepSpec.sStartDate;
-while(loopkey("TransDate",TRr,1,TrHs)) begin
-	testf = true;
-	if(TRr.TransDate>RepSpec.sEndDate) then begin testf = false; TrHs = false; end;
-	if(TRr.IntYc!=SHYc and TRr.IntYc!=RetYc and TRr.IntYc!=IVYc) then begin testf=false; end;
-	if(testf) then begin 
-		switch(TRr.IntYc) begin
-			case SHYc: SHr.SerNr = TRr.Number;
-					if(ReadFirstMain(SHr,1,true)) then begin
-						if(SHr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
-					end;
-			case 	RetYc	: Retr.SerNr = TRr.Number;
-					if(ReadFirstMain(Retr,1,true)) then begin
-						if(Retr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
-					end;
-			case 	RetYc	: IVr.SerNr = TRr.Number;
-					if(ReadFirstMain(IVr,1,true)) then begin
-						if(IVr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
-					end;
-		end;			
-	end;
-	if(testf) then begin
-		cntrw = matrowcnt(TRr);
-		for(i=0;i<cntrw;i=i+1) begin
-			matrowget(TRr,i,TRrw);
-			if(TRrw.AccNumber=="45" and TRrw.ovst <> 1 and TRrw.stp==1) then begin
-				obj = "";
-				ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
-				obj = stores[0];
-				if(blank(obj)) then begin obj = "blank"; end;
-				saleSum[obj] = saleSum[obj] + TRrw.DebVal;
-				saleSum[obj] = saleSum[obj] - TRrw.CredVal;
+loopDate = RepSpec.sStartDate;
+while(loopDate<=RepSpec.sEndDate) begin
+	logtext(0,loopDate);
+	TRr.TransDate = loopDate;
+	TrHs = true;
+	while(loopkey("TransDate",TRr,1,TrHs)) begin
+		testf = true;
+		if(TRr.TransDate>loopDate) then begin testf = false; TrHs = false; end;
+		if(TRr.IntYc!=SHYc and TRr.IntYc!=RetYc and TRr.IntYc!=IVYc) then begin testf=false; end;
+		if(testf) then begin 
+			switch(TRr.IntYc) begin
+				case SHYc: SHr.SerNr = TRr.Number;
+						if(ReadFirstMain(SHr,1,true)) then begin
+							if(SHr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+						end;
+				case 	RetYc	: Retr.SerNr = TRr.Number;
+						if(ReadFirstMain(Retr,1,true)) then begin
+							if(Retr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+						end;
+				case 	RetYc	: IVr.SerNr = TRr.Number;
+						if(ReadFirstMain(IVr,1,true)) then begin
+							if(IVr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+						end;
+			end;			
+		end;
+		if(testf) then begin
+			cntrw = matrowcnt(TRr);
+			for(i=0;i<cntrw;i=i+1) begin
+				matrowget(TRr,i,TRrw);
+				if(TRrw.AccNumber=="45" and TRrw.ovst <> 1 and TRrw.stp==1) then begin
+					obj = "";
+					ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
+					obj = stores[0];
+					if(blank(obj)) then begin obj = "blank"; end;
+					saleSum[obj] = saleSum[obj] + TRrw.DebVal;
+					saleSum[obj] = saleSum[obj] - TRrw.CredVal;
+				end;
 			end;
 		end;
-	end;
-end;	
-getvectortags(saleSum,tags);
-if(tags.length>0) then begin 
-	for(i=0;i<tags.length;i=i+1) begin
-		RecordNew(VIr);
-		VIr.VECode = "FOB_SKLAD";
-		VIVc_PasteVECode(VIr,0,false,true,vewarn);
-		VIr.SerNr = NextSerNr("VIVc",currentdate,-1,false,""); 
-		VIr.TransDate = currentdate;
-		if(blank(VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = tags[i]; end;
-		if(!SetInSet(tags[i],VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = VIr.Objects & "," & tags[i]; end;
-		VIrw.Objects = tags[i];
-		VIrw.AccNumber = "41/06";
-		if (GetAccName(VIrw.AccNumber,tstr,60)) then begin end;
-		VIrw.Comment = tstr; 
-		VIrw.Sum = saleSum[tags[i]];
-		matrowput(VIr,0,VIrw);  
-		VICalcVals(VIr);
-		VISumup(VIr,ct); 
-		VIr.PayVal = -ct;
-		VIVc_PastePayVal(VIr);
-		VIr.OKPersons = "AUTO";
-		VIr.InvDate = currentdate;
-		VIr.DueDate = currentdate;
-		if (RecordInsert(VIr,true)) then begin end;
-		RecordCopy(oldVIr,VIr);
-		VIr.OKFlag = 1;
-		if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
-	end;
+	end;	
+	ResetLoop(TRr);
+	getvectortags(saleSum,tags);
+	if(tags.length>0) then begin 
+		for(i=0;i<tags.length;i=i+1) begin
+			RecordNew(VIr);
+			VIr.VECode = "FOB_SKLAD";
+			VIVc_PasteVECode(VIr,0,false,true,vewarn);
+			VIr.SerNr = NextSerNr("VIVc",currentdate,-1,false,""); 
+			logtext(0,VIr.SerNr);
+			VIr.TransDate = loopDate;
+			if(blank(VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = tags[i]; end;
+			if(!SetInSet(tags[i],VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = VIr.Objects & "," & tags[i]; end;
+			VIrw.Objects = tags[i];
+			VIrw.AccNumber = "41/06";
+			if (GetAccName(VIrw.AccNumber,tstr,60)) then begin end;
+			VIrw.Comment = tstr; 
+			VIrw.Sum = saleSum[tags[i]];
+			matrowput(VIr,0,VIrw);  
+			VICalcVals(VIr);
+			VISumup(VIr,ct); 
+			VIr.PayVal = -ct;
+			VIVc_PastePayVal(VIr);
+			VIr.OKPersons = "AUTO";
+			VIr.InvDate = loopDate;
+			VIr.DueDate = loopDate;
+			if (RecordInsert(VIr,true)) then begin end;
+			RecordCopy(oldVIr,VIr);
+			VIr.OKFlag = 1;
+			if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
+		end;
+	end;	
+	loopDate = AddDay(loopDate,1);
+	ClearVector(saleSum);
+	ClearArray(tags);
 end;	
 return;
 end;
