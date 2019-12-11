@@ -99,7 +99,7 @@ begin
 	row VIVc VIrw;
 	integer rwcnt,i,sernrf;
 	string 100 warning;
-	boolean chsum;
+	boolean chsum, activelocf;
 	integer curcomp;
 	string 255 usr, obj, CustCode;
 	record UserVc User;
@@ -109,78 +109,98 @@ begin
 	record ECVendFobSetBlaock ECVFSb;
 	row ECVendFobSetBlaock ECVFSrw;
 	
-	if(SetCompany(29,false)) then begin
-		BlockLoad(ECVFSb);
-		rwcnt = matrowcnt(ECVFSb);
-		for (i=0;i<rwcnt;i=i+1) begin
-			matrowget(ECVFSb,i,ECVFSrw)
-			if(nonblank(location))then begin
-				if(ECVFSrw.CompanyNr==Company and ECVFSrw.LocCode==location)then begin
-					CustCode = ECVFSrw.VendName;
-				end;
-			end else begin
-				if(ECVFSrw.CompanyNr==Company)then begin
-					CustCode = ECVFSrw.VendName;
+	
+	activelocf = true;
+	if(SetInSet("SW1",VIr.Objects)) then begin activelocf = false; end;
+	if(SetInSet("SW2",VIr.Objects)) then begin activelocf = false; end;
+	if(SetInSet("SW4",VIr.Objects)) then begin activelocf = false; end;
+	if(SetInSet("AHT",VIr.Objects)) then begin activelocf = false; end;
+	if(SetInSet("CB2",VIr.Objects)) then begin activelocf = false; end;
+	if(SetInSet("EXTRAVAGANZA",VIr.Objects)) then begin activelocf = false; end;
+	if(SetInSet("THOM_SABO",VIr.Objects)) then begin activelocf = false; end;
+	
+	if(activelocf)then begin
+		if(SetCompany(29,false)) then begin
+			BlockLoad(ECVFSb);
+			rwcnt = matrowcnt(ECVFSb);
+			for (i=0;i<rwcnt;i=i+1) begin
+				matrowget(ECVFSb,i,ECVFSrw);
+				if(nonblank(location))then begin
+					if(ECVFSrw.CompanyNr==Company and ECVFSrw.LocCode==location)then begin
+						CustCode = ECVFSrw.VendName;
+					end;
+				end else begin
+					if(ECVFSrw.CompanyNr==Company)then begin
+						CustCode = ECVFSrw.VendName;
+					end;
 				end;
 			end;
+			if(blank(CustCode) and nonblank(location))then begin
+				for (i=0;i<rwcnt;i=i+1) begin
+					matrowget(ECVFSb,i,ECVFSrw);
+					if(ECVFSrw.CompanyNr==Company)then begin
+						CustCode = ECVFSrw.VendName;
+					end;
+				end;
+			end;
+			ResetCompany(18);
 		end;
-		ResetCompany(18)
-	end;
-	
-	IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
-	if(ReadFirstKey("OfficialSerNr",IVr,1,true))then begin
-		if(VIr.OKFlag==1)then begin
-			matrowget(IVr,0,IVrw);
-			IVrw.Quant = 1;
-			IVrw.Price = VIr.PayVal;
-			IVrw.Sum = VIr.PayVal;
-			matrowput(IVr,0,IVrw);
-			matrowget(IVr,0,IVrw);
-			IVVc_PasteSum(IVr,0,chsum,1);
-			matrowput(IVr,0,IVrw);
-			RecordCopy(OldIVr,IVr);
-			IVr.OKFlag = 1;
-			RecordUpdate(OldIVr,IVr,true);
+		
+		IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
+		if(ReadFirstKey("OfficialSerNr",IVr,1,true))then begin
+			if(VIr.OKFlag==1)then begin
+				matrowget(IVr,0,IVrw);
+				IVrw.Quant = 1;
+				IVrw.Price = VIr.PayVal;
+				IVrw.Sum = VIr.PayVal;
+				matrowput(IVr,0,IVrw);
+				matrowget(IVr,0,IVrw);
+				IVVc_PasteSum(IVr,0,chsum,1);
+				matrowput(IVr,0,IVrw);
+				RecordCopy(OldIVr,IVr);
+				IVr.OKFlag = 1;
+				RecordUpdate(OldIVr,IVr,true);
+			end else begin
+				RecordCopy(OldIVr,IVr);
+				IVr.OKFlag = 0;
+				RecordUpdate(OldIVr,IVr,true);
+			end;
 		end else begin
-			RecordCopy(OldIVr,IVr);
-			IVr.OKFlag = 0;
-			RecordUpdate(OldIVr,IVr,true);
-		end;
-	end else begin
-		if(VIr.OKFlag==1 and VIr.OKPersons=="AUTO")then begin
-			recordnew(IVr);
-			IVr.InvDate = CurrentDate;
-			IVr.TransDate = CurrentDate;
-			IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
-			ExtractObj(VIr.Objects,i,obj);
-			IVr.CustCode = CustCode;
-			IVr.SalesMan = "AUTO";
-			BlockLoad(LMb);
-			PasteCust2InInv(IVr,LMb,"",true,warning,warning,warning,warning,warning);
-			IVr.UpdStockFlag = 0;
-			usr = IVr.SalesMan;
-			User.Code = usr;
-			readfirstmain(User,1,true);
-			IVr.SalesGroup = User.SalesGroup;
-			IVrw.ArtCode = "PRODUCT_SOLD";
-			matrowput(IVr,0,IVrw);
-			IVVc_PasteArtCode(IVr,0,warning,warning,false,sernrf);
-			matrowget(IVr,0,IVrw);
-			IVrw.Quant = 1;
-			IVrw.Price = VIr.PayVal;
-			IVrw.Sum = VIr.PayVal;
-			matrowput(IVr,0,IVrw);
-			matrowget(IVr,0,IVrw);
-			IVVc_PasteSum(IVr,0,chsum,1);
-			IVrw.VATCode = "0%";
-			matrowput(IVr,0,IVrw);
-			IVr.SerNr = NextSerNr("IVVc",IVr.TransDate,User.LastInvNr,false,"");            
-			recordstore(IVr,false);
-			RecordCopy(OldIVr,IVr);
-			IVr.OKFlag = 1;
-			if(RecordUpdate(OldIVr,IVr,true)==0)then begin
-				CreateRecordLink(IVr,CurrentCompany,VIr,Company);
-				CreateRecordLink(VIr,Company,IVr,CurrentCompany);
+			if(VIr.OKFlag==1 and VIr.OKPersons=="AUTO")then begin
+				recordnew(IVr);
+				IVr.InvDate = CurrentDate;
+				IVr.TransDate = CurrentDate;
+				IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
+				ExtractObj(VIr.Objects,i,obj);
+				IVr.CustCode = CustCode;
+				IVr.SalesMan = "AUTO";
+				BlockLoad(LMb);
+				PasteCust2InInv(IVr,LMb,"",true,warning,warning,warning,warning,warning);
+				IVr.UpdStockFlag = 0;
+				usr = IVr.SalesMan;
+				User.Code = usr;
+				readfirstmain(User,1,true);
+				IVr.SalesGroup = User.SalesGroup;
+				IVrw.ArtCode = "PRODUCT_SOLD";
+				matrowput(IVr,0,IVrw);
+				IVVc_PasteArtCode(IVr,0,warning,warning,false,sernrf);
+				matrowget(IVr,0,IVrw);
+				IVrw.Quant = 1;
+				IVrw.Price = VIr.PayVal;
+				IVrw.Sum = VIr.PayVal;
+				matrowput(IVr,0,IVrw);
+				matrowget(IVr,0,IVrw);
+				IVVc_PasteSum(IVr,0,chsum,1);
+				IVrw.VATCode = "0%";
+				matrowput(IVr,0,IVrw);
+				IVr.SerNr = NextSerNr("IVVc",IVr.TransDate,User.LastInvNr,false,"");            
+				recordstore(IVr,false);
+				RecordCopy(OldIVr,IVr);
+				IVr.OKFlag = 1;
+				if(RecordUpdate(OldIVr,IVr,true)==0)then begin
+					CreateRecordLink(IVr,CurrentCompany,VIr,Company);
+					CreateRecordLink(VIr,Company,IVr,CurrentCompany);
+				end;
 			end;
 		end;
 	end;
