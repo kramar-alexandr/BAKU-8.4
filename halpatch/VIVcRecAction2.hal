@@ -58,6 +58,10 @@ remote function Boolean PasteCust2InInv(var record IVVc,record LocalMachineBlock
 remote function Boolean IVVc_PasteArtCode(var record IVVc,Integer,var string,var string,Boolean,var Integer);
 remote function Boolean IVVc_PasteSum(var record IVVc,Integer,var Boolean,Integer); 
 external procedure ExtractObj(string,var Integer,var string);
+remote procedure IVVc_PasteLocation(var record IVVc,Integer);
+remote function boolean CompanyIsJWLikeCompany(Integer);
+
+
 
 procedure VILastTransDate(LongInt vinr,var date tdp)
 BEGIN
@@ -92,13 +96,13 @@ END;
 
 
 global
-updating procedure CreateCCIVFromLocalVI(record VIVc VIr,integer Company,string location)
+updating procedure CreateCCIVFromLocalVI(record VIVc VIr,integer Company,string fobVenpor)
 begin
 	record IVVc IVr, OldIVr;
 	row IVVc IVrw;
 	row VIVc VIrw;
 	integer rwcnt,i,sernrf;
-	string 100 warning;
+	string 100 warning, Acc4;
 	boolean chsum, activelocf;
 	integer curcomp;
 	string 255 usr, obj, CustCode;
@@ -108,6 +112,10 @@ begin
 	record LocationVc Locr;
 	record ECVendFobSetBlaock ECVFSb;
 	row ECVendFobSetBlaock ECVFSrw;
+	record TRVc TRr, OldTRr;
+	row TRVc TRrw;
+	record AccVc Accr;
+	val DebCred;
 	
 	
 	activelocf = true;
@@ -120,32 +128,6 @@ begin
 	if(SetInSet("THOM_SABO",VIr.Objects)) then begin activelocf = false; end;
 	
 	if(activelocf)then begin
-		if(SetCompany(29,false)) then begin
-			BlockLoad(ECVFSb);
-			rwcnt = matrowcnt(ECVFSb);
-			for (i=0;i<rwcnt;i=i+1) begin
-				matrowget(ECVFSb,i,ECVFSrw);
-				if(nonblank(location))then begin
-					if(ECVFSrw.CompanyNr==Company and ECVFSrw.LocCode==location)then begin
-						CustCode = ECVFSrw.VendName;
-					end;
-				end else begin
-					if(ECVFSrw.CompanyNr==Company)then begin
-						CustCode = ECVFSrw.VendName;
-					end;
-				end;
-			end;
-			if(blank(CustCode) and nonblank(location))then begin
-				for (i=0;i<rwcnt;i=i+1) begin
-					matrowget(ECVFSb,i,ECVFSrw);
-					if(ECVFSrw.CompanyNr==Company)then begin
-						CustCode = ECVFSrw.VendName;
-					end;
-				end;
-			end;
-			ResetCompany(18);
-		end;
-		
 		IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
 		if(ReadFirstKey("OfficialSerNr",IVr,1,true))then begin
 			if(VIr.OKFlag==1)then begin
@@ -172,7 +154,7 @@ begin
 				IVr.TransDate = CurrentDate;
 				IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
 				ExtractObj(VIr.Objects,i,obj);
-				IVr.CustCode = CustCode;
+				IVr.CustCode = fobVenpor;
 				IVr.SalesMan = "AUTO";
 				BlockLoad(LMb);
 				PasteCust2InInv(IVr,LMb,"",true,warning,warning,warning,warning,warning);
@@ -193,13 +175,57 @@ begin
 				IVVc_PasteSum(IVr,0,chsum,1);
 				IVrw.VATCode = "0%";
 				matrowput(IVr,0,IVrw);
+				
+				if(CompanyIsJWLikeCompany(currentcompany))then begin
+					IVr.Location = "CWH_J";
+				end else begin
+					IVr.Location = "CWH";
+				end;
+				IVVc_PasteLocation(IVr,-1);
+				
 				IVr.SerNr = NextSerNr("IVVc",IVr.TransDate,User.LastInvNr,false,"");            
 				recordstore(IVr,false);
 				RecordCopy(OldIVr,IVr);
 				IVr.OKFlag = 1;
 				if(RecordUpdate(OldIVr,IVr,true)==0)then begin
-					CreateRecordLink(IVr,CurrentCompany,VIr,Company);
-					CreateRecordLink(VIr,Company,IVr,CurrentCompany);
+					TRr.Number = IVr.SerNr;
+					TRr.IntYc = IVYc;
+					if (ReadFirstMain(TRr,2,true)) then begin
+					
+						RecordCopy(OldTRr,TRr);
+					
+						matrowget(TRr,2,TRrw);
+						
+						DebCred = TRrw.CredVal;
+						Acc4 = TRrw.AccNumber;
+						TRrw.AccNumber = "46";
+						Accr.AccNumber = "46";
+						readfirstmain(Accr,1,true);
+						TRrw.Comment = Accr.Comment;
+						
+						matrowput(TRr,2,TRrw);
+												
+						TRrw.AccNumber = "45";
+						Accr.AccNumber = "45";
+						readfirstmain(Accr,1,true);
+						TRrw.Comment = Accr.Comment;
+						TRrw.DebVal = DebCred;
+						
+						matrowput(TRr,3,TRrw);
+												
+						TRrw.AccNumber = Acc4;
+						Accr.AccNumber = Acc4;
+						readfirstmain(Accr,1,true);
+						TRrw.Comment = Accr.Comment;
+						TRrw.CredVal = DebCred;
+						
+						matrowput(TRr,4,TRrw);
+						
+						if(RecordUpdate(OldTRr,TRr,true)==0)then begin
+							CreateRecordLink(IVr,CurrentCompany,VIr,Company);
+							CreateRecordLink(VIr,Company,IVr,CurrentCompany);
+						end;
+					end;
 				end;
 			end;
 		end;
@@ -806,7 +832,7 @@ begin
   record TRVc TRr;
   record TRVc oldTRr;
   val bc1v;  
-  string 255 autmsgfunciontags, Location, LocObj, obj,setObj;
+  string 255 autmsgfunciontags, fobVenpor, LocObj, obj,setObj;
 	integer CurCompany, i;
 	record LocationVc Locr;
 	record ObjVc Objr;
@@ -917,6 +943,7 @@ begin
 	
 	if(CurrentCompany!=18)then begin
 		setObj = VIr.Objects;
+		i = 0;
 		ExtractObj(setObj,i,obj);
 		while(nonblank(obj)) begin
 			Objr.Code = obj;
@@ -929,14 +956,14 @@ begin
 		end;
 		Locr.Code = "";
 		while (loopmain(Locr,1,true)) begin
-			if(LocObj==Locr.Objects)then begin
-				Location = Locr.Code;
+			if(LocObj==Locr.Objects and nonblank(Locr.FOBSuplier))then begin
+				fobVenpor = Locr.FOBSuplier;
 			end;
 		end;
 		resetLoop(Locr);
 		CurCompany = CurrentCompany;
 		if(SetCompany(18,false))then begin
-			CreateCCIVFromLocalVI(VIr,CurCompany,Location);
+			CreateCCIVFromLocalVI(VIr,CurCompany,fobVenpor);
 			ResetCompany(CurCompany);
 		end;
 		
