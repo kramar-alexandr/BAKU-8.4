@@ -294,7 +294,7 @@ procedure PrintSHRows(record RcVc RepSpec,record SHVc SHr,record SysFormatBlock 
                       var Array string hazlevcode,var Array string hazlevcomment,var Array val hazlevweight,var Array val hazlevolume,var Integer hazlevcnt,
                       record LangNrVc LangNrr,var val tots,var val totwovat,val fr,val to1,var val TotfifoRowSum) //Edit***************************Sasha2,14:39 19.03.2015
 BEGIN
-  Integer i,rwcnt,rownr;
+  Integer i,rwcnt,rownr,c,cnt;
   row SHVc SHrw;
   row ORVc ORrw;
   string 255 tstr,location;
@@ -314,9 +314,17 @@ BEGIN
   record TaxMatrixVc TMr;
   integer pos; //edited by BPI
   Record DIVc DIr; //edited by BPI
-  string 255 myname; //edited by BPI
+  string 255 myname, AltVendCodes; //edited by BPI
   val fifoRowSum; //Edit***************************Sasha2,14:38 19.03.2015
 	boolean TrHs;
+	record ConsItemVc CIr;
+	vector boolean vAltFlg;
+	record BPIBrandVc BPIBrandr;
+	array string 255 VeItemcodes;
+	
+	
+	
+	
   SetupVATBase(VATr,vatcnt);
   BlockLoad(MSb);  
   BlockLoad(GenOptRec);  
@@ -366,7 +374,52 @@ BEGIN
 				end;
 			end;	
 			OUTFORMFIELD("MYF_SPEC",SHrw.Spec);
-			OUTFORMFIELD("MYF_SERIALNR",SHrw.SerialNr);
+			if(CurrentCompany==18)then begin
+				c = 0;
+				CIr.Code = SHrw.ArtCode;
+				if(ReadFirstMain(CIr,1,true))then begin
+					vAltFlg[CIr.LocCode] = true;
+					VeItemcodes[c] = CIr.LocCode;
+					c = c + 1;
+				end;
+				INr.Code = SHrw.ArtCode;
+				if(ReadFirstMain(INr,1,true))then begin
+					if(!vAltFlg[INr.AlternativeCode])then begin
+						vAltFlg[INr.AlternativeCode] = true;
+						VeItemcodes[c] = INr.AlternativeCode;
+						c = c + 1;
+					end;
+					BPIBrandr.Code = INr.BPIBrand;
+					if(nonblank(INr.BPIBrand) and ReadFirstMain(BPIBrandr,1,true))then begin
+						PIr.ItemCode = SHrw.ArtCode;
+						PIr.VECode = BPIBrandr.Vendor;
+						TrHs = true;
+						while (LoopKey("Vendor",PIr,2,TrHs)) begin
+							if(PIr.ItemCode!=SHrw.ArtCode or PIr.VECode!=SHrw.ArtCode)then begin TrHs = false; end;
+							if(TrHs and !vAltFlg[PIr.VEItemCode])then begin
+								vAltFlg[PIr.VEItemCode] = true;
+								VeItemcodes[c] = PIr.VEItemCode;
+								c = c + 1;
+							end;
+						end;
+						ResetLoop(PIr);
+					end;
+				end;
+				cnt = c;
+				for (c=0;c<cnt;c=c+1) begin
+					if (c == 0) then begin
+						OUTFORMFIELD("MYF_SERIALNR",VeItemcodes[c]);
+					end;
+					if (c == 1) then begin
+						OUTFORMFIELD("MYF_SERIALNR1",VeItemcodes[c]);
+					end;
+					if (c == 2) then begin
+						OUTFORMFIELD("MYF_SERIALNR2",VeItemcodes[c]);
+					end;
+				end;
+			end else begin
+				OUTFORMFIELD("MYF_SERIALNR",SHrw.SerialNr);
+			end;
 			OUTFORMFIELD("MYF_ORQTY",SHrw.Ship);
 			OUTFORMFIELD("MYF_ITLOCATION",SHrw.Location);
 			OUTFORMFIELD("MYF_ITPLACE",SHrw.PosCode);
