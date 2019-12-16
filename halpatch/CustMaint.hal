@@ -2777,13 +2777,18 @@ vector val saleSum,sumVi;
 val ct;
 string 255 vewarn,tstr,obj,objects;
 array string 255 tags;
-array string 20 stores;
+array string 20 stores,brand;
 record SHVc SHr;
 record RetVc Retr;
 record IVVc IVr;
 vector string 255 upd;
+vector boolean brands,create;
 date loopDate;
 testf = true;
+//-------------------------------Brands allowed-------------------------------------
+	brands["GRAFF"] = true;
+	brands["Chopard"] = true;
+//----------------------------------------------------------------------------------
 loopDate = RepSpec.sStartDate;
 while(loopDate<=RepSpec.sEndDate) begin
 	TRr.TransDate = loopDate;
@@ -2814,17 +2819,14 @@ while(loopDate<=RepSpec.sEndDate) begin
 				case SHYc: SHr.SerNr = TRr.Number;
 						if(ReadFirstMain(SHr,1,true)) then begin
 							if(SHr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
-							if(testf) then begin logtext(0,"SHr " & SHr.SerNr); end;
 						end;
 				case 	RetYc	: Retr.SerNr = TRr.Number;
 						if(ReadFirstMain(Retr,1,true)) then begin
 							if(Retr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
-							if(testf) then begin logtext(0,"Retr " & Retr.SerNr); end;
 						end;
 				case 	IVYc	: IVr.SerNr = TRr.Number;
 						if(ReadFirstMain(IVr,1,true)) then begin
 							if(IVr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
-							if(testf) then begin logtext(0,"IVr " & IVr.SerNr); end;
 						end;
 			end;			
 		end;
@@ -2836,9 +2838,13 @@ while(loopDate<=RepSpec.sEndDate) begin
 					obj = "";
 					ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
 					obj = stores[0];
+					ExtractObjectsByType(TRrw.Objects,"BRAND",brand,oscnt);
 					if(blank(obj)) then begin obj = "blank"; end;
-					saleSum[obj] = saleSum[obj] + TRrw.DebVal;
-					saleSum[obj] = saleSum[obj] - TRrw.CredVal;
+					if(brands[brand[0]]) then begin
+						saleSum[obj] = saleSum[obj] + TRrw.DebVal;
+						saleSum[obj] = saleSum[obj] - TRrw.CredVal;
+						create[obj] = true;
+					end;
 				end;
 			end;
 		end;
@@ -2847,66 +2853,69 @@ while(loopDate<=RepSpec.sEndDate) begin
 	getvectortags(saleSum,tags);
 	if(tags.length>0) then begin 
 		for(i=0;i<tags.length;i=i+1) begin
-			if(nonblank(upd[tags[i]])) then begin
-				if(sumVi[tags[i]]!=saleSum[tags[i]]) then begin
-					VIr.SerNr = upd[tags[i]];
-					if(ReadFirstMain(VIr,1,true)) then begin
-						RecordCopy(oldVIr,VIr);
-						VIr.OKFlag = 0;
-						if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
-						RecordCopy(oldVIr,VIr);
-						matRowget(VIr,0,VIrw);
-						VIrw.Objects = tags[i];
-						VIrw.AccNumber = "41/06";
-						if (GetAccName(VIrw.AccNumber,tstr,60)) then begin end;
-						VIrw.Comment = tstr; 
-						VIrw.Sum = saleSum[tags[i]];
-						logtext(0,VIrw.Sum );
-						matrowput(VIr,0,VIrw);  
-						VICalcVals(VIr);
-						VISumup(VIr,ct); 
-						VIr.PayVal = VIr.PayVal - ct;
-						VIVc_PastePayVal(VIr);
-						if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
-						if(saleSum[tags[i]]!=0) then begin
+			if(create[tags[i]) then begin
+				if(nonblank(upd[tags[i]])) then begin
+					if(sumVi[tags[i]]!=saleSum[tags[i]]) then begin
+						VIr.SerNr = upd[tags[i]];
+						if(ReadFirstMain(VIr,1,true)) then begin
 							RecordCopy(oldVIr,VIr);
-							VIr.OKFlag = 1;
+							VIr.OKFlag = 0;
 							if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
+							RecordCopy(oldVIr,VIr);
+							matRowget(VIr,0,VIrw);
+							VIrw.Objects = tags[i];
+							VIrw.AccNumber = "41/06";
+							if (GetAccName(VIrw.AccNumber,tstr,60)) then begin end;
+							VIrw.Comment = tstr; 
+							VIrw.Sum = saleSum[tags[i]];
+							logtext(0,VIrw.Sum );
+							matrowput(VIr,0,VIrw);  
+							VICalcVals(VIr);
+							VISumup(VIr,ct); 
+							VIr.PayVal = VIr.PayVal - ct;
+							VIVc_PastePayVal(VIr);
+							if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
+							if(saleSum[tags[i]]!=0) then begin
+								RecordCopy(oldVIr,VIr);
+								VIr.OKFlag = 1;
+								if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
+							end;	
 						end;	
-					end;	
+					end;
+				end else begin	
+					RecordNew(VIr);
+					VIr.VECode = "FOB_SKLAD";
+					VIVc_PasteVECode(VIr,0,false,true,vewarn);
+					VIr.SerNr = NextSerNr("VIVc",currentdate,-1,false,""); 
+					logtext(0,"new " & VIr.SerNr);
+					VIr.TransDate = loopDate;
+					if(blank(VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = tags[i]; end;
+					if(!SetInSet(tags[i],VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = VIr.Objects & "," & tags[i]; end;
+					VIrw.Objects = tags[i];
+					VIrw.AccNumber = "41/06";
+					if (GetAccName(VIrw.AccNumber,tstr,60)) then begin end;
+					VIrw.Comment = tstr; 
+					VIrw.Sum = saleSum[tags[i]];
+					matrowput(VIr,0,VIrw);  
+					VICalcVals(VIr);
+					VISumup(VIr,ct); 
+					VIr.PayVal = -ct;
+					VIVc_PastePayVal(VIr);
+					VIr.OKPersons = "AUTO";
+					VIr.InvDate = loopDate;
+					VIr.DueDate = loopDate;
+					if (RecordInsert(VIr,true)) then begin end;
+					RecordCopy(oldVIr,VIr);
+					VIr.OKFlag = 1;
+					if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
 				end;
-			end else begin	
-				RecordNew(VIr);
-				VIr.VECode = "FOB_SKLAD";
-				VIVc_PasteVECode(VIr,0,false,true,vewarn);
-				VIr.SerNr = NextSerNr("VIVc",currentdate,-1,false,""); 
-				logtext(0,"new " & VIr.SerNr);
-				VIr.TransDate = loopDate;
-				if(blank(VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = tags[i]; end;
-				if(!SetInSet(tags[i],VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = VIr.Objects & "," & tags[i]; end;
-				VIrw.Objects = tags[i];
-				VIrw.AccNumber = "41/06";
-				if (GetAccName(VIrw.AccNumber,tstr,60)) then begin end;
-				VIrw.Comment = tstr; 
-				VIrw.Sum = saleSum[tags[i]];
-				matrowput(VIr,0,VIrw);  
-				VICalcVals(VIr);
-				VISumup(VIr,ct); 
-				VIr.PayVal = -ct;
-				VIVc_PastePayVal(VIr);
-				VIr.OKPersons = "AUTO";
-				VIr.InvDate = loopDate;
-				VIr.DueDate = loopDate;
-				if (RecordInsert(VIr,true)) then begin end;
-				RecordCopy(oldVIr,VIr);
-				VIr.OKFlag = 1;
-				if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
-			end;
+			end;	
 		end;	
 	end;	
 	loopDate = AddDay(loopDate,1);
 	ClearVector(saleSum);
 	ClearVector(sumVi);
+	ClearVector(create);
 	ClearVector(upd);
 	ClearArray(tags);
 end;	
