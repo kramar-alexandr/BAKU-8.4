@@ -101,8 +101,8 @@ begin
 	record IVVc IVr, OldIVr;
 	row IVVc IVrw;
 	row VIVc VIrw;
-	integer rwcnt,i,sernrf;
-	string 100 warning, Acc4;
+	integer rwcnt,i,sernrf,j;
+	string 255 warning, Acc4, setObj, LocObj;
 	boolean chsum, activelocf;
 	integer curcomp;
 	string 255 usr, obj, CustCode;
@@ -131,14 +131,37 @@ begin
 		IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
 		if(ReadFirstKey("OfficialSerNr",IVr,1,true))then begin
 			if(VIr.OKFlag==1)then begin
-				matrowget(IVr,0,IVrw);
-				IVrw.Quant = 1;
-				IVrw.Price = VIr.PayVal;
-				IVrw.Sum = VIr.PayVal;
-				matrowput(IVr,0,IVrw);
-				matrowget(IVr,0,IVrw);
-				IVVc_PasteSum(IVr,0,chsum,1);
-				matrowput(IVr,0,IVrw);
+				for (i=matrowcnt(IVr)-1;i>=0;i=i-1) begin
+					MatRowDelete(IVr,i);
+				end;
+				for (i=0;i<matrowcnt(VIr);i=i+1) begin
+					matrowget(VIr,i,VIrw);
+					IVrw.ArtCode = "PRODUCT_SOLD";
+					matrowput(IVr,0,IVrw);
+					IVVc_PasteArtCode(IVr,0,warning,warning,false,sernrf);
+					matrowget(IVr,0,IVrw);
+					IVrw.Quant = 1;
+					IVrw.Price = VIrw.Sum;
+					IVrw.Sum = VIrw.Sum;
+					matrowput(IVr,0,IVrw);
+					matrowget(IVr,0,IVrw);
+					IVVc_PasteSum(IVr,0,chsum,1);
+					IVrw.VATCode = "0%";
+					setObj = VIrw.Objects;
+					j = 0;
+					ExtractObj(setObj,j,obj);
+					while(nonblank(obj)) begin
+						Objr.Code = obj;
+						if(ReadFirstMain(Objr,1,true)) then begin
+							if(Objr.OTCode=="BRAND") then begin
+								LocObj = Objr.Code;
+							end;
+						end;
+						ExtractObj(setObj,j,obj);
+					end;
+					IVrw.Objects = LocObj;
+					matrowput(IVr,0,IVrw);
+				end;
 				RecordCopy(OldIVr,IVr);
 				IVr.OKFlag = 1;
 				RecordUpdate(OldIVr,IVr,true);
@@ -154,7 +177,6 @@ begin
 				IVr.TransDate = VIr.TransDate;
 				IVr.PayDate = VIr.TransDate;
 				IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
-				ExtractObj(VIr.Objects,i,obj);
 				IVr.CustCode = fobVenpor;
 				IVr.SalesMan = "AUTO";
 				BlockLoad(LMb);
@@ -164,18 +186,35 @@ begin
 				User.Code = usr;
 				readfirstmain(User,1,true);
 				IVr.SalesGroup = User.SalesGroup;
-				IVrw.ArtCode = "PRODUCT_SOLD";
-				matrowput(IVr,0,IVrw);
-				IVVc_PasteArtCode(IVr,0,warning,warning,false,sernrf);
-				matrowget(IVr,0,IVrw);
-				IVrw.Quant = 1;
-				IVrw.Price = VIr.PayVal;
-				IVrw.Sum = VIr.PayVal;
-				matrowput(IVr,0,IVrw);
-				matrowget(IVr,0,IVrw);
-				IVVc_PasteSum(IVr,0,chsum,1);
-				IVrw.VATCode = "0%";
-				matrowput(IVr,0,IVrw);
+				
+				for (i=0;i<matrowcnt(VIr);i=i+1) begin
+					matrowget(VIr,i,VIrw);
+					IVrw.ArtCode = "PRODUCT_SOLD";
+					matrowput(IVr,0,IVrw);
+					IVVc_PasteArtCode(IVr,0,warning,warning,false,sernrf);
+					matrowget(IVr,0,IVrw);
+					IVrw.Quant = 1;
+					IVrw.Price = VIrw.Sum;
+					IVrw.Sum = VIrw.Sum;
+					matrowput(IVr,0,IVrw);
+					matrowget(IVr,0,IVrw);
+					IVVc_PasteSum(IVr,0,chsum,1);
+					IVrw.VATCode = "0%";
+					setObj = VIrw.Objects;
+					j = 0;
+					ExtractObj(setObj,j,obj);
+					while(nonblank(obj)) begin
+						Objr.Code = obj;
+						if(ReadFirstMain(Objr,1,true)) then begin
+							if(Objr.OTCode=="BRAND") then begin
+								LocObj = Objr.Code;
+							end;
+						end;
+						ExtractObj(setObj,j,obj);
+					end;
+					IVrw.Objects = LocObj;
+					matrowput(IVr,0,IVrw);
+				end;
 				
 				if(CompanyIsJWLikeCompany(currentcompany))then begin
 					IVr.Location = "CWH_J";
