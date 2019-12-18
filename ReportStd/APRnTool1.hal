@@ -287,6 +287,89 @@ BEGIN
   RETURN;
 END;
 
+
+global
+procedure IDGPrintHeaderAP2(record RcVc RepSpec,Integer nrofper)
+BEGIN
+  LongInt p1,p2;
+  record AgedBlock AgedRec;
+  string 255 tstr,tstr1,tstr2,tstr3;
+  Boolean fraserf;
+      
+  fraserf = false;    
+  BlockLoad(AgedRec);
+  if (RepSpec.ArtMode==0) then begin
+    StartFormat(15);
+     OutString(0,0,USetStr(4042),false);
+     OutString(100,0,USetStr(4049),false);
+    EndFormat;
+    StartFormat(15);
+     OutString(15,0,USetStr(4043),false);
+     if (RepSpec.flags[5]==0) then begin
+       OutString(185,0,USetStr(4003),false);
+     end else begin
+       OutString(185,0,USetStr(4011),false);
+     end;
+     OutString(310,0,USetStr(4044),true);
+     OutStringAdjustBiDi(380,0,USetStr(4046),true,M4Val,420);
+     if (RepSpec.flags[2]==0) then begin
+       OutStringAdjustBiDi(425,0,USetStr(3201),true,M4Val,465);
+     end;
+     OutStringAdjustBiDi(480,0,USetStr(4047),true,M4Val,520);
+    EndFormat;
+  end;
+  if (RepSpec.ArtMode==1) then begin
+    StartFormat(15);
+		 OutString(0,0,USetStr(4042),false);
+     OutString(100,0,"Наимен.",false);
+     OutString(20,0,USetStr(4043),false);
+     if (RepSpec.flags[5]==0) then begin
+       OutString(150,0,USetStr(4003),false);
+     end else begin
+       OutString(150,0,USetStr(4011),false);
+     end;
+		  OutString(180,0,USetStr(36315),false);
+     OutString(200,0,USetStr(4044),false);
+     OutString(250,0,USetStr(4045),true);
+		 if(CurrentCompany==18)then begin
+			OutString(280,0,USetStr(36314),true);
+			OutString(315,0,USetStr(31044),true);
+			OutString(350,0,USetStr(4046),true);
+			OutString(390,0,USetStr(36312),true);
+			OutString(450,0,USetStr(36313),true);
+			OutString(450,0,USetStr(36325),true);
+		 end else begin
+			OutString(450,0,USetStr(4046),true);
+		 end;
+    EndFormat;
+  end;
+  if ((RepSpec.ArtMode==2) or (RepSpec.ArtMode==5)) then begin
+    PrintPLAgedHeader(RepSpec,nrofper,fraserf);
+  end;
+  if (RepSpec.ArtMode==3) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(4042),false);
+      OutStringAdjustBiDi(480,0,USetStr(4047),true,M4Val,520);
+      EndFormat;
+      Gray_Divider(0,1);
+  end;
+  if (RepSpec.ArtMode==4) or (RepSpec.ArtMode==6) then begin
+      StartFormat(15);
+      OutString(0,0,USetStr(4042),false);
+//      OutString(200,0,USetStr(4043),false);//, this is very wrong
+      OutString(260,0,USetStr(2528),true); 
+      OutString(320,0,USetStr(2440),true);
+      OutString(400,0,USetStr(2439),true);
+      OutString(480,0,USetStr(2529),true);
+      EndFormat;
+      Gray_Divider(0,1);
+  end;
+  RETURN;
+END;
+
+
+
+
 global
 procedure PrintPrepaymentsNrsOP(record RcVc RepSpec,Boolean curncyf,string vecode,Boolean backdate,Integer pos1,Integer pos2)
 BEGIN
@@ -949,6 +1032,158 @@ LAPRPrintOverView:;
   return;
 end;
 
+
+
+global
+function Boolean IDGAPRPrintOverView(record VIVc VIr,record OPrsVc OPrsr,record TRVc TRr,record RcVc RepSpec,val rval,val rs,LongInt latedays,record CUVc VEr)
+begin
+  string 255 tstr,tstr2,dblstr;
+  Boolean foundclosed;
+  record AgedBlock Ab;
+  record PUVc Pur;
+  record RLinkVc RLr;
+	record POVc POr;
+	row POVc POrw;
+	string 255 Object, Brnd, obj;
+	record BPIBrandVc BPIBrandr;
+	record INVc INr;
+	integer i;
+	record ObjVc Objr;
+	
+  
+  if ((VIr.InstallmentInv==1) and (RepSpec.flags[19]!=0)) then begin
+    if (PrintInstallments(VIr,RepSpec,rval,rs,foundclosed)) then begin
+      goto LAPRPrintOverView;
+    end;
+  end;
+  BlockLoad(Ab);
+  switch (OPrsr.TransType) begin
+    case kOPrsTransTypeInvoice:
+      tstr = VIr.SerNr;
+      if (nonblank(VIr.InvoiceNr)) then begin
+        tstr = tstr & ", (";
+        tstr = tstr & VIr.InvoiceNr;
+        tstr = tstr & ")";
+      end;
+      dblstr = "DblAP";
+    case kOPrsTransTypeNLTransaction:
+      tstr = VIr.SerNr;
+      if (nonblank(VIr.InvoiceNr)) then begin
+        tstr = tstr & ", (";
+        tstr = tstr & VIr.InvoiceNr;
+        tstr = tstr & ")";
+      end;
+      dblstr = "DblTrans2";
+      YcToStr(TRr.IntYc,tstr2);     
+      tstr2 = tstr2 & "." & TRr.Number;
+    case kOPrsTransTypePurgeNLTransaction:
+      tstr = VIr.SerNr;
+      if (nonblank(VIr.InvoiceNr)) then begin
+        tstr = tstr & ", (";
+        tstr = tstr & VIr.InvoiceNr;
+        tstr = tstr & ")";
+      end;
+      dblstr = "DblTrans2";
+      YcToStr(TRr.IntYc,tstr2);     
+      tstr2 = tstr2 & "." & TRr.Number;
+  end;
+  
+  if (VIr.Closed==1) then begin
+    tstr = tstr & " (*) ";
+    foundclosed = true;
+  end;
+	
+	
+	
+	if(nonblank(VIr.POSerNr))then begin
+		POr.SerNr = VIr.POSerNr;
+		if(ReadFirstMain(POr,1,true))then begin
+			matrowget(POr,0,POrw);
+			INr.Code = POrw.ArtCode;
+			if(ReadFirstMain(INr,1,true))then begin
+				BPIBrandr.Code = INr.BPIBrand;
+				if(ReadFirstMain(BPIBrandr,1,true))then begin
+					Brnd = BPIBrandr.Name;
+				end;
+			end;
+		end;
+	end;
+	
+	
+	i = 0;
+	ExtractObj(VIr.Objects,i,obj);
+	while(nonblank(obj)) begin
+		Objr.Code = obj;
+		if(ReadFirstMain(Objr,1,true)) then begin
+			logtext(0,Objr.Code);
+			if(Objr.OTCode=="STORE") then begin
+				Object = Objr.Code;
+			end;
+		end;
+		ExtractObj(VIr.Objects,i,obj);
+	end;
+	
+	
+	
+	
+  StartFormat(15);
+	OutString(0,"DblCUVc",VEr.Code,false);
+	OutString(100,0,VEr.Name,false);
+  OutStringID(20,dblstr,tstr,false,tstr2);
+  // OutString(50,0,VIr.VEName,false);
+  if (ReadRecordLink(VIr,1,PUr,RLr))then begin
+	OutString(100,"DblPUVc",PUr.SerNr,false);
+  end;
+  if (RepSpec.flags[5]==0) then begin
+    OutDate(150,0,VIr.InvDate,false);
+  end else begin
+    OutDate(150,0,VIr.RebDate,false);
+  end;
+  OutString(180,0,VIr.PayDeal,false);
+  OutDate(200,0,VIr.DueDate,false);
+  if (Ab.ShowDelayDays!=0) then begin
+    if (latedays<0) then begin
+      OutLongInt(250,0,-latedays,true);
+    end else begin
+      OutString(250,0, "0",true);
+    end;  
+  end else begin
+    if (latedays <> -1) then begin
+      OutLongInt(250,0,latedays,true);
+    end else begin
+      OutString(250,0, "-1",true);
+    end;  
+  end;
+  if (RepSpec.flags[2]==1) then begin
+		if(CurrentCompany==18)then begin
+			OutString(280,0,Object,true);
+			OutString(315,0,Brnd,true);
+			OutVal(350,0,VIr.PayVal,M4Val,true);
+			OutVal(390,0,VIr.PayVal-rval,M4Val,true);
+		end;
+    OutVal(450,0,rval,M4Val,true);
+    OutString(480,0,VIr.CurncyCode,true);
+  end else begin
+		if(CurrentCompany==18)then begin
+			OutString(280,0,Object,true);
+			OutString(315,0,Brnd,true);
+			OutVal(350,0,MulRateToBase1(VIr.CurncyCode,VIr.PayVal,VIr.FrRate,VIr.ToRateB1,VIr.ToRateB2,VIr.BaseRate1,VIr.BaseRate2,DefaultCurRoundOff),M4Val,true);
+			OutVal(390,0,MulRateToBase1(VIr.CurncyCode,VIr.PayVal,VIr.FrRate,VIr.ToRateB1,VIr.ToRateB2,VIr.BaseRate1,VIr.BaseRate2,DefaultCurRoundOff)-rs,M4Val,true);
+		end;
+    OutVal(480,0,rs,M4Val,true);
+  end;  
+  EndFormat;
+LAPRPrintOverView:;  
+  IDGAPRPrintOverView = foundclosed;
+  return;
+end;
+
+
+
+
+
+
+
 global
 procedure PrintCreditorsAccounts(Array string credaccs,Array val credbal,var Integer credcnt)
 begin
@@ -979,6 +1214,8 @@ begin
 			OutString(0,0,"",false);
 			OutString(0,0,"",false);
 			OutString(0,0,"",false);
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
 		end;
     OutString(290,0,USetStr(4048),false);
     OutValBiDi(450,0,totCurSum,M4Val,true,480);
@@ -987,6 +1224,8 @@ begin
   end;
 	StartFormat(15);
 	if(CurrentCompany==18)then begin
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
 		OutString(0,0,"",false);
 		OutString(0,0,"",false);
 		OutString(0,0,"",false);
@@ -1012,6 +1251,8 @@ begin
 		OutString(0,0,"",false);
 		OutString(0,0,"",false);
 		OutString(0,0,"",false);
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
 	end;
   OutString(290,0,USetStr(4060),false);
   OutValBiDi(450,0,ivdue,M4Val,true,480);
@@ -1019,6 +1260,8 @@ begin
   EndFormat;
 	StartFormat(15);
 	if(CurrentCompany==18)then begin
+		OutString(0,0,"",false);
+		OutString(0,0,"",false);
 		OutString(0,0,"",false);
 		OutString(0,0,"",false);
 		OutString(0,0,"",false);
@@ -1036,6 +1279,8 @@ begin
   if (onacc!=0) then begin
     StartFormat(15);
 		if(CurrentCompany==18)then begin
+			OutString(0,0,"",false);
+			OutString(0,0,"",false);
 			OutString(0,0,"",false);
 			OutString(0,0,"",false);
 			OutString(0,0,"",false);
