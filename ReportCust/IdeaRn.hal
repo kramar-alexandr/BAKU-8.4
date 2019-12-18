@@ -109,25 +109,27 @@ end;
 
 global procedure IdeaStckRepRn(record RcVc RepSpec)
 begin
-	record ItemStatusVc ISr;
-	boolean TrHs,testf,testname;
+	record ItemStatusVc ISr, varISr;
+	boolean TrHs,testf,testname, TrHs2, VarietyItemf;
 	array integer tab;
-	integer i,j,lccnt,mtrw,pos,lcsnt,namecnt;
+	integer i,j,lccnt,mtrw,pos,lcsnt,namecnt,varcnt;
 	record LocationVc Locr;
 	array string 255 aLocationsSl, aLocCodesSl,aLocations, aLocCodes;
 	record INVc INr;
 	row INVc INrw;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
-	string 250 vCompName,Position,clstr,namew;
+	string 250 vCompName,Position,clstr,namew,VarSpec;
 	record PISVc PISr;
 	vector val vPosit;
-	integer vs, b;
+	integer vs, b, v;
 	record DIVc DIr;
 	vector string 255 vClassif;
 	array val qty;
 	val totqty;
 	longint curtick;
+	vector string 255 ItCodeVar;
+	record VARVc VARr;
 	
 	curtick = getcurtick();
 	tab[1] = 0;
@@ -255,20 +257,41 @@ begin
 	INr.Code = "";
 	while (loopMain(INr,1,true))begin
 		testf = true;
+		VarietyItemf = false;
+		varcnt = 0;
 		ISr.Code = INr.Code;
 		ISr.Location = ";;;";
 		if(ReadFirstMain(ISr,2,true))then begin 
 			if(ISr.Instock<1)then begin testf = false; end;
+			if(testf)then begin
+				varISr.Code = INr.Code;
+				TrHs2 = true;
+				v = 0;
+				while (loopMain(varISr,1,TrHs2)) begin
+					if(varISr.Code!=INr.Code)then begin TrHs2 = false; end;
+					if(TrHs2 and nonblank(varISr.Variety))then begin
+						logtext(0,varISr.Code);
+						VarietyItemf = true;
+						ItCodeVar[varISr.Code & "_" & v] = varISr.Variety;
+						v = v + 1;
+					end;
+				end;
+				varcnt = v;
+				resetloop(varISr);
+			end;
 		end else begin
 			testf = false;
 		end;
 		if(nonblank(RepSpec.f1) and !setinset(RepSpec.f1,INr.DispGroups)/*INr.BPIBrand!=RepSpec.f1*/)then begin testf = false; end;
 		if(nonblank(RepSpec.f2) and !setinset(RepSpec.f2,INr.DispGroups)/*INr.BPICollection!=RepSpec.f2*/)then begin testf = false; end;
 		if(nonblank(RepSpec.f3) and left(RepSpec.f3,2)!="IS" and left(RepSpec.f3,2)!="CS" /*INr.BPICollection!=RepSpec.f2*/)then begin testf = false; end;
-		if(left(INr.Category,2)!="IS" and left(INr.Category,2)!="CS")then begin testf = false; end;
+		// if(left(INr.Category,2)!="IS" and left(INr.Category,2)!="CS")then begin testf = false; end;
 		if(INr.CompletCode!="1" and INr.CompletCode!="2" and INr.CompletCode!="R") then begin testf = false; end;
 		if(nonblank(RepSpec.f3) and left(INr.Category,3)!= left(RepSpec.f3,3)) then begin testf = false; end;
-		if(testf)then begin
+		if(INr.Code=="IPCA-00002-1")then begin
+			logtext(0,testf & " 111");
+		end;
+		if(testf and !VarietyItemf)then begin
 			vClassif["BRAND"] = "";
 			vClassif["MODEL"] = "";
 			vClassif["COLOUR"] = "";
@@ -359,6 +382,114 @@ begin
 				Position = "";
 			end;
 			endformat;
+		end;
+		
+		
+		if(testf and VarietyItemf)then begin
+			vClassif["BRAND"] = "";
+			vClassif["MODEL"] = "";
+			vClassif["COLOUR"] = "";
+			pos = 0;
+			ExtractObj(INr.DispGroups,pos,clstr);
+			while (nonblank(clstr)) begin
+				DIr.Code = clstr;
+				if(ReadFirstMain(DIr,1,true))then begin
+					if(DIr.CType=="BRAND")then begin
+						vClassif["BRAND"] = DIr.Name;
+					end;
+					if(DIr.CType=="MODEL")then begin
+						vClassif["MODEL"] = DIr.Name;
+					end;
+					if(DIr.CType=="COLOUR")then begin
+						vClassif["COLOUR"] = DIr.Name;
+					end;
+					if(DIr.CType=="SIZE")then begin
+						vClassif["SIZE"] = DIr.Name;
+					end;
+				end;
+				ExtractObj(INr.DispGroups,pos,clstr);
+			end;
+			
+			for (v=0;v<varcnt;v=v+1) begin 
+				VarSpec = "";
+				VARr.Code = right(ItCodeVar[INr.Code & "_" & v],len(ItCodeVar[INr.Code & "_" & v]) - 1);
+				if(ReadFirstMain(VARr,1,true))then begin
+					VarSpec = VARr.Comment;
+				end;
+				
+				startformat(15);
+				outstring(tab[1],0,left(INr.Category,3),false);
+				outstring(tab[2],0,vClassif["BRAND"],false);
+				outstring(tab[3],0,INr.SN & ItCodeVar[INr.Code & "_" & v],false);
+				outstring(tab[4],0,INr.Name & ", " & VarSpec,false);
+				outstring(tab[5],0,INr.AlternativeCode,false);
+				MatRowGet(INr,0,INrw);
+				outstring(tab[6],0,INrw.Text,false);
+				outstring(tab[7],0,vClassif["MODEL"],false);
+				outstring(tab[8],0,vClassif["COLOUR"],false);
+				outstring(tab[8],0,INr.Size,false);
+				outstring(tab[9],0,INr.Unittext,false);
+				totqty = 0;
+				for (i=0;i<lccnt;i=i+1)begin
+					ISr.Code = INr.Code;
+					ISr.Location = aLocCodes[i];
+					ISr.Variety = ItCodeVar[INr.Code & "_" & v];
+					if(readFirstmain(ISr,3,true))then begin
+						qty[i] = ISr.Instock - ISr.RsrvQty;
+						totqty = totqty + ISr.Instock;
+						vPosit[aLocCodes[i]] = ISr.Instock;
+					end else begin
+					end;
+				end;
+				outstring(tab[10],0,mid(ValToString(totqty,M4Val,"","",1),0,len(ValToString(totqty,M4Val,"","",1))-2),false);
+				for (i=0;i<lccnt;i=i+1)begin
+					ISr.Code = INr.Code;
+					ISr.Location = aLocCodes[i];
+					ISr.Variety = ItCodeVar[INr.Code & "_" & v];
+					if(readFirstmain(ISr,3,true))then begin
+						outstring(tab[11]+(vs*i),0,mid(ValToString(qty[i],M4Val,"","",1),0,len(ValToString(qty[i],M4Val,"","",1))-2),false);
+						vPosit[aLocCodes[i]] = ISr.Instock;
+					end else begin
+						outstring(tab[11]+(vs*i),0,"0",false);
+					end;
+				end;
+				for (i=0;i<lcsnt;i=i+1)begin
+					ISr.Code = INr.Code;
+					ISr.Location = aLocCodesSl[i];
+					ISr.Variety = ItCodeVar[INr.Code & "_" & v];
+					if(readFirstmain(ISr,3,true))then begin
+						outstring(tab[12]+(vs*i),0,mid(ValToString(ISr.RsrvQty,M4Val,"","",1),0,len(ValToString(ISr.RsrvQty,M4Val,"","",1))-2),false);
+						vPosit[aLocCodesSl[i]] = ISr.RsrvQty;
+					end else begin
+						outstring(tab[11]+(vs*i),0,"0",false);
+					end;
+				end;
+				b=tab[11]+(vs*i)+vs;
+				for (i=0;i<lccnt;i=i+1)begin
+					PISr.ArtCode = INr.Code;
+					PISr.Variety = ItCodeVar[INr.Code & "_" & v];
+					PISr.Location = aLocCodes[i];
+					TrHs = true;
+					while (loopkey("CodeVariety",PISr,3,TrHs))begin
+						testf = true;
+						if(PISr.ArtCode!=INr.Code)then begin testf = false; end;
+						if(PISr.Variety!=ItCodeVar[INr.Code & "_" & v])then begin testf = false; end;
+						if(PISr.Location!=aLocCodes[i])then begin testf = false; end;
+						if(!testf)then begin TrHs = false; end;
+						if(testf)then begin
+							if(blank(Position))then begin 
+								Position =  PISr.Position & " (" & mid(ValToString(PISr.Instock,M4Val,"","",1),0,len(ValToString(PISr.Instock,M4Val,"","",1))-2) & ")";
+							end else begin
+								Position = Position & "; "  &  PISr.Position & " (" & mid(ValToString(PISr.Instock,M4Val,"","",1),0,len(ValToString(PISr.Instock,M4Val,"","",1))-2) & ")";
+							end;
+						end;
+					end;
+					ResetLoop(PISr);
+					outstring(b+(vs*i),0,Position,false);
+					Position = "";
+				end;
+				endformat;
+			end;
 		end;
 	end;
 	resetloop(INr);
