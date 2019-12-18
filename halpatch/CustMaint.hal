@@ -2230,6 +2230,67 @@ begin
 return;
 end;
 
+global webpublic procedure WebExportAnyReg()
+begin
+	string 100 regname,blockname,dirrname;
+	integer i,CompQty;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	
+	BlockLoad(Compb);	
+	
+	regname = WebGetArg("regname");
+	blockname = WebGetArg("blockname");
+	
+	
+	if(blank(regname) and blank(blockname))then begin
+		WebOutString("regname or blockname");
+	end else begin	
+		if(nonblank(regname))then begin
+			CompQty = matrowcnt(Compb);
+			for (i=0;i<CompQty;i=i+1) begin
+				matrowget(Compb,i,Comprw);
+				if(Comprw.ActiveStatus==0) then begin
+					SetCompany(i+1,false);
+					dirrname = "ExportData/" & regname;
+					if (!DirExists(dirrname)) then begin
+						CreateFolder(dirrname);
+					end;
+					createfile(dirrname & "/" & regname & i+1 & ".txt");
+					CloseFile;
+					openexportfile(dirrname & "/" & regname & i+1 & ".txt",true);
+					addheadertoexport(i+1);
+					RegisterExport(regname);
+					CloseFile;
+				end;
+			end;
+		end;
+		if(nonblank(blockname))then begin
+			CompQty = matrowcnt(Compb);
+			for (i=0;i<CompQty;i=i+1) begin
+				matrowget(Compb,i,Comprw);
+				if(Comprw.ActiveStatus==0) then begin
+					SetCompany(i+1,false);
+					dirrname = "ExportData/" & blockname;
+					if (!DirExists(dirrname)) then begin
+						CreateFolder(dirrname);
+					end;
+					createfile(dirrname & "/" & blockname & i+1 & ".txt");
+					CloseFile;
+					openexportfile(dirrname & "/" & blockname & i+1 & ".txt",true);
+					addheadertoexport(i+1);
+					BlockExport(blockname);
+					CloseFile;
+				end;
+			end;
+		end;
+	
+	end;
+
+return;
+end;
+
+
 global webpublic procedure WebWriteRegistersFiles()
 begin
 integer i,curcomp,CompQty;
@@ -2771,8 +2832,8 @@ record TRVc TRr;
 row TRVc TRrw;
 record VIVc VIr,oldVIr;
 row VIVc VIrw;
-boolean TrHs,testf,TrHs2;
-integer cntrw,i,j,oscnt,rowCnt;
+boolean TrHs,testf,TrHs2,testBrand;
+integer cntrw,i,j,oscnt,rowCnt,oldCompany;
 vector val saleSum,sumVi,saleSumRow;
 val ct;
 string 255 vewarn,tstr,obj,objects;
@@ -2783,8 +2844,14 @@ record RetVc Retr;
 record IVVc IVr;
 vector string 255 upd,brandObj;
 vector boolean brands,create;
+record BrandsBanDateBlock BBBr;
+row BrandsBanDateBlock BBBrw;
 date loopDate;
 testf = true;
+oldCompany = currentCompany;
+setCompany(18,false);
+blockload(BBBr);
+ResetCompany(oldCompany);
 //-------------------------------Brands allowed-------------------------------------
 	brands["GRAFF"] = true;
 	brands["CHOPARD"] = true;
@@ -2792,6 +2859,10 @@ testf = true;
 	brands["0000392"] = true;
 	brands["LLADRO_F"] = true;
 	brands["BRAGUET_"] = true;
+	brands["HARRY_WINS"] = true;
+	brands["JAQUET_DRO"] = true;
+	brands["GLASHUTTE"] = true;
+	brands["OMEGA"] = true; 
 //----------------------------------------------------------------------------------
 loopDate = RepSpec.sStartDate;
 while(loopDate<=RepSpec.sEndDate) begin
@@ -2844,7 +2915,13 @@ while(loopDate<=RepSpec.sEndDate) begin
 					obj = stores[0];
 					ExtractObjectsByType(TRrw.Objects,"BRAND",brand,oscnt);
 					if(blank(obj)) then begin obj = "blank"; end;
-					if(brands[brand[0]]) then begin
+					testBrand = false;
+					rowCnt = matrowcnt(BBBr);
+					for(j=0;j<rowCnt;j=j+1) begin
+						matrowget(BBBr,j,BBBrw);
+						if((SetInSet(brand[0],BBBrw.Object) or BBBrw.Object==brand[0]) and BBBrw.StartBanDate<=TRr.TransDate) then begin testBrand = true; end;
+					end;
+					if(testBrand) then begin
 						saleSum[obj] = saleSum[obj] + TRrw.DebVal;
 						saleSum[obj] = saleSum[obj] - TRrw.CredVal;
 						brandObj[obj & brand[0]] = brand[0];
@@ -2952,7 +3029,7 @@ record TRVc TRr;
 row TRVc TRrw;
 record VIVc VIr,oldVIr;
 row VIVc VIrw;
-boolean TrHs,testf,TrHs2;
+boolean TrHs,testf,TrHs2,testBrand;
 integer cntrw,i,j,oscnt,rowCnt,comp,oldComp,CompQty;
 vector val saleSum,sumVi,saleSumRow;
 val ct;
@@ -2967,6 +3044,8 @@ vector boolean brands,create;
 date loopDate;
 record CompaniesBlock Compb;
 row CompaniesBlock Comprw;
+record BrandsBanDateBlock BBBr;
+row BrandsBanDateBlock BBBrw;
 testf = true;
 //-------------------------------Brands allowed-------------------------------------
 	brands["GRAFF"] = true;
@@ -2975,10 +3054,17 @@ testf = true;
 	brands["0000392"] = true;
 	brands["LLADRO_F"] = true;
 	brands["BRAGUET_"] = true;
+	brands["HARRY_WINS"] = true;
+	brands["JAQUET_DRO"] = true;
+	brands["GLASHUTTE"] = true;
+	brands["OMEGA"] = true; 
 //----------------------------------------------------------------------------------
 BlockLoad(Compb);
 
 oldComp = currentcompany;
+SetCompany(18,false);
+blockload(BBBr);
+ResetCompany(oldComp);
 CompQty = matrowcnt(Compb);
 logtext(0,CompQty);
 for(comp=0;comp<CompQty;comp=comp+1) begin
@@ -3032,11 +3118,17 @@ for(comp=0;comp<CompQty;comp=comp+1) begin
 							matrowget(TRr,i,TRrw);
 							if(TRrw.AccNumber=="45" and TRrw.ovst <> 1 and TRrw.stp==1) then begin
 								obj = "";
+								testBrand = false;
 								ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
 								obj = stores[0];
 								ExtractObjectsByType(TRrw.Objects,"BRAND",brand,oscnt);
 								if(blank(obj)) then begin obj = "blank"; end;
-								if(brands[brand[0]]) then begin
+								rowCnt = matrowcnt(BBBr);
+								for(j=0;j<rowCnt;j=j+1) begin
+									matrowget(BBBr,j,BBBrw);
+									if((SetInSet(brand[0],BBBrw.Object) or BBBrw.Object==brand[0]) and BBBrw.StartBanDate<=TRr.TransDate) then begin testBrand = true; end;
+								end;
+								if(testBrand) then begin
 									saleSum[obj] = saleSum[obj] + TRrw.DebVal;
 									saleSum[obj] = saleSum[obj] - TRrw.CredVal;
 									brandObj[obj & brand[0]] = brand[0];
