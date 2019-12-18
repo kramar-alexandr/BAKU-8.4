@@ -1,6 +1,12 @@
 //server-only
 external inner function roundmode SetRoundModeD(Integer);// Edit ************************** Tuesday, 1 April 2014 17:03:06
 external procedure LogProcTime(string,longint);
+remote function Boolean PUVc_PasteVECode(var record PUVc);
+remote procedure PUVc_PasteCostPrice(var record PUVc,Integer);
+remote function Boolean PUVc_PasteArtCode(var record PUVc,Integer,var string,var string);
+remote procedure PUSumUp(var record PUVc);
+remote procedure PUVc_PasteLocation(var record PUVc,Integer);
+remote procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
 
 /*global
 updating function LongInt IVVcRecordCheck(record IVVc IVp,record IVVc IV2p,LongInt stat,LongInt long4)
@@ -337,9 +343,176 @@ BEGIN
 
  	GCSVcRecordCheck = res; 
   RETURN;
-END;	
+END;
+	
+global
+procedure SplitSDrByCurrency(var array record SDVc curSDr,record SDVc SDr,var array string currs,var Integer curcnt)
+begin
+  record ItemHistVc IHr;
+  vector boolean curIncluded;
+  Vector string 10 curindex;
+  record SDVc vectSDr;
+  row SDVc vectSDrw,SDrw;
+  Boolean TrHs;
+  Integer rwcnt;
+  val qty;
+    
+    IHr.FileName = "SDVc";
+    IHr.TransNr = SDr.SerNr;
+    TrHs = true;
+    while (LoopKey("FNTransNr",IHr,2,TrHs)) begin
+      if (IHr.FileName!="SDVc" or IHr.TransNr!=SDr.SerNr) then begin TrHs = false; end;
+      if (TrHs) then begin
+      	if(blank(IHr.CurncyCode))then begin
+      		IHr.CurncyCode = "AZN";
+      	end;
+        if (curIncluded[IHr.CurncyCode]) then begin
+          vectSDr = curSDr[curindex[IHr.CurncyCode]];
+        end else begin
+          RECORDNEW(vectSDr);
+					vectSDr.Location = SDr.Location;
+          vectSDr.SerNr = SDr.SerNr;
+          if(blank(IHr.CurncyCode))then begin
+          	IHr.CurncyCode = "AZN";
+          end;
+          curIncluded[IHr.CurncyCode] = true;
+          currs[curcnt] = IHr.CurncyCode;
+          curindex[IHr.CurncyCode] = curcnt;
+          curcnt = curcnt + 1;
+        end;
+        rwcnt = MatRowCnt(vectSDr);
+        ClearRow(vectSDr,vectSDrw,1);
+        qty = -IHr.Qty;
+        vectSDrw.ArtCode = IHr.ArtCode;
+        vectSDrw.Qty = qty;
+        vectSDrw.FIFO = IHr.TotCostPrice/qty;
+        vectSDrw.FIFORowVal = IHr.TotCostPriceCurncy/qty;
+        MatRowGet(SDr,IHr.Row,SDrw);
+        MatRowPut(vectSDr,rwcnt,vectSDrw);
+        curSDr[curindex[IHr.CurncyCode]] = vectSDr;
+      end;
+    end;
+  
+  return;
+end; //Edit***************************ABr,11:38 18.12.2019 }
 
+global
+updating function LongInt SDVcRecordUpdateAfter(var record SDVc SDr,record SDVc SD2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record SDVc NilSDr;
+  record UserVc Userr;
+  record ORVc ORr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	integer oldComp,i,rwcnt,k,m,curcnt;
+	string 255 VECode,warning,inwarn;
+	record LocationVc Locr,Loc1r;
+	row SDVc SDrw;
+	record ConsItemVc CIr;
+	record BPIBrandVc BBr;
+	array record SDVc curSD;
+	array string 20 currs;
+	record BaseCurBlock BCb,targetBCb;
+	string 5 curcode,sourcecurcode;
+	val fr,to1,to2,br1,br2; 
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record PosVc Posr;
+	record SDVc SD1r;
+	res = 0;
+	res = inner.SDVcRecordUpdateAfter(SDr,SD2r,stat,long4);
+	oldComp = CurrentCompany;
+	BlockLoad(Compb);
+	BlockLoad(targetBCb);
+	matrowget(Compb,oldComp-1,Comprw);
 
+	if(SDr.OKFlag!=0 and SD2r.OKFlag==0) then begin
+		SplitSDrByCurrency(curSD,SDr,currs,curcnt);
+		if(curcnt==0) then begin curcnt=1; curSD[0] = SDr; end;
+  	for (m=0;m<curcnt;m=m+1) begin
+			SD1r = curSD[m];
+			Loc1r.Code = SD1r.Location;
+			if(ReadFirstMain(Loc1r,1,true)) then begin
+				if(nonblank(Loc1r.FOBSuplier)) then begin
+					VECode = Loc1r.FOBSuplier;
+				end;	
+			end;	
+			SetCompany(18,false);
+			RECORDNEW(PUr);
+			if (currs[m]!=targetBCb.BaseCur1) then begin
+          curcode = currs[m];
+          fr = blankval;
+          to1 = blankval;
+          to2 = blankval;
+          br1 = blankval;
+          br2 = blankval;
+          GetFullCurncyRate(curcode,PUr.TransDate,fr,to1,to2,br1,br2);
+          if (curcode!=currs[m]) then begin
+            logtext(0,"No currency " & currs[m] & " in target company " & Comprw.ShortName);
+          end;
+          PUr.CurncyCode = curcode;
+          PUr.FrRate = fr;
+          PUr.ToRateB1 = to1; 
+          PUr.ToRateB2 = to2;
+          PUr.BaseRate1 = br1;
+          PUr.BaseRate2 = br2;
+        end;
+			PUr.VECode = VECode;
+			PUVc_PasteVECode(PUr);
+			PUr.VEName = "#Stock Depreciation# " & SDr.SerNr & " from company " & Comprw.ShortName;
+			if (PUr.SerNr<=0) then begin
+				PUr.SerNr = NextSerNr("PUVc",PUr.TransDate,-1,false,"");
+			end;	
+			rwcnt = MatRowCnt(SD1r);
+			for (i=0;i<rwcnt;i=i+1) begin
+				MatRowGet(SD1r,i,SDrw);
+				CIr.LocCode = SDrw.ArtCode;
+				if(ReadFirstKey("LocCodeBrand",CIr,1,true)) then begin end;
+				PUrw.ArtCode = CIr.Code;
+				BBr.Code = CIr.BrandCode;
+				if(ReadFirstMain(BBr,1,true)) then begin end;
+				PUrw.ToPosCode = BBr.CWHCode;
+				Posr.Code = BBr.CWHCode;
+				if(ReadFirstMain(Posr,1,true)) then begin end;
+				PUrw.Location = Posr.Location;
+				PUVc_PasteLocation(PUr,i);
+				MatRowPut(PUr,i,PUrw);
+				PUVc_PasteArtCode(PUr,i,warning,inwarn);
+				MatRowGet(PUr,i,PUrw);
+				PUrw.Quant = SDrw.Qty;
+				MatRowPut(PUr,i,PUrw);
+				//PUVc_PasteQuant(PUr,k);//Commented Edit ************************** BPI Ukraine - KramarAlexandr - 02, 06 08 2019 y. at 3:34:03 PM
+				MatRowGet(PUr,i,PUrw);
+				PUrw.UPrice = SDrw.FIFORowVal;
+				PUrw.SerialNr = SDrw.SerialNr;// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 25 09 2019 y. at 9:41:17 AM
+				/*PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
+								PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+								PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+								PUrw.CustomsCost,p,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+				PUrw.CostPrice = p;
+				PUrw.Sum = s;*/
+				PUrw.CostPrice = SDrw.FIFO;
+				MatRowPut(PUr,i,PUrw);
+				PUVc_PasteCostPrice(PUr,i);
+				MatRowGet(PUr,i,PUrw);
+				PUrw.Extra = blankval;// Edit ************************** BPI Ukraine - KramarAlexandr - Thursday, 1 August 2019 16:24:38
+				//s = IVrw.FIFO*IVrw.Quant;
+				//PUrw.Sum = s;
+				MatRowPut(PUr,i,PUrw);
+				
+			end;
+			PUSumUp(PUr);
+			if (RECORDSTORE(PUr,false)) then begin
+				CreateRecordLink(SDr,oldComp,PUr,currentcompany);
+				CreateRecordLink(PUr,currentcompany,SDr,oldComp);
+			end;	
+		end;	
+	end;	
+	ResetCompany(oldComp);
+  SDVcRecordUpdateAfter = res;
+  RETURN;
+END;
 
 
 
