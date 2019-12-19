@@ -3851,3 +3851,165 @@ begin
 
 return;
 end;
+
+global
+procedure PWrongRn(record RcVc RepSpec)
+begin
+  record RoundBlock RoundRec;
+  record PUVc PUr;
+  record POVc POr;
+  record LocationVc Locr;
+  Boolean TrHs;
+  Boolean testf;
+  LongInt frorder,toorder;
+  val totsum,pursumval;// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 8 December 2017 15:25:24
+  LongInt afr,ato;
+  val rowsum;
+  val totunitsum,totfreight,totcustoms,totextra;
+  val t,t2;
+  Integer rw;
+  String 255 tstr;
+  String 20 ckey;
+  Integer i,rwcnt,k;
+  row PUVc PUrw;
+  row POVc POrw;
+  val pursum;
+  val unitsum,sumquant,freight,customs,extra,totsumquant;
+  string 50 crncy;
+  record INVc INr;
+  string 20 frit,toit;
+  string 20 frin,toin;
+	longint curtick;
+	record BPIBrandVc BPIBrandr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	integer comp,CompQty,oldComp;
+	date sDate;
+	val rowPrice;
+	string 255 rowCost;
+	record ItemHistVc IHr;
+	
+	
+	logtext(0,"start");
+	oldComp = currentCompany;
+	BlockLoad(Compb);
+	sDate = addDay(currentdate, -150);
+	CompQty = matrowcnt(Compb);
+	
+	startreportnoheaderjob("Wrong PUr");
+	
+	StartFormat(15);
+	OutString(0,0,"Компания",false);
+	OutString(60,0,"Поступление",false);
+	OutString(100,0,"Таможня строки",false);
+	OutString(140,0,"Таможня пост.",false);
+	OutString(200,0,"Цена строки",false);
+	OutString(250,0,"Заказ",false);
+	OutString(300,0,"Остаток по IH",false);
+	EndFormat
+	
+	logtext(0,CompQty);
+	logtext(0,sDate);
+  for(comp=0;comp<CompQty;comp=comp+1) begin
+		matrowget(Compb,comp,Comprw);
+		if(Comprw.ActiveStatus==0) then begin
+			logtext(0,comp+1);
+			SetCompany(comp+1,false);
+			PUr.TransDate = currentdate;
+			TrHs = true;
+			while(LoopBackKey("TransDate",PUr,1,TrHs)) begin
+				testf = false;
+				if(PUr.TransDate<sDate) then begin TrHs = false; end;
+				rwcnt = matrowcnt(PUr);
+				for(i=0;i<rwcnt;i=i+1) begin
+					matrowget(PUr,i,PUrw);
+					if(PUrw.UPrice>999 and StringToVal(PUrw.CustomsCost,M4Val)>=1 and StringToVal(PUrw.CustomsCost,M4Val)<=10)then begin 
+						testf = true; 
+						rowCost = PUrw.CustomsCost;
+						rowPrice = PUrw.UPrice;
+					end;
+				end;
+				if(testf) then begin
+					
+					StartFormat(15);
+					OutString(0,0,Comprw.ShortName,false);
+					OutString(60,"DblPUVc",PUr.SerNr,false);
+					OutString(100,0,rowCost,false);
+					OutString(140,0,PUr.CustomsCost,false);
+					OutString(200,0,rowPrice,false);
+					OutString(250,0,PUr.PONr,false);
+					EndFormat
+					
+					rwcnt = matrowcnt(PUr);
+					for(i=0;i<rwcnt;i=i+1) begin
+						matrowget(PUr,i,PUrw);
+						if(PUrw.UPrice>999 and StringToVal(PUrw.CustomsCost,M4Val)>=1 and StringToVal(PUrw.CustomsCost,M4Val)<=10)then begin 
+							IHr.FileName = "PUVc";
+							IHr.TransNr = PUr.SerNr;
+							IHr.Row = i;
+							if(readfirstkey("FNTransNr",IHr,3,true))then begin
+								StartFormat(15);
+									OutString(200,0,IHr.ArtCode,false);
+									OutString(300,0,IHr.RemQty,false);
+									EndFormat
+							end;
+						end;
+					end;
+					
+					
+					
+					
+				end;	
+			end;
+			ResetLoop(PUr);
+		end;
+	end;	
+	
+	
+	StartFormat(15);
+	OutString(0,0,"Компания",false);
+	OutString(60,0,"Заказ поставщику",false);
+	OutString(100,0,"Таможня строки",false);
+	OutString(140,0,"Таможня пост.",false);
+	OutString(200,0,"Цена строки",false);
+	EndFormat
+	
+  for(comp=0;comp<CompQty;comp=comp+1) begin
+		matrowget(Compb,comp,Comprw);
+		if(Comprw.ActiveStatus==0) then begin
+			logtext(0,comp+1);
+			SetCompany(comp+1,false);
+			POr.TransDate = currentdate;
+			TrHs = true;
+			while(LoopBackKey("TransDate",POr,1,TrHs)) begin
+				testf = false;
+				if(POr.TransDate<sDate) then begin TrHs = false; end;
+				rwcnt = matrowcnt(POr);
+				for(i=0;i<rwcnt;i=i+1) begin
+					matrowget(POr,i,POrw);
+					if(POrw.Price>999 and StringToVal(POrw.CustomsCost,M4Val)>=1 and StringToVal(POrw.CustomsCost,M4Val)<=10)then begin 
+						testf = true; 
+						rowCost = POrw.CustomsCost;
+						rowPrice = POrw.Price;
+					end;
+				end;
+				if(testf) then begin
+					StartFormat(15);
+					OutString(0,0,Comprw.ShortName,false);
+					OutString(60,"DblPOVc",POr.SerNr,false);
+					OutString(100,0,rowCost,false);
+					OutString(140,0,POr.CustomsCost,false);
+					OutString(200,0,rowPrice,false);
+					EndFormat
+				end;	
+			end;
+			ResetLoop(POr);
+		end;
+	end;	
+	
+		
+  EndJob;
+	ResetCompany(oldComp);
+	logtext(0,"end");
+  return;
+end;
