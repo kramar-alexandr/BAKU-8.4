@@ -102,7 +102,7 @@ begin
 	row IVVc IVrw;
 	row VIVc VIrw;
 	integer rwcnt,i,sernrf,j;
-	string 255 warning, Acc4, setObj, LocObj;
+	string 255 warning, Acc4, setObj, LocObj, location;
 	boolean chsum, activelocf;
 	integer curcomp;
 	string 255 usr, obj, CustCode;
@@ -116,6 +116,7 @@ begin
 	row TRVc TRrw;
 	record AccVc Accr;
 	val DebCred;
+	record CUVc CUr;
 	
 	
 	activelocf = true;
@@ -143,8 +144,8 @@ begin
 					
 					if(VIrw.Sum<0)then begin
 						IVrw.Quant = -1;
-						IVrw.Price = VIrw.Sum;
-						IVrw.Sum = VIrw.Sum * -1;
+						IVrw.Price = VIrw.Sum * -1;
+						IVrw.Sum = VIrw.Sum;
 					end else begin
 						IVrw.Quant = 1;
 						IVrw.Price = VIrw.Sum;
@@ -174,6 +175,10 @@ begin
 				IVr.InvDate = VIr.TransDate;
 				IVr.TransDate = VIr.TransDate;
 				IVr.PayDate = VIr.TransDate;
+				CUr.Code = IVr.CustCode;
+				if(ReadFirstMain(CUr,1,true))then begin
+					IVr.Location = CUr.SortCode;
+				end;
 				RecordUpdate(OldIVr,IVr,true);
 			end else begin
 				RecordCopy(OldIVr,IVr);
@@ -188,12 +193,19 @@ begin
 				IVr.PayDate = VIr.TransDate;
 				IVr.OfficialSerNr = VIr.SerNr & ":" & Company;
 				IVr.CustCode = fobVenpor;
+				
+				CUr.Code = fobVenpor;
+				if(ReadFirstMain(CUr,1,true))then begin
+					location = CUr.SortCode;
+				end;
+				
 				IVr.SalesMan = "AUTO";
 				BlockLoad(LMb);
 				PasteCust2InInv(IVr,LMb,"",true,warning,warning,warning,warning,warning);
 				IVr.UpdStockFlag = 0;
 				usr = IVr.SalesMan;
 				User.Code = usr;
+				IVr.Location = location;
 				readfirstmain(User,1,true);
 				IVr.SalesGroup = User.SalesGroup;
 				
@@ -206,7 +218,7 @@ begin
 					if(VIrw.Sum<0)then begin
 						IVrw.Quant = -1;
 						IVrw.Price = VIrw.Sum * -1;
-						IVrw.Sum = VIrw.Sum * -1;
+						IVrw.Sum = VIrw.Sum;
 					end else begin
 						IVrw.Quant = 1;
 						IVrw.Price = VIrw.Sum;
@@ -249,6 +261,16 @@ begin
 				if(RecordUpdate(OldIVr,IVr,true)==0)then begin
 					CreateRecordLink(IVr,CurrentCompany,VIr,Company);
 					CreateRecordLink(VIr,Company,IVr,CurrentCompany);
+					RecordCopy(OldIVr,IVr);
+					IVr.OKFlag = 0;
+					if(RecordUpdate(OldIVr,IVr,true)==0)then begin
+						RecordCopy(OldIVr,IVr);
+						IVr.InvDate = VIr.TransDate;
+						IVr.TransDate = VIr.TransDate;
+						IVr.PayDate = VIr.TransDate;
+						IVr.OKFlag = 1;
+						if(RecordUpdate(OldIVr,IVr,true)==0)then begin end;
+					end;
 				end;
 			end;
 		end;

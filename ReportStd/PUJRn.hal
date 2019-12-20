@@ -98,7 +98,7 @@ begin
   record RoundBlock RoundRec;
   record PUVc PUr;
   record LocationVc Locr;
-  Boolean TrHs;
+  Boolean TrHs,TrHs2;
   Boolean testf;
   LongInt frorder,toorder;
   val totsum,pursumval;// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 8 December 2017 15:25:24
@@ -107,18 +107,22 @@ begin
   val totunitsum,totfreight,totcustoms,totextra;
   val t,t2;
   Integer rw;
-  String 255 tstr;
+  String 255 tstr, CompCode, AltCode, VeItCode;
   String 20 ckey;
-  Integer i,rwcnt,k;
+  Integer i,rwcnt,k,c;
   row PUVc PUrw;
   val pursum;
   val unitsum,sumquant,freight,customs,extra,totsumquant;
   string 50 crncy;
-  record INVc INr;
+  record INVc INr, IN2r;
   string 20 frit,toit;
   string 20 frin,toin;
 	longint curtick;
 	record BPIBrandVc BPIBrandr;
+	vector boolean vAltFlg;
+	array string 255 VeItemcodes;
+	record PIVc PIr, PIr2;
+	record ConsItemVc CIr;
 	
   BlockLoad(RoundRec);
   rowsum = blankval;
@@ -249,6 +253,9 @@ begin
 			OutString(330,0,USetStr(31169),false);
 			OutString(330,0,USetStr(36316),false);
 			OutString(0,0,USetStr(2762),false);
+			OutString(0,0,"Код тов. комп.",false);
+			OutString(0,0,"Альт. код",false);
+			OutString(0,0,"Код пост.",false);
 			OutStringAdjustBiDi(100,0,USetStr(2620),true,M4Val,140);
 			OutString(200,0,USetStr(36317),false);
 			OutString(200,0,USetStr(2612),false);
@@ -265,6 +272,7 @@ begin
 				OutStringBiDi(420,0,USetStr(2616),true,410);
 			end;
 			OutStringAdjustBiDi(480,0,USetStr(2331),true,M4Val,520);
+			OutStringAdjustBiDi(480,0,USetStr(36327),true,M4Val,520);
 			EndFormat;
 		end;
 	end else begin
@@ -540,10 +548,60 @@ begin
 								end;
 						end;
 	//                    t2 = MulRateToBase1(PUr.CurncyCode,PUrw.UPrice,PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,DefaultCurRoundOff);
+						
+						// CompCode, AltCode, VeItCode;
+						
+						CompCode = "";
+						AltCode = "";
+						VeItCode = "";
+						
+						
+						for (c=0;c<VeItemcodes.length;c=c+1)begin
+							VeItemcodes[c] = "";
+						end;
+						c = 0;
+						CIr.Code = PUrw.ArtCode;
+						if(ReadFirstMain(CIr,1,true))then begin
+							vAltFlg[CIr.LocCode & PUrw.ArtCode] = true;
+							VeItemcodes[c] = CIr.LocCode;
+							CompCode = CIr.LocCode;
+							c = c + 1;
+						end;
+							
+						IN2r.Code = PUrw.ArtCode;
+						if(ReadFirstMain(IN2r,1,true))then begin
+							if(!vAltFlg[IN2r.AlternativeCode & PUrw.ArtCode])then begin
+								vAltFlg[IN2r.AlternativeCode & PUrw.ArtCode] = true;
+								VeItemcodes[c] = IN2r.AlternativeCode;
+								AltCode = IN2r.AlternativeCode;
+								c = c + 1;
+							end;
+							BPIBrandr.Code = IN2r.BPIBrand;
+							if(ReadFirstMain(BPIBrandr,1,true))then begin
+								PIr2.ItemCode = PUrw.ArtCode;
+								PIr2.VECode = BPIBrandr.Vendor;
+								TrHs2 = true;
+								 while (LoopMain(PIr2,1,TrHs)) begin
+									if(PIr2.ItemCode!=PUrw.ArtCode)then begin TrHs2 = false; end;
+									if(TrHs2 and !vAltFlg[PIr2.VEItemCode & PUrw.ArtCode])then begin
+										vAltFlg[PIr2.VEItemCode & PUrw.ArtCode] = true;
+										VeItemcodes[c] = PIr2.VEItemCode;
+										VeItCode = PIr2.VEItemCode;
+										c = c + 1;
+									end;
+								end;
+								ResetLoop(PIr2);
+							end;
+						end;
+	
+	
 						t2 = PUrw.UPrice;
 						t = Round(PUrw.Quant * t2,GetCostRoundMode(RoundRec));
 						unitsum = unitsum + t;
 						OutString(0,0,PUrw.ArtCode,false);
+						OutString(0,0,CompCode,false);
+						OutString(0,0,AltCode,false);
+						OutString(0,0,VeItCode,false);
 						OutValBiDi(100,0,PUrw.Quant,M4UVal,true,140);
 						OutString(120,0,PUrw.Spec,false);
 						if (nonblank(PUrw.SerialNr)) then begin 
@@ -580,6 +638,7 @@ begin
 							OutStringAdjustBiDi(420,0,PUrw.Extra,true,M4Val,465);
 						end;
 						OutValBiDi(480,0,PUrw.CostPrice,M45Val,true,520);
+						OutValBiDi(480,0,PUrw.CostPrice * PUrw.Quant,M45Val,true,520);
 						sumquant = sumquant + PUrw.Quant;
 						pursum = pursum + PUrw.Quant*PUrw.CostPrice;
 						freight = freight + PUrw.Quant*PUrw.ShipCost;
@@ -816,3 +875,4 @@ begin
 	LogProcTime("PUJRn",getcurtick() - curtick);
   return;
 end;
+
