@@ -1364,7 +1364,7 @@ BEGIN
 	record BarCodeVc BCr;
 	record PIVc PIr;
 	vector boolean BarVector;
-	
+	vector integer rowBarCode;
 	BlockLoad(Compb);
 	
 	
@@ -1451,18 +1451,20 @@ BEGIN
 			if(nonblank(newINrw.NewBarCode)) then begin
 				if(BarVector[newINrw.NewBarCode]) then begin
 					res = -1;
-						RecordCheckError(36330,"",i,"NewBarCode");
-						goto LNewINVcRecordCheck;
+					RecordCheckError(36330,"в строках " & i & "-" & rowBarCode[newINrw.NewVECode],i,"NewBarCode");
+					goto LNewINVcRecordCheck;
 				end;
 				BarVector[newINrw.NewBarCode] = true;
+				rowBarCode[newINrw.NewBarCode] = i;
 			end;	
 			if(nonblank(newINrw.NewVECode)) then begin
 				if(BarVector[newINrw.NewVECode]) then begin
 					res = -1;
-						RecordCheckError(36330,"",i,"NewVECode");
-						goto LNewINVcRecordCheck;
+					RecordCheckError(36330,"в строках " & i & "-" & rowBarCode[newINrw.NewVECode],i,"NewVECode");
+					goto LNewINVcRecordCheck;
 				end;
 				BarVector[newINrw.NewVECode] = true;
+				rowBarCode[newINrw.NewVECode] = i;
 			end;	
 		end;
 		if(NCCHb.ClassifCheck==1 and newINr.Brand!="BRND0046" and (newINrw.ConsgType!=3 and newINrw.ConsgType!=4) and CurrentCompany!=29)then begin
@@ -2517,32 +2519,33 @@ BEGIN
 							RecordCheckError(36304,"",-1,"Brand"); 
 							goto LNewINVcRecordCheck;
 						end;
-						PIr.ItemCode = NewINrw.Code;
-						PIr.Location = blankval;
 						PIr.VECode = Brandr.Vendor;
 						PIr.VEItemCode = newINrw.NewVECode;
-						if(ReadFirstMain(PIr,4,true)) then begin
-							RecordCheckError(36210,"",i,"NewVECode"); 
-							goto LNewINVcRecordCheck;
+						if(ReadFirstKey("VEItemCode",PIr,4,true)) then begin
+							if(PIr.ItemCode!=NewINrw.Code) then begin
+								RecordCheckError(36210,"",i,"NewVECode"); 
+								res = -1;
+								goto LNewINVcRecordCheck;
+							end;	
 						end;
 					end;	
 				end;	
 				if(nonblank(NewINrw.NewBarCode)) then begin
 					BCr.Barcode = NewINrw.NewBarCode;
 					if(ReadFirstMain(BCr,1,true)) then begin
-						if(BCr.Itemcode!=NewINrw.VendorCode) then begin
+						if(BCr.Itemcode!=NewINrw.Code) then begin
 							res = -1;
 						end;	
 					end;
 					INr.BarCode = NewINrw.NewBarCode;
 					if(ReadFirstKey("BarCode",INr,1,true)) then begin
-						if(INr.Code!=NewINrw.VendorCode) then begin
+						if(INr.Code!=NewINrw.Code) then begin
 							res = -1;
 						end;	
 					end;
 					INr.AlternativeCode = NewINrw.NewBarCode;
 					if(ReadFirstKey("AlternativeCode",INr,1,true)) then begin
-						if(INr.Code!=NewINrw.VendorCode) then begin
+						if(INr.Code!=NewINrw.Code) then begin
 							res = -1;
 						end;	
 					end;
@@ -2559,13 +2562,14 @@ BEGIN
 						testINr.Code = newINrw.VendorCode;
 						if(ReadFirstMain(testINr,1,true))then begin
 							if(nonblank(newINrw.NewVECode)) then begin
-								PIr.ItemCode = NewINrw.Code;
-								PIr.Location = blankval;
 								PIr.VECode = Brandr.Vendor;
 								PIr.VEItemCode = newINrw.NewVECode;
-								if(ReadFirstMain(PIr,4,true)) then begin
-									RecordCheckError(36210," в компании " & Comprw.ShortName,i,"NewVECode"); 
-									goto LNewINVcRecordCheck;
+								if(ReadFirstKey("VEItemCode",PIr,4,true)) then begin
+									if(PIr.ItemCode!=NewINrw.VendorCode) then begin
+										RecordCheckError(36210," в компании " & Comprw.ShortName,i,"NewVECode"); 
+										res = -1;
+										goto LNewINVcRecordCheck;
+									end;	
 								end;
 							end;
 							if(nonblank(NewINrw.NewBarCode)) then begin
