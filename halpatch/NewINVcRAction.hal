@@ -641,40 +641,32 @@ BEGIN
 		mtrwNewIN = matrowcnt(NewINr);
 		for (i=0;i<mtrwNewIN;i=i+1) begin
 			matrowget(newINr,i,newINrw);
-			if(nonblank(NewINrw.NewBarCode)) then begin
-				RecordNew(BCr);
-				BCr.Barcode = NewINrw.NewBarCode;
-				BCr.Itemcode = NewINrw.Code;
-				RecordStore(BCr,true);
-			end;	
-			if(nonblank(NewINrw.NewVECode)) then begin
-				RecordNew(PIr);
-				PIr.ItemCode = NewINrw.Code;
-				PIr.VECode = Brandr.Vendor;
-				PIr.VEItemCode = newINrw.NewVECode;
-				PIr.Comment = newINrw.Name;
-				RecordStore(PIr,true);
-			end;	
+			RecordNew(BCr);
+			BCr.Barcode = NewINrw.NewBarCode;
+			BCr.Itemcode = NewINrw.Code;
+			RecordStore(BCr,true);
+			RecordNew(PIr);
+			PIr.ItemCode = NewINrw.Code;
+			PIr.VECode = Brandr.Vendor;
+			PIr.VEItemCode = newINrw.NewVECode;
+			PIr.Comment = newINrw.Name;
+			RecordStore(PIr,true);
 			for (j=0;j<CompQty;j=j+1)begin
 				matrowget(Compb,j,Comprw);
 				if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3))then begin
 					SetCompany(j+1,false);
 					tmpINr.Code = newINrw.VendorCode;
 					if(ReadFirstMain(tmpINr,1,true)) then begin
-						if(nonblank(NewINrw.NewBarCode)) then begin
-							RecordNew(BCr);
-							BCr.Barcode = NewINrw.NewBarCode;
-							BCr.Itemcode = tmpINr.Code;
-							RecordStore(BCr,true);
-						end;	
-						if(nonblank(NewINrw.NewVECode)) then begin
-							RecordNew(PIr);
-							PIr.ItemCode = tmpINr.Code;
-							PIr.VECode = Brandr.Vendor;
-							PIr.VEItemCode = newINrw.NewVECode;
-							PIr.Comment = newINrw.Name;
-							RecordStore(PIr,true);
-						end;		
+						RecordNew(BCr);
+						BCr.Barcode = NewINrw.NewBarCode;
+						BCr.Itemcode = tmpINr.Code;
+						RecordStore(BCr,true);
+						RecordNew(PIr);
+						PIr.ItemCode = tmpINr.Code;
+						PIr.VECode = Brandr.Vendor;
+						PIr.VEItemCode = newINrw.NewVECode;
+						PIr.Comment = newINrw.Name;
+						RecordStore(PIr,true);
 					end;	
 				end;
 			end;
@@ -1292,7 +1284,7 @@ BEGIN
   string 200 rawclass,uloc,group;
   integer pos,rwcnt, t,tcnt,oldComp,CompQty,k;
   record DIVc DIr;
-  boolean upd,insertDispNameNotCode,TrHs,TrHs1,testf;
+  boolean upd,insertDispNameNotCode,TrHs,TrHs1,testf,InJwSavedf,testf2;
   record DiCheckBlock DiCb; //Edit***************************Sasha2,16:52 07.12.2015
   row DiCheckBlock DiCbw; //Edit***************************Sasha2,16:52 07.12.2015
   vector string 255 diCheckTypes; //Edit***************************Sasha2,17:22 07.12.2015
@@ -2726,7 +2718,9 @@ BEGIN
 				pos = 0;
 				compstr = newINr.UserStr5;
 				ExtractObj(compstr,pos,comp);
+				InJwSavedf = false;
 				while (nonblank(comp)) begin
+					testf2 = true;
 					for (k=0;k<CompQty;k=k+1) begin
 						matrowget (Compb,k,Comprw);
 						if(Comprw.ShortName==comp)then begin
@@ -2736,6 +2730,10 @@ BEGIN
 					if(!SetInSet(comp,companies)) then begin
 						logtext(0,"SetCompanyCode(Comprw.CompCode, " & Comprw.CompCode);
 						if (SetCompanyCode(Comprw.CompCode,false)) then begin
+							if(CompanyIsJWLikeCompany(CurrentCompany)) then begin
+								InJwSavedf = true;
+							end;
+							if(InJwSavedf and CompanyIsJWLikeCompany(CurrentCompany))then begin testf2 = false; end;
 							FullFillINVc(INConsr,newINr,newINrw,group,type,insertDispNameNotCode);
 							if(!INConsCodef)then begin
 								recordNew(UINr);
@@ -2745,11 +2743,8 @@ BEGIN
 							if(INConsr.UUID==blankINr.UUID)then begin
 								recordNew(UINr);
 								INConsr.UUID = UINr.UUID;
-								logtext(0,"123 blankINr.UUID " & UINr.UUID);
 							end;
-							logtext(0,"blankINr.UUID " & blankINr.UUID);
-							logtext(0,"INConsr.UUID " & INConsr.UUID);
-							if(INConsr.UUID!=blankINr.UUID)then begin
+							if(testf2)then begin
 								if(recordStore(INConsr,true))then begin 
 									locompcritemf = true;
 									ResetCompany(curcomp);
