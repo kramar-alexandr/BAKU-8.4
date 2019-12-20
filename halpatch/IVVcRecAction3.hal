@@ -39,6 +39,7 @@ external function Boolean GetItemPriceDiscount3(string,val,var record INVc,strin
 external function Boolean INVc_AllowSales(record INVc,var LongInt);
 remote function boolean CompanyIsJWLikeCompany(Integer); //edited by BPI
 external function string 255 GetCashBackSpecialItemCode();
+external procedure ExtractObjectsByType(string, string, var array string, var integer);
 
 function Boolean CheckInvDatePerItemType(Date invdate,Integer daysrange, Integer OutArgEInvoices)
 begin
@@ -606,10 +607,13 @@ begin
   record BrazilEInvTypeVc BEInvTyper;
   record EInvoiceBlock EIb;
   record BaseCurBlock BCb;
-  Integer daysrange;
+  Integer daysrange,oscnt;
   record LoyaltyCardVc LoyaltyCardr; // ________________________________________ABR 28.03.19 16:00
 	roundmode rnd; //edited by BPI
 	val torate,frrate; //edited by BPI
+	array string 255 brand;
+	record BPIBrandVc BBr;
+	record CUVc CU2r;
 	
 	rnd = DefaultValRoundoff; //edited by BPI
   rnd.decimals = 2; //edited by BPI
@@ -1842,6 +1846,37 @@ not needed any more
 			end;
 		end;
 	end;
+	if(transf) then begin
+		rwcnt = MatRowCnt(IVp);
+		for (i=0;i<rwcnt;i=i+1) begin
+			MatRowGet(IVp,i,IVrw);
+			ClearArray(brand);
+			ExtractObjectsByType(IVrw.Objects,"BRAND",brand,oscnt);
+			if(blank(brand[0])) then begin
+				INr.Code = IVrw.ArtCode;
+				if(ReadFirstMain(INr,1,true)) then begin
+					if(nonblank(INr.BPIBrand)) then begin
+						BBr.Code = INr.BPIBrand;
+						if(ReadFirstMain(BBr,1,true)) then begin
+							CU2r.Code = BBr.Vendor;
+							if(ReadFirstMain(CU2r,1,true)) then begin 
+								ClearArray(brand);
+								ExtractObjectsByType(CU2r.VEObjects,"BRAND",brand,oscnt);
+								if(nonblank(brand[0])) then begin
+									if(blank(IVrw.Objects)) then begin
+										IVrw.Objects = brand[0];
+									end else begin
+										IVrw.Objects = IVrw.Objects & "," & brand[0];
+									end;
+								end;
+							end;
+						end;
+					end;	
+				end;
+			end;
+			MatRowPut(IVp,i,IVrw);
+		end;	
+	end;	
   // Edit ************************** BPI Ukraine - KramarAlexandr - 05, 24 05 2019 y. at 2:47:58 PM
 L99:;  
   IVVcRecordCheckRows = res;
