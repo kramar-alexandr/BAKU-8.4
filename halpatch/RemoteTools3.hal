@@ -33,6 +33,10 @@ external procedure FindUserMailboxName(string,var string,var string);
 external updating function Integer PastePOInPUFromBPU(record POVc,record PUVc,Integer,record BigPUVc);
 remote function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
 remote procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
+remote updating function Integer PastePOInVI(var record POVc,var record VIVc,string,
+                                      Boolean,Boolean,Boolean,
+                                      Boolean,Boolean,Boolean,Boolean,Boolean);
+external procedure PUSumUp(var record PUVc);
 
 
 global
@@ -574,13 +578,17 @@ BEGIN
   record SRBlock SRRec;
   record PUVc OldPU;  
 	row PUVc PUrw;
-	integer i,k,orcnt;
+	integer i,k,orcnt,notenr;
 	record ClientItemStatusVc CISr;
 	record ORVc ORr;
 	string 255 warning;
 	row ORVc ORrw;
-	val price;
-	Boolean chsum;
+	val price, total, FInBase;
+	Boolean chsum, brndpartivf;
+	record VIVc VIr;
+	record RLinkVc RLr;
+	
+	
 
   if (ReadFirstMain(POp,0,true)) then begin end;  
   if (POp.OrderType!=kOrderTypeNormal) then begin 
@@ -615,12 +623,39 @@ BEGIN
 		//PUp.OKFlag = 1;
 		PUp.TransDate = CurrentDate;
 	end;
+	
+	
+	notenr = 1;
+	while (ReadRecordLink(POp,notenr,VIr,RLr)) begin
+		if (VIr.BrandShipCostf==1 and VIr.BrandShipCostIVUsedf==0) then begin
+			brndpartivf = true;
+			PUp.Cost3 = VIr.PayVal;
+			for(i=0;i<matrowcnt(PUp);i=i+1) begin
+				MatRowGet(PUp,i,PUrw);
+				total = total + PUrw.Quant * PUrw.UPrice;
+			end;
+			FInBase = PUp.Cost3;
+			for(i=0;i<matrowcnt(PUp);i=i+1) begin
+				MatRowGet(PUp,i,PUrw);
+				PUrw.RowCost3 = FInBase * (PUrw.UPrice/total);
+				MatRowPut(PUp,i,PUrw);
+			end;
+			PUSumUp(PUp);
+		end;
+		notenr = notenr + 1;
+	end;
+	
+	
   if ((MatRowCnt(PUp)>0) and (PUp.SerNr!=-1)) then begin
     if (RecordUpdate(OldPU,PUp,true)==0) then begin 
       CreateRecordLink(PUp,CurrentCompany,POp,CurrentCompany);  
 			CreateRecordLink(BPUr,CurrentCompany,PUp,CurrentCompany); 
 			CreateRecordLink(PUp,CurrentCompany,BPUr,CurrentCompany); 
       CreateRecordLink(POp,CurrentCompany,PUp,CurrentCompany);  
+			if(brndpartivf)then begin
+				CreateRecordLink(PUp,CurrentCompany,VIr,CurrentCompany); 
+				CreateRecordLink(VIr,CurrentCompany,PUp,CurrentCompany);  
+			end;
     end;
     res = 0;
   end;
@@ -706,6 +741,58 @@ LRecordAction_raPastePOInVI:;
   RETURN;
 END;
 */
+
+
+
+
+
+global
+updating function Integer PastePOInVIFBCC(var record POVc POp,var record VIVc VIp)
+begin
+	integer res;
+	res = 0;
+	VIp.BrandShipCostf = 1;
+	VIp.BrandShipCostIVUsedf = 0;
+	PastePOInVIFBCC = res;
+	return;
+end;
+
+global
+updating function LongInt RecordAction_raPastePOInVIFBCC(var record POVc POp,var record VIVc VIp)
+BEGIN
+  LongInt res,newnr;
+  record SRBlock SRRec;
+      
+  if (ReadFirstMain(POp,0,true)) then begin end;  
+  RecordNew(VIp);
+  res = PastePOInVIFBCC(POp,VIp);
+  if (res!=0) then begin
+    goto LRecordAction_raPastePOInVI;
+  end;
+  if (VIp.SerNr==-1) then begin
+    BlockLoad(SRRec);
+    newnr = GetCurUserLastNr("VIVc");
+    if (newnr==-1) then begin
+      newnr = SRRec.LastVINr;      
+    end;    
+    VIp.SerNr = NextSerNr("VIVc",VIp.TransDate,newnr,false,"");
+    if (VIp.SerNr==-1) then begin goto LRecordAction_raPastePOInVI; end;
+  end;
+  // if ((MatRowCnt(VIp)>0) and (VIp.SerNr!=-1)) then begin
+    if (RecordStore(VIp,false)) then begin 
+      CreateRecordLink(VIp,CurrentCompany,POp,CurrentCompany);  
+      CreateRecordLink(POp,CurrentCompany,VIp,CurrentCompany);  
+    end;
+  // end else begin
+    // res = -1;
+  // end;
+LRecordAction_raPastePOInVI:;  
+  RecordAction_raPastePOInVIFBCC = res;
+  RETURN;
+END;
+
+
+
 /*
 function Boolean acActLOK(var record ActVc Actp)
 BEGIN
