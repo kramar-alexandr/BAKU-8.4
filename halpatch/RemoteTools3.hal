@@ -528,6 +528,17 @@ updating function LongInt RecordAction_raPastePOInPU(var record POVc POp,var rec
 BEGIN
   LongInt res,ponr,newnr;
   record SRBlock SRRec;
+ record PUVc OldPU;  
+	row PUVc PUrw;
+	integer i,k,orcnt,notenr;
+	record ClientItemStatusVc CISr;
+	record ORVc ORr;
+	string 255 warning;
+	row ORVc ORrw;
+	val price, total, FInBase;
+	Boolean chsum, brndpartivf;
+	record VIVc VIr, OldVIr;
+	record RLinkVc RLr;
       
   if (ReadFirstMain(POp,0,true)) then begin end;  
   if (POp.OrderType!=kOrderTypeNormal) then begin 
@@ -557,10 +568,45 @@ BEGIN
   if (res!=0) then begin
     goto LRecordAction_raPastePOInPU;
   end;
+	
+	
+	
+	notenr = 1;
+	while (ReadRecordLink(POp,notenr,VIr,RLr)) begin
+		if (VIr.BrandShipCostf==1 and VIr.BrandShipCostIVUsedf==0) then begin
+			brndpartivf = true;
+			PUp.Cost3 = VIr.PayVal;
+			for(i=0;i<matrowcnt(PUp);i=i+1) begin
+				MatRowGet(PUp,i,PUrw);
+				total = total + PUrw.Quant * PUrw.UPrice;
+			end;
+			FInBase = PUp.Cost3;
+			for(i=0;i<matrowcnt(PUp);i=i+1) begin
+				MatRowGet(PUp,i,PUrw);
+				PUrw.RowCost3 = FInBase * (PUrw.UPrice/total);
+				MatRowPut(PUp,i,PUrw);
+			end;
+			PUSumUp(PUp);
+		end;
+		notenr = notenr + 1;
+	end;
+	
+	
+	
+	
+	
   if ((MatRowCnt(PUp)>0) and (PUp.SerNr!=-1)) then begin
     if (RecordStore(PUp,false)) then begin 
       CreateRecordLink(PUp,CurrentCompany,POp,CurrentCompany);  
       CreateRecordLink(POp,CurrentCompany,PUp,CurrentCompany);  
+			if(brndpartivf)then begin
+				RecordCopy(OldVIr,VIr);
+				VIr.BrandShipCostIVUsedf = 1;
+				if (RecordUpdate(OldVIr,VIr,true)==0) then begin 
+					CreateRecordLink(PUp,CurrentCompany,VIr,CurrentCompany); 
+					CreateRecordLink(VIr,CurrentCompany,PUp,CurrentCompany);  
+				end;
+			end;
     end;
     res = 0;
   end;
