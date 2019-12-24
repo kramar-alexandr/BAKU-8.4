@@ -2106,13 +2106,13 @@ begin
   LongInt res, resNIN;
   record POVc POr;
   row POVc POrw;
-  record PUVc localPUr;
+  record PUVc localPUr, correctedPUr;
   record INVc INr;
   record LocationVc LocRec;
   record CostAccBlock CAb;
   record MainStockBlock MSb;
   record SRBlock SRRec;
-  row PUVc PUrw;
+  row PUVc PUrw, correctedPUrw;
   row PUVc PU2rw;
   Integer rwcnt, rwcnt2, k, mtrw;
   Integer i,j;
@@ -2141,7 +2141,7 @@ begin
   record SerNrTrackBlock SNrb;
   Array string 255 otcheckaccs;
   Array string 255 otcheckobjtyps;
-  Integer otcheckcnt;
+  Integer otcheckcnt, notenr;
   Boolean initotcheckf,testf, testf2, TrHs, consPOf;  
 	record NewINVc NINr, NINEmptr;
 	row NewINVc	NINrw; 
@@ -2161,13 +2161,15 @@ begin
 	longint curtick;
 	record AccBlock AccB;
 	vector boolean vecVI;
-	vector boolean vecVItest;
+	vector boolean vecVItest, correctedItms;
 	array string 255 tags;
 	record VIVc VIr;
 	row VIVc VIrw;
 	Integer wn,nwn,err,cntIV,cntORIV;
-  Boolean TsTr,testf1,testVI,custcostchf;
+  Boolean TsTr,testf1,testVI,custcostchf,correctPUf;
 	val ChCustCost;
+	record RLinkVc RLr;
+	vector boolean CorrPrice, CorrSum;
 	
 	BlockLoad(AccB);
 	BlockLoad(CCB);
@@ -2341,7 +2343,42 @@ begin
 					end;
 				end;
 			end;
-			if(!testVI and (PUr.ShipCostOKFlag==0 or PUr.CustomsCostOKFlag==0)) then begin 
+			
+			
+			for (i=0;i<matrowcnt(POr);i=i+1) begin
+				matrowget(POr,i,POrw);
+				correctedItms[POrw.ArtCode] = true;
+			end;
+			
+			
+			notenr = 1;
+			while (ReadRecordLink(POr,notenr,correctedPUr,RLr)) begin
+				if(correctedPUr.SerNr!=PUr.SerNr)then begin
+					for (i=0;i<matrowcnt(correctedPUr);i=i+1) begin
+						matrowget(correctedPUr,i,correctedPUrw);
+						if(!correctedItms[correctedPUrw.ArtCode])then begin
+							CorrPrice[correctedPUrw.UPrice] = true;
+							CorrSum[correctedPUrw.Sum] = true;
+						end;
+					end;
+				end;
+				notenr = notenr + 1;
+			end;
+			
+			correctPUf = true;
+			
+			for (i=0;i<matrowcnt(PUr);i=i+1) begin
+				matrowget(PUr,i,PUrw);
+				if(correctedItms[PUrw.ArtCode] and !CorrPrice[correctedPUrw.UPrice] and !CorrSum[correctedPUrw.Sum]) then begin
+					correctPUf = false;
+				end;
+			end;
+			
+			
+			
+			
+			
+			if(!testVI and (PUr.ShipCostOKFlag==0 or PUr.CustomsCostOKFlag==0) and !correctPUf) then begin 
 				testf1 = false; 
 				RecordCheckError(36236,"",-1,"SerNr");      
 				res = -1; 
