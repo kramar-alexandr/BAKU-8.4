@@ -1355,7 +1355,7 @@ BEGIN
 	row IdINSNOneBlock IINSNOrw;
 	string 255 SNOneNumber, compstr, comp, consItcode;
 	val SNMiddleval;
-	boolean Catef,TrHs2,INConsCodef,locompcritemf;
+	boolean Catef,TrHs2,locompcritemf;
 	array string 100 asnt;
 	integer check,curcomp;
 	record ConsItemVc ConsIr,CIr;
@@ -1363,7 +1363,7 @@ BEGIN
 	boolean CompFlag;
 	record BarCodeVc BCr;
 	record PIVc PIr;
-	vector boolean BarVector;
+	vector boolean BarVector,INConsCodef;
 	vector integer rowBarCode;
 	BlockLoad(Compb);
 	
@@ -1500,7 +1500,7 @@ BEGIN
 						if(Comprw.ActiveStatus==0 and j+1!=10 and j+1!=32)then begin
 							SetCompany(j+1,false);
 							tmpINr.Code = newINrw.VendorCode;
-							if(ReadFirstMain(tmpINr,1,true)) then begin
+							if(ReadFirstMain(tmpINr,1,true) and tmpINr.BPIBrand==newINr.Brand) then begin
 									CompFlag = false;
 									if(blank(companies[newINrw.VendorCode])) then begin
 										companies[newINrw.VendorCode] = Comprw.ShortName;
@@ -2777,7 +2777,6 @@ BEGIN
 			
 			if(curcomp==18 and newINrw.ConsgType!=3 and newINrw.ConsgType!=4)then begin  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:55 17.09.2019
 				consItcode = INConsr.Code;
-				INConsCodef = false;
 				pos = 0;
 				compstr = newINr.UserStr5;
 				ExtractObj(compstr,pos,comp);
@@ -2793,7 +2792,7 @@ BEGIN
 						if (SetCompanyCode(Comprw.CompCode,false)) then begin
 							testINr.Code = newINrw.VendorCode;
 							if(ReadFirstMain(testINr,1,true))then begin
-								INConsCodef = true;
+								INConsCodef[Comprw.CompCode & newINrw.VendorCode] = true;
 							end;
 							ResetCompany(curcomp);
 						end;
@@ -2818,10 +2817,13 @@ BEGIN
 						if (SetCompanyCode(Comprw.CompCode,false)) then begin
 							if(InJwSavedf and CompanyIsJWLikeCompany(CurrentCompany))then begin testf2 = false; end;
 							FullFillINVc(INConsr,newINr,newINrw,group,type,insertDispNameNotCode);
-							if(!INConsCodef)then begin
+							if(!INConsCodef[Comprw.CompCode & newINrw.VendorCode])then begin
 								recordNew(UINr);
 								INConsr.Code = newINrw.VendorCode;
 								INConsr.UUID = UINr.UUID;
+							end else begin
+								INConsr.Code = newINrw.Code;
+								INConsr.AlternativeCode = newINrw.VendorCode;
 							end;
 							if(testf2)then begin
 								if(recordStore(INConsr,true))then begin 
