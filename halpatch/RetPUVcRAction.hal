@@ -1941,22 +1941,46 @@ global
 updating function LongInt RetPUVcRecordCheck(var record RetPUVc RetPUp,record RetPUVc RetPU2p,LongInt stat,LongInt check)
 BEGIN
   LongInt res,error;
+	row RetPUVc RetPUrw;
   Boolean UnOKedCheckSerialf;
   string 255 errorstr,fieldstr;
   integer rownr;
 	record RLinkVc RLr;
 	record ActVc Actr;
+	record ItemStatusVc ISr;
   longint curtick;
+	vector val AbsItemqty;
+	integer i;
 	
 	curtick = getcurtick();
   logtext(0,"RetPUVcRecordCheck"); 
   
   UnOKedCheckSerialf = false;
   res = DoRetPUVcRecordCheck(RetPUp,RetPU2p,stat,check,error,errorstr,rownr,fieldstr,UnOKedCheckSerialf);
+		
 
   if (res!=0) then begin
     RecordCheckError(error,errorstr,rownr,fieldstr);   
   end;
+	
+	for (i=0;i<matrowcnt(RetPUp);i=i+1) begin
+    MatRowGet(RetPUp,i,RetPUrw);
+		if(RetPUp.OKFlag==1)then begin
+			AbsItemqty[RetPUrw.ArtCode] = AbsItemqty[RetPUrw.ArtCode] + RetPUrw.Quant;
+			ISr.Code = RetPUrw.ArtCode;
+			if(nonblank(RetPUrw.Location))then begin
+				ISr.Location = RetPUrw.Location;
+			end else begin
+				ISr.Location = RetPUp.Location;
+			end;
+			if(ReadFirstMain(ISr,2,true))then begin
+				if(AbsItemqty[RetPUrw.ArtCode]>(ISr.Instock-ISr.RsrvQty))then begin
+					RecordCheckError(36332,"",i,"Quant");      
+					res = 36332; 
+				end;
+			end;
+		end;
+	end;
 	
 	if(CurrentCompany==29)then begin
 		if(RetPUp.OKFlag==1 and RetPU2p.OKFlag==0 and ReadRecordLink(RetPUp,1,Actr,RLr))then begin
