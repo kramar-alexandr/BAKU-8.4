@@ -16,14 +16,14 @@ SetLangMode(LangRussian,"RUS",0); //Edit***************************Sasha2,18:20 
 
 global function val ItemQtyPerDate(string artcode, date idate,string location,string serial,var val serialcost,var integer acnt,var vector val cqty,var vector val ccost,var array string acur,string brandcur)
 begin
-	record ItemHistVc IHr;
+	record ItemHistVc IHr,CCIHr;
 	val res;
 	string 50 key;
 	integer keys;
 	boolean TrHs,testf;
 	string 100 oldartcode,oldfilename;
 	longint oldsernr;
-  integer oldrow,oldinvalid;
+  integer oldrow,oldinvalid,curcomp;
   record ItemStatusVc ISr;
   record SerBalVc SBr;
   vector boolean vcur;
@@ -65,6 +65,24 @@ begin
 					if(nonblank(serial) and IHr.SerialNr!=serial)then begin testf = false; end;
 			
 					if(testf)then begin
+						if(left(currentuser,2)=="SA")then begin
+						if(IHr.TransDate>stringtodate("1/12/2019"))then begin
+							if(IHr.CurncyCode=="AZN")then begin
+								curcomp = currentcompany;
+								setcompany(18,false);
+								CCIHr.TransDate = IHr.InDate;
+								CCIHr.ArtCode = IHr.ArtCode;
+								if(readfirstkey("ArtCode",CCIHr,2,true))then begin
+									if(CCIHr.TransDate==IHr.InDate and CCIHr.ArtCode==IHr.ArtCode)then begin
+										IHr.CurncyCode = CCIHr.CurncyCode;
+										IHr.RemCostPriceCurncy = CCIHr.TotCostPriceCurncy / CCIHr.Qty * IHr.RemQty;
+									end;
+								end;
+								setcompany(curcomp,false);
+							end;
+						end;
+						end;
+					
 						res = res + IHr.Qty;
 						cqty[IHr.CurncyCode] = cqty[IHr.CurncyCode] + IHr.Qty;
 						if(!vcur[IHr.CurncyCode])then begin
@@ -115,6 +133,25 @@ begin
 			
 				if(testf)then begin
 					res = res + IHr.Qty;
+					
+					if(left(currentuser,2)=="SA")then begin
+					if(IHr.TransDate>stringtodate("1/12/2019"))then begin
+						if(IHr.CurncyCode=="AZN")then begin
+							curcomp = currentcompany;
+							setcompany(18,false);
+							CCIHr.TransDate = IHr.InDate;
+							CCIHr.ArtCode = IHr.ArtCode;
+							if(readfirstkey("ArtCode",CCIHr,2,true))then begin
+								if(CCIHr.TransDate==IHr.InDate and CCIHr.ArtCode==IHr.ArtCode)then begin
+									IHr.CurncyCode = CCIHr.CurncyCode;
+									IHr.RemCostPriceCurncy = CCIHr.TotCostPriceCurncy / CCIHr.Qty * IHr.RemQty;
+								end;
+							end;
+							setcompany(curcomp,false);
+						end;
+					end;
+					end;
+					
 					cqty[IHr.CurncyCode] = cqty[IHr.CurncyCode] + IHr.Qty;
 					if(!vcur[IHr.CurncyCode])then begin
 						vcur[IHr.CurncyCode] = true;
@@ -328,7 +365,7 @@ end;
 global  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 
 procedure MyFindAwerageCost(string artcode, string location,string curcode,date todate,string realcur,string brandcur,var val cost,var val curcost,var val curcost2)
 begin
-	record ItemHistVc IHr,IH2r;
+	record ItemHistVc IHr,IH2r,CCIHr;
 	record PUVc PUr;
 	row PUVc PUrw;
 	val curval;
@@ -337,7 +374,7 @@ begin
 	val fr,to1,to2,br1,br2;
 	string 100 oldartcode,oldfilename;
 	longint oldsernr;
-  integer oldrow,oldinvalid;
+  integer oldrow,oldinvalid,curcomp;
   val curqty,tempcost;
 	
 	
@@ -357,7 +394,24 @@ begin
 			if(curcode!=IHr.CurncyCode and nonblank(IHr.CurncyCode))then begin testf=false; end;
 			if(blank(IHr.CurncyCode) and curcode!=realcur)then begin testf=false; end;
 			
-			if(testf)then begin
+			if(testf)then begin	
+				if(left(currentuser,2)=="SA")then begin
+				if(IHr.TransDate>stringtodate("1/12/2019"))then begin
+					if(IHr.CurncyCode=="AZN")then begin
+						curcomp = currentcompany;
+						setcompany(18,false);
+						CCIHr.TransDate = IHr.InDate;
+						CCIHr.ArtCode = IHr.ArtCode;
+						if(readfirstkey("ArtCode",CCIHr,2,true))then begin
+							if(CCIHr.TransDate==IHr.InDate and CCIHr.ArtCode==IHr.ArtCode)then begin
+								IHr.RemCostPriceCurncy = CCIHr.TotCostPriceCurncy / CCIHr.Qty * IHr.RemQty;
+							end;
+						end;
+						setcompany(curcomp,false);
+					end;
+				end;
+				end;
+				
 				tempcost = 0;
 				curcost = curcost + IHr.RemCostPriceCurncy;
 				cost = cost + IHr.RemCostPrice;
@@ -386,6 +440,23 @@ begin
 			if(blank(IHr.CurncyCode) and curcode!=realcur)then begin testf=false; end;
 			
 			if(testf)then begin
+				if(left(currentuser,2)=="SA")then begin
+				if(IHr.TransDate>stringtodate("1/12/2019"))then begin
+					if(IHr.CurncyCode=="AZN")then begin
+						curcomp = currentcompany;
+						setcompany(18,false);
+						CCIHr.TransDate = IHr.InDate;
+						CCIHr.ArtCode = IHr.ArtCode;
+						if(readfirstkey("ArtCode",CCIHr,2,true))then begin
+							if(CCIHr.TransDate==IHr.InDate and CCIHr.ArtCode==IHr.ArtCode)then begin
+								IHr.RemCostPriceCurncy = CCIHr.TotCostPriceCurncy / CCIHr.Qty * IHr.RemQty;
+							end;
+						end;
+						setcompany(curcomp,false);
+					end;
+				end;
+				end;
+				
 				tempcost = 0;
 				if(IHr.Qty>=0)then begin
 					cost = cost + IHr.TotCostPrice;
