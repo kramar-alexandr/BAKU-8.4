@@ -413,6 +413,239 @@ end;
 
 
 
+global updating procedure CreatePOOnCurrfromOR(record ORVc ORr)
+begin
+	integer mtrw,i,j,k,pos,rownum;
+	row ORVc ORrw;
+	Record POVc POr;
+	row POVc POrw;
+	string 50 ostr, brCur;
+	array string 100 class,artcode;
+	record INVc INr;
+	boolean foundf,TrHs,testf;
+	record CUVc CUr;
+	record DIVc DIr;
+	string 200 vendor;
+	record POVc oldPOr;
+	vector integer OrderedQuant;
+	record BPIBrandVc Brandr;
+	
+	mtrw = matrowcnt(ORr);
+	For(i=0;i<mtrw;i=i+1) begin
+		matrowget(ORr,i,ORrw); 
+		if(nonblank(ORrw.ArtCode) and ORrw.stp!=98)then begin
+			if(currentcompany!=28)then begin
+				INr.Code = ORrw.ArtCode;
+				if(readfirstmain(INr,1,true))then begin
+					if(INr.ItemType==1)then begin
+						pos = 0;
+						ostr = "";
+						vendor = "";
+						brCur = "";
+						if(ORr.OrderClass=="CUSTO") then begin
+							if(nonblank(INr.BPIBrand))then begin
+								Brandr.Code = INr.BPIBrand;
+								if(ReadFirstMain(Brandr,1,true))then begin
+									CUr.Code = Brandr.Name;
+									CUr.VEType = 1;
+									if(ReadFirstKey("VEActCode",CUr,2,true))then begin brCur = CUr.VECurncyCode; end;
+								end;
+							end;
+							if(blank(brCur))then begin
+								brCur = INr.LastPurchCurncyCode;
+							end;
+							vendor = "FOB_SKLAD";
+							foundf = false;
+							For(j=0;j<k;j=j+1) begin
+								if(class[j]==brCur)then begin
+									foundf = true;
+								end;
+							end; 
+							if(!foundf)then begin
+								class[k] = brCur;
+								k = k + 1;
+							end;
+						end else begin	
+							ExtractObj(INr.DispGroups,pos,ostr);
+							while(nonblank(ostr))begin
+								if(nonblank(ostr))then begin
+									DIr.Code = ostr;
+									if(readfirstmain(DIr,1,true))then begin
+										if(DIr.CType=="BRAND")then begin
+											vendor = DIr.Name;
+										end;
+									end;
+									ExtractObj(INr.DispGroups,pos,ostr);
+								end;
+							end;
+							foundf = false;
+							For(j=0;j<k;j=j+1) begin
+								if(class[j]==vendor)then begin
+									foundf = true;
+								end;
+							end; 
+							if(!foundf)then begin
+								class[k]=vendor;
+								k=k+1;
+							end;
+						end;	
+					end;
+				end;
+			end;
+		end;
+	end;
+	if(k<1)then begin
+		messagebox(0,"Нет товаров для заказа поставщику !");
+	end;
+	testf = true;
+	if(testf)then begin
+		For(j=0;j<k;j=j+1) begin
+			recordnew(POr);
+			rownum = 0;
+			POr.OrdNr = ORr.SerNr;
+			recordcopy(oldPOr,POr);
+			if(currentcompany!=28)then begin
+				POr.VECode = "";
+				if (ORr.OrderClass!="CUSTO") then begin
+					CUr.Name = class[j];
+					TrHs = true;
+					while(loopkey("Name",CUr,1,TrHs))begin
+						testf = true;
+						if(CUr.Name!=class[j])then begin TrHs = true; testf = false; end;
+						//if(CUr.Code<"0009999" and CUr.Code>"0000001")then begin testf = false; end;
+						if ((CUr.VECat=="IDEA") and (currentcompany!=28))then begin testf = false; end;
+						if ((CUr.VECat!="IDEA") and (currentcompany==28))then begin testf = false; end;
+						
+						if(testf)then begin
+							if(currentcompany!=18 and currentcompany!=29 and currentcompany!=28 and currentcompany!=9 and ORr.OrderClass=="CUSTO") then begin
+								POr.VECode = "FOB_SKLAD";
+								POVc_PasteVECode(POr,true);
+								TrHs = false;
+							end else begin
+								POr.VECode = CUr.Code;
+								POVc_PasteVECode(POr,true);
+								TrHs = false;
+							end;	
+						end;
+					end;
+					resetloop(CUr);
+				end else begin
+					POr.VECode = "FOB_SKLAD";
+					POVc_PasteVECode(POr,true);
+					TrHs = false;
+				end;
+			end;
+			
+			POr.InvAddr4 = ORr.OrderClass & ORr.SerNr;
+			POr.PlanShip = addday(POr.TransDate,CUr.PlanShipDays);
+			if(currentcompany!=18 and currentcompany!=29 and currentcompany!=28 and currentcompany!=9) then begin
+				POr.AllowOtherVEItem = 1;
+				if(ORr.OrderClass=="CUSTO")then begin
+					POr.CurncyCode = class[j];
+				end;
+				POr.CheckCurncyCode = POr.CurncyCode;
+			end;	
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(ORr,i,ORrw); 
+				if(nonblank(ORrw.ArtCode) and ORrw.stp!=98)then begin
+					INr.Code = ORrw.ArtCode;
+					if(readfirstmain(INr,1,true))then begin
+						if(INr.ItemType==1)then begin
+							if(ORr.OrderClass!="CUSTO")then begin
+								pos = 0;
+								ostr = "";
+								vendor = "";
+								ExtractObj(INr.DispGroups,pos,ostr);
+								while(nonblank(ostr))begin
+									if(nonblank(ostr))then begin
+										DIr.Code = ostr;
+										if(readfirstmain(DIr,1,true))then begin
+											if(DIr.CType=="BRAND")then begin
+												vendor = DIr.Name;
+											end;
+										end;
+										ExtractObj(INr.DispGroups,pos,ostr);
+									end;
+								end;
+								ostr = vendor;
+							end else begin
+								brCur = "";
+								ostr = "";
+								if(nonblank(INr.BPIBrand))then begin
+									Brandr.Code = INr.BPIBrand;
+									if(ReadFirstMain(Brandr,1,true))then begin
+										CUr.Code = Brandr.Name;
+										CUr.VEType = 1;
+										if(ReadFirstKey("VEActCode",CUr,2,true))then begin brCur = CUr.VECurncyCode; end;
+									end;
+								end;
+								if(blank(brCur))then begin
+									brCur = INr.LastPurchCurncyCode;
+								end;
+								ostr = brCur;
+							end;
+							
+							if(ostr==class[j])then begin
+								if(currentcompany!=18 and currentcompany!=29 and currentcompany!=28 and currentcompany!=9) then begin
+									POrw.ItemConsgType = 1;
+									matrowput(POr,rownum,POrw);	
+								end;	
+								POrw.ArtCode = ORrw.ArtCode;
+								matrowput(POr,rownum,POrw);							
+								POVc_PasteArtCode(POr,rownum,false);
+								matrowget(POr,rownum,POrw);
+								POrw.Quant = ORrw.Quant;
+								POrw.Spec = ORrw.Spec;
+								POrw.OrdRow = i;
+								matrowput(POr,rownum,POrw);
+								POVc_PasteQuant(POr,rownum);
+								if(POr.VECode=="FOB_SKLAD") then begin
+									matrowget(POr,rownum,POrw);
+									POrw.Price = blankval;
+									POrw.Sum = blankval;
+									matrowput(POr,rownum,POrw);
+								end;
+								rownum = rownum + 1;
+							end;
+						end;
+					end;
+				end;
+			end;
+				
+			POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");  
+			if(currentcompany!=18 and currentcompany!=29 and currentcompany!=28 and currentcompany!=9) then begin
+				POr.OKFlag = 1;
+				POr.Location = ORr.Location;
+				if(Blank(ORr.Location)) then begin
+					messagebox(0,"Поле склад должно быть заполненно");
+				end else begin
+					recordStore(POr,true);
+				end;
+			end else begin
+				recordStore(POr,true);
+			end;	
+			createrecordlink(POr,CurrentCompany,ORr,CurrentCompany);
+			createrecordlink(ORr,CurrentCompany,POr,CurrentCompany);
+		end; 
+	end;
+
+
+return;
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 global updating procedure CCCreatePOfromOR(record ORVc ORr, var record POVc POr)

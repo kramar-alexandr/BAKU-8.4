@@ -365,6 +365,8 @@ begin
   Boolean initotcheckf,TrHs;    
   record TRGenBlock TRGb;
 	record BPIBrandVc BPIBrandr;
+	vector val AbsItemqty;
+	record SerBalVc SBr
   
   res = 0;
   insertmode = 1;//Rs_insert
@@ -576,6 +578,24 @@ begin
   for (i=0;i<rwcnt;i=i+1) begin
     thesamelocf = false;
     MatRowGet(SDp,i,SDrw);
+		
+		if(SDp.OKFlag==1)then begin
+			AbsItemqty[SDrw.ArtCode] = AbsItemqty[SDrw.ArtCode] + SDrw.Qty;
+			ISr.Code = SDrw.ArtCode;
+			if(nonblank(SDrw.Location))then begin
+				ISr.Location = SDrw.Location;
+			end else begin
+				ISr.Location = SDp.Location;
+			end;
+			if(ReadFirstMain(ISr,2,true))then begin
+				if(AbsItemqty[SDrw.ArtCode]>(ISr.Instock-ISr.RsrvQty))then begin
+					RecordCheckError(36332,"",i,"Qty");      
+					res = -1; 
+					goto LSDVcRecordCheck;
+				end;
+			end;
+		end;
+		
     if (check!=0) then begin
       testf = true;
       if (IsStandardProduct) then begin
@@ -594,7 +614,7 @@ begin
           goto LSDVcRecordCheck;
         end;
       end;
-    
+		
       if (nonblank(SDrw.Location)) then begin
         loc2 = SDrw.Location;
       end else begin
@@ -742,6 +762,7 @@ begin
                   FindStockValueInclStockReserv(-1,SDrw.ArtCode,"",loc2,ISr,stockreservq);
                 end else begin
                   FindStockValueInclStockReserv(-1,SDrw.ArtCode,SDrw.SerialNr,loc2,ISr,stockreservq);
+									logtext(0,"This2!!!!!!!!!!!!!!!!! " & stockreservq);
                 end;
                 if (ISr.Instock<(prev+stockreservq)) then begin
                   if (INr.SerNrf>0) then begin

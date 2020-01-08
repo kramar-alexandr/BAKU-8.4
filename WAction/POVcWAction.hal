@@ -67,6 +67,12 @@ external updating procedure VIFromPUDsm();
 remote procedure CheckVIForPU(LongInt,vector boolean,var vector boolean);
 remote function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
 remote updating function Integer RecordAction_raPastePOInVIFBCC (var record POvc, var record IVVc);
+remote procedure PUSumUp(var record PUVc);
+remote procedure PUCalcCostPrice(string,val,Integer,Integer,string,string,
+                                   val,val,val,val,val,
+                                   val,val,val,val,val,val,
+                                   string,var val,val,var val,string,Integer);
+remote function Boolean PUDchrsum(record PUVc,Integer);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -191,22 +197,26 @@ global
 updating procedure PUFromPODsm()
 BEGIN
   record POVc POr;
-  record PUVc PUr;
+  record PUVc PUr, PU2r;
+	row PUVc PUrw;
   LongInt r;
-  Integer wn,nwn,err,cntIV,cntORIV,i;
-  Boolean testf,TsTr,testf1,testVI,consPOf;
+  Integer wn,nwn,err,cntIV,cntORIV,i,notenr;
+  Boolean testf,TsTr,testf1,testVI,consPOf,corPOf;
   record POSettingBlock POSb;
 	record VIVc VIr;
 	row VIVc VIrw;
   record ConsCompBlock CCB;
 	record AccBlock AccB;
 	vector boolean vecVI;
-	vector boolean vecVItest;
+	vector boolean vecVItest, vcorPOf;
 	array string 255 tags;
 	string 255 warning;
 	row POVc POrw;
 	record INVc INr;
-	
+	record RLinkVc RLr;
+	vector string 255 RowArtCodes, CustomsCostRow;
+	vector val ShipCostRow, Cost1Row, Cost2Row, Cost3Row, Cost4Row, Cost5Row;
+	val p, s;
 	
 	
 	BlockLoad(CCB);
@@ -271,13 +281,46 @@ BEGIN
 								// end;
 							// end;
 						// end else begin
-							if(POr.ExtraCostInPU==0)then begin
+							if(CurrentCompany==18)then begin
+									
+								for (i=0;i<matrowcnt(POr);i=i+1) begin
+									matrowget(POr,i,POrw);
+									RowArtCodes[i] = POrw.ArtCode;
+								end;
+
+							
+								notenr = 1;
+								while (ReadRecordLink(POr,notenr,PU2r,RLr)) begin
+									for (i=0;i<matrowcnt(PU2r);i=i+1) begin
+										matrowget(PU2r,i,PUrw);
+										if(PUrw.ArtCode!=RowArtCodes[PUrw.OrdRow])then begin vcorPOf[PUrw.OrdRow] = true; end;
+										if(PUrw.ArtCode==RowArtCodes[PUrw.OrdRow])then begin vcorPOf[PUrw.OrdRow] = false; end;
+										ShipCostRow[PUrw.OrdRow] = PUrw.ShipCost;
+										CustomsCostRow[PUrw.OrdRow] = PUrw.CustomsCost;
+										Cost1Row[PUrw.OrdRow] = PUrw.RowCost1;
+										Cost2Row[PUrw.OrdRow] = PUrw.RowCost2;
+										Cost3Row[PUrw.OrdRow] = PUrw.RowCost3;
+										Cost4Row[PUrw.OrdRow] = PUrw.RowCost4;
+										Cost5Row[PUrw.OrdRow] = PUrw.RowCost5;
+									end;
+									notenr = notenr + 1;
+								end;
+								
+								
+								for (i=0;i<matrowcnt(POr);i=i+1) begin
+									matrowget(POr,i,POrw);
+									if(vcorPOf[i])then begin
+										corPOf = true;
+									end;
+								end;
+							end;
+							
+							if(POr.ExtraCostInPU==0 and !corPOf)then begin
 								if(POr.ShipCostOKFlag!=0) then begin
 									if(blank(POr.ShipCost)) then begin testf1 = false;  MessageBox(36234,""); end;
 								end else begin	
 									if(blank(POr.ShipCost) or POr.ShipCost==0) then begin testf1 = false;  MessageBox(36234,""); end;
 								end;
-								
 								
 								
 								consPOf = false; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 18:22 16.12.2019
@@ -290,6 +333,9 @@ BEGIN
 										end;
 									end;
 								end;
+								
+								
+								
 								
 								
 								if(!consPOf)then begin
@@ -328,10 +374,35 @@ BEGIN
 					end;	
 					if(testf1) then begin
 						r = RecordAction_raPastePOInPU(POr,PUr);
+						
+						
 						switch (r) begin
 							case -1: Beep;
 							case -2: MessageBox(1281,"");
 							case 0:
+								if(corPOf)then begin
+									for (i=0;i<matrowcnt(PUr);i=i+1) begin
+										matrowget(PUr,i,PUrw);
+										PUrw.ShipCost = ShipCostRow[PUrw.OrdRow];
+										PUrw.CustomsCost = CustomsCostRow[PUrw.OrdRow];
+										PUrw.RowCost1 = Cost1Row[PUrw.OrdRow];
+										PUrw.RowCost2 = Cost2Row[PUrw.OrdRow];
+										PUrw.RowCost3 = Cost3Row[PUrw.OrdRow];
+										PUrw.RowCost4 = Cost4Row[PUrw.OrdRow];
+										PUrw.RowCost5 = Cost5Row[PUrw.OrdRow];
+										matrowput(PUr,i,PUrw);
+										PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
+												PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+												PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+												PUrw.CustomsCost,p,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+										PUrw.CostPrice = p;
+										PUrw.Sum = s;
+										MatRowPut(PUr,i,PUrw);
+										PUDchrsum(PUr,i);
+									end;
+									PUSumUp(PUr);
+									if (RecordStore(PUr,true)) then begin end;
+								end;
 								nwn = OpenWindow("PUDClass",1,0,"","",PUr);
 								SetRLink(wn,true);  
 							otherwise
