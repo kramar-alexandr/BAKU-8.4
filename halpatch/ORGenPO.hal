@@ -1448,14 +1448,14 @@ begin
 	row SHVc SHrw, SH2rw;
 	record POVc POr;
 	row POVc POrw;
-	string 50 ostr;
+	string 50 ostr,POCurCode;
 	array string 100 class,artcode,itemcurrency;
 	record INVc INr, LINr, UUINr;
 	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf,ccItemf;
 	record CUVc CUr;
 	record DIVc DIr;
 	string 200 vendor,loccode,errmsg,OffserNr, PUstock;
-	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode,vLocCashier;
+	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode,vLocCashier,vCurrRowCode;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
 	vector boolean vArtCodeRepeat;
@@ -1509,11 +1509,12 @@ begin
 		end;
 		For(i=0;i<mtrw;i=i+1) begin
 			matrowget(ORr,i,ORrw); 
-			logtext(0,"ORrw.ArtCode 1 " & ORrw.ArtCode & "  " & ECArt[ORrw.ArtCode]);
+			// logtext(0,"ORrw.ArtCode 1 " & ORrw.ArtCode & "  " & ECArt[ORrw.ArtCode]);
 			if(ECArt[ORrw.ArtCode]>0)then begin
 				chsum = false;
 				ORrw.Quant = ECArt[ORrw.ArtCode];
 				ORrw.Price = vItemFifo[ORrw.ArtCode];
+				vCurrRowCode[ORrw.ArtCode] = ORrw.BrndCurrCode;
 				matrowput(ORr,i,ORrw); 
 				ORVc_PastePrice(ORr,i,chsum);
 				matrowget(ORr,i,ORrw); 
@@ -1525,8 +1526,9 @@ begin
 				matrowget(ORr,i,ORrw); 
 				POComp = ORrw.ECReservComp;
 				PONr = ORrw.ECReceived;
+				logtext(0,ORrw.ECReceived);
 				ItemORPriseWRebate[ORrw.ArtCode] = ORrw.Price - ((ORrw.Price / 100) * ORrw.vRebate);
-				Logtext(0,"Цена по счету клиента дл€ заказа поставщика строка " & i & " - " & ItemORPriseWRebate[ORrw.ArtCode]);
+				// Logtext(0,"Цена по счету клиента дл€ заказа поставщика строка " & i & " - " & ItemORPriseWRebate[ORrw.ArtCode]);
 			end;
 		end;
 		if(POComp<=0)then begin
@@ -1636,6 +1638,7 @@ begin
 			POr.Location = PUstock;
 			TrHs = false;
 			mtrw = matrowcnt(POr);
+			POCurCode = "";
 			For(i=0;i<shmtrw;i=i+1) begin
 				if(nonblank(artcode[i]))then begin
 					if(SetCompany(18,false)) then begin
@@ -1671,6 +1674,7 @@ begin
 								POrw.Price = ItemORPriseWRebate[CIr.Code];
 								POrw.vRebate = 0;
 								POrw.Sum = POrw.Price * POrw.Quant;
+								POCurCode = vCurrRowCode[CIr.Code];
 								matrowput(POr,i,POrw);
 								POVc_PasteQuant(POr,i);
 								matrowget(POr,i,POrw);
@@ -1689,6 +1693,8 @@ begin
 					v = ecvcnt;
 				end;
 			end;
+			POr.CurncyCode = POCurCode;
+			POr.CheckCurncyCode = POCurCode;
 			if(RecordStore(POr,true))then begin 
 				logtext(0,POr.SerNr & " Заказ " & currentcompany);
 				CreateRecordLink(POr,CurrentCompany,SHr,18);  
