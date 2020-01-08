@@ -5,7 +5,7 @@ external procedure POVc_PasteQuant(var record POVc,Integer);// Edit ************
 external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
 remote function boolean CompanyIsJWLikeCompany(Integer);
 external updating procedure ECPUFromPODsm(var record POVc,var record PUVc);
-external updating procedure CCPUFromPODsm(var record POVc,var record PUVc);
+external updating procedure CCPUFromPODsm(var record POVc,var record PUVc, vector val);
 external updating function Integer CreateVIFromPO(LongInt,record RcVc,var record VIVc);
 remote procedure CreatePufromIVforPLHandle(record RcVc,integer,var string);
 remote updating function LongInt RecordAction_raPastePUInVI(record PUVc,var record VIVc,var string);
@@ -1492,6 +1492,7 @@ begin
 	end;
 	OldComp = CurrentCompany;
 	logtext(0,"SHr.OrderNr 1 " & SHr.OrderNr);
+	
 	ORr.SerNr = SHr.OrderNr;
 	if(ReadFirstMain(ORr,1,true))then begin
 		logtext(0,"ORr.OrderNr 1 " & ORr.SerNr);
@@ -1505,7 +1506,21 @@ begin
 			matrowget(SHr,i,SHrw);
 			artcode[i] = SHrw.ArtCode;
 			ECArt[SHrw.ArtCode] = SHrw.Ship;
-			vItemFifo[SHrw.ArtCode] = SHrw.FIFORowVal/SHrw.Ship;
+			
+			IHr.FileName = "SHVc";
+			IHr.TransNr = SHr.SerNr;
+			TrHs = true;
+			while (LoopBackKey("FNTransNr",IHr,2,TrHs)) begin
+				if(IHr.FileName!="SHVc")then begin TrHs = false; end;
+				if(IHr.TransNr!=SHr.SerNr)then begin TrHs = false; end;
+				if(IHr.ArtCode==SHrw.ArtCode)then begin
+					vItemFifo[SHrw.ArtCode] = IHr.TotCostPriceCurncy;
+					CIr.Code = SHrw.ArtCode;
+					if(ReadFirstMain(CIr,1,true))then begin 
+						vItemHTotCostPr[CIr.LocCode] = IHr.TotCostPrice;
+					end;
+				end;
+			end;
 		end;
 		For(i=0;i<mtrw;i=i+1) begin
 			matrowget(ORr,i,ORrw); 
@@ -1605,7 +1620,7 @@ begin
 				CreateRecordLink(POr,CurrentCompany,SHr,18);  
 				CreateRecordLink(SHr,18,POr,CurrentCompany);  
 			end;
-			CCPUFromPODsm(POr,PUr);
+			CCPUFromPODsm(POr,PUr,vItemHTotCostPr);
 			// GetFullCurncyRate(itemcurrency[c],POr.TransDate,fr,to1,to2,br1,br2);
 			// PUr.FrRate = fr;
 			// PUr.ToRateB1 = to1;
@@ -1700,7 +1715,7 @@ begin
 				CreateRecordLink(POr,CurrentCompany,SHr,18);  
 				CreateRecordLink(SHr,18,POr,CurrentCompany);  
 			end;
-			CCPUFromPODsm(POr,PUr);
+			CCPUFromPODsm(POr,PUr,vItemHTotCostPr);
 			if(RecordStore(PUr,true))then begin 
 				CreateRecordLink(ORr,18,PUr,CurrentCompany);  
 				CreateRecordLink(PUr,CurrentCompany,ORr,18); 
