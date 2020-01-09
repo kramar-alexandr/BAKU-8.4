@@ -973,46 +973,34 @@ begin
 			end;
 			
 			
-			
-			
-			
-			// INr.Code = "";
-			// while (LoopMain(INr,1,true)) begin
-				// if(nonblank(vPUCur [INr.Code & "_" & INr.BPIBrand]))then begin 
-					// ItemToCorrf[INr.Code & "_" & compNo] = true; 
-					// vCurItemPrice[INr.Code & "_" & compNo] = vPUPrice [INr.Code & "_" & INr.BPIBrand]; 
-					// vCurItemCurrency[INr.Code & "_" & compNo] = vPUCur [INr.Code & "_" & INr.BPIBrand]; 
-				// end;
-			// end;
-			// ResetLoop(INr);
-			
-			IHr.FileName = "PUVc";
+			IHr.FileName = "";
 			IHr.TransDate = CurrentDate;
 			TrHs = true;
 			while (LoopBackKey("FNTransDate",IHr,2,TrHs)) begin
 				testf = true;
-				if(IHr.FileName!="PUVc")then begin TrHs = false; end;
 				if(IHr.TransDate<stringtodate("1/12/2019"))then begin TrHs = false; end;
 				if(!ItemToCorrf[IHr.ArtCode & "_" & compNo])then begin testf = false; end;
-				logtext(0,TrHs);
-				logtext(0,testf);
 				if(TrHs and testf)then begin
 					RecordCopy(oldIHr,IHr);
 					IHr.TotCostPriceCurncy = vCurItemPrice[IHr.ArtCode & "_" & compNo] * IHr.Qty;
-					IHr.RemCostPriceCurncy = vCurItemPrice[IHr.ArtCode & "_" & compNo] * IHr.RemQty;
+					if(IHr.RemQty>0)then begin
+						IHr.RemCostPriceCurncy = vCurItemPrice[IHr.ArtCode & "_" & compNo] * IHr.RemQty;
+					end;
 					IHr.CurncyCode = vCurItemCurrency[IHr.ArtCode & "_" & compNo];
 					if(recordupdate(oldIHr,IHr,true)==0)then begin
-						weboutstring(" ItemHist in company" & IHr.TransDate & " --- " & IHr.ArtCode & " --- " & compNo);
+						weboutstring(" ItemHist in company" & IHr.TransDate & " --- " & IHr.ArtCode & " --- " & compNo & " --- " & IHr.FileName);
 						weboutstring("<BR>");
-						PUr.SerNr = IHr.TransNr;
-						if(ReadFirstMain(PUr,1,true))then begin
-							matrowget (PUr,IHr.Row,PUrw);
-							PUrw.UPrice = vCurItemPrice[IHr.ArtCode & "_" & compNo];
-							matrowput (PUr,IHr.Row,PUrw);
-							PUr.CurncyCode = vCurItemCurrency[IHr.ArtCode & "_" & compNo];
-							if(RecordStore(PUr,true))then begin
-								weboutstring(" PU in company" & PUr.SerNr & " --- " & PUrw.ArtCode & " --- " & compNo);
-								weboutstring("<BR>");
+						if(IHr.FileName=="PUVc")then begin
+							PUr.SerNr = IHr.TransNr;
+							if(ReadFirstMain(PUr,1,true))then begin
+								matrowget (PUr,IHr.Row,PUrw);
+								PUrw.UPrice = vCurItemPrice[IHr.ArtCode & "_" & compNo];
+								matrowput (PUr,IHr.Row,PUrw);
+								PUr.CurncyCode = vCurItemCurrency[IHr.ArtCode & "_" & compNo];
+								if(RecordStore(PUr,true))then begin
+									weboutstring(" PU in company" & PUr.SerNr & " --- " & PUrw.ArtCode & " --- " & compNo);
+									weboutstring("<BR>");
+								end;
 							end;
 						end;
 					end;
@@ -1050,7 +1038,9 @@ begin
 								if(IHr.ArtCode==PUrw.ArtCode and TrHs)then begin
 									RecordCopy(oldIHr,IHr);
 									IHr.TotCostPriceCurncy = PUrw.UPrice * IHr.Qty;
-									IHr.RemCostPriceCurncy = PUrw.UPrice * IHr.RemQty;
+									if(IHr.RemQty>0)then begin
+										IHr.RemCostPriceCurncy = PUrw.UPrice * IHr.RemQty;
+									end;
 									IHr.CurncyCode = vPUCur [CIr.LocCode & "_" & CIr.BrandCode];
 									if(recordupdate(oldIHr,IHr,true)==0)then begin
 										weboutstring(" ItemHist in CCompany" & IHr.TransDate & " --- " & IHr.ArtCode & " --- ");
@@ -1066,6 +1056,32 @@ begin
 		end;
 	end;
 	ResetLoop (PUr);
+	
+	
+	IHr.FileName = "";
+	IHr.TransDate = CurrentDate;
+	TrHs = true;
+	while (LoopBackKey("FNTransDate",IHr,2,TrHs)) begin
+		testf = true;
+		if(IHr.TransDate<stringtodate("1/12/2019"))then begin TrHs = false; end;
+		CIr.Code = IHr.ArtCode;
+		if(ReadFirstMain(CIr,1,true))then begin end;
+		if(blank(vPUCur [CIr.LocCode & "_" & CIr.BrandCode]))then begin testf = false; end;
+		if(TrHs and testf)then begin
+			RecordCopy(oldIHr,IHr);
+			IHr.TotCostPriceCurncy = vPUPrice[CIr.LocCode & "_" & CIr.BrandCode] * IHr.Qty;
+			if(IHr.RemQty>0)then begin
+				IHr.RemCostPriceCurncy = vPUPrice[CIr.LocCode & "_" & CIr.BrandCode] * IHr.RemQty;
+			end;
+			IHr.CurncyCode = vPUCur[CIr.LocCode & "_" & CIr.BrandCode];
+			if(recordupdate(oldIHr,IHr,true)==0)then begin
+				weboutstring(" ItemHist in CCompany " & IHr.TransDate & " --- " & IHr.ArtCode & " --- " & IHr.FileName);
+				weboutstring("<BR>");
+			end;
+		end;
+	end;
+	ResetLoop (IHr);
+
 	
 	return;
 end;
