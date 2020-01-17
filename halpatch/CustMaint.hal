@@ -3096,6 +3096,7 @@ integer rownr,curAccDiffIntYc;
 val tmpval;
 boolean createTr;
 longint corrTRrNum;
+val Acc60,Acc61;
 
 testf = true;
 oldCompany = currentCompany;
@@ -3153,6 +3154,8 @@ while(loopDate<=RepSpec.sEndDate) begin
 			ResetLoop(TRr);
 			if (corrTRrNum<0) then begin
 				corrTRrNum = 1;
+			end else begin
+				corrTRrNum = corrTRrNum + 1;
 			end;
 			AccTRr.Number = corrTRrNum;
 			AccTRr.Comment = "Отмена кредиторов";
@@ -3200,6 +3203,8 @@ while(loopDate<=RepSpec.sEndDate) begin
 				end;
 				if(testf) then begin
 					cntrw = matrowcnt(TRr);
+					Acc60 = 0;
+					Acc61 = 0;
 					for(i=0;i<cntrw;i=i+1) begin
 						matrowget(TRr,i,TRrw);
 						if((TRrw.AccNumber=="45" or TRrw.AccNumber=="60" or TRrw.AccNumber=="61") and TRrw.ovst <> 1 and TRrw.stp==1) then begin
@@ -3225,6 +3230,33 @@ while(loopDate<=RepSpec.sEndDate) begin
 									create[obj] = true;
 									brands[brand[0]] = true;
 								end else begin
+									if(TRrw.AccNumber=="60") then begin
+										Acc60 = Acc60 + TRrw.DebVal + TRrw.CredVal;
+									end;
+									if(TRrw.AccNumber=="61") then begin
+										Acc61 = Acc61 + TRrw.DebVal + TRrw.CredVal;
+									end;	
+								end;
+							end;
+						end;
+					end;
+					if(Acc60+Acc61==0 and testf) then begin
+						for(i=0;i<cntrw;i=i+1) begin
+							matrowget(TRr,i,TRrw);
+							if((TRrw.AccNumber=="60" or TRrw.AccNumber=="61") and TRrw.ovst <> 1 and TRrw.stp==1) then begin
+								obj = "";
+								ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
+								obj = stores[0];
+								ClearArray(brand);
+								ExtractObjectsByType(TRrw.Objects,"BRAND",brand,oscnt);
+								if(blank(obj)) then begin obj = "blank"; end;
+								testBrand = false;
+								rowCnt = matrowcnt(BBBr);
+								for(j=0;j<rowCnt;j=j+1) begin
+									matrowget(BBBr,j,BBBrw);
+									if((SetInSet(brand[0],BBBrw.Object) or BBBrw.Object==brand[0]) and BBBrw.StartBanDate<=TRr.TransDate and nonblank(brand[0])) then begin testBrand = true; end;
+								end;
+								if(testBrand) then begin
 									if(TRrw.DebVal!=0) then begin
 										TRrw.DebVal = TRrw.DebVal*(-1);
 									end;	
@@ -3237,20 +3269,18 @@ while(loopDate<=RepSpec.sEndDate) begin
 									if(TRrw.CurCredVal!=0) then begin
 										TRrw.CurCredVal = TRrw.CurCredVal*(-1);
 									end;	
-										MatrowPut(AccTRr,rownr,TRrw);
-										rownr = rownr + 1;
-										createTr = true;
+									MatrowPut(AccTRr,rownr,TRrw);
+									rownr = rownr + 1;
+									createTr = true;
 								end;
-							end;
-						end;
+							end;		
+						end;	
 					end;
 				end;
 			end;	
 			if(createTr) then begin
 				TRSumup(AccTRr,tmpval);
-				logtext(0,"CurDate   " & loopDate);
-				logtext(0,"Number Tr   " & AccTRr.Number);
-				logtext(0,RecordInsert(AccTRr,true));
+				RecordInsert(AccTRr,true);
 			END;
 			ResetLoop(TRr);
 			getvectortags(brands,tags1);
