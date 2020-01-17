@@ -3094,6 +3094,8 @@ row CompaniesBlock Comprw;
 date loopDate;
 integer rownr,curAccDiffIntYc;
 val tmpval;
+boolean createTr;
+longint corrTRrNum;
 
 testf = true;
 oldCompany = currentCompany;
@@ -3104,35 +3106,58 @@ ResetCompany(oldCompany);
 CompQty = matrowcnt(Compb);
 //-------------------------------Brands allowed-------------------------------------
 //----------------------------------------------------------------------------------
-
 curAccDiffIntYc = 301;
 loopDate = RepSpec.sStartDate;
+for(comp=0;comp<CompQty;comp=comp+1) begin
+	matrowget(Compb,comp,Comprw);
+	if(Comprw.ActiveStatus==0 and comp+1!=18 and comp+1!=33 and comp+1!=29) then begin 
+		SetCompany(comp+1,false);
+		RecordClear(AccTRr);
+		AccTRr.Comment = "Отмена кредиторов";
+		AccTRr.IntYc = curAccDiffIntYc;
+		resetloop(AccTRr);
+		TrHs = true;
+		while(loopkey("Comment",AccTRr,2,TrHs)) begin
+			if (AccTRr.IntYc!=curAccDiffIntYc) then begin TrHs = false; end;
+			if (AccTRr.Comment!="Отмена кредиторов") then begin TrHs = false; end;
+			if (TrHs) and (AccTRr.TransDate>=RepSpec.sStartDate) and (AccTRr.TransDate<=RepSpec.sEndDate) then begin
+				DeleteTransaction(AccTRr.Number,AccTRr.IntYc);
+				stepback(AccTRr);
+			end;
+		end;
+	end;	
+end;	
 
-AccTRr.Comment = "Отмена кредиторов";
-AccTRr.IntYc = curAccDiffIntYc;
-resetloop(AccTRr);
-TrHs = true;
-while(loopkey("Comment",AccTRr,2,TrHs)) begin
-	if (AccTRr.IntYc!=curAccDiffIntYc) then begin TrHs = false; end;
-	if (AccTRr.Comment!="Отмена кредиторов") then begin TrHs = false; end;
-	if (TrHs) and (AccTRr.TransDate>=RepSpec.sStartDate) and (AccTRr.TransDate<=RepSpec.sEndDate) then begin
-		DeleteTransaction(AccTRr.Number,AccTRr.IntYc);
-		stepback(AccTRr);
-	end;
-end;
 while(loopDate<=RepSpec.sEndDate) begin
 	for(comp=0;comp<CompQty;comp=comp+1) begin
 		matrowget(Compb,comp,Comprw);
 		if(Comprw.ActiveStatus==0 and comp+1!=18 and comp+1!=33 and comp+1!=29) then begin 
 			SetCompany(comp+1,false);
 			logtext(0,comp+1);
+			createTr = false;
 			RecordClear(AccTRr);
 			RecordNew(AccTRr);
 			AccTRr.TransDate = loopDate;
 			AccTRr.IntYc = curAccDiffIntYc;
-			AccTRr.Number = NextSerNr("TRVc",CurrentDate,-1,false,"");
+			TRr.Number = 9999999;
+			TRr.IntYc = curAccDiffIntYc;
+			TrHs = true;
+			while(LoopBackKey("Number",TRr,2,TrHs)) begin
+				if(TRr.IntYc==curAccDiffIntYc) then begin
+					TrHs = false;
+					corrTRrNum = TRr.Number;
+				end else begin 
+					TrHs = false;
+				end;
+			end;
+			ResetLoop(TRr);
+			if (corrTRrNum<0) then begin
+				corrTRrNum = 0;
+			end;
+			AccTRr.Number = corrTRrNum;
 			AccTRr.Comment = "Отмена кредиторов";
 			AccTRr.RegDate = loopDate;
+			AccTRr.RegTime = CurrentTime;
 			rownr = 0;
 			TRr.TransDate = loopDate;
 			VIr.VECode = "FOB_SKLAD";
@@ -3156,9 +3181,9 @@ while(loopDate<=RepSpec.sEndDate) begin
 			while(loopkey("TransDate",TRr,1,TrHs)) begin
 				testf = true;
 				if(TRr.TransDate>loopDate) then begin testf = false; TrHs = false; end;
-				if(TRr.IntYc!=SHYc and TRr.IntYc!=RetYc and TRr.IntYc!=IVYc) then begin testf=false; end;
+				//if(TRr.IntYc!=SHYc and TRr.IntYc!=RetYc and TRr.IntYc!=IVYc) then begin testf=false; end;
 				if(testf) then begin 
-					switch(TRr.IntYc) begin
+					/*switch(TRr.IntYc) begin
 						case SHYc: SHr.SerNr = TRr.Number;
 								if(ReadFirstMain(SHr,1,true)) then begin
 									if(SHr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
@@ -3171,7 +3196,7 @@ while(loopDate<=RepSpec.sEndDate) begin
 								if(ReadFirstMain(IVr,1,true)) then begin
 									if(IVr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
 								end;
-					end;			
+					end;*/			
 				end;
 				if(testf) then begin
 					cntrw = matrowcnt(TRr);
@@ -3200,15 +3225,21 @@ while(loopDate<=RepSpec.sEndDate) begin
 									create[obj] = true;
 									brands[brand[0]] = true;
 								end else begin
+										TRrw.DebVal = TRrw.DebVal*(-1);
+										TRrw.CredVal = TRrw.CredVal*(-1);
 										MatrowPut(AccTRr,rownr,TRrw);
+										rownr = rownr + 1;
+										createTr = true;
 								end;
 							end;
 						end;
 					end;
 				end;
 			end;	
-			TRSumup(AccTRr,tmpval);
-      RecordInsert(AccTRr,true);
+			if(createTr) then begin
+				TRSumup(AccTRr,tmpval);
+				RecordInsert(AccTRr,true);
+			END;
 			ResetLoop(TRr);
 			getvectortags(brands,tags1);
 			getvectortags(saleSum,tags);
