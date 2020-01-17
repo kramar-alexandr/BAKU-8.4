@@ -16,8 +16,10 @@ external procedure VIVc_PastePayVal(var record VIVc);
 //external procedure MyExtractObj(string,var Integer,var string);
  external function val AbsoluteVal(val);
 remote updating procedure CreateNewGlobalItem(var record INVc);
+external updating procedure DeleteTransaction(LongInt,Integer);
+external procedure TRSumup(var record TRVc,var val);
 
-
+SetLangMode(LangRussian,"RUS",0);
 
 global updating function LongInt CheckClassifGlblImprt(array string headers,array string params,var record INVc INr)
 begin
@@ -3069,8 +3071,8 @@ end;
 global updating 
 procedure CollectVIDaySaleMn(record RcVc RepSpec)
 begin
-record TRVc TRr;
-row TRVc TRrw;
+record TRVc TRr,AccTRr;
+row TRVc TRrw,AccTRrw;
 record VIVc VIr,oldVIr;
 row VIVc VIrw;
 boolean TrHs,testf,TrHs2,testBrand;
@@ -3090,6 +3092,9 @@ row BrandsBanDateBlock BBBrw;
 record CompaniesBlock Compb;
 row CompaniesBlock Comprw;
 date loopDate;
+integer rownr,curAccDiffIntYc;
+val tmpval;
+
 testf = true;
 oldCompany = currentCompany;
 setCompany(18,false);
@@ -3099,13 +3104,36 @@ ResetCompany(oldCompany);
 CompQty = matrowcnt(Compb);
 //-------------------------------Brands allowed-------------------------------------
 //----------------------------------------------------------------------------------
+
+curAccDiffIntYc = 301;
 loopDate = RepSpec.sStartDate;
+
+AccTRr.Comment = "Отмена кредиторов";
+AccTRr.IntYc = curAccDiffIntYc;
+resetloop(AccTRr);
+TrHs = true;
+while(loopkey("Comment",AccTRr,2,TrHs)) begin
+	if (AccTRr.IntYc!=curAccDiffIntYc) then begin TrHs = false; end;
+	if (AccTRr.Comment!="Отмена кредиторов") then begin TrHs = false; end;
+	if (TrHs) and (AccTRr.TransDate>=RepSpec.sStartDate) and (AccTRr.TransDate<=RepSpec.sEndDate) then begin
+		DeleteTransaction(AccTRr.Number,AccTRr.IntYc);
+		stepback(AccTRr);
+	end;
+end;
 while(loopDate<=RepSpec.sEndDate) begin
 	for(comp=0;comp<CompQty;comp=comp+1) begin
 		matrowget(Compb,comp,Comprw);
 		if(Comprw.ActiveStatus==0 and comp+1!=18 and comp+1!=33 and comp+1!=29) then begin 
 			SetCompany(comp+1,false);
 			logtext(0,comp+1);
+			RecordClear(AccTRr);
+			RecordNew(AccTRr);
+			AccTRr.TransDate = loopDate;
+			AccTRr.IntYc = curAccDiffIntYc;
+			AccTRr.Number = NextSerNr("TRVc",CurrentDate,-1,false,"");
+			AccTRr.Comment = "Отмена кредиторов";
+			AccTRr.RegDate = loopDate;
+			rownr = 0;
 			TRr.TransDate = loopDate;
 			VIr.VECode = "FOB_SKLAD";
 			VIr.TransDate = loopDate;
@@ -3149,7 +3177,7 @@ while(loopDate<=RepSpec.sEndDate) begin
 					cntrw = matrowcnt(TRr);
 					for(i=0;i<cntrw;i=i+1) begin
 						matrowget(TRr,i,TRrw);
-						if(TRrw.AccNumber=="45" and TRrw.ovst <> 1 and TRrw.stp==1) then begin
+						if((TRrw.AccNumber=="45" or TRrw.AccNumber=="60" or TRrw.AccNumber=="61") and TRrw.ovst <> 1 and TRrw.stp==1) then begin
 							obj = "";
 							ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
 							obj = stores[0];
@@ -3163,18 +3191,24 @@ while(loopDate<=RepSpec.sEndDate) begin
 								if((SetInSet(brand[0],BBBrw.Object) or BBBrw.Object==brand[0]) and BBBrw.StartBanDate<=TRr.TransDate and nonblank(brand[0])) then begin testBrand = true; end;
 							end;
 							if(testBrand) then begin
-								saleSum[obj] = saleSum[obj] + TRrw.DebVal;
-								saleSum[obj] = saleSum[obj] - TRrw.CredVal;
-								brandObj[obj & brand[0]] = brand[0];
-								saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] + TRrw.DebVal;
-								saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] - TRrw.CredVal;
-								create[obj] = true;
-								brands[brand[0]] = true;
+								if(TRrw.AccNumber=="45") then begin
+									saleSum[obj] = saleSum[obj] + TRrw.DebVal;
+									saleSum[obj] = saleSum[obj] - TRrw.CredVal;
+									brandObj[obj & brand[0]] = brand[0];
+									saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] + TRrw.DebVal;
+									saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] - TRrw.CredVal;
+									create[obj] = true;
+									brands[brand[0]] = true;
+								end else begin
+										MatrowPut(AccTRr,rownr,TRrw);
+								end;
 							end;
 						end;
 					end;
 				end;
 			end;	
+			TRSumup(AccTRr,tmpval);
+      RecordInsert(AccTRr,true);
 			ResetLoop(TRr);
 			getvectortags(brands,tags1);
 			getvectortags(saleSum,tags);
