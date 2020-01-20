@@ -3099,6 +3099,7 @@ val tmpval;
 boolean createTr;
 longint corrTRrNum;
 val Acc60,Acc61;
+record SDVc SDr;
 
 testf = true;
 oldCompany = currentCompany;
@@ -3189,7 +3190,7 @@ while(loopDate<=RepSpec.sEndDate) begin
 			while(loopkey("TransDate",TRr,1,TrHs)) begin
 				testf = true;
 				if(TRr.TransDate>loopDate) then begin testf = false; TrHs = false; end;
-				if(TRr.IntYc!=SHYc and TRr.IntYc!=RetYc and TRr.IntYc!=IVYc) then begin testf=false; end;
+				if(TRr.IntYc!=SHYc and TRr.IntYc!=RetYc and TRr.IntYc!=IVYc and TRr.IntYc!=SDYc) then begin testf=false; end;
 				if(testf) then begin 
 					switch(TRr.IntYc) begin
 						case SHYc: SHr.SerNr = TRr.Number;
@@ -3203,6 +3204,10 @@ while(loopDate<=RepSpec.sEndDate) begin
 						case 	IVYc	: IVr.SerNr = TRr.Number;
 								if(ReadFirstMain(IVr,1,true)) then begin
 									if(IVr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+								end;
+						case 	SDYc	: SDr.SerNr = TRr.Number;
+								if(ReadFirstMain(SDr,1,true)) then begin
+									if(SetInSet("CENTRAL_RETURN",SDr.Objects)) then begin testf=false; end;
 								end;
 					end;			
 				end;
@@ -3226,26 +3231,23 @@ while(loopDate<=RepSpec.sEndDate) begin
 								if((SetInSet(brand[0],BBBrw.Object) or BBBrw.Object==brand[0]) and BBBrw.StartBanDate<=TRr.TransDate and nonblank(brand[0])) then begin testBrand = true; end;
 							end;
 							if(testBrand) then begin
-								logtext(0,"Curcomp " & Currentcompany);
 								if(TRrw.AccNumber=="45") then begin
-									saleSum[obj] = saleSum[obj] + TRrw.DebVal;
-									saleSum[obj] = saleSum[obj] - TRrw.CredVal;
-									brandObj[obj & brand[0]] = brand[0];
-									saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] + TRrw.DebVal;
-									saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] - TRrw.CredVal;
-									create[obj] = true;
-									brands[brand[0]] = true;
+									if(TRr.IntYc!=SDYc) then begin
+										saleSum[obj] = saleSum[obj] + TRrw.DebVal;
+										saleSum[obj] = saleSum[obj] - TRrw.CredVal;
+										brandObj[obj & brand[0]] = brand[0];
+										saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] + TRrw.DebVal;
+										saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] - TRrw.CredVal;
+										create[obj] = true;
+										brands[brand[0]] = true;
+									end;	
 								end else begin
 									if(TRrw.AccNumber=="60") then begin
 										Acc60 = TRrw.DebVal - TRrw.CredVal;
-										logtext(0,Acc60);
 										matrowput(TRr,i,TRrw);
 										matrowget(TRr,i+1,TRrw);
-										logtext(0,"Number ACC " & TRrw.AccNumber);
 										if(TRrw.AccNumber=="61") then begin								
 											Acc61 = TRrw.DebVal - TRrw.CredVal;
-											logtext(0,comp+1);
-											logtext(0,"sum equal" & Acc61+Acc60);
 											if(Acc61+Acc60 == 0) then begin
 												matrowput(TRr,i+1,TRrw);
 												matrowget(TRr,i,TRrw);
@@ -3291,7 +3293,7 @@ while(loopDate<=RepSpec.sEndDate) begin
 
 			if(createTr) then begin
 				TRSumup(AccTRr,tmpval);
-				logtext(0,"Record Insert " & RecordInsert(AccTRr,true));
+				RecordInsert(AccTRr,true);
 			END;
 			ResetLoop(TRr);
 			getvectortags(brands,tags1);
