@@ -32,6 +32,7 @@ external function LongInt GetCurUserLastNr(string);
 external function Boolean DatePrel(Date);
 external procedure ExtractObj(string,var Integer,var string);
 external procedure SplitRiigiObjsNoCut(string,var string,var string,var string,var string);
+external function Boolean TRAutoTrans(var record TRVc,Integer,Boolean,Boolean);
 
 global
 procedure SplitRiigiObjsNoCut(string objstr,var string obj1,var string  obj2,var string  obj3,var string obj4)
@@ -1534,3 +1535,55 @@ begin
   PurgeTRVcRecordImportAfter = res;
   return;
 end;
+
+global
+procedure AddTransAutoTransRows(record TRVc gTRp) //_________________________________________ABR 20.01.20
+BEGIN
+  Integer i,rwcnt;
+  Integer oi,orwcnt;
+  row TRVc TRrw;
+  row TRVc newTRrw;
+  record AccVc Accr;
+  record TRVc oldgTRp;
+  record AutVc Autr;
+  row AutVc Autrw;
+	boolean CheckTrans;
+	
+	CheckTrans = true;
+  RecordCopy(oldgTRp,gTRp);
+  orwcnt = MatRowCnt(oldgTRp);
+  i = 0;
+  for (oi=0;oi<orwcnt;oi=oi+1) begin
+		CheckTrans = true;
+    MatRowGet(oldgTRp,oi,TRrw);
+    ClearRow(gTRp,newTRrw,1);
+		if(gTRp.IntYc==SDYc and CurrentCompany!=18 and SetInSet("CENTRAL_RETURN",TRrw.Objects) and TRrw.AccNumber=="41/02") then begin CheckTrans = false; end;
+		if(gTRp.IntYc==STMovYc and TRrw.AccNumber=="41/02") then begin CheckTrans = false; end;
+		if(gTRp.IntYc==SHYc and CurrentCompany==18 and TRrw.AccNumber=="41/02") then begin CheckTrans = false; end;
+		if(gTRp.IntYc==RetYc and CurrentCompany==18 and TRrw.AccNumber=="41/02") then begin CheckTrans = false; end;
+		if(CheckTrans) then begin
+			Accr.AccNumber = TRrw.AccNumber;
+			ReadFirstMain(Accr,1,true);
+			if (nonblank(Accr.TransAutCode)) then begin
+				newTRrw.AccNumber =  Accr.TransAutCode;
+			logtext(0,"ACCNumber - " & newTRrw.AccNumber);
+				newTRrw.Typ = TRrw.Typ;
+				MatRowInsert(gTRp,oi+1,newTRrw);
+				TRAutoTrans(gTRp,oi+1,true,true);
+				MatRowDelete(gTRp,oi+1);
+				Autr.Code = Accr.TransAutCode;
+				if (ReadFirstMain(Autr,1,true)) then begin
+					if (MatRowCnt(Autr)>0) then begin
+						MatRowGet(Autr,0,Autrw);
+						if (Autrw.AccNumber=="!") then begin
+							MatRowDelete(gTRp,i);
+							i = i - 1;
+						end;
+					end;
+				end;
+			end;
+		end;	
+    i = i + 1;
+  end;  
+  RETURN;
+END;
