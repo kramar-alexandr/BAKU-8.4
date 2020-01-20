@@ -3861,12 +3861,12 @@ end;
 global updating procedure ExchCurrInTr41AccRow(string FileName, longint DocNr)
 begin
 	record TRVc TRr, OldTRr;
-	row TRVc TRrw;
-	integer i,j,rwcnt, mtrw;
-	array string 255 aArtCodes, aRowCrncy;
-	array val aRowCostPrice, aChckFIFORV;
+	row TRVc TRrw, TR61rw;
+	integer i,j,rwcnt, mtrw, i4120;
+	array string 255 aArtCodes, aRowCrncy, a60and61Curr;
+	array val aRowCostPrice, aChckFIFORV, a60and61Val, Chck60and61Val;
 	array integer aItRows;
-	boolean trf, TrHs, chckFIFORowf;
+	boolean trf, TrHs, chckFIFORowf, f4102;
 	record ItemHistVc IHr;
 	record SDVc SDr;
 	row SDVc SDrw;
@@ -3991,10 +3991,22 @@ begin
 				ResetLoop(IHr);
 			end;
 			j = 0;
+			i4120 = 0;
 			mtrw = matrowcnt(TRr);
 			for (i=0;i<mtrw;i=i+1) begin
 				matrowget(TRr,i,TRrw);
 				if(TRrw.AccNumber=="41/01" or TRrw.AccNumber=="41/02")then begin
+					if (TRrw.AccNumber=="41/02") then begin  
+						f4102 = true; 
+						a60and61Curr[i4120] = aRowCrncy[j];
+						a60and61Val[i4120] = aRowCostPrice[j];
+						if(TRrw.DebVal!=blankval)then begin
+							Chck60and61Val[i4120] = TRrw.DebVal;
+						end else begin
+							Chck60and61Val[i4120] = TRrw.CredVal;
+						end;
+						i4120 = i4120 + 1; 
+					end;
 					if (chckFIFORowf and (Round(aChckFIFORV[j],SetRoundModeD(2))==TRrw.DebVal or Round(aChckFIFORV[j],SetRoundModeD(2))==TRrw.CredVal)) then begin
 						if (TRrw.DebVal!=blankval) then begin
 							TRrw.CurDebVal = aRowCostPrice[j];
@@ -4025,6 +4037,42 @@ begin
 					end;
 				end;
 			end;
+			
+			j = 0;
+			mtrw = matrowcnt(TRr);
+			for (i=0;i<mtrw;i=i+1) begin
+				matrowget(TRr,i,TRrw);
+				matrowget(TRr,i+1,TR61rw);
+				if(TRrw.AccNumber=="60" and TR61rw.AccNumber=="61" and (Chck60and61Val[j]==AbsoluteVal(TRrw.DebVal) or Chck60and61Val[j]==AbsoluteVal(TRrw.CredVal)))then begin
+					if (TRrw.DebVal!=blankval) then begin
+						TRrw.CurDebVal = a60and61Val[j] * (TRrw.DebVal / AbsoluteVal(TRrw.DebVal));
+						TRrw.Curncy = a60and61Curr[j];
+						matrowput (TRr,i,TRrw);
+					end;
+					if (TRrw.CredVal!=blankval) then begin
+						TRrw.CurCredVal = a60and61Val[j] * (TRrw.CredVal / AbsoluteVal(TRrw.CredVal));
+						TRrw.Curncy = a60and61Curr[j];
+						matrowput (TRr,i,TRrw);
+					end;
+					i=i+1;
+					matrowget(TRr,i,TRrw);
+					if (TRrw.DebVal!=blankval) then begin
+						TRrw.CurDebVal = a60and61Val[j] * (TRrw.DebVal / AbsoluteVal(TRrw.DebVal));
+						TRrw.Curncy = a60and61Curr[j];
+						matrowput (TRr,i,TRrw);
+					end;
+					if (TRrw.CredVal!=blankval) then begin
+						TRrw.CurCredVal = a60and61Val[j] * (TRrw.CredVal / AbsoluteVal(TRrw.CredVal));
+						TRrw.Curncy = a60and61Curr[j];
+						matrowput (TRr,i,TRrw);
+					end;
+					j = j + 1;
+					if(i4120==j)then begin i = mtrw + 1; end;
+				end;
+			end;
+			
+			
+			
 			if(recordupdate(oldTRr,TRr,true)==0) then begin
 				logtext(0,"TRr Updated");
 			end;
