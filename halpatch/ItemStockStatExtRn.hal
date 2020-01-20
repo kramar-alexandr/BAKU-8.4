@@ -189,6 +189,215 @@ return;
 end;
 
 
+
+
+
+
+
+
+
+global function val IDItemQtyPerDate(string artcode, date idate,string location,string serial,var val serialcost,var integer acnt,var vector val cqty,var vector val ccost,var array string acur,string brandcur,string variety)
+begin
+	record ItemHistVc IHr,CCIHr;
+	val res;
+	string 50 key;
+	integer keys;
+	boolean TrHs,testf;
+	string 100 oldartcode,oldfilename;
+	longint oldsernr;
+  integer oldrow,oldinvalid,curcomp;
+  record ItemStatusVc ISr;
+  record SerBalVc SBr;
+  vector boolean vcur;
+  integer i;
+  record ConsItemVc CIr;
+  record INVc INr;
+  //integer acnt;
+  //vector val cqty,ccost;
+  //array string 10 acur;
+  
+  For(i=0;i<acnt;i=i+1) begin
+	  cqty[acur[i]] = blankval;
+	  cqty[acur[i]] = blankval;
+	end; 
+  acnt = 0;
+      
+  res = 0;
+  	serialcost = 0;
+  	if(idate>=currentdate)then begin
+  		if(nonblank(location))then begin
+  			ISr.Code = artcode;
+  			ISr.Location = location;
+				ISr.Variety = variety;
+  			readfirstmain(ISr,3,true);
+  			res = ISr.Instock;
+  			IHr.ArtCode = artcode;
+				IHr.Variety = ISr.Variety;
+				if(nonblank(ISr.Variety))then begin
+					if(nonblank(location))then begin
+						IHr.Location = location;
+						key = "ArtCodeLoc";
+						keys = 2;
+					end else begin
+						key = "ArtCodeVariety";
+						keys = 2;
+					end;
+				end else begin
+					if(nonblank(location))then begin
+						IHr.Location = location;
+						key = "ArtCodeLoc";
+						keys = 2;
+					end else begin
+						key = "ArtCode";
+						keys = 1;
+					end;
+				end;
+			
+				TrHs = true;
+				res = 0;
+				While(loopkey(key,IHr,keys,TrHs)) begin
+					testf = true;
+					if (IHr.ArtCode!=artcode or IHr.Location!=location or IHr.TransDate>idate) then begin testf = false; TrHs = false; end;
+					if(IHr.StockAffectf<1)then begin testf = false; end;
+					if(nonblank(serial) and IHr.SerialNr!=serial)then begin testf = false; end;
+					if(IHr.Variety!=ISr.Variety)then begin testf = false; end;
+					if(testf)then begin
+						//if(left(currentuser,2)=="SA")then begin
+						if(IHr.TransDate>stringtodate("1/12/2019"))then begin
+							if(IHr.CurncyCode=="AZN")then begin
+								curcomp = currentcompany;
+								INr.Code = IHr.ArtCode;
+								readfirstmain(INr,1,true);
+								setcompany(18,false);
+								CIr.LocCode = IHr.ArtCode;
+								CIr.BrandCode = INr.BPIBrand;								
+								readfirstkey("LocCodeBrand",CIr,2,true);
+								CCIHr.TransDate = IHr.InDate;
+								CCIHr.ArtCode = CIr.Code;
+								if(readfirstkey("ArtCode",CCIHr,2,false))then begin
+									if(CCIHr.TransDate==IHr.InDate and CCIHr.ArtCode==CIr.Code)then begin
+										IHr.CurncyCode = CCIHr.CurncyCode;
+										IHr.RemCostPriceCurncy = CCIHr.TotCostPriceCurncy / CCIHr.Qty * IHr.RemQty;
+									end;
+								end;
+								setcompany(curcomp,false);
+							end;
+						end;
+						//end;
+					
+						res = res + IHr.Qty;
+						cqty[IHr.CurncyCode] = cqty[IHr.CurncyCode] + IHr.Qty;
+						if(!vcur[IHr.CurncyCode])then begin
+							vcur[IHr.CurncyCode] = true;
+							acur[acnt] = IHr.CurncyCode;
+							acnt = acnt + 1;
+						end;
+						if(IHr.Qty>=0)then begin
+							serialcost = serialcost + IHr.TotCostPrice;
+							ccost[IHr.CurncyCode] = ccost[IHr.CurncyCode] + IHr.TotCostPrice;
+						end else begin
+							serialcost = serialcost - IHr.TotCostPrice;
+							ccost[IHr.CurncyCode] = ccost[IHr.CurncyCode] - IHr.TotCostPrice;
+						end;  	
+					end;
+				end; 
+  		end else begin
+  			ISr.Code = artcode;
+  			ISr.Location = ";;;";
+				ISr.Variety = variety;
+  			readfirstmain(ISr,3,true);
+  			res = ISr.Instock;
+  		end;
+  		if(nonblank(serial))then begin
+  			SBr.Serial = serial;
+  			SBr.Location = location;
+  			SBr.Item = artcode;
+  			readfirstmain(SBr,3,true);
+  			res = SBr.Quant;
+  			serialcost = SBr.CostPrice;
+  		end;
+  	end else begin
+			IHr.ArtCode = artcode;
+			if(nonblank(location))then begin
+				IHr.Location = location;
+				key = "ArtCodeLoc";
+				keys = 2;
+			end else begin
+				key = "ArtCode";
+				keys = 1;
+			end;
+		
+			TrHs = true;
+			While(loopkey(key,IHr,keys,TrHs)) begin
+				testf = true;
+				if (IHr.ArtCode!=artcode or IHr.Location!=location or IHr.TransDate>idate) then begin testf = false; TrHs = false; end;
+				if(IHr.StockAffectf<1)then begin testf = false; end;
+				if(nonblank(serial) and IHr.SerialNr!=serial)then begin testf = false; end;
+				if(IHr.Variety!=ISr.Variety)then begin testf = false; end;
+				if(testf)then begin
+					res = res + IHr.Qty;
+					
+					//if(left(currentuser,2)=="SA")then begin
+					if(IHr.TransDate>stringtodate("1/12/2019"))then begin
+						if(IHr.CurncyCode=="AZN")then begin
+							curcomp = currentcompany;
+							INr.Code = IHr.ArtCode;
+							readfirstmain(INr,1,true);
+							setcompany(18,false);
+							CIr.LocCode = IHr.ArtCode;
+								CIr.BrandCode = INr.BPIBrand;								
+								readfirstkey("LocCodeBrand",CIr,2,true);
+								CCIHr.TransDate = IHr.InDate;
+								CCIHr.ArtCode = CIr.Code;
+								if(readfirstkey("ArtCode",CCIHr,2,false))then begin
+									if(CCIHr.TransDate==IHr.InDate and CCIHr.ArtCode==CIr.Code)then begin
+										IHr.CurncyCode = CCIHr.CurncyCode;
+										IHr.RemCostPriceCurncy = CCIHr.TotCostPriceCurncy / CCIHr.Qty * IHr.RemQty;
+									end;
+								end;
+							setcompany(curcomp,false);
+						end;
+					end;
+					//end;
+					
+					cqty[IHr.CurncyCode] = cqty[IHr.CurncyCode] + IHr.Qty;
+					if(!vcur[IHr.CurncyCode])then begin
+						vcur[IHr.CurncyCode] = true;
+						acur[acnt] = IHr.CurncyCode;
+						acnt = acnt + 1;
+					end;
+					if(IHr.Qty>=0)then begin
+						serialcost = serialcost + IHr.TotCostPrice;
+						ccost[IHr.CurncyCode] = ccost[IHr.CurncyCode] + IHr.TotCostPrice;
+					end else begin
+						serialcost = serialcost - IHr.TotCostPrice;
+						ccost[IHr.CurncyCode] = ccost[IHr.CurncyCode] - IHr.TotCostPrice;
+					end;  	
+				end;
+			end; 
+			serialcost = serialcost/res;
+		end;
+		
+		
+		IDItemQtyPerDate = res;
+		
+return;
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 global function val ItemQtyPerDateGlob(string artcode, date idate,string location)
 begin
 	record ItemHistVc IHr;
@@ -1587,6 +1796,517 @@ return;
 end;
 
 
+procedure PrintInfoID(record INVc INr, record ItemStatusVc ISr,string serial,val serstock,val costprice,date todate,var val total_qty,var val total_cost,var val total_price,var vector string typeval,array string typecode,Integer typescnt,boolean addclassf,string realcur,string brandcur,record RcVc RepSpec)
+begin 
+	record DIVc DIr;
+	record PLVc PLr;
+	integer pos,cnt,i,pos1,mtrw,c;
+  string 50 uloc,pricecur,uloc1;
+  val fr,to1,to2,br1,br2;
+  val baseprice,cur,price,baseprice5,brandprice;
+  record INConsVc INCr;
+	val instock,awercost,awercostcur,awercostbrandcur,curcost2,curcost,cost;
+	record PLDefVc PLDefr;
+	record ItemHistVc IHr;
+	record PUVc PUr,PUIHr;
+	row PUVc PUrw;
+  record IVVc IVr;
+  row IVVc IVrw;
+  roundmode rmode5;
+  string 255 brand,model,tstr,tstr2,filename,serverip,stock,reserve;
+  Boolean collf,metalf;
+  string 20 collstr,metalstr;
+	record OldDIVc OldDIr;
+  boolean TrHs, testf;
+	record ORVc ORr;
+	row ORVc ORrw;
+	record BPIBrandVc Brndr;
+	date dat;
+	
+  rmode5 = SetRoundMode(0,kRoundingDirectionToFromPosInf,kRoundingModeHalfUp,/*kRoundingStep5*/kRoundingStepNone);	//Edit----------------------Dima  17.04.2015
+  
+	IHr.ArtCode=INr.Code;
+	IHr.FileName="PUVc";
+	IHr.TransDate=todate;
+	TrHS = true;
+	while (LoopBackKey("FNArtCode",IHr,3,TrHS)) begin
+		testf = true;
+		if(IHr.ArtCode!=INr.Code)then begin TrHS = false; end;
+		if(IHr.FileName!="PUVc")then begin TrHS = false; end;
+		if(nonblank(ISr.Variety) and ISr.Variety!=IHr.Variety)then begin testf = false; end;
+		PUIHr.SerNr = IHr.TransNr;
+		if(ReadFirstMain(PUIHr,1,true))then begin
+			if(left(PUIHr.VECode,3)=="FOB")then begin testf = false; end;
+		end else begin
+			testf = false;
+		end;
+		if(TrHS and testf)then begin
+			dat = IHr.TransDate;
+			TrHS = false;
+		end;
+	end;
+	ResetLoop(IHr);
+  if(serstock==0)then begin
+  	instock = ISr.Instock;
+		reserve = ISr.RsrvQty;
+  end else begin
+  	instock = serstock;
+  end;
+  
+	// if(nonblank(ISr.Variety))then begin
+		// INr.Code = INr.Code & ISr.Variety;
+	// end;
+	
+	startformat(15);
+		DIr.Code = INr.DispGroups;
+		readfirstmain(DIr,1,true);
+		if(nonblank(ISr.Variety)) then begin
+			PLr.ArtCode = ISr.Code & ISr.Variety;
+		end else begin
+			PLr.ArtCode = ISr.Code;
+		end;
+		PLr.PLCode = "RRP";
+		PLr.SerialNr = serial;
+		if(readfirstmain(PLr,3,true))then begin
+			if(PLr.ArtCode==ISr.Code and PLr.PLCode=="RRP" and PLr.SerialNr==serial)then begin
+				price = PLr.ExVatPrice;
+			end;
+		end;	
+		if(nonblank(ISr.Variety))then begin
+			outstring(0,0,INr.Code & ISr.Variety,false);
+		end else begin
+			outstring(0,0,INr.Code,false);
+		end;
+		outstring(0,0,INr.AlternativeCode,false);
+		outstring(0,0,INr.OrigCode,false);
+		outstring(0,0,INr.BarCode,false);
+		outstring(0,0,INr.SN,false);
+		outstring(0,0,ISr.Location,false);
+		if(currentcompany==18)then begin
+			Brndr.Code = INr.BPIBrand;
+			if(readfirstmain(Brndr,1,true))then begin
+				outstring(0,0,Brndr.CWHCode,false);//mesto
+			end else begin
+				outstring(0,0,"",false);//nema mesta
+			end;
+			outstring(0,0,INr.Department,false);//stelaj
+			outstring(0,0,INr.InvCode,false);//polka
+		end;
+		pos = 0;
+		brand = "";
+		model = "";
+		if (CurrentCompany!=13) then begin
+  		ExtractObj(INr.DispGroups,pos,uloc);
+  		while (NonBlank(uloc)) begin
+  		  DIr.Code = uloc;
+  		  if (readfirstmain(DIr,1,true)) then begin
+  		    if (DIr.CType=="BRAND") then begin
+  		      brand = DIr.Name;
+  		    end;
+  		    if (DIr.CType=="MODEL") then begin
+  		      model = DIr.Name;
+  		    end;
+  		    if (addclassf and NonBlank(DIr.CType)) then begin //Edit***************************Sasha2,14:30 08.02.2016 {
+  				  if (DIr.CType=="GENDER") then begin
+  				    switch (Left(UpperCase(INr.MainDisp),1)) begin
+  				      case "A":
+        				  DIr.CType = DIr.CType & "_A";
+        				  typeval[DIr.CType] = INr.Code & ";" & DIr.Name;
+  				      case "J":
+  				        DIr.CType = DIr.CType & "_J";
+        				  typeval[DIr.CType] = INr.Code & ";" & DIr.Name;
+  				      case "W":
+  				        DIr.CType = DIr.CType & "_W";
+        				  typeval[DIr.CType] = INr.Code & ";" & DIr.Name;
+  				    end;
+  				  end else begin
+  				    typeval[DIr.CType] = INr.Code & ";" & DIr.Name;
+  				    switch (Left(UpperCase(INr.MainDisp),1)) begin //if classifications in custom separate fields {
+  				      case "A":
+  				        if (NonBlank(INr.Reference)) then begin
+  				          collf = true;
+  				          collstr = "COLL_A";
+  				        end;
+  				        if (NonBlank(INr.Metal)) then begin
+  				          metalf = true;
+  				          metalstr = "MATERIAL_A";
+  				        end;
+  				      case "J":
+  				        if (NonBlank(INr.Reference)) then begin
+  				          collf = true;
+  				          collstr = "COLL_J";
+  				        end;
+  				        if (NonBlank(INr.Metal)) then begin
+  				          metalf = true;
+  				          metalstr = "MATERIAL_J";
+  				        end;
+  				        if (NonBlank(INr.RowWeight)) then begin
+  				          tstr = typeval["WEIGHT"];
+      			        pos1 = 0;
+      			        ExtractObj(tstr,pos1,uloc1);
+      			        if (uloc1==INr.Code) then begin
+      			          ExtractObj(tstr,pos1,uloc1);
+      			          if (blank(uloc1)) then begin
+      			            typeval["WEIGHT"] = INr.Code & ";" & INr.RowWeight;
+      			          end;
+      			        end else begin
+      			          typeval["WEIGHT"] = INr.Code & ";" & INr.RowWeight;
+      			        end;
+  				        end;
+  				        if (NonBlank(INr.MajStoneDet)) then begin
+  				          tstr = typeval["D_CARAT"];
+      			        pos1 = 0;
+      			        ExtractObj(tstr,pos1,uloc1);
+      			        if (uloc1==INr.Code) then begin
+      			          ExtractObj(tstr,pos1,uloc1);
+      			          if (blank(uloc1)) then begin
+      			            typeval["D_CARAT"] = INr.Code & ";" & INr.MajStoneDet;
+      			          end;
+      			        end else begin
+      			          typeval["D_CARAT"] = INr.Code & ";" & INr.MajStoneDet;
+      			        end;
+  				        end;
+  				      case "W":
+  				        if (NonBlank(INr.Reference)) then begin
+  				          collf = true;
+  				          collstr = "COLL_W";
+  				        end;
+  				        if (NonBlank(INr.Metal)) then begin
+  				          metalf = true;
+  				          metalstr = "MATERIAL_W";
+  				        end;
+  				    end; 
+  				    if (collf) then begin
+  				      tstr = typeval[collstr];
+  			        pos1 = 0;
+  			        ExtractObj(tstr,pos1,uloc1);
+  			        if (uloc1==INr.Code) then begin
+  			          ExtractObj(tstr,pos1,uloc1);
+  			          if (blank(uloc1)) then begin
+  			            typeval[collstr] = INr.Code & ";" & INr.Reference;
+  			          end;
+  			        end else begin
+  			          typeval[collstr] = INr.Code & ";" & INr.Reference;
+  			        end;  
+  				      collf = false;
+  				    end;
+  				    if (metalf) then begin
+  		          tstr = typeval[metalstr];
+  			        pos1 = 0;
+  			        ExtractObj(tstr,pos1,uloc1);
+  			        if (uloc1==INr.Code) then begin
+  			          ExtractObj(tstr,pos1,uloc1);
+  			          if (blank(uloc1)) then begin
+  			            typeval[metalstr] = INr.Code & ";" & INr.Metal;
+  			          end;
+  			        end else begin
+  			          typeval[metalstr] = INr.Code & ";" & INr.Metal;
+  			        end;
+  				      metalf = false;
+  				    end;//if classifications in custom separate fields }
+  				  end;
+  				end; //Edit***************************Sasha2,14:30 08.02.2016 }
+  		  end;
+  		  ExtractObj(INr.DispGroups,pos,uloc);
+  		end;
+  	 //Edit***************************Sasha2,16:37 18.02.2016
+		end else begin
+		  ExtractObj(INr.DispGroups,pos,uloc);
+		  DIr.Code = uloc;
+		  readfirstmain(DIr,1,true)
+		  outstring(0,0,DIr.Name,false);
+		end;
+		
+		ExtractObj(INr.DispGroups,pos,uloc);
+		if(currentcompany==9)then begin
+			if(uloc=="GOODS")then begin
+				ExtractObj(INr.DispGroups,pos,uloc);
+			end;
+		end;
+		if(currentcompany!=13)then begin
+			if(CompanyIsJWLikeCompany(currentcompany)==false)then begin
+				if(nonblank(INr.BPIBrand)) then begin
+					outstring(0,0,BPICodeToName(INr.BPIBrand),false);
+				end else begin 
+					outstring(0,0,brand,false); //Edit***************************Sasha2,16:37 18.02.2016
+				end;
+			end else begin
+				outstring(0,0,BPICodeToName(INr.BPIBrand),false);
+			end;
+		end;
+		outstring(0,0,INr.Name,false);
+		if(currentcompany!=13)then begin
+			if(nonblank(INr.BPICollection)) then begin
+				outstring(0,0,BPICodeToName(INr.BPICollection),false);
+			end else begin
+				outstring(0,0,model,false);
+			end;
+		end else begin
+			outstring(0,0,"",false);
+		end;	
+		if (addclassf) then begin //Edit***************************Sasha2,16:36 18.02.2016
+  		outstring(0,0,INr.RowWeight,false); //Ves
+  		outstring(0,0,INr.MajStoneDet,false);  //Karatnoct
+		end; //Edit***************************Sasha2,16:36 18.02.2016
+		
+		if(currentcompany==29)then begin
+			ORr.SerNr = mid(serial,3,len(serial)-12);
+			stock = "";
+			if(readfirstmain(ORr,1,true))then begin
+				mtrw = matrowcnt(ORr);
+				for (c=0;c<mtrw;c=c+1) begin
+					matrowget(ORr,c,ORrw);
+					if(ORrw.ArtCode==INr.Code)then begin
+						if(blank(stock))then begin
+							stock = ORrw.ECReservStock;
+						end else begin
+							stock = stock & "," & ORrw.ECReservStock;
+						end;
+					end;
+				end;
+			end;
+			outstring(0,0,mid(serial,3,len(serial)-12),false); 
+			outstring(0,0,stock,false);
+		end;
+	
+			outstring(0,0,BPICodeToName(INr.BPIGroup),false); 
+			outstring(0,0,BPICodeToName(INr.BPISubGroup),false); 
+			outstring(0,0,BPICodeToName(INr.BPICategory),false); 
+			outstring(0,0,BPICodeToName(INr.BPIMaterial),false); 
+			if(CurrentCompany==13) then begin
+				outstring(0,0,INr.Colour,false); 
+				outstring(0,0,BPICodeToName(INr.BPIColor),false); 
+				outstring(0,0,BPICodeToName(INr.BPIShape),false); 
+				outstring(0,0,INr.Size,false); 
+				outstring(0,0,BPICodeToName(INr.BPISize),false); 
+			end else begin	
+				outstring(0,0,BPICodeToName(INr.BPIColor),false); 
+				outstring(0,0,BPICodeToName(INr.BPIShape),false); 
+				outstring(0,0,BPICodeToName(INr.BPISize),false); 
+			end;
+			outstring(0,0,BPICodeToName(INr.BPIUse),false); 
+			outstring(0,0,BPICodeToName(INr.BPISex),false); 
+			outstring(0,0,BPICodeToName(INr.BPIPlating),false);
+			outstring(0,0,BPICodeToName(INr.BPIClarity),false); 
+			outstring(0,0,BPICodeToName(INr.BPIWeight),false); 
+			outstring(0,0,BPICodeToName(INr.BPICut),false); 
+			outstring(0,0,BPICodeToName(INr.BPIStone),false); 
+			outstring(0,0,BPICodeToName(INr.BPIStrap),false); 
+			outstring(0,0,BPICodeToName(INr.BPIOdour),false); 
+			if(currentcompany==25)then begin
+				outstring(0,0,INr.MainDisp,false); 
+				outstring(0,0,INr.SNOne,false);
+			end;
+			
+		outstring(0,0,serial,false);// Edit ************************** Tuesday, 7 May 2013 10:13:07
+		INCr.Code = INr.Code;
+		if(readfirstmain(INCr,1,true))then begin
+			outstring(0,0,USetStr(31180),false);
+		end else begin
+			outstring(0,0,"",false);
+		end;
+		
+			outstring(0,0,dat,false);
+		outstring(0,0,instock,false);
+		outstring(0,0,reserve,false);
+		outstring(0,0,INr.Unittext,false);
+		total_qty = total_qty + instock;
+		GetFullCurncyRate(INr.LastPurchCurncyCode,todate,fr,to1,to2,br1,br2);
+		if(fr==0 or to1==0)then begin
+			fr=1; to1=0;
+		end;
+		
+		/* if(CurrentUser!="SA1")then begin
+			awercost = 0;
+			awercostcur = 0;
+			awercostbrandcur = 0;
+			awercost = FindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur);
+			FindAwerageCostCurProc(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,curcost,curcost2);
+			awercostcur = curcost;
+			awercostbrandcur = curcost2;
+		end else begin */
+			awercost = 0;
+			awercostcur = 0;
+			awercostbrandcur = 0;
+			MyFindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,cost,curcost,curcost2);
+			awercost = cost;
+			awercostcur = curcost;
+			awercostbrandcur = curcost2;
+		// end;
+		
+		
+		if(costprice>0 and nonblank(serial) and INr.SerNrf>0)then begin
+			awercost = costprice;
+			IHr.ArtCode = INr.Code;
+			IHr.SerialNr = serial;
+			IHr.FileName = "PUVc";
+			if(readlastkey("ArtCodeSerialNr",IHr,3,true))then begin
+				PUr.SerNr = IHr.TransNr;
+				readfirstmain(PUr,1,true);
+				matrowget(PUr,IHr.Row,PUrw);
+				awercostcur = PUrw.UPrice;
+			end else begin
+				IHr.ArtCode = INr.Code;
+				IHr.SerialNr = serial;
+				IHr.FileName = "IVVc";
+				readfirstkey("ArtCodeSerialNr",IHr,3,true);
+				IVr.SerNr = IHr.TransNr;
+				readfirstmain(IVr,1,true);
+				matrowget(IVr,IHr.Row,IVrw);
+				awercostcur = IVrw.Sum;
+			end;
+		end;
+		
+	
+		
+		
+		if(usercanaction("ViewCostPrice",true))then begin
+			outstring(0,0,awercostcur,false);
+			if(nonblank(brandcur))then begin
+				outstring(0,0,awercostbrandcur,false);
+			end;
+			outstring(0,0,awercost,false);
+			outstring(0,0,awercostcur*instock,false);
+			outstring(0,0,awercost*instock,false);
+			if(left(currentuser,2)=="SA")then begin
+				//logtext(0,"INr.LastPurchCurncyCode 3 " & INr.LastPurchCurncyCode);
+			end;
+			outval(0,0,INr.LastPurchPrice2,m4val,false);
+			if(nonblank(brandcur))then begin
+				outstring(0,0,awercostbrandcur*instock,false);
+			end;
+		end;
+		
+
+		total_cost = total_cost + awercost*instock;
+		
+		baseprice = 0;
+		brandprice = 0;
+		if(nonblank(ISr.Variety)) then begin
+			PLr.ArtCode = ISr.Code & ISr.Variety;
+		end else begin
+			PLr.ArtCode = ISr.Code;
+		end;
+		PLr.PLCode = "RRP";
+		PLr.CustCode = "";
+		PLr.SerialNr = serial;
+		
+		if(readfirstmain(PLr,4,true))then begin
+			if(PLr.ArtCode==ISr.Code and PLr.PLCode=="RRP" and PLr.SerialNr==serial)then begin
+				price = PLr.ExVatPrice;
+				PLDefr.Code = "RRP";
+				readfirstmain(PLDefr,1,true);
+				pricecur = PLDefr.CurncyCode;
+				if(nonblank(PLr.CurncyCode))then begin
+					pricecur = PLr.CurncyCode;
+				end;
+			end;
+		end;		
+		if(price==0)then begin
+			cnt = 0;
+			PLr.ArtCode = ISr.Code;
+			PLr.PLCode = "RRP";
+			while(loopmain(PLr,2,(PLr.ArtCode==ISr.Code)))begin
+				if(PLr.ArtCode==ISr.Code)then begin
+					price = price + PLr.ExVatPrice;
+					cnt = cnt + 1;
+					PLDefr.Code = "RRP";
+					readfirstmain(PLDefr,1,true);
+					pricecur = PLDefr.CurncyCode;
+					if(nonblank(PLr.CurncyCode))then begin
+						pricecur = PLr.CurncyCode;
+					end;
+				end;
+			end;
+			resetloop(PLr);
+			price = price/cnt;
+		end;
+		GetFullCurncyRate(pricecur,todate,fr,to1,to2,br1,br2);
+		if(fr==0 or to1==0)then begin
+			fr=1; to1=1;
+		end;
+		baseprice = price/fr*to1;
+		if(pricecur!=INr.LastPurchCurncyCode)then begin
+			GetFullCurncyRate(INr.LastPurchCurncyCode,todate,fr,to1,to2,br1,br2);
+			if(fr==0 or to1==0)then begin
+				fr=1; to1=1;
+			end;
+			price = baseprice*fr/to1;
+		end;
+		
+		if(addclassf)then begin
+			baseprice5 = round(baseprice,rmode5);	//Edit----------------------Dima  17.04.2015
+		end else begin
+			baseprice5 = baseprice;
+		end;
+		
+		if(currentcompany==10)then begin
+			PLr.ArtCode = ISr.Code;
+			PLr.PLCode = "RRP";
+			PLr.CustCode = "";
+		
+			if(readfirstmain(PLr,3,true))then begin
+				if(PLr.ArtCode==ISr.Code and PLr.PLCode=="RRP")then begin
+					baseprice5 = PLr.ExVatPrice;
+					baseprice = PLr.ExVatPrice;
+				end;
+			end;	
+		end;
+		
+		if(nonblank(brandcur))then begin
+			GetFullCurncyRate(brandcur,todate,fr,to1,to2,br1,br2);
+			if(fr==0 or to1==0)then begin
+				GetFullCurncyRate(brandcur,currentdate,fr,to1,to2,br1,br2);
+				if(fr==0 or to1==0)then begin
+					fr=1; to1=1;
+				end;
+			end;
+			brandprice = baseprice / to1 * fr;
+		end; 
+		
+		outval(0,0,price,m4val,false);
+		if(nonblank(brandcur))then begin
+			outval(0,0,brandprice,m4val,false);
+		end;
+		outval(0,0,baseprice5,m4val,false);
+		//outstring(0,0,baseprice,false);
+		outstring(0,0,price*instock,false);
+		if(nonblank(brandcur))then begin
+			outval(0,0,brandprice*instock,m4val,false);
+		end;
+		outstring(0,0,baseprice*instock,false);
+		total_price = total_price + baseprice*instock;
+		if(left(currentuser,2)=="SA")then begin
+			//logtext(0,"INr.LastPurchCurncyCode 2 " & INr.LastPurchCurncyCode);
+		end;
+		if(left(currentuser,2)=="SA")then begin
+				//logtext(0,"INr.LastPurchCurncyCode 4 " & INr.LastPurchCurncyCode);
+			end;
+		outstring(0,0,INr.LastPurchCurncyCode,false);
+		if (addclassf) then begin //Edit***************************Sasha2,14:37 08.02.2016 {
+		  for (i=30;i<typescnt;i=i+1) begin //if you change "30" do it in other places having "For" loop 
+		    pos = 0;
+		    ExtractObjWithSeparator(";",typeval[typecode[i]],true,pos,uloc);
+		    if (uloc==INr.Code) then begin
+		      ExtractObjWithSeparator(";",typeval[typecode[i]],true,pos,uloc);
+          outstring(0,0,uloc,false);
+        end else begin
+          outstring(0,0,"",false);
+		    end;
+		  end;
+		end; //Edit***************************Sasha2,14:37 08.02.2016 }
+	FindAndStoreINVcImgLink(INr,currentcompany,tstr2,filename);
+	if(nonblank(filename))then begin
+		filename = "http://" & RepSpec.f9 & "/" & filename;
+	end else begin
+		filename = "";
+	end;
+	outstring(0,0,filename,false);
+	outstring(0,0,INr.GlobalArtCode,false);
+	endformat;
+
+return;
+end;
 
 
 
@@ -1857,6 +2577,110 @@ end; //Edit***************************Sasha2,10:05 19.02.2016 }
 
 
 //Edit----------------------Dima  23.02.2016
+procedure IDCollectAndPrintData(record RcVc RepSpec,record INVc INr, var record TotalsRepVc Totals,var vector string typeval,array string typecode,Integer typescnt,boolean addclassf,string brandcur)
+begin
+ record ItemStatusVc ISr;
+ record SerBalVc SBr;
+ boolean TrHs2,testf2,TrHs,testf,testf3;
+ date todate;
+ record ItemHistVc IHr;
+ integer acnt;
+ vector val cqty,ccost;
+ array string 10 acur;
+ integer i;
+ string 10 realcur;
+ string 255 tstr2,filename,serverip,ITCode;
+ record LocationVc Locr;
+  
+  todate = RepSpec.d1;
+  if(blank(todate))then begin
+  	todate = currentdate;
+  end;
+
+	ISr.Code = INr.Code;
+	realcur = INr.LastPurchCurncyCode;
+	TrHs2 = true;
+	while(loopmain(ISr,1,TrHs2)) begin
+		testf2 = true;
+		if(ISr.Code!=INr.Code)then begin testf2 = false; TrHs2 = false; end;
+		if(nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2)then begin testf2 = false; end;
+		if(ISr.Location==";;;")then begin testf2 = false; end;
+		if(nonblank(RepSpec.f8)) then begin
+			Locr.Code = ISr.Location;
+			if(ReadFirstMain(Locr,1,true)) then begin
+				if(!SetInSet(Locr.Objects,RepSpec.f8))then begin testf2 = false; end; 
+			end;
+		end;	
+		
+		if(testf2)then begin
+			SBr.CostPrice = 0;
+			ISr.Instock = IDItemQtyPerDate(ISr.Code,todate,ISr.Location,"",SBr.CostPrice,acnt,cqty,ccost,acur,brandcur,ISr.Variety);
+			if(ISr.Code=="IPF1-07975-1")then begin logtext(0,ISr.Instock & " instock"); end;
+			//logtext(0,"CollectAndPrintData " & ISr.Instock & " " & ISr.Location);
+		end;
+		if(ISr.Instock<=0)then begin testf2 = false; end;
+		if(ISr.Code=="IPF1-07974-1")then begin logtext(0,"1"); end;
+		if(testf2)then begin
+			if(ISr.Code=="IPF1-07974-1")then begin logtext(0,"2"); end;
+			if(INr.SerNrf==0)then begin
+				For(i=0;i<acnt;i=i+1) begin
+					if(INr.LastPurchCurncyCode==acur[i] and nonblank(INr.LastPurchCurncyCode))then begin
+						cqty[INr.LastPurchCurncyCode] = cqty[INr.LastPurchCurncyCode] + cqty[""];
+						ccost[INr.LastPurchCurncyCode] = ccost[INr.LastPurchCurncyCode] + ccost[""];
+						cqty[""] = blankval;
+						ccost[""] = blankval;
+					end;
+				end; 
+				
+				
+				For(i=0;i<acnt;i=i+1) begin
+					if(cqty[acur[i]]!=0)then begin
+						INr.LastPurchCurncyCode = acur[i];
+						ISr.Instock = cqty[acur[i]];
+						if(left(currentuser,2)=="SA")then begin
+							//logtext(0,"PrintInfo2 1 " & INr.LastPurchCurncyCode);
+						end;
+						PrintInfoID(INr,ISr,"",0,0,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,realcur,brandcur,RepSpec);
+					end;
+				end;
+				
+			end else begin
+				if(ISr.Code=="IPF1-07974-1")then begin logtext(0,"3"); end;
+				if(nonblank(ISr.Variety))then begin
+					ITCode = INr.Code & ISr.Variety;
+				end else begin
+					ITCode = INr.Code;
+				end;
+				SBr.Item = ITCode;
+				SBr.Location = ISr.Location;
+				while (loopmain(SBr,2,(SBr.Item==ITCode and SBr.Location==ISr.Location))) begin
+					if(ISr.Code=="IPF1-07974-1")then begin logtext(0,"4"); end;
+					if(SBr.Item==ITCode and SBr.Location==ISr.Location)then begin
+						if(ISr.Code=="IPF1-07974-1")then begin logtext(0,"5"); end;
+						ISr.Instock = IDItemQtyPerDate(SBr.Item,todate,ISr.Location,SBr.Serial,SBr.CostPrice,acnt,cqty,ccost,acur,brandcur,ISr.Variety);
+						//logtext(0,SBr.Item & " " & SBr.Location & " " & ISr.Instock & " " & SBr.CostPrice);
+						if(ISr.Instock>0)then begin
+							if(left(currentuser,2)=="SA")then begin
+								//logtext(0,"PrintInfo2 2 " & INr.LastPurchCurncyCode);
+							end;
+							if(ISr.Code=="IPF1-07974-1")then begin logtext(0,"6"); end;
+							PrintInfoID(INr,ISr,SBr.Serial,ISr.Instock,SBr.CostPrice,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,INr.LastPurchCurncyCode,brandcur,RepSpec);
+						end;
+					end;
+				end;
+				resetloop(SBr);
+			end;
+		end;
+	end;
+end;
+
+
+
+
+
+
+
+//Edit----------------------Dima  23.02.2016
 procedure CollectAndPrintData(record RcVc RepSpec,record INVc INr, var record TotalsRepVc Totals,var vector string typeval,array string typecode,Integer typescnt,boolean addclassf,string brandcur)
 begin
  record ItemStatusVc ISr;
@@ -1943,6 +2767,12 @@ begin
 		end;
 	end;
 end;
+
+
+
+
+
+
 
 
 global procedure ItemStockStatExtRn(record RcVc RepSpec)
@@ -2255,12 +3085,20 @@ begin
 					if(companies.length>1)then begin			
 						for (i=0;i<companies.length;i=i+1) begin
 							if (SetCompany(companies[i],false)) then begin
-								CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+								if(CurrentCompany!=28)then begin
+									CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+								end else begin
+									IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+								end;
 							end;
 						end;
 						ResetCompany(oldcompany);	
 					end else begin
+						if(CurrentCompany!=28)then begin
 							CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+						end else begin
+							IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+						end;
 					end;
 				end;   
 				
@@ -2339,12 +3177,20 @@ begin
 						if(companies.length>1)then begin			
 							for (i=0;i<companies.length;i=i+1) begin
 								if (SetCompany(companies[i],false)) then begin
-									CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+									if(CurrentCompany!=28)then begin
+										CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+									end else begin
+										IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+									end;
 								end;
 							end;
 							ResetCompany(oldcompany);	
 						end else begin
+							if(CurrentCompany!=28)then begin
 								CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+							end else begin
+								IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+							end;
 						end;
 						
 				end;
