@@ -19,6 +19,7 @@ remote updating procedure CreateNewGlobalItem(var record INVc);
 external function roundmode SetRoundModeD(Integer);
 external updating procedure DeleteTransaction(LongInt,Integer);
 external procedure TRSumup(var record TRVc,var val);
+external function string 60 RemoveObjectFromObjectList(string,string);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -3073,7 +3074,7 @@ end;
 global updating 
 procedure CollectVIDaySaleMn(record RcVc RepSpec)
 begin
-record TRVc TRr,AccTRr;
+record TRVc TRr,AccTRr,AccTRrCC;
 row TRVc TRrw,AccTRrw;
 record VIVc VIr,oldVIr;
 row VIVc VIrw;
@@ -3100,6 +3101,8 @@ boolean createTr;
 longint corrTRrNum;
 val Acc60,Acc61;
 record SDVc SDr;
+record LocationVc Locr;
+string 255 fobCust;
 
 testf = true;
 oldCompany = currentCompany;
@@ -3140,8 +3143,10 @@ while(loopDate<=RepSpec.sEndDate) begin
 			SetCompany(comp+1,false);
 			logtext(0,comp+1);
 			createTr = false;
+			RecordClear(AccTRrCC);
 			RecordClear(AccTRr);
 			RecordNew(AccTRr);
+			RecordNew(AccTRrCC);
 			AccTRr.TransDate = loopDate;
 			AccTRr.IntYc = curAccDiffIntYc;
 			TRr.Number = 9999999;
@@ -3188,6 +3193,7 @@ while(loopDate<=RepSpec.sEndDate) begin
 			ResetLoop(TRr);
 			TrHs = true;
 			while(loopkey("TransDate",TRr,1,TrHs)) begin
+				fobCust = "";
 				testf = true;
 				if(TRr.TransDate>loopDate) then begin testf = false; TrHs = false; end;
 				if(TRr.IntYc!=SHYc and TRr.IntYc!=RetYc and TRr.IntYc!=IVYc and TRr.IntYc!=SDYc) then begin testf=false; end;
@@ -3196,19 +3202,36 @@ while(loopDate<=RepSpec.sEndDate) begin
 						case SHYc: SHr.SerNr = TRr.Number;
 								if(ReadFirstMain(SHr,1,true)) then begin
 									if(SHr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+									Locr.Code = IVr.Location;
+									if(ReadFirstMain(Locr,1,true)) then begin
+										fobCust = Locr.FOBSuplier;
+									end;
 								end;
 						case 	RetYc	: Retr.SerNr = TRr.Number;
 								if(ReadFirstMain(Retr,1,true)) then begin
 									if(Retr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+									Locr.Code = IVr.Location;
+									if(ReadFirstMain(Locr,1,true)) then begin
+										fobCust = Locr.FOBSuplier;
+									end;
 								end;
 						case 	IVYc	: IVr.SerNr = TRr.Number;
 								if(ReadFirstMain(IVr,1,true)) then begin
 									if(IVr.CustCode=="FOBE_COMMERCE") then begin testf=false; end;
+									Locr.Code = IVr.Location;
+									if(ReadFirstMain(Locr,1,true)) then begin
+										fobCust = Locr.FOBSuplier;
+									end;
 								end;
 						case 	SDYc	: SDr.SerNr = TRr.Number;
 								if(ReadFirstMain(SDr,1,true)) then begin
 									if(SetInSet("CENTRAL_RETURN",SDr.Objects)) then begin testf=false; end;
+									Locr.Code = SDr.Location;
+									if(ReadFirstMain(Locr,1,true)) then begin
+										fobCust = Locr.FOBSuplier;
+									end;
 								end;
+								
 					end;			
 				end;
 				if(testf) then begin
@@ -3264,6 +3287,14 @@ while(loopDate<=RepSpec.sEndDate) begin
 													TRrw.CurCredVal = TRrw.CurCredVal*(-1);
 												end;	
 												MatrowPut(AccTRr,rownr,TRrw);
+												Matrowget(AccTRr,rownr,TRrw);
+												ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
+												obj = stores[0];
+												TRrw.Objects = RemoveObjectFromObjectList(TRrw.Objects,obj);
+												TRrw.Objects = AddObjectToObjectList(TRrw.Objects,fobCust);
+												TRrw.Objects = AddObjectToObjectList(TRrw.Objects,"CC");
+												MatRowInsert(AccTRrCC,rownr,TRrw);
+												MatrowPut(AccTRrCC,rownr,TRrw);
 												rownr = rownr + 1;
 												matrowget(TRr,i+1,TRrw);
 												if(TRrw.DebVal!=0) then begin
@@ -3279,6 +3310,14 @@ while(loopDate<=RepSpec.sEndDate) begin
 													TRrw.CurCredVal = TRrw.CurCredVal*(-1);
 												end;	
 												MatrowPut(AccTRr,rownr,TRrw);
+												Matrowget(AccTRr,rownr,TRrw);
+												ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
+												obj = stores[0];
+												TRrw.Objects = RemoveObjectFromObjectList(TRrw.Objects,obj);
+												TRrw.Objects = AddObjectToObjectList(TRrw.Objects,fobCust);
+												TRrw.Objects = AddObjectToObjectList(TRrw.Objects,"CC");
+												MatRowInsert(AccTRrCC,rownr,TRrw);
+												MatrowPut(AccTRrCC,rownr,TRrw);
 												rownr = rownr + 1;
 												createTr = true;
 											end;	
@@ -3295,8 +3334,8 @@ while(loopDate<=RepSpec.sEndDate) begin
 				TRSumup(AccTRr,tmpval);
 				RecordInsert(AccTRr,true);
 				SetCompany(18,false);
-				for(i=0;i<matrowcnt(AccTRr);i=i+1) begin
-					matrowget(AccTRr,i,TRrw);
+				for(i=0;i<matrowcnt(AccTRrCC);i=i+1) begin
+					matrowget(AccTRrCC,i,TRrw);
 					if(TRrw.DebVal!=0) then begin
 						TRrw.DebVal = TRrw.DebVal*(-1);
 					end;	
