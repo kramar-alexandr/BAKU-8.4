@@ -26,6 +26,20 @@ external procedure LogProcTime(string,longint);
 remote procedure ORSumup(var record ORVc);
 remote procedure ORVc_PastePrice(var record ORVc,Integer,var Boolean);
 remote procedure ORDchsum(var record ORVc,Integer);
+external function Boolean VIVc_PasteVECode(var record VIVc,Integer,Boolean,Boolean,var string);
+external function Boolean GetAccName(string,var string,Integer);
+external procedure ExtractObj(string,var Integer,var string);
+external procedure ExtractObjectsByType(string, string, var array string, var integer);
+remote procedure VICalcVals(var record VIVc);
+external procedure VISumup(record VIVc,var val);
+external procedure VIVc_PastePayVal(var record VIVc);
+//external procedure MyExtractObj(string,var Integer,var string);
+ external function val AbsoluteVal(val);
+remote updating procedure CreateNewGlobalItem(var record INVc);
+external function roundmode SetRoundModeD(Integer);
+external updating procedure DeleteTransaction(LongInt,Integer);
+external procedure TRSumup(var record TRVc,var val);
+external function string 60 RemoveObjectFromObjectList(string,string);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -1755,6 +1769,123 @@ begin
 	ResetCompany(OldComp);
 return;
 end;//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 
+
+
+
+
+
+
+
+
+
+global updating function boolean CreateUnlinkedVIfromCCRetPU(record VIVc VIr, record RetPUVc RetPUr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:46 03.02.2020
+begin
+	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c,vimtrw,vii,ecvcnt,v,cmpnmb,VIOFFCnt,lcnt,ccnt,FIFOcnt;
+	record ORVc ORr, ECORr;
+	row ORVc ORrw, ECORrw;
+	record SHVc SH2r;
+	row SHVc SHrw, SH2rw;
+	record POVc POr;
+	row POVc POrw;
+	string 50 ostr,POCurCode;
+	array string 100 class,artcode,itemcurrency,aLCPOrowNr;
+	record INVc INr, LINr, UUINr;
+	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf,ccItemf;
+	record CUVc CUr;
+	record DIVc DIr;
+	string 200 vendor,loccode,errmsg,OffserNr, PUstock, curcode;
+	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode,vLocCashier,vCurrRowCode;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBrw;
+	vector boolean vArtCodeRepeat;
+	vector integer vArtCodeQTY, ECArt,priceinorcnt;
+	vector val ItemPrice, ItemRebate, vItemPrice, vItemRowCostCurrPrice, vItemRowQuant, ItemORPriseWRebate;
+	record VIVc OldVIr, offVIr;
+	row VIVc VIrw, OldVIrw;
+	record RcVc RepSpec;
+	longint r, shLnkN, POComp, PONr;
+	record IVVc IVr;
+	record RLinkVc RLinkr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	val ct, SumFO, itemtotcost;
+	val fr,to1,to2,br1,br2,totivsum;
+	record ItemHistVc IHr;
+	record ActVc Actr;
+	record ECVendFobSetBlaock ECVFSBb;
+	row ECVendFobSetBlaock ECVFSBrw;
+	integer ItQty, it, smtrw;
+	record RLinkVc RLr;
+	record ORVc LORr, GORr;
+	record ECCasierDocSetBlock ECCDSb;
+	row ECCasierDocSetBlock ECCDSrw;
+	record ConsItemVc CIr;
+	row RetPUVc RetPUrw;
+	val vItemFifo, vItemHTotCostPr, sumItemFifo, SumItemHTotCostPr;
+	string 255 vewarn, tstr;
+	record LocationVc Locr;
+	
+	
+	
+	for(i=0;i<matrowcnt(RetPUr);i=i+1) begin
+		matrowget (RetPUr,i,RetPUrw);
+		IHr.FileName = "RetPUVc";
+		IHr.TransNr = RetPUr.SerNr;
+		IHr.Row = i;
+		TrHs = true;
+		while (LoopBackKey("FNTransNr",IHr,3,TrHs)) begin
+			if(IHr.FileName!="RetPUVc")then begin TrHs = false; end;
+			if(IHr.TransNr!=RetPUr.SerNr)then begin TrHs = false; end;
+			if(IHr.Row!=i)then begin TrHs = false; end;
+			if(IHr.ArtCode==RetPUrw.ArtCode and TrHs)then begin
+				vItemFifo = vItemFifo + IHr.TotCostPriceCurncy;
+				vItemHTotCostPr = vItemHTotCostPr + IHr.TotCostPrice;
+				curcode = IHr.CurncyCode;
+			end;
+		end;
+		ResetLoop (IHr);
+	end;
+	
+	Locr.Code = RetPUr.Location;
+	if(ReadFirstMain(Locr,1,true))then begin end;
+	RecordNew(VIr);
+	VIr.VECode = RetPUr.VECode;
+	VIVc_PasteVECode(VIr,0,false,true,vewarn);
+	VIr.SerNr = NextSerNr("VIVc",currentdate,-1,false,""); 
+	logtext(0,"new " & VIr.SerNr);
+	VIr.TransDate = CurrentDate;
+	VIrw.AccNumber = "41/06";
+	if (GetAccName(VIrw.AccNumber,tstr,60)) then begin end;
+	VIrw.Comment = tstr; 
+	VIrw.Sum = vItemFifo;
+	matrowput(VIr,0,VIrw);  
+	VICalcVals(VIr);
+	VISumup(VIr,ct); 
+	VIr.PayVal = vItemFifo;
+	VIVc_PastePayVal(VIr);
+	VIr.InvDate = CurrentDate;
+	VIr.DueDate = CurrentDate;
+	if(nonblank(VIr.Objects)) then begin VIr.Objects = VIr.Objects & ","; end;
+	VIr.Objects = VIr.Objects & Locr.Objects;
+	VIr.PayDeal = "CN";
+	VIr.CurncyCode = curcode;
+	if(curcode!="AZN")then begin
+		if(vItemFifo<vItemHTotCostPr)then begin
+			VIr.FrRate = 1;
+			VIr.ToRateB1 = vItemHTotCostPr / vItemFifo;
+		end else begin
+			VIr.ToRateB1 = 1;
+			VIr.FrRate = vItemHTotCostPr / vItemFifo;
+		end;
+	end else begin
+		VIr.ToRateB1 = blankval;
+		VIr.FrRate = blankval;
+	end;
+	if (recordStore(VIr,true)) then begin end;
+	CreateUnlinkedVIfromCCRetPU = true;
+return;
+end; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:46 03.02.2020
+
 
 
 
