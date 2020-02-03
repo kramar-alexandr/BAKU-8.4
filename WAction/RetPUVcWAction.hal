@@ -20,7 +20,8 @@ remote procedure SetDelAddr(string,string,var string,var string,var string,var s
 remote function string 20 FindCustRoute(string,string,string);
 remote procedure RetPUVc_PasteLocation(var record RetPUVc,Integer);
 remote procedure RetPUVc_PasteVendor(var record RetPUVc,Integer);
-
+remote function Boolean RetPUVc_PasteArtCode(var record RetPUVc,Integer,Boolean,Boolean);
+external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
 
 global
 procedure RetPUSumUp(var record RetPUVc RetPUp)
@@ -191,18 +192,18 @@ end;
 
 
 
-// function Boolean RetPUDClassArtCodeEFAfter(Integer wn, Integer rownr,Integer changed)
-// BEGIN
-  // record RetPUVc RetPUr;
+function Boolean RetPUDClassArtCodeEFAfter(Integer wn, Integer rownr,Integer changed)
+BEGIN
+  record RetPUVc RetPUr;
 
-  // if (changed!=0) then begin
-    // GetWindowRecord(wn,RetPUr);
-    // RetPUVc_PasteArtCode(RetPUr,rownr);
-    // PutWindowRecord(wn,RetPUr);
-  // end;
-  // RetPUDClassQuantEFAfter = true;
-  // return;
-// end;
+  if (changed!=0) then begin
+    GetWindowRecord(wn,RetPUr);
+    RetPUVc_PasteArtCode(RetPUr,rownr,1,false);
+    PutWindowRecord(wn,RetPUr);
+  end;
+  RetPUDClassArtCodeEFAfter = true;
+  return;
+end;
 
 
 
@@ -414,6 +415,35 @@ begin
 end;
 
 
+
+function Boolean RetPUDClassCurncyCodeEFAfter(Integer wn,Integer changedf)
+begin
+  record RetPUVc RetPUr;
+  record CUVc VEr;
+  string 5 curcode;
+  val fr,to1,to2,br1,br2;
+
+  if (changedf!=0) then begin
+    GetWindowRecord(wn,RetPUr);
+    DeselectWindow(wn,false);
+    curcode = RetPUr.CurncyCode;
+    GetFullCurncyRate(curcode,RetPUr.TransDate,fr,to1,to2,br1,br2);
+    RetPUr.CurncyCode = curcode;
+    RetPUr.FrRate = fr;
+    RetPUr.ToRateB1 = to1; 
+    RetPUr.ToRateB2 = to2;
+    RetPUr.BaseRate1 = br1;
+    RetPUr.BaseRate2 = br2;    
+    PutWindowRecord(wn,RetPUr);
+  end;
+  RetPUDClassCurncyCodeEFAfter = true;
+  return;
+end;
+
+
+
+
+
 global
 function Boolean RetPUDClassAfterEditField(Integer wn,string fieldname,Integer fn, Integer rownr,Integer changed)
 BEGIN
@@ -433,8 +463,8 @@ BEGIN
     case "PURow": res = RetPUDClassPURowEFAfter(wn,rownr,changed);
     case "Location": res = RetPUDClassLocationEFAfter(wn,rownr,changed);
 		case "VECode": res = RetPUDClassVECodeEFAfter(wn,rownr,changed);
-		// case "ArtCode": res = RetPUDClassLocationEFAfter(wn,rownr,changed);
-		// case "Location": res = RetPUDClassLocationEFAfter(wn,rownr,changed);
+		case "ArtCode": res = RetPUDClassArtCodeEFAfter(wn,rownr,changed);
+		case "CurncyCode": res = RetPUDClassCurncyCodeEFAfter(wn,changed);
   end;
   RetPUDClassAfterEditField = res;
   RETURN;

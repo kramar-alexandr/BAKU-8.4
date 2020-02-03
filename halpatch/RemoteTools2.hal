@@ -29,6 +29,7 @@ external procedure CalcSum(val,val,val,val,var val,Integer);
 external procedure IVSumup(var record IVVc,Boolean);
 external function LongInt GetCurUserLastNr(string);
 external procedure FindSalesExVat(record TaxMatrixVc,string,val,Integer,Integer,var val);
+external updating function boolean CreateUnlinkedVIfromCCRetPU(record VIVc, record RetPUVc);
 
 
 procedure FindCreditNotePayTerm(var string paydeal)
@@ -340,46 +341,137 @@ global
 updating function Integer RecordAction_raPasteRetPUInVI(var record VIVc VIp,LongInt retpunr)
 BEGIN
   record SRBlock SRRec;
-  record RetPUVc RetPUr;
+  record RetPUVc RetPUr, aRetPU;
+	row RetPUVc RetPUrw, RetPUrw2;
   Integer res;
   LongInt newnr;
   string 255 tstr;
   Boolean nousersernr;
   val temp;
+  integer i, ITypecnt, ITType, j;
+	vector boolean ItemType;
+	record INVc INr;
   
-  res = -1;
-  RecordNew(VIp);
-  VIp.SerNr = -1;
-  RetPUr.SerNr = retpunr;
-  if (ReadFirstMain(RetPUr,1,true)) then begin end;
-  if (RetPUr.OKFlag==0) then begin goto LRecordAction_raPasteRetPUInVI; end;
-  if (PasteRetPUInVI(VIp,RetPUr)) then begin
-    if (VIp.SerNr==-1) then begin
-      BlockLoad(SRRec);
-      if ((VIp.InvType==kInvoiceTypeCredit or VIp.InvType==kInvoiceTypeCreditSpecialSales) and (SRRec.LastCredVINr!=-1))  then begin
-        newnr = GetCurUserLastNr("CreditVIVc");
-        if (newnr<=0) then begin
-          newnr = SRRec.LastCredVINr;
-        end;
-        nousersernr = true;
-      end;
-    end;
-    VIp.SerNr = NextSerNr("VIVc",VIp.TransDate,newnr,true,"");
-    if (VIp.SerNr==-1) then begin
-      res = 1747;
-      goto LRecordAction_raPasteRetPUInVI;
-    end;
-    if ((MatRowCnt(VIp)>0) and (VIp.SerNr!=-1)) then begin
-      VISumup(VIp,temp);
-      if (RecordInsert(VIp,false)) then begin
-        CreateRecordLink(VIp,CurrentCompany,RetPUr,CurrentCompany);  
-        CreateRecordLink(RetPUr,CurrentCompany,VIp,CurrentCompany);  
-        res = 1;
-      end;
-    end;
-  end else begin
-    res = -2;
-  end;  
+	if (CurrentCompany!=18) then begin
+		res = -1;
+		RecordNew(VIp);
+		VIp.SerNr = -1;
+		RetPUr.SerNr = retpunr;
+		if (ReadFirstMain(RetPUr,1,true)) then begin end;
+		if (RetPUr.OKFlag==0) then begin goto LRecordAction_raPasteRetPUInVI; end;
+		if (PasteRetPUInVI(VIp,RetPUr)) then begin
+			if (VIp.SerNr==-1) then begin
+				BlockLoad(SRRec);
+				if ((VIp.InvType==kInvoiceTypeCredit or VIp.InvType==kInvoiceTypeCreditSpecialSales) and (SRRec.LastCredVINr!=-1))  then begin
+					newnr = GetCurUserLastNr("CreditVIVc");
+					if (newnr<=0) then begin
+						newnr = SRRec.LastCredVINr;
+					end;
+					nousersernr = true;
+				end;
+			end;
+			VIp.SerNr = NextSerNr("VIVc",VIp.TransDate,newnr,true,"");
+			if (VIp.SerNr==-1) then begin
+				res = 1747;
+				goto LRecordAction_raPasteRetPUInVI;
+			end;
+			if ((MatRowCnt(VIp)>0) and (VIp.SerNr!=-1)) then begin
+				VISumup(VIp,temp);
+				if (RecordInsert(VIp,false)) then begin
+					CreateRecordLink(VIp,CurrentCompany,RetPUr,CurrentCompany);  
+					CreateRecordLink(RetPUr,CurrentCompany,VIp,CurrentCompany);  
+					res = 1;
+				end;
+			end;
+		end else begin
+			res = -2;
+		end;  
+	end else begin
+		res = -1;
+		RecordNew(VIp);
+		VIp.SerNr = -1;
+		RetPUr.SerNr = retpunr;
+		if (ReadFirstMain(RetPUr,1,true)) then begin end;
+		if (RetPUr.OKFlag==0) then begin goto LRecordAction_raPasteRetPUInVI; end;
+		if (PasteRetPUInVI(VIp,RetPUr)) then begin
+			if (VIp.SerNr==-1) then begin
+				BlockLoad(SRRec);
+				if ((VIp.InvType==kInvoiceTypeCredit or VIp.InvType==kInvoiceTypeCreditSpecialSales) and (SRRec.LastCredVINr!=-1))  then begin
+					newnr = GetCurUserLastNr("CreditVIVc");
+					if (newnr<=0) then begin
+						newnr = SRRec.LastCredVINr;
+					end;
+					nousersernr = true;
+				end;
+			end;
+			VIp.SerNr = NextSerNr("VIVc",VIp.TransDate,newnr,true,"");
+			if (VIp.SerNr==-1) then begin
+				res = 1747;
+				goto LRecordAction_raPasteRetPUInVI;
+			end;
+			if ((MatRowCnt(VIp)>0) and (VIp.SerNr!=-1)) then begin
+				VISumup(VIp,temp);
+				if (RecordInsert(VIp,false)) then begin
+					CreateRecordLink(VIp,CurrentCompany,RetPUr,CurrentCompany);  
+					CreateRecordLink(RetPUr,CurrentCompany,VIp,CurrentCompany);  
+					res = 1;
+				end;
+			end;
+		end else begin
+			res = -2;
+		end;  
+		
+		if (res==-2) then begin
+			ITypecnt = 0;
+			for (i=0;i<matrowcnt(RetPUr);i=i+1) begin
+				matrowget(RetPUr,i,RetPUrw);
+				INr.Code = RetPUrw.ArtCode;
+				nousersernr = false;
+				if(ReadFirstMain(INr,1,true))then begin end;
+				if(!ItemType[INr.ItemType])then begin
+					ITType = INr.ItemType;
+					RecordCopy(aRetPU,RetPUr);
+					for (j=matrowcnt(aRetPU);j>=0;j=j-1) begin
+						matrowget(aRetPU,j,RetPUrw2);
+						INr.Code = RetPUrw2.ArtCode;
+						if (ReadFirstMain(INr,1,true)) then begin end;
+						if(ITType!=INr.ItemType)then begin
+							matrowdelete(aRetPU,j);
+						end;
+					end;
+					if(CreateUnlinkedVIfromCCRetPU(VIp,aRetPU)) then begin
+						if (VIp.SerNr==-1) then begin
+							BlockLoad(SRRec);
+							if ((VIp.InvType==kInvoiceTypeCredit or VIp.InvType==kInvoiceTypeCreditSpecialSales) and (SRRec.LastCredVINr!=-1))  then begin
+								newnr = GetCurUserLastNr("CreditVIVc");
+								if (newnr<=0) then begin
+									newnr = SRRec.LastCredVINr;
+								end;
+								nousersernr = true;
+							end;
+						end;
+						VIp.SerNr = NextSerNr("VIVc",VIp.TransDate,newnr,true,"");
+						if (VIp.SerNr==-1) then begin
+							res = 1747;
+							goto LRecordAction_raPasteRetPUInVI;
+						end;
+						if ((MatRowCnt(VIp)>0) and (VIp.SerNr!=-1)) then begin
+							VISumup(VIp,temp);
+							if (RecordInsert(VIp,false)) then begin
+								CreateRecordLink(VIp,CurrentCompany,aRetPU,CurrentCompany);  
+								CreateRecordLink(aRetPU,CurrentCompany,VIp,CurrentCompany);  
+								res = 1;
+							end;
+						end;
+					end else begin
+						res = -2;
+					end;
+					ITypecnt = ITypecnt + 1;
+				end;
+			end;
+		end;
+		
+	end;
 LRecordAction_raPasteRetPUInVI:;
   RecordAction_raPasteRetPUInVI = res;
   RETURN;
