@@ -222,10 +222,10 @@ begin
   row SHVc SHrw2;
   row SHVc SHrw3;
   Integer rwcntrec,reci,j;
-  Integer rwcntrec2,reci2;
+  Integer rwcntrec2,reci2,ecvcnt;
   Boolean isstruct;
   Integer cnt;
-  Integer errcode;
+  Integer errcode, v;
   LongInt sernr,stmovnr,dummyl,l;
   record PISVc PISr;
   string 255 objstr,errstr,accnr,oldOfficialSerNr,tstr2,c;
@@ -244,7 +244,7 @@ begin
   Array string 255 otcheckaccs;
   Array string 255 otcheckobjtyps;
   Integer otcheckcnt;
-  Boolean initotcheckf;   
+  Boolean initotcheckf, VendCompCheckf;   
   record CUUserLabelBlock CUUerLb;
   record CountryVc Countryr;
   record AccVc Accr;
@@ -252,6 +252,8 @@ begin
 	record ActVc Actr;
 	record ClientItemStatusVc CISr;
 	boolean TrHs;
+	record ECVendFobSetBlaock ECVFSBb;
+	row ECVendFobSetBlaock ECVFSBrw;
 	
   logtext(0,"DoSHVcRecordCheck");
   
@@ -284,6 +286,26 @@ begin
       if (SH2p.OKFlag==1) then begin unokf = true; end;
     end;
   end;
+	
+	if (CurrentCompany==18) then begin
+		BlockLoad(ECVFSBb);
+		ecvcnt = matrowcnt(ECVFSBb);
+		for(v=0;v<ecvcnt;v=v+1)begin
+			matrowget (ECVFSBb,v,ECVFSBrw);
+			if(ECVFSBrw.VendName==SHp.CustCode)then begin
+				VendCompCheckf = true;
+			end;
+		end;
+		if (!VendCompCheckf and (SHp.OKFlag!=0) and (SH2p.OKFlag==0)) then begin
+			error = 36338;
+      errorstr = "";
+      rownr = -1;
+      fieldstr = "CustCode";
+      res = -1;
+      goto LSHVcRecordCheck;
+		end;
+	end;
+	
   if (unokf) then begin
     errcode = IsUnOKAllowed_SHVc(SHp);
     if (errcode!=0) then begin
