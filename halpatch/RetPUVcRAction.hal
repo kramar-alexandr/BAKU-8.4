@@ -905,10 +905,12 @@ BEGIN
   Array string 255 otcheckobjtyps;
   Integer otcheckcnt;
   record OTCheckBlock OTCheckr;
-  Boolean initotcheckf; 
+  Boolean initotcheckf,TrHs; 
   LongInt dummyl; 
 	record CoinSettingsBlock CoinB; //Edit***************************Sasha2,15:41 02.08.2016
 	string 15 nextPackageEAN;
+	string 255 LocCode, sPosCode;
+	record PosVc Posr;
 
 	if(currentuser=="SA1")then begin
 		// res = 0;
@@ -922,6 +924,43 @@ BEGIN
 		logtext(0,RetPUp.SerNr & " SerNr");
     RetPUp.SerNr = NextSerNr("RetPUVc",RetPUp.TransDate,-1,false,"");  
   end;
+
+
+
+	if(currentcompany==28)then begin
+		for (i=0;i<matrowcnt(RetPUp);i=i+1)begin
+			matrowget(RetPUp,i,RetPUrw);
+			LocCode = "";
+			sPosCode = "";
+			TrHs = false;
+			if(nonblank(RetPUrw.Location))then begin
+				TrHs = true;
+				LocCode = RetPUrw.Location;
+			end else begin
+				if (nonblank(RetPUp.Location)) then begin
+					TrHs = true;
+					LocCode = RetPUp.Location;
+				end;
+			end;
+			j = 0;
+			Posr.Location = LocCode;
+			while (LoopKey("Location",Posr,1,TrHs)) begin
+				if(Posr.Location != LocCode)then begin TrHs = false; end;
+				if(TrHs)then begin
+					sPosCode = Posr.Code;
+					j = j + 1;
+				end;
+			end;
+			ResetLoop(Posr);
+			if(j==1)then begin
+				RetPUrw.PosCode = sPosCode;
+				matrowput(RetPUp,i,RetPUrw);
+			end;
+		end;
+	end;
+
+
+
 
   res = 0;
   oldnr = RetPUp.SerNr;
@@ -1993,6 +2032,7 @@ BEGIN
 			end;
 		end;
 	end;
+	
 	LRetPUVcRecordCh:; 
 	if(CurrentCompany==29)then begin
 		if(RetPUp.OKFlag==1 and RetPU2p.OKFlag==0 and ReadRecordLink(RetPUp,1,Actr,RLr))then begin
