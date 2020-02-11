@@ -1378,7 +1378,147 @@ return;
 end;
 
 
+global updating procedure SendAsyncUpdateContactToCRM(var record CUVc CUr)// Edit ************************** BPI Ukraine - KramarAlexandr - 02, 11 02 2020 y. at 11:23:45 PM
+begin
+	integer err,noErr;
+  string 255 host,tstr,nonce,opaque,page;
+  LongInt port,pos,mtrw;
+  Area req,reply;
+ string 255 ha1,ha2, UserCRMID, LocationCRMID;
+  row MarcCampVc MCrw;
+  integer i;
+  json jsresponse;
+	record WebReportChBlock WRChb;
+	record UserVc Userr;	
+	record GlobalStoresVc GSr;
+	
+	blockload(WRChb);		
+	
+	if(CUr.CUType==1)then begin
+		if(WRChb.WEBCheck==1)then begin
+	
+	
+			host = "192.168.3.11";
+			page = "/api/Contact/Update";
+			port = 8088;
+			logtext(0,"CURIPADDRESS" & CURIPADDRESS); 
+			if(fileexists("demoserver"))then begin
+				port = 8087;
+				logtext(0,"newport 8087");
+			end;
 
+		
+			Userr.Code = CUr.CurEmplCreator;
+			if(Readfirstmain(Userr,1,true))then begin
+				UserCRMID = Userr.CRMid;
+			end;
+			if(blank(UserCRMID) or UserCRMID=="null")then begin
+				if(nonblank(CUr.CurEmplCreator))then begin
+					SendWebRequest(host,port,-1,false,"GET","/api/Consultant/GetCrmId?hansaId=" & UrlEncode(CUr.CurEmplCreator),"application/json","",false,req,reply,5);
+					jsresponse = ParseJSONArea(reply);
+					if(nonblank(MyJSGet(jsresponse,"result")))then begin
+						UserCRMID = MyJSGet(jsresponse,"result");
+					end;
+				end;
+			end;
+		
+			if(blank(CUr.CRMid))then begin
+				SendWebRequest(host,port,-1,false,"GET","/api/Contact/GetCrmId?hansaId=" & UrlEncode(CUr.Code),"application/json","",false,req,reply,5);
+				jsresponse = ParseJSONArea(reply);
+				if(nonblank(MyJSGet(jsresponse,"result")))then begin
+					CUr.CRMid = MyJSGet(jsresponse,"result");
+					if(blank(CUr.CRMid))then begin
+						SendContactToCRM(CUr);
+						goto lSendAsyncUpdateContactToCRM;
+					end;
+				end else begin
+					SendContactToCRM(CUr);
+					goto lSendAsyncUpdateContactToCRM;
+				end;
+			end;
+		
+		
+			GSr.Code = CUr.CreateLocation;
+			if(Readfirstmain(GSr,1,true))then begin
+				LocationCRMID = GSr.CRMid;
+			end;
+			if(blank(LocationCRMID) or LocationCRMID=="null")then begin
+				if(nonblank(CUr.CreateLocation))then begin 
+					SendWebRequest(host,port,-1,false,"GET","/api/Shop/GetCrmId?hansaId=" & UrlEncode(CUr.CreateLocation),"application/json","",false,req,reply,5);
+					jsresponse = ParseJSONArea(reply);
+					if(nonblank(MyJSGet(jsresponse,"result")))then begin
+						LocationCRMID = MyJSGet(jsresponse,"result");
+						GSr.CRMid = LocationCRMID;
+						recordstore(GSr,true);
+					end;
+				end;
+			end;
+
+			addtexttoarea("{" & chr(13) & chr(10),req);
+			if(/*nonblank(CUr.CRMName)*/true)then begin
+				addtexttoarea("\"firstName\":\"" & NormalizeStrToJson(CUr.CRMName) & "\"," & chr(13) & chr(10),req);
+				addtexttoarea("\"lastName\":\"" & NormalizeStrToJson(CUr.CRMLName) & "\"," & chr(13) & chr(10),req);
+			end else begin
+				addtexttoarea("\"firstName\":\"" & NormalizeStrToJson(CUr.Name) & "\"," & chr(13) & chr(10),req);
+				addtexttoarea("\"lastName\":\"" & "" & "\"," & chr(13) & chr(10),req);
+			end;
+			//if(nonblank(CUr.Phone))then begin
+				addtexttoarea("\"landlineNumber\":\"" & CUr.Phone & "\"," & chr(13) & chr(10),req);
+			//end;
+			//if(nonblank(CUr.eMail))then begin
+				addtexttoarea("\"mainEmail\":\"" & NormalizeStrToJson(CUr.eMail) & "\"," & chr(13) & chr(10),req);
+			//end;
+			//if(nonblank(CUr.Mobile))then begin
+				addtexttoarea("\"mobilePhone1\":\"" & CUr.Mobile & "\"," & chr(13) & chr(10),req);
+			//end;
+			//if(nonblank(CUr.AltPhone))then begin
+				addtexttoarea("\"mobilePhone2\":\"" & CUr.AltPhone & "\"," & chr(13) & chr(10),req);
+			//end;
+			addtexttoarea("\"birthday\":\"" & datetostring(CUr.BirthDate,"YYYY-MM-DD") & "\"," & chr(13) & chr(10),req);
+			//if(nonblank(LocationCRMID))then begin
+				addtexttoarea("\"shopId\":" & "\"" & NormalizeStrToJson(LocationCRMID) & "\"," & chr(13) & chr(10),req);
+			//end;
+			if(nonblank(UserCRMID))then begin
+				addtexttoarea("\"consultantId\":" & "\"" & NormalizeStrToJson(UserCRMID) & "\"," & chr(13) & chr(10),req);
+			end;
+		
+			if(CUr.Gender==0)then begin
+				addtexttoarea("\"gender\":\"" & "Male" & "\"," & chr(13) & chr(10),req);
+			end;
+			if(CUr.Gender==1)then begin
+				addtexttoarea("\"gender\":\"" & "Female" & "\"," & chr(13) & chr(10),req);
+			end;
+		
+			if(CUr.blockedFlag==0)then begin
+				addtexttoarea("\"blockedflag\":\"" & "active" & "\"," & chr(13) & chr(10),req);
+			end else begin
+				addtexttoarea("\"blockedflag\":\"" & "inactive" & "\"," & chr(13) & chr(10),req);
+			end;
+		
+			if(nonblank(CUr.CRMid)) then begin
+			addtexttoarea("\"id\":" & "\"" & NormalizeStrToJson(CUr.CRMid) & "\"," & chr(13) & chr(10),req);
+			end;
+			addtexttoarea("}" & chr(13) & chr(10),req);
+			addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,req);
+			writeareatofile(req,"CRMRequest.txt",1);
+			SendWebRequest(host,port,-1,false,"PATCH",page,"application/json","",false,req,reply,5);
+			SendAsyncWebRequest(host,port,-1,false,"PATCH",page,"application/json","",req,"SendAsyncUpdateContactToCRMReply",3);
+
+			if(getarealength(reply)>0)then begin
+				jsresponse = ParseJSONArea(reply);
+				if(nonblank(MyJSGet(jsresponse,"result")))then begin
+					logtext(0,"SendUpdateContactToCRM " & MyJSGet(jsresponse,"result"));
+				end;
+			end;
+			addtexttoarea(" SendUpdateContactToCRM " & CUr.Code & " " & currentcompany & " ",reply);
+			addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,reply);
+			writeareatofile(reply,"CRMResponse.txt",1);
+		end;
+	end;
+lSendAsyncUpdateContactToCRM:;
+	
+return;
+end;
 
 global updating procedure SendUpdateContactToCRM(var record CUVc CUr)//Edit_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 11:38 11.09.2018
 begin
