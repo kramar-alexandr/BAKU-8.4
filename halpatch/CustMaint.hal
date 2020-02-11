@@ -20,6 +20,8 @@ external function roundmode SetRoundModeD(Integer);
 external updating procedure DeleteTransaction(LongInt,Integer);
 external procedure TRSumup(var record TRVc,var val);
 external function string 60 RemoveObjectFromObjectList(string,string);
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external updating procedure SendUpdateContactToCRM(var record CUVc);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -4187,6 +4189,99 @@ begin
 return;
 end;
 
+global webpublic updating procedure WebFillCustomerNames()
+begin
+	record CUvc CUr;
+	boolean testf,TrHs;
+	integer pos,i,cntr;
+	string 100 fname,lname,mname,tstr;
+	
+	TrHs = true;
+	
+	
+	while(loopmain(CUr,1,TrHs))begin
+		testf = true;
+		if(blank(CUr.Name))then begin testf = false; end;
+		if(CUr.CUType==0)then begin testf = false; end;
+		if(CUr.VEType==1)then begin testf = false; end;
+		if(CUr.EmployeeType==1)then begin testf = false; end;
+		if(CUr.blockedFlag==1)then begin testf = false; end;
+		if(nonblank(CUr.CRMLName))then begin testf = false; end;
+		if(nonblank(CUr.CRMName))then begin testf = false; end;
+		if(nonblank(CUr.CRMPatr))then begin testf = false; end;
+		
+		if(fileexists("stop"))then begin
+			TrHs = false;
+		end;
+		
+		if(testf)then begin
+			logtext(0,cntr);
+			cntr = cntr + 1;
+			fname = "";
+			lname = "";
+			mname = "";
+			
+			pos = 0;
+			tstr = "";
+			i = 0;
+			ExtractObjWithSeparator(" ",CUr.Name,true,pos,tstr);
+			while(nonblank(tstr))begin
+				if(nonblank(tstr))then begin					
+					if(i>1)then begin
+						if(len(tstr)<3 or tstr==uchr(120) & uchr(97) & uchr(110) & uchr(305) & uchr(109) or tstr=="xanum")then begin
+							fname = fname & " " & tstr; 
+						end else begin
+							if(nonblank(mname))then begin
+								mname = mname & " " & tstr;
+							end else begin
+								mname = tstr;
+							end;
+							i=i+1;
+						end;
+					end;
+					if(i==1)then begin
+						if(len(tstr)<3 or tstr==uchr(120) & uchr(97) & uchr(110) & uchr(305) & uchr(109) or tstr=="xanum")then begin
+							lname = lname & " " & tstr; 
+						end else begin
+							fname = tstr;
+							i=i+1;
+						end;
+					end;
+					if(i==0)then begin
+						lname = tstr;
+						i=i+1;
+					end;
+				end;
+				ExtractObjWithSeparator(" ",CUr.Name,true,pos,tstr);
+			end;
+			
+			if(nonblank(lname) and blank(fname))then begin
+				fname = lname;
+				lname = "";
+			end;
+			CUr.CRMLName = lname;
+			CUr.CRMName = fname;
+			CUr.CRMPatr = mname;
+			//SendUpdateContactToCRM(CUr);
+			recordstore(CUr,true);
+			
+			/*weboutstring(CUr.Code);
+			weboutstring("===");
+			weboutstring(CUr.Name);
+			weboutstring("===");
+			weboutstring(lname);
+			weboutstring("===");
+			weboutstring(fname);
+			weboutstring("===");
+			weboutstring(mname);
+			weboutstring("<br>");*/
+		end;
+		
+	end;
+
+return;
+end;
+
 global updating procedure SortAccessMn(record RcVc RepSpec)
 begin
 record AccessVc Acsr, Acs2r;
@@ -4241,24 +4336,5 @@ while(LoopMain(Acsr,1,TrHs)) begin
 end;	
 return;
 end;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
