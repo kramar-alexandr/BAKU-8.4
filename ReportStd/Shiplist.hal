@@ -484,26 +484,26 @@ begin
 	logtext(0,AllBalP);
 
 	if (maxPPBal < AllBalP) then begin
-		PPBal = maxPPBal;
-		AllBalP = AllBalP - PPBal;
+		AllBalP = AllBalP - maxPPBal;
+		PPBal = 0;
 	end else begin
-		PPBal = AllBalP;
+		PPBal = maxPPBal - AllBalP;
 		AllBalP = 0;
 	end;
 	
 	if (maxPBSBal < AllBalP) then begin
-		PBSBal = maxPBSBal;
-		AllBalP = AllBalP - PBSBal;
+		AllBalP = AllBalP - maxPBSBal;
+		PBSBal = 0;
 	end else begin
-		PBSBal = AllBalP;
+		PBSBal = maxPBSBal - AllBalP;
 		AllBalP = 0;
 	end;
 	
 	if (maxPBal < AllBalP) then begin
-		PBal = maxPBal;
-		AllBalP = AllBalP - PBal;
+		AllBalP = AllBalP - maxPBal;
+		PBal = 0;
 	end else begin
-		PBal = AllBalP;
+		PBal = maxPBal - AllBalP;
 		AllBalP = 0;
 	end;
  return;
@@ -520,7 +520,7 @@ begin
 	row POVc POrw;
 	record SerBalVc SBr;
   record LocationVc Locr;
-  Boolean TrHs, TrHs2;
+  Boolean TrHs, TrHs2, testf3;
   Boolean testf, TrLf, locf, IVCredVithStatf,SMf, testf2;
   Integer i,j,k,intPOSerNr,intPOComp, locORserNr, StatusMargin, curcomp;
   Integer rwcnt, ordcnt, stockcnt, pos;
@@ -535,7 +535,7 @@ begin
 	record ORVc ORr, locORr;
 	record RLinkVc RLr;
 	date locORrDate, blnkDate, RecDate;
-	val Weight, Volume, PPSum, PSum, PartPSum, Sum, credPO, PartPaymentAmount, OldBalancePayment, OpenPPSum, CurPUSum, BalanceP, PreP, PaymntBefP, AllBalP, PUCustomsSum, PUShipSum, CurrBalP;
+	val Weight, Volume, PPSum, PSum, PartPSum, Sum, credPO, PartPaymentAmount, OldBalancePayment, OpenPPSum, CurPUSum, BalanceP, PreP, PaymntBefP, AllBalP, PUCustomsSum, PUShipSum, CurrBalP, BCostsP;
 	record POShipmDataVc POSDr;
 	row POShipmDataVc POSDrw;
 	record APPayHistVc APPayHistr;
@@ -594,7 +594,7 @@ begin
 		outstring(30,0,"Weight",false);
 		outstring(31,0,"Freight sum, AZN",false);
 		outstring(32,0,"Customs sum, AZN",false);
-		outstring(44,0,"Brand costs sum, AZN",false);
+		// outstring(44,0,"Brand costs sum, AZN",false);
 	endformat;
 	
 	TrHs = true;
@@ -822,12 +822,31 @@ begin
 			CurPUSum = 0;
 		end;
 		
-		AllBalP = POr.Sum4-Sum-PartPaymentAmount-CurPUSum;
-		CurrBalP =  POr.Sum4-PartPaymentAmount-CurPUSum;
+		
+		VIr.POSerNr = POr.SerNr;
+		TrHs2 = true;
+		While(LoopKey("POSerNr",VIr,1,TrHs2)) begin
+			testf3 = true;
+			if (VIr.POSerNr!=POr.SerNr) then begin TrHs2 = false; testf3 = false;end;
+			if (!SetInSet("E101",VIr.Objects)) then begin testf3 = false; end;
+			if (testf3) then begin
+				APr.SerNr = VIr.SerNr;
+				if(ReadFirstMain(APr,1,true))then begin
+					BCostsP = BCostsP + (VIr.PayVal - APr.RVal);
+				end;
+			end;
+		end;
+		Resetloop(VIr);
+		
+		
+		AllBalP = POr.Sum4-Sum-PartPaymentAmount-CurPUSum-BCostsP;
+		CurrBalP =  POr.Sum4-PartPaymentAmount-CurPUSum-BCostsP;
 		
 		PreP = 0; // prepayment
 		PaymntBefP = 0; // Payment before shipment
 		BalanceP = 0;	// Balance payment
+		
+		
 		
 		if(currentcompany!=28)then begin
 			switch (POr.PayDeal) begin
@@ -953,7 +972,7 @@ begin
 					outstring(31,0,POr.ShipCost,false);
 					outstring(32,0,POr.CustomsCost,false);
 				end;
-					outstring(44,0,POr.Cost3,false);
+					// outstring(44,0,POr.Cost3,false);
 			endformat;
 		end;
 	end;
