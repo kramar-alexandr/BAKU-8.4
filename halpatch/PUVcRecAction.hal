@@ -680,6 +680,7 @@ global
 updating function LongInt PUVcRecordUpdateAfter(var record PUVc PUr,record PUVc PU2r,LongInt stat,LongInt long4)
 begin
   LongInt res, i;
+	row PUVc PUrw;
   Boolean ihf, shipdf, shipd0f;
   record VIVc VIr;
   record VIVc oldVIr;
@@ -687,7 +688,8 @@ begin
   record RcVc RepSpec;
 	record POVc POr;
 	row POVc POrw;
-  val bc1v;
+  val bc1v, PartTotal;
+	vector val PPUItemQty;
 	LOGTEXT(0,currentcompany & "PUVcRecordUpdateAfter");	
   ihf = ItemHistExists("PUVc",PUr.SerNr);
   if ((PUr.OKFlag!=0) and (PU2r.OKFlag!=0)) then begin
@@ -751,7 +753,7 @@ begin
   if ((PUr.OKFlag!=0) and (PU2r.OKFlag!=0)) then begin//overstrike
     PUVc_UpdateTR(PUr,PU2r);
   end;
-	if ((PUr.OKFlag==1) and (PU2r.OKFlag==0) and CurrentCompany==18) then begin
+	if ((PUr.OKFlag==1) and (PU2r.OKFlag==0) and CurrentCompany==18 and currentcompany==28) then begin
 		POr.SerNr = PUr.PONr;
 		if(ReadFirstMain(POr,1,true))then begin
 			shipdf = true;
@@ -767,6 +769,21 @@ begin
 			end;
 			if (!shipdf and !shipd0f) then begin
 				POr.IDStatus = "PO Goods Delivered Partial";
+				
+				for (i=0;i<matrowcnt(PUr);i=i+1) begin
+					matrowget(PUr,i,PUrw);
+					PPUItemQty[PUrw.ArtCode] = PUrw.Quant;
+				end;
+				
+				for (i=0;i<matrowcnt(POr);i=i+1) begin
+					matrowget(POr,i,POrw);
+					if(PPUItemQty[POrw.ArtCode]>0) then begin
+						PartTotal = PartTotal + (POrw.Sum / POrw.Quant * PPUItemQty[POrw.ArtCode]);
+					end;
+				end;		
+				
+				POr.PartDelSum4 = POr.PartDelSum4 + PartTotal;
+				
 				RecordStore (POr,true);
 			end;
 		end;

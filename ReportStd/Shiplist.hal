@@ -464,6 +464,11 @@ begin
 			end;
 		end;
 	end;
+	
+	
+	
+	
+	
 	endjob;
 	return;
 end;
@@ -472,16 +477,16 @@ end;
 
 
 global   // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:48 13.02.2020
-procedure CCPOListPaymPrior (val PayAm, var val AllBalP, var val PPBal, var val PBSBal, var val PBal, val PPBalPrc, val PBSBalPrc, val PBalPrc)
+procedure CCPOListPaymPrior (val POSum, val PartSum, var val AllBalP, var val PPBal, var val PBSBal, var val PBal, val PPBalPrc, val PBSBalPrc, val PBalPrc)
 begin
 	val maxPPBal, maxPBSBal, maxPBal;
 
-	maxPPBal = PayAm / 100 * PPBalPrc;
-	maxPBSBal = PayAm / 100 * PBSBalPrc;
-	maxPBal = PayAm / 100 * PBalPrc;
+	maxPPBal = (POSum - PartSum) / 100 * PPBalPrc;
+	maxPBSBal = (POSum - PartSum) / 100 * PBSBalPrc;
+	maxPBal = (POSum - PartSum) / 100 * PBalPrc;
 
-	logtext(0,PayAm);
-	logtext(0,AllBalP);
+	// logtext(0,PayAm);
+	// logtext(0,AllBalP);
 
 	if (maxPPBal < AllBalP) then begin
 		AllBalP = AllBalP - maxPPBal;
@@ -520,7 +525,7 @@ begin
 	row POVc POrw;
 	record SerBalVc SBr;
   record LocationVc Locr;
-  Boolean TrHs, TrHs2, testf3;
+  Boolean TrHs, TrHs2;
   Boolean testf, TrLf, locf, IVCredVithStatf,SMf, testf2;
   Integer i,j,k,intPOSerNr,intPOComp, locORserNr, StatusMargin, curcomp;
   Integer rwcnt, ordcnt, stockcnt, pos;
@@ -535,7 +540,7 @@ begin
 	record ORVc ORr, locORr;
 	record RLinkVc RLr;
 	date locORrDate, blnkDate, RecDate;
-	val Weight, Volume, PPSum, PSum, PartPSum, Sum, credPO, PartPaymentAmount, OldBalancePayment, OpenPPSum, CurPUSum, BalanceP, PreP, PaymntBefP, AllBalP, PUCustomsSum, PUShipSum, CurrBalP, BCostsP;
+	val Weight, Volume, PPSum, PSum, PartPSum, Sum, credPO, PartPaymentAmount, OldBalancePayment, OpenPPSum, CurPUSum, BalanceP, PreP, PaymntBefP, AllBalP, PUCustomsSum, PUShipSum;
 	record POShipmDataVc POSDr;
 	row POShipmDataVc POSDrw;
 	record APPayHistVc APPayHistr;
@@ -594,7 +599,6 @@ begin
 		outstring(30,0,"Weight",false);
 		outstring(31,0,"Freight sum, AZN",false);
 		outstring(32,0,"Customs sum, AZN",false);
-		// outstring(44,0,"Brand costs sum, AZN",false);
 	endformat;
 	
 	TrHs = true;
@@ -822,25 +826,8 @@ begin
 			CurPUSum = 0;
 		end;
 		
+		AllBalP = POr.Sum4-Sum-PartPaymentAmount-CurPUSum;
 		
-		VIr.POSerNr = POr.SerNr;
-		TrHs2 = true;
-		While(LoopKey("POSerNr",VIr,1,TrHs2)) begin
-			testf3 = true;
-			if (VIr.POSerNr!=POr.SerNr) then begin TrHs2 = false; testf3 = false;end;
-			if (!SetInSet("E101",VIr.Objects)) then begin testf3 = false; end;
-			if (testf3) then begin
-				APr.SerNr = VIr.SerNr;
-				if(ReadFirstMain(APr,1,true))then begin
-					BCostsP = BCostsP + (VIr.PayVal - APr.RVal);
-				end;
-			end;
-		end;
-		Resetloop(VIr);
-		
-		
-		AllBalP = POr.Sum4-Sum-PartPaymentAmount-CurPUSum-BCostsP;
-		CurrBalP =  POr.Sum4-PartPaymentAmount-BCostsP;
 		
 		PreP = 0; // prepayment
 		PaymntBefP = 0; // Payment before shipment
@@ -848,54 +835,136 @@ begin
 		
 		
 		
+		
 		if(currentcompany!=28)then begin
 			switch (POr.PayDeal) begin
-						case "PA": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 100, 0, 0);
-						case "PB": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 50, 50, 0);
-						case "PC": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
-						case "PD": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "PE": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "PF": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "PG": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 40, 60, 0);
-						case "PH": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 40, 60, 0);
-						case "PI": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 30, 70, 0);
-						case "PJ": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "PK": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 70, 30, 0);
-						case "PL": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
-						case "PM": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "PN": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 30, 0, 70);
-						case "PO": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 100, 0);
-						case "PQ": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 60, 40, 0);
-						case "PR": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
-						case "PS": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 20, 80, 0);
-						case "PT": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 35, 65, 0);
-						case "PU": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 25, 75, 0);
-						case "PV": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 75, 25, 0);
+						case "PA": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 100, 0, 0);
+						case "PB": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 50, 50, 0);
+						case "PC": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
+						case "PD": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "PE": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "PF": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "PG": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 40, 60, 0);
+						case "PH": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 40, 60, 0);
+						case "PI": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 30, 70, 0);
+						case "PJ": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "PK": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 70, 30, 0);
+						case "PL": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
+						case "PM": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "PN": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 30, 0, 70);
+						case "PO": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 100, 0);
+						case "PQ": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 60, 40, 0);
+						case "PR": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
+						case "PS": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 20, 80, 0);
+						case "PT": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 35, 65, 0);
+						case "PU": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 25, 75, 0);
+						case "PV": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 75, 25, 0);
 			end;
 		end else begin
 			switch (POr.PayDeal) begin
-						case "A": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 100, 0, 0);
-						case "50": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 50, 50, 0);
-						case "PC": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
-						case "PD": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "PE": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "PF": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "40": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 40, 60, 0);
-						case "30": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 30, 70, 0);
-						case "PJ": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "70": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 70, 30, 0);
-						case "PL": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
-						case "PM": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
-						case "PN": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 30, 0, 70);
-						case "BS": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 0, 100, 0);
-						case "60": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 60, 40, 0);
-						case "PR": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
-						case "20": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 20, 80, 0);
-						case "PT": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 35, 65, 0);
-						case "PU": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 25, 75, 0);
-						case "PV": CCPOListPaymPrior (CurrBalP, AllBalP, PreP, PaymntBefP, BalanceP, 75, 25, 0);
+						case "A": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 100, 0, 0);
+						case "50": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 50, 50, 0);
+						case "PC": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
+						case "PD": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "PE": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "PF": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "40": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 40, 60, 0);
+						case "30": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 30, 70, 0);
+						case "PJ": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "70": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 70, 30, 0);
+						case "PL": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
+						case "PM": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 0, 100);
+						case "PN": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 30, 0, 70);
+						case "BS": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 0, 100, 0);
+						case "60": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 60, 40, 0);
+						case "PR": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 50, 0, 50);
+						case "20": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 20, 80, 0);
+						case "PT": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 35, 65, 0);
+						case "PU": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 25, 75, 0);
+						case "PV": CCPOListPaymPrior (POr.Sum4, POr.PartDelSum4, AllBalP, PreP, PaymntBefP, BalanceP, 75, 25, 0);
 			end;
 		end;
+		
+		
+		
+		
+		
+		// if(currentcompany!=28)then begin
+		
+			// switch (POr.PayDeal) begin
+						// case "PA": PreP = AllBalP;
+						// case "PB": PreP = AllBalP/2;
+											 // PaymntBefP = AllBalP/2;
+						// case "PC": PreP = AllBalP/2;
+											 // BalanceP = AllBalP/2;
+						// case "PD": BalanceP = AllBalP;
+						// case "PE": BalanceP = AllBalP;
+						// case "PF": BalanceP = AllBalP;
+						// case "PG": PreP = AllBalP*0.4;
+											 // PaymntBefP = AllBalP*0.6;
+						// case "PH": PreP = AllBalP*0.4;
+											 // PaymntBefP = AllBalP*0.6;
+						// case "PI": PreP = AllBalP*0.3;
+											 // PaymntBefP = AllBalP*0.7;
+						// case "PJ": BalanceP = AllBalP;
+						// case "PK": PreP = AllBalP*0.7;
+											 // PaymntBefP = AllBalP*0.3;
+						// case "PL": PreP = AllBalP/2;
+											 // BalanceP = AllBalP/2;
+						// case "PM": BalanceP = AllBalP;
+						// case "PN": PreP = AllBalP*0.3;
+											 // BalanceP = AllBalP*0.7;
+						// case "PO": PaymntBefP = AllBalP;
+						// case "PQ": PreP = AllBalP*0.6;
+											 // PaymntBefP = AllBalP*0.4;
+						// case "PR": PreP = AllBalP/2;
+											 // BalanceP = AllBalP/2;
+						// case "PS": PreP = AllBalP*0.2;
+											 // PaymntBefP = AllBalP*0.8;
+						// case "PT": PreP = AllBalP*0.35;
+											 // PaymntBefP = AllBalP*0.65;
+						// case "PU": PreP = AllBalP*0.25;
+											 // PaymntBefP = AllBalP*0.75;
+						// case "PV": PreP = AllBalP*0.75;
+											 // PaymntBefP = AllBalP*0.25;
+			// end;
+		// end else begin
+			// switch (POr.PayDeal) begin
+						// case "A": PreP = AllBalP;
+						// case "50": PreP = AllBalP/2;
+											 // PaymntBefP = AllBalP/2;
+						// case "PC": PreP = AllBalP/2;
+											 // BalanceP = AllBalP/2;
+						// case "PD": BalanceP = AllBalP;
+						// case "PE": BalanceP = AllBalP;
+						// case "PF": BalanceP = AllBalP;
+						// case "40": PreP = AllBalP*0.4;
+											 // PaymntBefP = AllBalP*0.6;
+						// case "30": PreP = AllBalP*0.3;
+											 // PaymntBefP = AllBalP*0.7;
+						// case "PJ": BalanceP = AllBalP;
+						// case "70": PreP = AllBalP*0.7;
+											 // PaymntBefP = AllBalP*0.3;
+						// case "PL": PreP = AllBalP/2;
+											 // BalanceP = AllBalP/2;
+						// case "PM": BalanceP = AllBalP;
+						// case "PN": PreP = AllBalP*0.3;
+											 // BalanceP = AllBalP*0.7;
+						// case "BS": PaymntBefP = AllBalP;
+						// case "60": PreP = AllBalP*0.6;
+											 // PaymntBefP = AllBalP*0.4;
+						// case "PR": PreP = AllBalP/2;
+											 // BalanceP = AllBalP/2;
+						// case "20": PreP = AllBalP*0.2;
+											 // PaymntBefP = AllBalP*0.8;
+						// case "PT": PreP = AllBalP*0.35;
+											 // PaymntBefP = AllBalP*0.65;
+						// case "PU": PreP = AllBalP*0.25;
+											 // PaymntBefP = AllBalP*0.75;
+						// case "PV": PreP = AllBalP*0.75;
+											 // PaymntBefP = AllBalP*0.25;
+			// end;
+		// end;
 		
 		
 		if(testf)then begin
@@ -972,7 +1041,6 @@ begin
 					outstring(31,0,POr.ShipCost,false);
 					outstring(32,0,POr.CustomsCost,false);
 				end;
-					// outstring(44,0,POr.Cost3,false);
 			endformat;
 		end;
 	end;
