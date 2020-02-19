@@ -1,17 +1,24 @@
-global webpublic procedure WebFindAndFixItems()
+global webpublic updating procedure WebFindAndFixItems()
 begin
 	record RHistVc RHr;
 	boolean TrHs,testf;
 	vector integer vrstr;
   array string 20 keys;
-  integer i,j,counter;
+  integer i,j,counter,lastj;
   string 10 c;
   string 50 recname,compnr,mainkey;
   integer cter,pref,check;
   longint kkk;
+  area workarea;
   record INVc INr,OrigINr;
+  vector string 100 brandbnames;
+  record BPIBrandVc BPIBrandr;
   
   setcompany(1,false);
+  
+  while(loopmain(BPIBrandr,1,true))begin
+  	brandbnames[BPIBrandr.Code] = BPIBrandr.Name;
+  end;
   
   kkk = 1;
 	RHr.TransDate = stringtodate("12/02/2020");
@@ -30,22 +37,37 @@ begin
 		end;
 		
 		if(testf)then begin
-			c = left(RHr.RecidStr,1);
+			setareazerosize(workarea);
+			addtexttoarea(RHr.RecidStr,workarea);
+			c = getstringfromarea(workarea,0,1);//left(RHr.RecidStr,1);
 			pref = asc(c) + 1;
-			compnr = mid(RHr.RecidStr,1,asc(c));
+			compnr = getstringfromarea(workarea,1,asc(c));//mid(RHr.RecidStr,1,asc(c));
 			recname = "";
 			mainkey = "";
 			cter = 0;
-			if(pref<len(RHr.RecidStr))then begin
-				for(j=pref;j<len(RHr.RecidStr);j=j+1)begin
-						c = mid(RHr.RecidStr,j,1);
-					if(asc(c)==0)then begin
-						if((j+1)<len(RHr.RecidStr))then begin
-							mainkey = mid(RHr.RecidStr,j+asc(c),len(RHr.RecidStr)-(j+asc(c)));
-						end;
-						j = len(RHr.RecidStr);
+			lastj = 0;
+			if(pref<getarealength(workarea))then begin
+				for(j=pref;j<getarealength(workarea);j=j+1)begin
+					c = getstringfromarea(workarea,j,1);//mid(RHr.RecidStr,j,1);
+					if(asc(c)<48)then begin
+						j = getarealength(workarea);
 					end else begin
 						recname = recname & c;
+						lastj = j;
+					end;
+				end;
+				
+				for(j=lastj;j<getarealength(workarea);j=j+1)begin
+					c = getstringfromarea(workarea,j,1);//mid(RHr.RecidStr,j,1);
+					if(asc(c)<48)then begin
+						if((j+1)<getarealength(workarea))then begin
+							mainkey = getstringfromarea(workarea,j+1,getarealength(workarea)-(j+1));
+							if(asc(left(mainkey,1))<48)then begin
+								mainkey = right(mainkey,len(mainkey)-1);
+							end;
+						end;
+						j = getarealength(workarea);
+					end else begin
 					end;
 				end;
 			end else begin
@@ -55,7 +77,7 @@ begin
 		
 		if(testf)then begin
 			if(recname=="INVc")then begin
-				weboutstring(kkk & " compnr " & compnr & "_____record " & recname & " mainkey " & mainkey);
+				//weboutstring(kkk & " compnr " & compnr & "_____record " & recname & " mainkey " & mainkey);
 				weboutstring("<BR>");
 				kkk = kkk + 1;
 				setcompany(stringtoint(compnr),false);
@@ -63,7 +85,26 @@ begin
 					if(readfirstmain(INr,1,true))then begin
 						ReadOriginalRecord(RHr,OrigINr);	
 						if(blank(INr.BPIBrand) and nonblank(OrigINr.BPIBrand))then begin
-							weboutstring("---------- BLANK BPAND " & OrigINr.BPIBrand);
+							weboutstring(compnr & " Restore brand " & brandbnames[OrigINr.BPIBrand] & " for item " & INr.Code);
+							INr.BPIBrand = OrigINr.BPIBrand;
+							INr.BPICollection = OrigINr.BPICollection;
+							INr.BPIGroup = OrigINr.BPIGroup;
+							INr.BPISubGroup = OrigINr.BPISubGroup;
+							INr.BPICategory = OrigINr.BPICategory;
+							INr.BPIMaterial = OrigINr.BPIMaterial;
+							INr.BPIColor = OrigINr.BPIColor;
+							INr.BPIShape = OrigINr.BPIShape;
+							INr.BPISize = OrigINr.BPISize;
+							INr.BPIUse = OrigINr.BPIUse;
+							INr.BPISex = OrigINr.BPISex;
+							INr.BPIPlating = OrigINr.BPIPlating;
+							INr.BPIClarity = OrigINr.BPIClarity;
+							INr.BPIWeight = OrigINr.BPIWeight;
+							INr.BPICut = OrigINr.BPICut;
+							INr.BPIStone = OrigINr.BPIStone;
+							INr.BPIStrap = OrigINr.BPIStrap;
+							INr.BPIOdour = OrigINr.BPIOdour;
+							recordstore(INr,true);
 						end;
 					end;
 				resetcompany(1);
