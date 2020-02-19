@@ -43,3 +43,97 @@ RunReport(RepSpec,0);
 return;
 end;
 
+
+
+global webpublic updating procedure WebTESTIDCreatedPOpricesRn()
+begin
+	record SHVc SHr;
+	row SHVc SHrw;
+	record ItemHistVc IHr;
+	record POVc POr;
+	row POVc POrw;
+	boolean testf, TrHs, ORrowf;
+	integer i, FIFOcnt, POComp;
+	record ConsItemVc CIr;
+	vector val vItemFifo, vItemHTotCostPr;
+	record ORVc ORr;
+	row ORVc ORrw;
+	record RlinkVc RLr;
+	LongInt POSerNr;
+	
+	if (SetCompany(18,false)) then begin
+		SHr.SerNr = -1;
+		while (loopmain(SHr,1,true)) begin
+			ORrowf = false;
+			ORr.SerNr = SHr.OrderNr;
+			if(ReadFirstMain(ORr,1,true))then begin
+				testf = true;
+				for (i=0;i<matrowcnt(SHr);i=i+1) begin
+					matrowget(SHr,i,SHrw);
+					IHr.FileName = "SHVc";
+					IHr.TransNr = SHr.SerNr;
+					IHr.Row = i;
+					TrHs = true;
+					FIFOcnt = 0;
+					CIr.Code = SHrw.ArtCode;
+					if(ReadFirstMain(CIr,1,true))then begin 
+						while (LoopBackKey("FNTransNr",IHr,3,TrHs)) begin
+							if(IHr.FileName!="SHVc")then begin TrHs = false; end;
+							if(IHr.TransNr!=SHr.SerNr)then begin TrHs = false; end;
+							if(IHr.Row!=i)then begin TrHs = false; end;
+							if(IHr.ArtCode==SHrw.ArtCode and TrHs)then begin
+									FIFOcnt = FIFOcnt + 1;
+									vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] + IHr.TotCostPriceCurncy / (IHr.Qty * -1);
+									vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] + IHr.TotCostPrice / (IHr.Qty * -1);
+							end;
+						end;
+						if (SHrw.LCPOrowNr > 0) then begin
+							ORrowf = true;
+						end;
+						ResetLoop (IHr);
+						vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] / FIFOcnt;
+						vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] / FIFOcnt;
+					end;
+				end;
+				matrowget (ORr,1,ORrw);
+				POComp = ORrw.ECReservComp;
+				WebOutString("SH_No_" & SHr.SerNr);
+				if(ReadRecordLink(SHr,1,POr,RLr))then begin
+					POSerNr = POr.SerNr;
+					if (SetCompany(POComp,false)) then begin
+						POr.SerNr = POSerNr;
+						if (ReadFirstMain(POr,1,true)) then begin
+							for (i=0;i<matrowcnt(POr);i=i+1) begin
+								matrowget (POr,i,POrw);
+								if (ORrowf) then begin
+									if (POrw.Price!=vItemFifo[POrw.ArtCode & "_" & i + 1]) then begin
+										WebOutString("____Error");
+										WebOutString("<BR>");
+									end else begin
+										WebOutString("<BR>");
+									end;
+								end else begin
+									if (POrw.Price!=vItemFifo[POrw.ArtCode & "_" & 0]) then begin
+										WebOutString("____Error");
+										WebOutString("<BR>");
+									end else begin
+										WebOutString("<BR>");
+									end;
+								end;
+							end;
+						end;
+					end;
+					ResetCompany (18);
+				end;
+			end;
+		end;
+	end;
+	
+	
+	
+	
+ // weboutstring("");
+ // ebOutString("<BR>");
+end;
+
+
