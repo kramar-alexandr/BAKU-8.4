@@ -4191,6 +4191,70 @@ begin
 return;
 end;
 
+
+
+
+
+global webpublic updating procedure WebSetStat()
+begin
+	record PUVc PUr;
+	row PUVc PUrw;
+	record POVc POr;
+	row POVc POrw;
+	boolean testf,TrHs,shipdf,shipd0f;
+	integer pos,i,cntr;
+	string 100 fname,lname,mname,tstr;
+	val bc1v, PartTotal;
+	vector val PPUItemQty;
+	
+	TrHs = true;
+	POr.SerNr = -1;
+	while (loopMain(POr,1,true)) begin
+		if (POr.IDStatus == "PO Confirmed") then begin
+			shipdf = true;
+			shipd0f = true;
+			for (i=0;i<matrowcnt(POr);i=i+1) begin
+				matrowget(POr,i,POrw);
+				if(POrw.Shipd2 < POrw.Quant) then begin shipdf = false; end;
+				if(POrw.Shipd2 > 0) then begin shipd0f = false; end; 
+			end;		
+			if (shipdf and !shipd0f) then begin
+				POr.IDStatus = "PO Completed";
+				logtext (0,POr.SerNr & "___" & "PO Completed");
+				RecordStore (POr,true);
+			end;
+			if (!shipdf and !shipd0f) then begin
+				POr.IDStatus = "PO Goods Delivered Partial";
+				logtext (0,POr.SerNr & "___" & "PO Goods Delivered Partial");
+				PUr.PONr = POr.SerNr;
+				if (ReadFirstKey("PONr",PUr,1,true)) then begin 
+					for (i=0;i<matrowcnt(PUr);i=i+1) begin
+						matrowget(PUr,i,PUrw);
+						PPUItemQty[PUrw.ArtCode] = PUrw.Quant;
+					end;
+					logtext (0,PUr.SerNr & "___" & "PU");
+					for (i=0;i<matrowcnt(POr);i=i+1) begin
+						matrowget(POr,i,POrw);
+						if(PPUItemQty[POrw.ArtCode]>0) then begin
+							PartTotal = PartTotal + (POrw.Sum / POrw.Quant * PPUItemQty[POrw.ArtCode]);
+						end;
+					end;		
+					
+					POr.PartDelSum4 = POr.PartDelSum4 + PartTotal;
+				end;
+				
+				RecordStore (POr,true);
+			end;
+		end;
+	end;
+	
+
+
+return;
+end;
+
+
+
 global webpublic updating procedure WebFillCustomerNames()
 begin
 	record CUvc CUr;
