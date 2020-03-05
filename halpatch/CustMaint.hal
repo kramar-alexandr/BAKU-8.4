@@ -4191,6 +4191,70 @@ begin
 return;
 end;
 
+
+
+
+
+global webpublic updating procedure WebSetStat()
+begin
+	record PUVc PUr;
+	row PUVc PUrw;
+	record POVc POr;
+	row POVc POrw;
+	boolean testf,TrHs,shipdf,shipd0f;
+	integer pos,i,cntr;
+	string 100 fname,lname,mname,tstr;
+	val bc1v, PartTotal;
+	vector val PPUItemQty;
+	setCompany(28,false);
+	TrHs = true;
+	POr.SerNr = -1;
+	while (loopMain(POr,1,true)) begin
+		if (POr.IDStatus == "PO Confirmed") then begin
+			shipdf = true;
+			shipd0f = true;
+			for (i=0;i<matrowcnt(POr);i=i+1) begin
+				matrowget(POr,i,POrw);
+				if(POrw.Shipd2 < POrw.Quant) then begin shipdf = false; end;
+				if(POrw.Shipd2 > 0) then begin shipd0f = false; end; 
+			end;		
+			if (shipdf and !shipd0f) then begin
+				POr.IDStatus = "PO Completed";
+				logtext (0,POr.SerNr & "___" & "PO Completed");
+				RecordStore (POr,true);
+			end;
+			if (!shipdf and !shipd0f) then begin
+				POr.IDStatus = "PO Goods Delivered Partial";
+				logtext (0,POr.SerNr & "___" & "PO Goods Delivered Partial");
+				PUr.PONr = POr.SerNr;
+				if (ReadFirstKey("PONr",PUr,1,true)) then begin 
+					for (i=0;i<matrowcnt(PUr);i=i+1) begin
+						matrowget(PUr,i,PUrw);
+						PPUItemQty[PUrw.ArtCode] = PUrw.Quant;
+					end;
+					logtext (0,PUr.SerNr & "___" & "PU");
+					for (i=0;i<matrowcnt(POr);i=i+1) begin
+						matrowget(POr,i,POrw);
+						if(PPUItemQty[POrw.ArtCode]>0) then begin
+							PartTotal = PartTotal + (POrw.Sum / POrw.Quant * PPUItemQty[POrw.ArtCode]);
+						end;
+					end;		
+					
+					POr.PartDelSum4 = POr.PartDelSum4 + PartTotal;
+				end;
+				
+				RecordStore (POr,true);
+			end;
+		end;
+	end;
+	
+
+
+return;
+end;
+
+
+
 global webpublic updating procedure WebFillCustomerNames()
 begin
 	record CUvc CUr;
@@ -4206,7 +4270,7 @@ begin
 		if(blank(CUr.Name))then begin testf = false; end;
 		if(CUr.CUType==0)then begin testf = false; end;
 		if(CUr.VEType==1)then begin testf = false; end;
-		if(CUr.EmployeeType==1)then begin testf = false; end;
+		if(CUr.EmployeeType==0)then begin testf = false; end;//!!!!!!!!!!!!!
 		if(CUr.blockedFlag==1)then begin testf = false; end;
 		if(nonblank(CUr.CRMLName))then begin testf = false; end;
 		if(nonblank(CUr.CRMName))then begin testf = false; end;
@@ -4217,7 +4281,7 @@ begin
 		end;
 		
 		if(testf)then begin
-			logtext(0,cntr);
+			//logtext(0,cntr);
 			cntr = cntr + 1;
 			fname = "";
 			lname = "";
@@ -4264,6 +4328,7 @@ begin
 			CUr.CRMLName = lname;
 			CUr.CRMName = fname;
 			CUr.CRMPatr = mname;
+			logtext(0,CUr.Code);
 			//SendUpdateContactToCRM(CUr);
 			recordstore(CUr,true);
 			
@@ -4366,4 +4431,124 @@ begin
 return;
 end;
 
+global 
+updating procedure AddObjMn()
+begin
+	record TRVc TRr,oldTRr;
+	row TRVc TRrw;
+	boolean TrHs, testf, update;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	integer comp,oldComp,CompQty;
+	array string 20 stores;
+	integer oscnt,cnt,i;
+	logtext(0,"start"); 
+	blockload(Compb);
+	oldComp = currentCompany;
+	CompQty = matrowcnt(Compb);
+	for(comp=0;comp<CompQty;comp=comp+1) begin
+		matrowget(Compb,comp,Comprw);
+		if(Comprw.ActiveStatus==0)then begin
+			SetCompany(comp+1,false);
+			TrHs = true;
+			TRr.TransDate = CurrentDate;
+			while(LoopBackKey("TransDate",TRr,1,TrHs)) begin
+				if(TRr.TransDate<StringToDate("18/02/2020")) then begin TrHs = false; end;
+				if(TrHs) then begin
+					update = false;
+					cnt = matrowcnt(TRr);
+					for(i=0;i<cnt;i=i+1) begin
+						matrowget(TRr,i,TRrw);
+						ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
+						if(nonblank(stores[0])) then begin i = cnt; end;
+					end;		
+					RecordCopy(oldTRr,TRr)
+					for(i=0;i<cnt;i=i+1) begin
+						matrowget(TRr,i,TRrw);
+						if(TRrw.Objects == "E801" or TRrw.Objects == "E8" or TRrw.Objects == "E800") then begin
+							TRrw.Objects = AddObjectToObjectList(TRrw.Objects,stores[0]);
+							update = true;						
+						end;
+						matrowput(TRr,i,TRrw);
+					end;
+					if(update) then begin 
+						logtext(0," update TRr INTYc -" & TRr.IntYc & " number- " & TRr.Number & " in company- " & Comprw.ShortName);
+						if (RecordUpdate(oldTRr,TRr,true)==0) then begin end;
+					end;
+					ClearArray(stores);
+				end;
+			end;
+			ResetLoop(TRr);
+		end;
+	end;	
+	SetCompany(oldComp,false);
+	
+	
+return;
+end;
 
+
+global 
+updating procedure AddObjKomisMn()
+begin
+	record TRVc TRr,oldTRr;
+	row TRVc TRrw;
+	boolean TrHs, testf, update;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	integer comp,oldComp,CompQty;
+	array string 20 stores;
+	integer oscnt,cnt,i;
+	record NewComissPrc2Block CP2b;// Edit ************************** ABR 18.02.20
+	
+	
+	logtext(0,"start"); 
+	
+	
+	blockload(Compb);
+
+	
+	
+	oldComp = currentCompany;
+	CompQty = matrowcnt(Compb);
+	for(comp=0;comp<CompQty;comp=comp+1) begin
+		matrowget(Compb,comp,Comprw);
+		if(Comprw.ActiveStatus==0)then begin
+			SetCompany(comp+1,false);
+			blockload(CP2b);
+			TrHs = true;
+			TRr.TransDate = CurrentDate;
+			while(LoopBackKey("TransDate",TRr,1,TrHs)) begin
+				if(TRr.TransDate<StringToDate("18/02/2020")) then begin TrHs = false; end;
+				if(TrHs) then begin
+					update = false;
+					cnt = matrowcnt(TRr);
+
+					RecordCopy(oldTRr,TRr)
+					for(i=0;i<cnt;i=i+1) begin
+						matrowget(TRr,i,TRrw);
+						if(TRrw.AccNumber==CP2b.CorrAcc)then begin
+							if(!setinset(CP2b.Objects,TRrw.Objects))then begin
+								logtext(0,TRrw.AccNumber & " -> " & TRrw.Objects);
+								TRrw.Objects = AddObjectToObjectList(TRrw.Objects,CP2b.Objects);
+								logtext(0,TRrw.AccNumber & " -> " & TRrw.Objects);
+								update = true;
+							end;
+						end;
+						matrowput(TRr,i,TRrw);
+					end;
+					if(update) then begin 
+						logtext(0," update TRr INTYc -" & TRr.IntYc & " number- " & TRr.Number & " in company- " & Comprw.ShortName & " for date "  & TRr.TransDate);
+						if (RecordUpdate(oldTRr,TRr,true)==0) then begin end;
+					end;
+					ClearArray(stores);
+				end;
+			end;
+			ResetLoop(TRr);
+		end;
+	end;	
+	SetCompany(oldComp,false);
+	
+	
+return;
+end;

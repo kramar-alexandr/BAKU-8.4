@@ -459,20 +459,20 @@ end;
 
 
 
-
-global updating procedure DeleteItemsFromRetPUDsm()
+global updating procedure DeleteItemsFromRetPUDsm() //EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:25 05.07.2018
 begin
 	integer wn,i,mtrw,rwcnt,j;
 	record RetPUVc RetPUr;
 	row RetPUVc RetPUrw;
 	record NotepadVc Noter,newNoter;
-	integer notenr;
+	integer notenr, pos;
 	record SerBalVc SBr;
-	string 100 tstr;
+	string 100 tstr,qtstr;
 	boolean serialfoundf,TrHs,testf;
   record RLinkVc RLr;
   boolean notercreate,skip;
   vector boolean vartcode;
+	vector Integer vquant;
 	
 	recordnew(newNoter);
 	
@@ -486,12 +486,14 @@ begin
 			notenr = 1;
 			while (ReadRecordLink(RetPUr,notenr,Noter,RLr)) begin
 				if ("DEL"==Noter.Classification) then begin
-			
 					rwcnt = LineTextCnt(Noter);
 					for (i=0;i<rwcnt;i=i+1) begin
-						tstr = LineTextGet(Noter,i);
+						pos = 0;
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,tstr);
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,qtstr);
 						if(nonblank(tstr))then begin
 							vartcode[tstr] = true;
+							vquant[tstr] = StringToInt(qtstr);
 						end;
 					end;  
 				end;
@@ -500,14 +502,55 @@ begin
 	
 			For(i=0;i<mtrw;i=i+1) begin
 				matrowget(RetPUr,i,RetPUrw);
-				if(vartcode[RetPUrw.ArtCode]==false)then begin
-					matrowdelete(RetPUr,i);
-					i=i-1;
-					mtrw = mtrw - 1;
+				if (currentcompany!=18) then begin
+					if(vquant[RetPUrw.ArtCode]==RetPUrw.Quant)then begin
+						if(vartcode[RetPUrw.ArtCode]==true)then begin
+							if(blank(RetPUrw.VEItemCode))then begin
+								matrowdelete(RetPUr,i);
+								i=i-1;
+								mtrw = mtrw - 1;
+							end else begin
+								RetPUrw.Quant = 0;
+								matrowput(RetPUr,i,RetPUrw);
+							end;
+						end;
+					end else begin
+						if(vquant[RetPUrw.ArtCode]>0)then begin
+							RetPUrw.Quant = RetPUrw.Quant - vquant[RetPUrw.ArtCode];
+							matrowput(RetPUr,i,RetPUrw);
+						end;
+					end;
+				end else begin
+					if(vquant[RetPUrw.ArtCode]==RetPUrw.Quant)then begin
+						if(vartcode[RetPUrw.ArtCode]==true)then begin
+							matrowdelete(RetPUr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end;
+					end else begin
+						if(vquant[RetPUrw.ArtCode]>0)then begin
+							RetPUrw.Quant = RetPUrw.Quant - vquant[RetPUrw.ArtCode];
+							matrowput(RetPUr,i,RetPUrw);
+						end;
+					end;
+					if(vquant[RetPUrw.VEItemCode]==RetPUrw.Quant)then begin
+						if(vartcode[RetPUrw.VEItemCode]==true)then begin
+							matrowdelete(RetPUr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end;
+					end else begin
+						if(vquant[RetPUrw.VEItemCode]>0)then begin
+							RetPUrw.Quant = RetPUrw.Quant - vquant[RetPUrw.VEItemCode];
+							matrowput(RetPUr,i,RetPUrw);
+						end;
+					end;
 				end;
 			end; 
+			putwindowrecord(wn,RetPUr);
 			RetPUSumUp(RetPUr);
 			putwindowrecord(wn,RetPUr);
+			MessageBox(0,"Были удалены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне поступления");
 		end else begin
 			messagebox(0,"Запись должна быть разокеена");
 		end;
@@ -517,6 +560,69 @@ begin
 	
 return;
 end;
+
+
+
+
+
+
+// global updating procedure DeleteItemsFromRetPUDsm()
+// begin
+	// integer wn,i,mtrw,rwcnt,j;
+	// record RetPUVc RetPUr;
+	// row RetPUVc RetPUrw;
+	// record NotepadVc Noter,newNoter;
+	// integer notenr;
+	// record SerBalVc SBr;
+	// string 100 tstr;
+	// boolean serialfoundf,TrHs,testf;
+  // record RLinkVc RLr;
+  // boolean notercreate,skip;
+  // vector boolean vartcode;
+	
+	// recordnew(newNoter);
+	
+	// notercreate = false;
+	
+	// wn = curwindow;
+	// if(windowstate(wn)==0)then begin
+		// getwindowrecord(wn,RetPUr);
+		// if(RetPUr.OKFlag==0)then begin
+			// mtrw = matrowcnt(RetPUr);
+			// notenr = 1;
+			// while (ReadRecordLink(RetPUr,notenr,Noter,RLr)) begin
+				// if ("DEL"==Noter.Classification) then begin
+			
+					// rwcnt = LineTextCnt(Noter);
+					// for (i=0;i<rwcnt;i=i+1) begin
+						// tstr = LineTextGet(Noter,i);
+						// if(nonblank(tstr))then begin
+							// vartcode[tstr] = true;
+						// end;
+					// end;  
+				// end;
+				// notenr = notenr + 1;
+			// end;
+	
+			// For(i=0;i<mtrw;i=i+1) begin
+				// matrowget(RetPUr,i,RetPUrw);
+				// if(vartcode[RetPUrw.ArtCode]==false)then begin
+					// matrowdelete(RetPUr,i);
+					// i=i-1;
+					// mtrw = mtrw - 1;
+				// end;
+			// end; 
+			// RetPUSumUp(RetPUr);
+			// putwindowrecord(wn,RetPUr);
+		// end else begin
+			// messagebox(0,"Запись должна быть разокеена");
+		// end;
+	// end else begin
+		// messagebox(0,"Сначала сохраните запись");
+	// end;
+	
+// return;
+// end;
 
 
 global updating procedure SaveItemsFromPUDsm()//EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:25 05.07.2018
@@ -562,23 +668,52 @@ begin
 			end;
 			For(i=0;i<mtrw;i=i+1) begin
 				matrowget(PUr,i,PUrw);
-				if(vartcode[PUrw.ArtCode]==true)then begin
-					if(vquant[PUrw.ArtCode]!=PUrw.Quant and nonblank(vquant[PUrw.ArtCode]) and vquant[PUrw.ArtCode]!=0)then begin
-						PUrw.Sum = PUrw.Sum / PUrw.Quant;
-						PUrw.Quant = vquant[PUrw.ArtCode];
-						PUrw.Sum = PUrw.Sum * PUrw.Quant;
-						matrowput(PUr,i,PUrw);
+				if (currentcompany!=18) then begin
+					if(vartcode[PUrw.ArtCode]==true)then begin
+						if(vquant[PUrw.ArtCode]!=PUrw.Quant and nonblank(vquant[PUrw.ArtCode]) and vquant[PUrw.ArtCode]!=0)then begin
+							PUrw.Sum = PUrw.Sum / PUrw.Quant;
+							PUrw.Quant = vquant[PUrw.ArtCode];
+							PUrw.Sum = PUrw.Sum * PUrw.Quant;
+							matrowput(PUr,i,PUrw);
+						end;
 					end;
-				end;
-				if(vartcode[PUrw.ArtCode]!=true)then begin
-					if(blank(PUrw.VEItemCode) and blank(PUrw.VEUnit))then begin
+					if(vartcode[PUrw.ArtCode]!=true)then begin
+						if(blank(PUrw.VEItemCode) and blank(PUrw.VEUnit))then begin
+							matrowdelete(PUr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end else begin
+							PUrw.Quant = 0;
+							PUrw.Sum = 0;
+							matrowput(PUr,i,PUrw);
+						end;
+					end;
+				end else begin
+					if(vartcode[PUrw.ArtCode]==true)then begin
+						if(vquant[PUrw.ArtCode]!=PUrw.Quant and nonblank(vquant[PUrw.ArtCode]) and vquant[PUrw.ArtCode]!=0)then begin
+							PUrw.Sum = PUrw.Sum / PUrw.Quant;
+							PUrw.Quant = vquant[PUrw.ArtCode];
+							PUrw.Sum = PUrw.Sum * PUrw.Quant;
+							matrowput(PUr,i,PUrw);
+						end;
+					end;
+					if(vartcode[PUrw.ArtCode]!=true)then begin
 						matrowdelete(PUr,i);
 						i=i-1;
 						mtrw = mtrw - 1;
-					end else begin
-						PUrw.Quant = 0;
-						PUrw.Sum = 0;
-						matrowput(PUr,i,PUrw);
+					end;
+					if(vartcode[PUrw.VIReconComment]==true)then begin
+						if(vquant[PUrw.VIReconComment]!=PUrw.Quant and nonblank(vquant[PUrw.VIReconComment]) and vquant[PUrw.VIReconComment]!=0)then begin
+							PUrw.Sum = PUrw.Sum / PUrw.Quant;
+							PUrw.Quant = vquant[PUrw.VIReconComment];
+							PUrw.Sum = PUrw.Sum * PUrw.Quant;
+							matrowput(PUr,i,PUrw);
+						end;
+					end;
+					if(vartcode[PUrw.VIReconComment]!=true)then begin
+						matrowdelete(PUr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
 					end;
 				end;
 			end; 
@@ -723,23 +858,52 @@ begin
 			end;
 			For(i=0;i<mtrw;i=i+1) begin
 				matrowget(POr,i,POrw);
-				if(vartcode[POrw.ArtCode]==true)then begin
-					if(vquant[POrw.ArtCode]!=POrw.Quant and nonblank(vquant[POrw.ArtCode]) and vquant[POrw.ArtCode]!=0)then begin
-						POrw.Sum = POrw.Sum / POrw.Quant;
-						POrw.Quant = vquant[POrw.ArtCode];
-						POrw.Sum = POrw.Sum * POrw.Quant;
-						matrowput(POr,i,POrw);
+				if (currentcompany==18) then begin
+					if(vartcode[POrw.ArtCode]==true)then begin
+						if(vquant[POrw.ArtCode]!=POrw.Quant and nonblank(vquant[POrw.ArtCode]) and vquant[POrw.ArtCode]!=0)then begin
+							POrw.Sum = POrw.Sum / POrw.Quant;
+							POrw.Quant = vquant[POrw.ArtCode];
+							POrw.Sum = POrw.Sum * POrw.Quant;
+							matrowput(POr,i,POrw);
+						end;
 					end;
-				end;
-				if(vartcode[POrw.ArtCode]!=true)then begin
-					if(blank(POrw.VEArtCode) and blank(POrw.VEUnit))then begin
+					if(vartcode[POrw.ArtCode]!=true)then begin
 						matrowdelete(POr,i);
 						i=i-1;
 						mtrw = mtrw - 1;
-					end else begin
-						POrw.Quant = blankval;
-						POrw.Sum = 0;
-						matrowput(POr,i,POrw);
+					end;
+					if(vartcode[POrw.VEArtCode]==true)then begin
+						if(vquant[POrw.VEArtCode]!=POrw.Quant and nonblank(vquant[POrw.VEArtCode]) and vquant[POrw.VEArtCode]!=0)then begin
+							POrw.Sum = POrw.Sum / POrw.Quant;
+							POrw.Quant = vquant[POrw.VEArtCode];
+							POrw.Sum = POrw.Sum * POrw.Quant;
+							matrowput(POr,i,POrw);
+						end;
+					end;
+					if(vartcode[POrw.VEArtCode]!=true)then begin
+						matrowdelete(POr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
+					end;
+				end else begin
+					if(vartcode[POrw.ArtCode]==true)then begin
+						if(vquant[POrw.ArtCode]!=POrw.Quant and nonblank(vquant[POrw.ArtCode]) and vquant[POrw.ArtCode]!=0)then begin
+							POrw.Sum = POrw.Sum / POrw.Quant;
+							POrw.Quant = vquant[POrw.ArtCode];
+							POrw.Sum = POrw.Sum * POrw.Quant;
+							matrowput(POr,i,POrw);
+						end;
+					end;
+					if(vartcode[POrw.ArtCode]!=true)then begin
+						if(blank(POrw.VEArtCode) and blank(POrw.VEUnit))then begin
+							matrowdelete(POr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end else begin
+							POrw.Quant = blankval;
+							POrw.Sum = 0;
+							matrowput(POr,i,POrw);
+						end;
 					end;
 				end;
 			end; 
@@ -802,24 +966,55 @@ begin
 	
 			For(i=0;i<mtrw;i=i+1) begin
 				matrowget(PUr,i,PUrw);
-				if(vquant[PUrw.ArtCode]==PUrw.Quant)then begin
-					if(vartcode[PUrw.ArtCode]==true)then begin
-						if(blank(PUrw.VEItemCode) and blank(PUrw.VEUnit))then begin
-							matrowdelete(PUr,i);
-							i=i-1;
-							mtrw = mtrw - 1;
-						end else begin
-							PUrw.Quant = 0;
-							PUrw.Sum = 0;
+				if (currentcompany!=18) then begin
+					if(vquant[PUrw.ArtCode]==PUrw.Quant)then begin
+						if(vartcode[PUrw.ArtCode]==true)then begin
+							if(blank(PUrw.VEItemCode) and blank(PUrw.VEUnit))then begin
+								matrowdelete(PUr,i);
+								i=i-1;
+								mtrw = mtrw - 1;
+							end else begin
+								PUrw.Quant = 0;
+								PUrw.Sum = 0;
+								matrowput(PUr,i,PUrw);
+							end;
+						end;
+					end else begin
+						if(vquant[PUrw.ArtCode]>0)then begin
+							PUrw.Sum = PUrw.Sum / PUrw.Quant;
+							PUrw.Quant = PUrw.Quant - vquant[PUrw.ArtCode];
+							PUrw.Sum = PUrw.Sum * PUrw.Quant;
 							matrowput(PUr,i,PUrw);
 						end;
 					end;
 				end else begin
-					if(vquant[PUrw.ArtCode]>0)then begin
-						PUrw.Sum = PUrw.Sum / PUrw.Quant;
-						PUrw.Quant = PUrw.Quant - vquant[PUrw.ArtCode];
-						PUrw.Sum = PUrw.Sum * PUrw.Quant;
-						matrowput(PUr,i,PUrw);
+					if(vquant[PUrw.ArtCode]==PUrw.Quant)then begin
+						if(vartcode[PUrw.ArtCode]==true)then begin
+							matrowdelete(PUr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end;
+					end else begin
+						if(vquant[PUrw.ArtCode]>0)then begin
+							PUrw.Sum = PUrw.Sum / PUrw.Quant;
+							PUrw.Quant = PUrw.Quant - vquant[PUrw.ArtCode];
+							PUrw.Sum = PUrw.Sum * PUrw.Quant;
+							matrowput(PUr,i,PUrw);
+						end;
+					end;
+					if(vquant[PUrw.VIReconComment]==PUrw.Quant)then begin
+						if(vartcode[PUrw.VIReconComment]==true)then begin
+							matrowdelete(PUr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end;
+					end else begin
+						if(vquant[PUrw.VIReconComment]>0)then begin
+							PUrw.Sum = PUrw.Sum / PUrw.Quant;
+							PUrw.Quant = PUrw.Quant - vquant[PUrw.VIReconComment];
+							PUrw.Sum = PUrw.Sum * PUrw.Quant;
+							matrowput(PUr,i,PUrw);
+						end;
 					end;
 				end;
 			end; 
@@ -961,24 +1156,55 @@ begin
 	
 			For(i=0;i<mtrw;i=i+1) begin
 				matrowget(POr,i,POrw);
-				if(vquant[POrw.ArtCode]==POrw.Quant)then begin
-					if(vartcode[POrw.ArtCode]==true)then begin
-						if(blank(POrw.VEArtCode) and blank(POrw.VEUnit))then begin
-							matrowdelete(POr,i);
-							i=i-1;
-							mtrw = mtrw - 1;
-						end else begin
-							POrw.Quant = 0;
-							POrw.Sum = 0;
+				if (currentcompany!=18) then begin
+					if(vquant[POrw.ArtCode]==POrw.Quant)then begin
+						if(vartcode[POrw.ArtCode]==true)then begin
+							if(blank(POrw.VEArtCode) and blank(POrw.VEUnit))then begin
+								matrowdelete(POr,i);
+								i=i-1;
+								mtrw = mtrw - 1;
+							end else begin
+								POrw.Quant = 0;
+								POrw.Sum = 0;
+								matrowput(POr,i,POrw);
+							end;
+						end;
+					end else begin
+						if(vquant[POrw.ArtCode]>0)then begin
+							POrw.Sum = POrw.Sum / POrw.Quant;
+							POrw.Quant = POrw.Quant - vquant[POrw.ArtCode];
+							POrw.Sum = POrw.Sum * POrw.Quant;
 							matrowput(POr,i,POrw);
 						end;
 					end;
 				end else begin
-					if(vquant[POrw.ArtCode]>0)then begin
-						POrw.Sum = POrw.Sum / POrw.Quant;
-						POrw.Quant = POrw.Quant - vquant[POrw.ArtCode];
-						POrw.Sum = POrw.Sum * POrw.Quant;
-						matrowput(POr,i,POrw);
+					if(vquant[POrw.ArtCode]==POrw.Quant)then begin
+						if(vartcode[POrw.ArtCode]==true)then begin
+							matrowdelete(POr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end;
+					end else begin
+						if(vquant[POrw.ArtCode]>0)then begin
+							POrw.Sum = POrw.Sum / POrw.Quant;
+							POrw.Quant = POrw.Quant - vquant[POrw.ArtCode];
+							POrw.Sum = POrw.Sum * POrw.Quant;
+							matrowput(POr,i,POrw);
+						end;
+					end;
+					if(vquant[POrw.VEArtCode]==POrw.Quant)then begin
+						if(vartcode[POrw.VEArtCode]==true)then begin
+							matrowdelete(POr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end;
+					end else begin
+						if(vquant[POrw.VEArtCode]>0)then begin
+							POrw.Sum = POrw.Sum / POrw.Quant;
+							POrw.Quant = POrw.Quant - vquant[POrw.VEArtCode];
+							POrw.Sum = POrw.Sum * POrw.Quant;
+							matrowput(POr,i,POrw);
+						end;
 					end;
 				end;
 			end; 

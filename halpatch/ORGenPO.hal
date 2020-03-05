@@ -1541,6 +1541,7 @@ begin
 							FIFOcnt = FIFOcnt + 1;
 							vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] + IHr.TotCostPriceCurncy / (IHr.Qty * -1);
 							vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] + IHr.TotCostPrice / (IHr.Qty * -1);
+							vCurrRowCode[IHr.ArtCode] = IHr.CurncyCode;
 					end;
 				end;
 				ResetLoop (IHr);
@@ -1558,7 +1559,9 @@ begin
 				if(ReadFirstMain(CIr,1,true))then begin 
 					ORrw.Price = vItemHTotCostPr[CIr.LocCode & "_" & ORrw.LCPOrow];
 				end;
-				vCurrRowCode[ORrw.ArtCode] = ORrw.BrndCurrCode;
+				if (nonblank(ORrw.BrndCurrCode)) then begin
+					vCurrRowCode[ORrw.ArtCode] = ORrw.BrndCurrCode;
+				end;
 				matrowput(ORr,i,ORrw); 
 				ORVc_PastePrice(ORr,i,chsum);
 				matrowget(ORr,i,ORrw); 
@@ -1601,6 +1604,7 @@ begin
 		if(ReadFirstMain(POr,1,true))then begin	
 			mtrw = matrowcnt(POr);
 			logtext(0,"POr read " & POr.SerNr & "  comp  " & currentcompany);
+			POCurCode = "";
 			For(i=mtrw;i>=0;i=i-1) begin
 				matrowget(POr,i,POrw); 
 				if(nonblank(POrw.ArtCode))then begin
@@ -1623,6 +1627,7 @@ begin
 									POVc_PasteQuant(POr,i);
 									matrowget(POr,i,POrw);
 									logtext(0,"POrw.Price2" & POrw.Price);
+									POCurCode = vCurrRowCode[CIr.Code];
 								end else begin
 									ResetCompany(POComp);
 									matrowdelete(POr,i);
@@ -1652,6 +1657,10 @@ begin
 			For(i=0;i<mtrw;i=i+1) begin
 				matrowget(POr,i,POrw);
 				logtext(0,"POrw price " & POrw.Price & "  comp  " & currentcompany);
+			end;
+			if (blank(POr.CurncyCode)) then begin
+				POr.CurncyCode = POCurCode;
+				POr.CheckCurncyCode = POCurCode;
 			end;
 			if(RecordStore(POr,true))then begin 
 				CreateRecordLink(POr,CurrentCompany,SHr,18);  

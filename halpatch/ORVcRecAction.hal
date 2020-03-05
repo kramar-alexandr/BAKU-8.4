@@ -866,7 +866,7 @@ begin
       res = -1;
       goto LORVcRecordCheck;
     end;
-    if (AllowedToTakeFromThisLoc(Locationr)==false) then begin
+    if (AllowedToTakeFromThisLoc(Locationr)==false and left(CurrentUser,2)!="SA") then begin
       RecordCheckError(1768,"",-1,"Location");      
       res = -1;
       goto LORVcRecordCheck;
@@ -1165,6 +1165,16 @@ begin
 				end;
 			end;
 		end;
+		if (currentcompany!=28 and currentcompany!=29) then begin
+			INr.Code = ORrw.ArtCode;
+			if (readfirstmain(INr,1,true)) then begin
+				if (blank(INr.BPIBrand)) then begin
+					RecordCheckError(36345,"",i,"ArtCode");      
+					res = -1;
+					goto LORVcRecordCheck;
+				end;
+			end;
+		end;
     switch (ORrw.stp) begin
       case 1:
         if (nonblank(ORrw.Spec) and blank(ORrw.ArtCode) and blank(ORrw.Quant)) then begin
@@ -1234,7 +1244,7 @@ begin
             res = -1;
             goto LORVcRecordCheck;
           end;
-          if (AllowedToTakeFromThisLoc(Locationr)==false) then begin
+          if (AllowedToTakeFromThisLoc(Locationr)==false and left(CurrentUser,2)!="SA") then begin
             RecordCheckError(1768,"",i,"Location");      
             res = -1;
             goto LORVcRecordCheck;
@@ -2650,6 +2660,9 @@ begin
   ORr.Closed = 0;
   ORr.ShipFlag = 0;
   ORr.QuoteNr = -1;
+	if (currentcompany==18) then begin
+		ORr.OrderClass = "STOCK";
+	end;
   ORr.DiscSum = blankval;
   ORr.DiscPerc = blankval;
   ORr.TotGP = blankval;
@@ -2797,6 +2810,9 @@ begin
   ORr.DiscSum = blankval;
   ORr.DiscPerc = blankval;
   ORr.Probability = blankval;
+	if (currentcompany==18) then begin
+		ORr.OrderClass = "STOCK";
+	end;
   rwcnt = MatRowCnt(ORr);
   for (i=0;i<rwcnt;i=i+1) begin
     MatRowGet(ORr,i,ORrw);
@@ -2942,22 +2958,15 @@ return;
 end;
 
 global
-procedure RecalcIDAmount()     
+function val RecalcID(row ORVc ORrw, record ORVc ORr)     
 begin
 Integer nwn,wn,CISqty,i,cnt;
-record ORVc ORr;
-row ORVc ORrw;
 boolean TrHs;
 record ItemStatusVc ISr;
 record ClientItemStatusVc CISr;
 record ConsItemVc CIr;
 string 255 location;
 
- wn = CurWindow;
- GetWindowRecord(wn,ORr);
- cnt = matrowcnt(ORr);
-	for(i=0;i<cnt;i=i+1) begin
-		matrowget(ORr,i,ORrw);
 		location = ORrw.Location;
 		CISr.ItemCode = ORrw.ArtCode;
 		CIr.Code = ORrw.ArtCode;
@@ -2986,9 +2995,7 @@ string 255 location;
 		if(readfirstmain(ISr,2,true)) then begin
 			ORrw.IDAmount = ISr.Instock - ISr.RsrvQty - CISqty;
 		end;
-		matrowput(ORr,i,ORrw);
-	end;	
- PutWindowRecord(wn,ORr); 
+		RecalcID = ORrw.IDAmount;
 return;
 end;
 
