@@ -367,27 +367,79 @@ begin
 	longint lines,i,j;
 	string 255 linestr;
 	array string 50 contacts;
+	vector boolean isVendor,isEmpl,hasLC,hasActiv;
+	record CUVc CUr;
+	record LoyaltyCardVc LCr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	integer CompQty,comp;
+	record ORVc ORr;
+	record IVVc IVr;
+	record CSVc CSr;
+	vector val LCbal;
 	
 	setcompany(1,true);
 	
+	blockload(Compb);
+	CompQty = matrowcnt(Compb);
 	logtext(0,"WebCheckListToClose start");
 	
 	addfiletoarea("ListToCkeckDublicates.txt",ainput,false);
 	lines = countlinesinarea(ainput);
 	
+	addtexttoarea("Code" & chr(9),aoutput);
+	addtexttoarea("is Vendor" & chr(9),aoutput);
+	addtexttoarea("is Employe" & chr(9),aoutput);
+	addtexttoarea("has Activity" & chr(9),aoutput);
+	addtexttoarea("has LC" & chr(9),aoutput);
+	addtexttoarea("LC points" & chr(9),aoutput);
+	addtexttoarea(chr(13) & chr(10),aoutput);
+	
 	for(i=0;i<lines;i=i+1)begin
 		linestr = getlinefromarea(ainput,i);
 		
 		if(nonblank(linestr))then begin
+			CUr.Code = linestr;
+			if(readfirstmain(CUr,1,true))then begin
+				if(CUr.VEType>0)then begin
+					isVendor[CUr.Code] = true;
+				end;
+				if(CUr.EmployeeType>0)then begin
+					isEmpl[CUr.Code] = true;
+				end;
+				LCr.CustCode = CUr.Code;
+				if(ReadFirstKey("ActCustCode",LCr,1,true)) then begin 
+					hasLC[CUr.Code] = true; 
+					LCbal[CUr.Code] = LCr.PointsBalance + LCr.StartBalance + LCr.PointsBalanceTotal;
+				end;
+				for(comp=0;comp<CompQty;comp=comp+1) begin
+					matrowget(Compb,comp,Comprw);
+					if(Comprw.ActiveStatus==0) then begin
+						SetCompany(comp+1,false);
+						ORr.CustCode = CUr.Code;
+						if(ReadFirstKey("CustCode",ORr,1,true)) then begin hasActiv[CUr.Code] = true; comp = CompQty; end;
+						CSr.CustCode = CUr.Code;
+						if(ReadFirstMain(CSr,1,true))then begin hasActiv[CUr.Code] = true; comp = CompQty; end;
+					end;
+				end;
+				
+			end;
 			contacts[contacts.length] = linestr;
 		end else begin
 			//check compained contacts
 			for(j=0;j<contacts.length;j=j+1)begin
-				addtexttoarea(contacts[j],aoutput);
-				addtexttoarea(chr(9),aoutput);
+				addtexttoarea(contacts[j] & chr(9),aoutput);
+				addtexttoarea(isVendor[contacts[j]] & chr(9),aoutput);
+				addtexttoarea(isEmpl[contacts[j]] & chr(9),aoutput);
+				addtexttoarea(hasActiv[contacts[j]] & chr(9),aoutput);
+				addtexttoarea(hasLC[contacts[j]] & chr(9),aoutput);
+				addtexttoarea(LCbal[contacts[j]] & chr(9),aoutput);
+				addtexttoarea(chr(13) & chr(10),aoutput);
 			end;
 			addtexttoarea(chr(13) & chr(10),aoutput);
 			ClearArray(contacts);
+			ClearVector(isVendor);
+			ClearVector(isEmpl);
 		end;
 		
 		
