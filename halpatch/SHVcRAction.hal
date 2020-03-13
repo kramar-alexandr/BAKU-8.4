@@ -845,7 +845,7 @@ begin
     end;
   end;    
 	
-	if (currentcompany==18 and (SHp.OKFlag!=0) and (SH2p.OKFlag==0)) then begin
+	if (currentcompany!=29 and (SHp.OKFlag!=0) and (SH2p.OKFlag==0)) then begin
 		rwcnt = matrowcnt(SHp);
 		for(i=0;i<rwcnt;i=i+1)begin
 			matrowget(SHp,i,SHrw);
@@ -857,6 +857,14 @@ begin
 				res = -1;
 				goto LSHVcRecordCheck;
       end;
+			if(SHrw.InStock<SHrw.Ordered and nonblank(SHrw.ArtCode))then begin
+				error = 36348;
+				errorstr = "";
+				rownr = i;
+				fieldstr = "InStock";
+				res = -1;
+				goto LSHVcRecordCheck;
+			end;
     end;
 	end;
 	
@@ -1147,19 +1155,21 @@ begin
 												OR2r.SerNr = SHp.OrderNr;
 												// logtext(0,SHp.OrderNr);
 												if(readFirstMain(OR2r,1,true)) then begin 
-													CISr.ItemCode = rec2SHrw.ArtCode;
 													CISqty = 0;
-													TrHs = true;
-													while (loopmain(CISr,1,TrHs)) begin
-														if(CISr.ItemCode!=rec2SHrw.ArtCode)then begin TrHs = false; end;
-														if(CISr.OrderNr!=SHp.OrderNr and TrHs)then begin
-															CISqty = CISqty + CISr.Quant;
+													if(currentcompany==18) then begin
+														CISr.ItemCode = rec2SHrw.ArtCode;
+														TrHs = true;
+														while (loopmain(CISr,1,TrHs)) begin
+															if(CISr.ItemCode!=rec2SHrw.ArtCode)then begin TrHs = false; end;
+															if(CISr.OrderNr!=SHp.OrderNr and TrHs)then begin
+																CISqty = CISqty + CISr.Quant;
+															end;
+															if(OR2r.OrderClass=="STOCK" and CISr.OrderNr==OR2r.SerNr and TrHs)then begin
+																CISqty = CISqty + CISr.Quant;
+															end;
 														end;
-														if(OR2r.OrderClass=="STOCK" and CISr.OrderNr==OR2r.SerNr and TrHs)then begin
-															CISqty = CISqty + CISr.Quant;
-														end;
-													end;
-													ResetLoop(CISr);
+														ResetLoop(CISr);
+													end;	
 													stockreservq = stockreservq - CISqty;
 													logtext(0,"stock reserve" & stockreservq);
 												end;	
