@@ -2710,28 +2710,19 @@ begin
  string 10 realcur;
  string 255 tstr2,filename,serverip;
  record LocationVc Locr;
- record INVc IN2r;
   
-	RecordCopy(IN2r,INr);
-	if(currentcompany==18) then begin
-		IN2r.Code = INr.Code;
-		if(ReadFirstMain(IN2r,1,true) == false) then begin
-			IN2r.AlternativeCode = INr.Code;
-			ReadFirstKey("AlternativeCode",IN2r,1,true);
-		end;	
-	end;	
 	
   todate = RepSpec.d1;
   if(blank(todate))then begin
   	todate = currentdate;
   end;
 
-	ISr.Code = IN2r.Code;
-	realcur = IN2r.LastPurchCurncyCode;
+	ISr.Code = INr.Code;
+	realcur = INr.LastPurchCurncyCode;
 	TrHs2 = true;
 	while(loopmain(ISr,1,TrHs2)) begin
 		testf2 = true;
-		if(ISr.Code!=IN2r.Code)then begin testf2 = false; TrHs2 = false; end;
+		if(ISr.Code!=INr.Code)then begin testf2 = false; TrHs2 = false; end;
 		if(currentcompany!=18) then begin
 			if(nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2)then begin testf2 = false; end;
 		end;	
@@ -2751,11 +2742,11 @@ begin
 		if(ISr.Instock<=0)then begin testf2 = false; end;
 		
 		if(testf2)then begin
-			if(IN2r.SerNrf==0)then begin
+			if(INr.SerNrf==0)then begin
 				For(i=0;i<acnt;i=i+1) begin
-					if(IN2r.LastPurchCurncyCode==acur[i] and nonblank(IN2r.LastPurchCurncyCode))then begin
-						cqty[IN2r.LastPurchCurncyCode] = cqty[IN2r.LastPurchCurncyCode] + cqty[""];
-						ccost[IN2r.LastPurchCurncyCode] = ccost[IN2r.LastPurchCurncyCode] + ccost[""];
+					if(INr.LastPurchCurncyCode==acur[i] and nonblank(INr.LastPurchCurncyCode))then begin
+						cqty[INr.LastPurchCurncyCode] = cqty[INr.LastPurchCurncyCode] + cqty[""];
+						ccost[INr.LastPurchCurncyCode] = ccost[INr.LastPurchCurncyCode] + ccost[""];
 						cqty[""] = blankval;
 						ccost[""] = blankval;
 					end;
@@ -2764,28 +2755,28 @@ begin
 				
 				For(i=0;i<acnt;i=i+1) begin
 					if(cqty[acur[i]]!=0)then begin
-						IN2r.LastPurchCurncyCode = acur[i];
+						INr.LastPurchCurncyCode = acur[i];
 						ISr.Instock = cqty[acur[i]];
 						if(left(currentuser,2)=="SA")then begin
-							//logtext(0,"PrintInfo2 1 " & IN2r.LastPurchCurncyCode);
+							//logtext(0,"PrintInfo2 1 " & INr.LastPurchCurncyCode);
 						end;
-						PrintInfo2(IN2r,ISr,"",0,0,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,realcur,brandcur,RepSpec);
+						PrintInfo2(INr,ISr,"",0,0,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,realcur,brandcur,RepSpec);
 					end;
 				end;
 				
 			end else begin
-				SBr.Item = IN2r.Code;
+				SBr.Item = INr.Code;
 				SBr.Location = ISr.Location;
-				while(loopmain(SBr,2,(SBr.Item==IN2r.Code and SBr.Location==ISr.Location))) begin
+				while(loopmain(SBr,2,(SBr.Item==INr.Code and SBr.Location==ISr.Location))) begin
 					
-					if(SBr.Item==IN2r.Code and SBr.Location==ISr.Location)then begin
+					if(SBr.Item==INr.Code and SBr.Location==ISr.Location)then begin
 						ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,SBr.Serial,SBr.CostPrice,acnt,cqty,ccost,acur,brandcur);
 						//logtext(0,SBr.Item & " " & SBr.Location & " " & ISr.Instock & " " & SBr.CostPrice);
 						if(ISr.Instock>0)then begin
 							if(left(currentuser,2)=="SA")then begin
-								//logtext(0,"PrintInfo2 2 " & IN2r.LastPurchCurncyCode);
+								//logtext(0,"PrintInfo2 2 " & INr.LastPurchCurncyCode);
 							end;
-							PrintInfo2(IN2r,ISr,SBr.Serial,ISr.Instock,SBr.CostPrice,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,INr.LastPurchCurncyCode,brandcur,RepSpec);
+							PrintInfo2(INr,ISr,SBr.Serial,ISr.Instock,SBr.CostPrice,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,INr.LastPurchCurncyCode,brandcur,RepSpec);
 						end;
 					end;
 				end;
@@ -2839,7 +2830,11 @@ begin
 	record BrandsReportCCBlock Brcb;
 	row BrandsReportCCBlock Brcbw;
 
-	blockload(Brcb);
+	if(RepSpec.flags[8]!=0) then begin
+		SetCompany(RepSpec.flags[8],false);
+		blockload(Brcb);
+		SetCompany(18,false);
+	end;	
   userbrandf = CheckUserBrands(currentuser,userbrand);
   
   logtext(0,"userbrandf " & userbrandf);
@@ -2848,9 +2843,6 @@ begin
 	
 	if (RepSpec.UsedOnly == 0) then begin
 		companies[0] = CurrentCompany;
-		if(RepSpec.flags[5] == 1 and CurrentCompany != 18) then begin
-			companies[1] = 18;
-		end;
 	end;
 	
 	if(RepSpec.UsedOnly == 1) then begin //All J&W companies ---  Irkan Ahmadov 20.12.2019
@@ -2864,9 +2856,6 @@ begin
 		companies[7] = 22;
 		companies[8] = 23;
 		companies[9] = 24;
-		if(RepSpec.flags[5] == 1) then begin
-			companies[10] = 18;
-		end;
 	end;
 	
 	if(RepSpec.UsedOnly == 2) then begin //All NoN J&W companies ---  Irkan Ahmadov 20.12.2019 !!!If you want to get all NoN JW comp.s you can use the procedure "CompanyIsJWLikeCompany(CompNo)".!!! // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:31 20.01.2020
@@ -2885,9 +2874,6 @@ begin
 		companies[12] = 31;
 		companies[13] = 32;
 		companies[14] = 33;
-		if(RepSpec.flags[5] == 1) then begin
-			companies[15] = 18;
-		end;
 	end;	
 
 	if(RepSpec.UsedOnly == 3) then begin //All companies ---  Irkan Ahmadov 29.01.2020
@@ -2915,9 +2901,6 @@ begin
 		companies[21] = 30;
 		companies[22] = 31;
 		companies[23] = 32;
-		if(RepSpec.flags[5] == 1) then begin
-			companies[24] = 18;
-		end;
 	end;
 		
 	
@@ -2996,8 +2979,9 @@ begin
     SortAndClearClassifications(typecode,typename,typescnt);
   end;
   
-  
-  startreportnoheaderjob(USetStr(31179));
+  if(RepSpec.flags[8]==0) then begin
+		startreportnoheaderjob(USetStr(31179));
+	end;	
   
   
   if(blank(todate))then begin
@@ -3338,8 +3322,14 @@ begin
   end;
   
   LItemStockStatExtRn:;
-  
-  endjob;
+  if(currentcompany!=18) then begin
+		RepSpec.flags[8] = currentcompany;
+		ItemStockStatExtRn(RepSpec);
+		RepSpec.flags[8] = 0;
+	end;
+	 if(RepSpec.flags[8]==0) then begin
+		 endjob;
+	end;	
   
   
 return;
