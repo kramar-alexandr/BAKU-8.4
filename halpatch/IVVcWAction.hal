@@ -1610,6 +1610,14 @@ function Boolean IVDClassAfterEditField(Integer wn,string fieldname,Integer fn, 
 BEGIN
   Boolean res;
 	record IVVc IVr; 
+	record INVc INr; 
+	row IVVc IVrw;
+	Integer i, qnt, mini;
+	val minPrice, vRebate;
+	string 100 artCode;
+	boolean status;
+	
+	status = true;
   
 	GetWindowRecord(wn,IVr);
 	
@@ -1669,6 +1677,66 @@ BEGIN
 		case "VaucherCode": res = IVDClassVaucherCodeEFAfter(wn,changed!=0);
 		//case "TaxFree": res = IVDClassTaxFreeEFAfter(wn,changed!=0);
   end;
+  
+  	if(CurrentCompany==1)then begin
+		qnt=0;
+		for (i=0;i<matrowcnt(IVr);i=i+1) begin
+			matrowget(IVr,i,IVrw);
+			if(nonblank(IVrw.ArtCode)) then begin 
+				if(nonblank(IVrw.Quant)) then begin
+					qnt=qnt+IVrw.Quant;
+				end;
+			end;
+		end;
+		if(qnt==2) then begin
+			minPrice = 100000000;
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if(nonblank(IVrw.Price)) then begin
+					if(IVrw.Price<minPrice) then begin
+						minPrice = IVrw.Price;
+						artCode = IVrw.ArtCode;
+						mini = i;
+					end;
+				end;
+			end;
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if(IVrw.Price<=0 and nonblank(IVrw.Price)) then begin
+					status = false;
+				end;
+			end;
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				IVr.InvComment = "";
+				IVrw.vRebate=blankval;
+				MatRowPut(IVr,i,IVrw);
+				PutWindowRecord(wn,IVr);
+				res = IVDClassvRebateEFAfter(wn,fn,i,1);
+				res = IVDClassSumEFAfter(wn,fn,i,1);
+			end;
+			MatRowGet(IVr,mini,IVrw);
+			if(status) then begin
+				IVr.InvComment = "Spec kompaniya 3 al 2 ode";
+				IVrw.vRebate = 100/IVrw.Quant;
+				MatRowPut(IVr,mini,IVrw);
+				PutWindowRecord(wn,IVr);
+				res = IVDClassvRebateEFAfter(wn,fn,mini,1);
+				res = IVDClassSumEFAfter(wn,fn,mini,1);
+			end;
+		end;
+		if(qnt>2) then begin
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				IVrw.vRebate=blankval;
+				MatRowPut(IVr,i,IVrw);
+				PutWindowRecord(wn,IVr);
+				res = IVDClassvRebateEFAfter(wn,fn,i,1);
+				res = IVDClassSumEFAfter(wn,fn,i,1);
+			end;
+		end;
+	end;
+	
   IVDClassAfterEditField = res;
   RETURN;
 END;
