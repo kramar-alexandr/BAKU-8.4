@@ -8,6 +8,80 @@ external function Boolean GetItemPriceDiscount3(string,val,var record INVc,strin
 external function string 60 RemoveObjectFromObjectList(string,string);
 external function string 60 AddObjectToObjectList(string,string);
 
+SetLangMode(LangRussian,"RUS",0);
+
+
+global // Edit ************************** BPI Ukraine - KramarAlexandr - 05, 27 03 2020 y. at 10:27:53 AM
+function string 255 AciaTwoLusOneSW(var record IVVc IVr,string opearation)
+begin
+  record SWexItemsBlock SWexItemsb;
+  row SWexItemsBlock SWexItemsrw;
+  vector boolean excludeitems;
+  integer i,rwcnt,minrow;
+  string 50 res;
+  row IVVc IVrw;
+  val totqty,minprice;
+  integer rowqty;
+    
+  blockload(SWexItemsb);
+  rwcnt = matrowcnt(SWexItemsb);
+  for(i=0;i<rwcnt;i=i+1)begin
+  	matrowget(SWexItemsb,i,SWexItemsrw);
+  	excludeitems[SWexItemsrw.ArtCode] = true;
+  end;
+  
+  minprice = 99999999;
+  rwcnt = matrowcnt(IVr);
+  for(i=0;i<rwcnt;i=i+1)begin
+  	matrowget(IVr,i,IVrw);
+  	if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+  		if(setinset("SPARKLING_WEEKS",IVrw.Objects))then begin
+  			IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,"SPARKLING_WEEKS");
+  			matrowput(IVr,i,IVrw);
+  		end;
+  		if(IVrw.Quant>0)then begin
+  			if(excludeitems[IVrw.ArtCode]==false)then begin
+					totqty = totqty + IVrw.Quant;
+					rowqty = rowqty + 1;
+					if(IVrw.Price<minprice)then begin
+						minprice = IVrw.Price;
+						minrow = i;
+					end;
+  			end;
+  		end;
+  	end;
+  end;
+  
+  if(totqty==3)then begin
+  	//if(rowqty==3)then begin
+  		for(i=0;i<rwcnt;i=i+1)begin
+				matrowget(IVr,i,IVrw);
+				if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+					if(IVrw.Quant>0)then begin
+						if(excludeitems[IVrw.ArtCode]==false)then begin
+							IVrw.vRebate = 0;
+							if(i==minrow)then begin
+								IVrw.vRebate = 100/IVrw.Quant;
+								res = "Сработала Акция Sparkling Weeks 2+1!";
+							end;
+							IVrw.Objects = AddObjectToObjectList(IVrw.Objects,"SPARKLING_WEEKS");
+							MatRowPut(IVr,i,IVrw);
+							IVVc_PasteQuantity(IVr,i);		
+							IVDchrsum(IVr,i);
+							IVDchsum(IVr,i);
+						end;
+					end;
+				end;
+			end;
+  	//end;
+  end;
+  
+  AciaTwoLusOneSW = res;
+  return;
+end; // Edit ************************** BPI Ukraine - KramarAlexandr - 05, 27 03 2020 y. at 10:27:59 AM
+
+
+
 global //Edit***************************Sasha2,13:44 01.06.2016 {
 function string 255 Acia50ForSecondBrandItem(var record IVVc IVr,string opearation)
 begin
@@ -32,7 +106,7 @@ begin
   Integer exportflag;
   Boolean dummyf;
   record SerNrTrackBlock SNrb;
-  	  	  	
+  	
   	while(loopmain(Akcr,1,true))begin  	
   		if(blankdate(Akcr.FromDate) or dateinrange(IVr.InvDate,Akcr.FromDate,Akcr.ToDate))then begin
 				for(aki=0;aki<matrowcnt(Akcr);aki=aki+1)begin
@@ -56,9 +130,7 @@ begin
 									end;
 								end;
 							end;
-						end;
-			
-			
+						end;			
 			
 						if(k>1)then begin
 							for(i=0;i<k;i=i+1)begin
@@ -157,6 +229,14 @@ begin
 				end;	
 			end;
 		end;
+		  
+  // Акция 2+1 в сваровски
+  	if(currentcompany==1)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 27 03 2020 y. at 10:29:52 AM
+  		if(IVr.InvDate>=stringtodate("27/03/2020") and IVr.InvDate<=stringtodate("05/04/2020"))then begin
+  			res = AciaTwoLusOneSW(IVr,opearation);
+  		end;
+  	end;
+  
   
   Acia50ForSecondBrandItem = res;
   return;
