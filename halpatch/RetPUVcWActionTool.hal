@@ -1503,7 +1503,8 @@ vector string 255 vNotSMcompLoc, vNotSMcompLocItem;
 vector boolean LocSHCompltdf, vNotSMcomp, vNotSMItemFCash;
 record StockMovVc SMr, newStockMovr;
 row StockMovVc newStockMovrw;
-
+vector val vRRPPrices;
+val priceDiff;
 	
 	BlockLoad(ECCDSb);
 	
@@ -1542,6 +1543,7 @@ row StockMovVc newStockMovrw;
 				vLocRetItemCompany[right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9)] = ORrw.ECReservComp;
 				vLocRetItemStock[right(ORrw.GlobalItemArtCode,len(ORrw.GlobalItemArtCode)-9)] = ORrw.ECReservStock;
 				vLocCompanys[ORrw.ECReservComp] = true;
+				vRRPPrices[ORrw.ArtCode] = ORrw.Sum / ORrw.Quant;
 				if(MaxNumComp<ORrw.ECReservComp)then begin MaxNumComp = ORrw.ECReservComp; end;
 			end;
 		end;
@@ -1738,6 +1740,7 @@ row StockMovVc newStockMovrw;
 						while (ReadRecordLink(PUr,j,VIr,RLr))begin
 							VIr.InvoiceNr = "";
 							mtrw = matrowcnt(VIr);
+							priceDiff = 0;
 							for (y=mtrw-1;y>=0;y=y-1)begin
 								matrowget(VIr,y,VIrw);
 								if(VIrw.AccNumber=="41/01")then begin
@@ -1746,8 +1749,17 @@ row StockMovVc newStockMovrw;
 									end else begin
 										VIrw.Sum = (VIrw.Sum / VIrw.qty) * RetPUitemQuant[RetPUr.SerNr & "_" & VIrw.Item];
 										VIrw.qty = RetPUitemQuant[RetPUr.SerNr & "_" & VIrw.Item];
+										priceDiff = priceDiff + ((vRRPPrices[VIrw.Item] - (VIrw.Sum / VIrw.qty)) *  VIrw.qty);
 										MatRowPut(VIr,y,VIrw);
 									end;
+								end;
+							end;
+							mtrw = matrowcnt(VIr);
+							for (y=mtrw-1;y>=0;y=y-1)begin
+								matrowget(VIr,y,VIrw);
+								if(VIrw.AccNumber=="76")then begin
+									VIrw.Sum = Round(priceDiff,SetRoundModeD(2));
+									MatRowPut(VIr,y,VIrw);
 								end;
 							end;
 							// mtrw = matrowcnt(VIr);  //for FOB36 Vendor
