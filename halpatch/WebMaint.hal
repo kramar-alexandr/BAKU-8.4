@@ -1,4 +1,5 @@
 external function longint DateDiff(date,date);
+remote function boolean CompanyIsJWLikeCompany(Integer);
 
 global webpublic updating procedure WebFindAndFixItems()
 begin
@@ -527,5 +528,61 @@ begin
 		end;
 	end;
 
+return;
+end;
+
+global webpublic updating procedure WebRestoreCostAndCurncyForIN()
+begin
+	record INVc INr,origINr,oldINr;
+	record RHistVc RHr;
+	string 100 tstr;
+	boolean TrHs;
+	integer i;
+	record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+	
+	blockload(Compb);
+	
+	for(i=1;i<26;i=i+1)begin
+		setcompany(i,false);
+		matrowget(Compb,i-1,Comprw);
+		if(CompanyIsJWLikeCompany(i)==false and Comprw.ActiveStatus==0)then begin
+			resetloop(INr);
+			while(loopmain(INr,1,true))begin
+				if(INr.InPrice>0 and 	INr.LastPurchPrice2==0)then begin
+					if(blank(INr.LastPurchCurncyCode))then begin
+				
+						tstr = BuildRecordIdStr(INr,i);
+			
+						RHr.RecidStr = tstr;
+						RHr.SerNr = 999999999;
+						TrHs = true;
+						while(loopbackkey("RecidStr",RHr,2,TrHs))begin
+							if(RHr.RecidStr!=tstr)then begin TrHs = false; end;
+					
+							if(TrHs)then begin
+								ReadOriginalRecord(RHr,origINr);	
+								if(origINr.Code==INr.Code and nonblank(origINr.LastPurchCurncyCode) and origINr.LastPurchPrice2>0)then begin
+									weboutstring(Comprw.CompCode & "  " & INr.Code & " Restore CURNCY " & origINr.LastPurchCurncyCode & " price " & origINr.LastPurchPrice2);
+									weboutstring("<BR>");
+									TrHs = false;
+									/*recordcopy(oldINr,INr);
+										INr.LastPurchCurncyCode = origINr.LastPurchCurncyCode;
+										INr.LastPurchPrice2 = origINr.LastPurchPrice2;
+									recordupdate(oldINr,INr,true);*/
+								end;
+							end;
+			
+						end;
+						resetloop(RHr);
+						
+					end;
+				end;
+			end;
+		end;
+	
+	end;
+	
+	
 return;
 end;
