@@ -62,6 +62,8 @@ remote updating function integer CreateBackStockMov(record StockMovVc, var recor
 external procedure StockMovSumUp(var record StockMovVc);
 remote procedure RetPUVc_PasteLocation(var record RetPUVc,Integer);
 remote procedure ORDchsum(var record ORVc,Integer);
+external updating procedure UpdateOrderFromInv(record IVVc,Boolean,record IVVc,Boolean);
+
 
 															 
 															 
@@ -777,13 +779,13 @@ end;
 global 
 updating procedure UnConfirmLocalOR (var record ORVc ORr)// _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger  15:27 24.12.2018
 begin
-	record IVVc IVr, OldIVr;
+	record IVVc IVr, OldIVr, IV2r;
 	record ORVc LocORr, OldLocORr;
 	row ORVc ORrw, LocORrw;
-	record SHVc SHr;
+	record SHVc SHr, SH2r;
 	record PUVc PUr;
 	row PUVc PUrw;
-	integer OldComp, MaxCompCode, rwcnt, i, j, PUcnt, y, LocComp, VIOFFCnt, k;
+	integer OldComp, MaxCompCode, rwcnt, i, j, PUcnt, y, LocComp, VIOFFCnt, k, mtrw, n;
 	vector boolean Compf;
 	record RLinkVc RLr;
 	vector boolean LocSHCompltdf, vNotSMcomp, vNotSMItemFCash;
@@ -807,7 +809,7 @@ begin
 	row StockMovVc newStockMovrw;
 	record ECCasierDocSetBlock ECCDSb;
 	row ECCasierDocSetBlock ECCDSrw;
-	vector string 255 vNotSMcompLoc, vNotSMcompLocItem;
+	vector string 255 vNotSMcompLoc, vNotSMcompLocItem, vSHLocation;
 	
 	BlockLoad(ECCDSb);
 	
@@ -1016,8 +1018,10 @@ begin
 							end;
 						end else begin
 							DeletedSH[j] = SHr.SerNr;
+							RecordCopy(SH2r,SHr);
 							RecordDelete(SHr);
 							RecordDelete(RLr);
+							if (UpdateOrderFromShip(SH2r,false,SHr,true,false))then begin end;
 						end;
 						j = j + 1;
 					end;
@@ -1046,8 +1050,10 @@ begin
 									CreateRecordLink(LocORr,Currentcompany,Actr,Currentcompany);
 								end;
 							end;
+							RecordCopy(IV2r,IVr);
 							RecordDelete(IVr);
 							RecordDelete(RLr);
+							UpdateOrderFromInv(IV2r,false,IVr,true);
 						end;
 						j = j + 1;
 					end;
@@ -1056,7 +1062,7 @@ begin
 					LocORr.Closed = 0;
 					LocORr.Comment = "Отменен";
 					LocORr.Addr0 = LocORr.Addr0 & "  (Заказ отменен)";
-					if(RecordUpdate(OldLocORr,LocORr,true)==0)then begin end;//?????? Maybe need false?
+					if(RecordUpdate(OldLocORr,LocORr,true)==0)then begin end;
 				end;
 			end;
 		end;
