@@ -1494,7 +1494,7 @@ begin
 	string 50 ostr;
 	array string 100 class,artcode,itemcurrency;
 	record INVc INr, IN2r;
-	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf,serportf;
+	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf,serportf,custECOMf;
 	record CUVc CUr;
 	record DIVc DIr;
 	string 200 vendor,loccode,errmsg,OffserNr,warning;
@@ -1503,7 +1503,7 @@ begin
 	row CompaniesBlock CBrw;
 	vector boolean vArtCodeRepeat, IVArtCodef, ORRowf;
 	vector integer vArtCodeQTY, ECArt,priceinorcnt;
-	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant,vItemRowQuantNew, vItemHTotCostPr, ItemORPriseWRebate, ORRowPrice, IVRowPrice, vGIPrice;
+	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant,vItemRowQuantNew, vItemHTotCostPr, ItemORPriseWRebate, ORRowPrice, IVRowPrice, vGIPrice, curCustItemSum;
 	record VIVc VIr, OldVIr, offVIr;
 	row VIVc VIrw, OldVIrw;
 	record RcVc RepSpec;
@@ -1545,6 +1545,9 @@ begin
 		mtrw = matrowcnt(ORr);
 		shmtrw = matrowcnt(SHr);
 		loccode = SHr.Location;
+		if (ORr.CustCode=="FOBE_COMMERCE") then begin
+			custECOMf = true;
+		end;
 		cmpnmb = currentcompany;
 		for(j=0;j<shmtrw;j=j+1) begin
 			matrowget(SHr,j,SH2rw);
@@ -1591,7 +1594,7 @@ begin
 				ECCodes[ORrw.GlobalItemArtCode] = "Y";
 				vArtCodeQTY[ORrw.GlobalItemArtCode] = ECArt[ORrw.ArtCode];
 			end;
-			if(ORRowf[i])then begin
+			if(ORRowf[i] and ORr.CustCode=="FOBE_COMMERCE")then begin
 			 // logtext(0,ORrw.Quant);
 				GIr.Code = ORrw.GlobalItemArtCode;
 				ReadFirstMain (GIr,1,true);
@@ -1600,6 +1603,8 @@ begin
 				ORrw.Sum = ORrw.Price * ORrw.Quant;
 				ORrw.vRebate = 0;
 				matrowput(ORr,i,ORrw); 
+			end else begin
+				curCustItemSum[ORrw.GlobalItemArtCode] = ORrw.Sum;
 			end;
 		end;
 		ORSumup (ORr);
@@ -1625,10 +1630,13 @@ begin
 				matrowget(IVr,i,IVrw);
 				if(IVArtCodef[IVrw.ArtCode])then begin
 					IN2r.Code = IVrw.ArtCode;
-					if(readfirstmain(IN2r,1,true)) then begin end;
-					IVrw.Price = vGIPrice[IN2r.GlobalArtCode]; 
-					IVrw.Sum = vGIPrice[IN2r.GlobalArtCode] * IVrw.Quant;
-					matrowput(IVr,i,IVrw);
+					if(readfirstmain(IN2r,1,true) and IVr.CustCode=="FOBE_COMMERCE") then begin 
+						IVrw.Price = vGIPrice[IN2r.GlobalArtCode]; 
+						IVrw.Sum = vGIPrice[IN2r.GlobalArtCode] * IVrw.Quant;
+						matrowput(IVr,i,IVrw);
+					end else begin
+						
+					end;
 				end;
 			end;
 			IVr.SalesMan = CurrentUser;
@@ -1799,7 +1807,11 @@ begin
 							VICostPriceSum = VICostPriceSum + VIrw.Sum;
 							IN2r.Code = PUrw.ArtCode;
 							if(readfirstmain(IN2r,1,true)) then begin end;
-							VIRRPPriceSum = VIRRPPriceSum + Round((vGIPrice[IN2r.GlobalArtCode] * PUrw.Quant),SetRoundModeD(2));
+							if (custECOMf) then begin
+								VIRRPPriceSum = VIRRPPriceSum + Round((vGIPrice[IN2r.GlobalArtCode] * PUrw.Quant),SetRoundModeD(2));
+							end else begin
+								VIRRPPriceSum = VIRRPPriceSum + curCustItemSum[IN2r.GlobalArtCode];
+							end;
 						end;
 						VICostPricewithRRPDif = VIRRPPriceSum - VICostPriceSum;
 						if (VICostPricewithRRPDif > 0) then begin

@@ -63,7 +63,8 @@ external procedure StockMovSumUp(var record StockMovVc);
 remote procedure RetPUVc_PasteLocation(var record RetPUVc,Integer);
 remote procedure ORDchsum(var record ORVc,Integer);
 external updating procedure UpdateOrderFromInv(record IVVc,Boolean,record IVVc,Boolean);
-
+external function roundmode SetRoundModeD(Integer);
+remote procedure ORSumup(var record ORVc);
 
 															 
 															 
@@ -1101,7 +1102,7 @@ begin
 	row GlobalItemVc GIrw, GI2rw;
 	record RLinkVc RLr;
 	record PLVc PLr;
-	vector val ItemRowPrice, ItemRowRebate;
+	vector val ItemRowPrice, ItemRowRebate, ItemSum;
 	record LocationVc Lcr;
 	record ActVc Actr, OldActr;
 	string 255 items;
@@ -1110,6 +1111,7 @@ begin
 	record POVc POr, OldPOr;
 	row POVc POrw;
 	record AccBlock ARb;
+	record LoyaltyCardVc LoyCardr;
 	
 	BlockLoad(ECMUb);
 	BlockLoad(ARb);
@@ -1378,13 +1380,23 @@ begin
 				end else begin
 					RecordCopy(OldLocORr,LocORr);
 				end;
+				
 				LocORr.OrdDate = currentdate;
 				LocORr.Reserved = 1;
-				LocORr.CustCode = "FOBE_COMMERCE";
-				warf = PasteCustInOrder(LocORr,LocORr.CustCode,LocORr.CustCode,inwarn,war);
+				
+				LoyCardr.SerNr = ORr.ECLoyaltyCard;
+				if (ReadFirstMain(LoyCardr,1,true)) then begin
+					LocORr.CustCode = LoyCardr.CustCode;
+					warf = PasteCustInOrder(LocORr,LocORr.CustCode,LocORr.CustCode,inwarn,war);
+				end else begin
+					LocORr.CustCode = "NOFULLNAME";
+					warf = PasteCustInOrder(LocORr,LocORr.CustCode,LocORr.CustCode,inwarn,war);
+				end;				
 				LocORr.PayDeal = "PP";
 				LocORr.PlanShipDate = ORr.PlanShipDate;
 				LocORr.DespatchDate = ORr.DespatchDate;
+				LocORr.ECLoyaltyCard = ORr.ECLoyaltyCard;
+				LocORr.ECOMMERCEOrdf = 1;
 				LocORr.OfficialSerNr = "EC_" & ORr.SerNr;
 				LocORr.Comment = ORr.Comment;
 				LocORr.Location = "";
@@ -1460,22 +1472,26 @@ begin
 				ORrw.Quant = 1;
 				allitemqty = allitemqty + 1;
 				ORrw.Spec = LocORrw.Spec;
+				ORrw.Price = LocORrw.Price;
+				ORrw.vRebate = LocORrw.vRebate;
+				ORrw.Sum = LocORrw.Sum;
 				ORrw.GlobalItemArtCode = LocORrw.GlobalItemArtCode;
 				for (lc=0;lc<=prcnt;lc=lc+1)begin
 					if(PriceQuant[ORrw.ArtCode & "_" & lc]>0)then begin
 						GIr.Code = ORrw.GlobalItemArtCode;
-						if(readfirstmain(GIr,1,true))then begin
-							ORrw.Price = GIr.Price;
-						end;
-						logtext(0,"Price - " & GIr.Price & "item" & ORrw.ArtCode);
-						ORrw.vRebate = GIr.Rebate;
+						/*if(readfirstmain(GIr,1,true))then begin
+								ORrw.Price = GIr.Price;
+								logtext(0,"Price - " & GIr.Price & "item" & ORrw.ArtCode);
+								ORrw.vRebate = GIr.Rebate;
+						end;*/
 						PriceQuant[ORrw.ArtCode & "_" & lc] = PriceQuant[ORrw.ArtCode & "_" & lc] - 1;
 						lc = prcnt + 1;
 					end;
 				end;
 				ORrw.SerialNr = LocORrw.SerialNr;
 				ORrw.PlanShipRow = LocORrw.PlanShipRow;
-				ORrw.Sum = ORrw.Price * ((100 - ORrw.vRebate) * 0.01);
+				// ORrw.Sum = ORrw.Price * ((100 - ORrw.vRebate) * 0.01);
+				ORrw.Sum = Round(LocORrw.Sum / LocORrw.Quant * ORrw.Quant,SetRoundModeD(2));
 				ORrw.VATCode = LocORrw.VATCode;
 				ORrw.ECReservStock = LocORrw.Location;
 				ORrw.ECReservComp = vItemComp[LocORrw.ArtCode];
@@ -1484,6 +1500,7 @@ begin
 				pos = pos + 1;
 			end;
 		end;
+		ORSumup(ORr);
 		i = i + 1;
 	end;
 	
@@ -1493,6 +1510,7 @@ begin
 			matrowget(ORr,i,ORrw);
 			ItemQuant[ORrw.ArtCode] = ItemQuant[ORrw.ArtCode] + ORrw.Quant;
 			PUItQuant[ORrw.ArtCode] = PUItQuant[ORrw.ArtCode] + ORrw.ECReceived;
+			ItemSum[ORrw.ArtCode] = ItemSum[ORrw.ArtCode] + ORrw.Sum;
 		end;
 		j = 0;
 		for (i=0;i<mtrw;i=i+1) begin
@@ -1504,11 +1522,14 @@ begin
 				ORVc_PasteQuant(ORr,i-j,true,chsum);
 				ItemQuant[ORrw.ArtCode] = 0;
 				PUItQuant[ORrw.ArtCode] = 0;
+				ORrw.Sum = ItemSum[ORrw.ArtCode];
+				matrowput(ORr,i-j,ORrw);
 			end else begin
 				matrowdelete(ORr,i-j);
 				j = j + 1;
 			end;
 		end;
+		ORSumup(ORr);
 	end;
 	
 	if(ECStItf and ORr.OrderConfirmed==1)then begin
