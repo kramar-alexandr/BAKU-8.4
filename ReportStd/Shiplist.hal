@@ -264,16 +264,18 @@ begin
 	record IVVc IVr, CredIVr;
 	record ORVc ORr;
 	row ORVc ORrw;
-  Boolean testf, TrHs, TrHs2, testf2;
-  string 20 frit,toit;
-  string 20 frin,toin;
-  record INVc INr;
-  string 255 tstr;
-  string 255 itsz,mask,subsets,mskrep;
-	vector val vRetItems, vRetOutItems;
-	vector boolean vInPerReturns;
-	val SaleTotal, Total, TotQty;
+  Boolean testf, TrHs, TrHs2, testf2, SHFlag;
 	record ARVc ARr;
+	date SHDate;
+	val RetSum, PaySum;
+	record IPVc IPr;
+	row IPVc IPrw;
+	vector string 255 IVPayDeal, PMComments;
+	record PMBlock PMb;
+	row PMBlock PMrw;
+	string 255 IVPM, stocks;
+	
+	BlockLoad(PMb);
 
 	StartReportnoheaderjob("Отчет по оплатам заказов Е-Коммерс");
 	startformat(15);
@@ -288,46 +290,174 @@ begin
 		outstring(340,0,"ФИО клиента",false);
 	endformat;
 	
+	if (blank(RepSpec.sStartDate)) then begin RepSpec.sStartDate = StringToDate("08/10/18"); end;
+	if (blank(RepSpec.sEndDate)) then begin RepSpec.sEndDate = CurrentDate;	end;
+	
+	for (i=0;i<matrowcnt(PMb);i=i+1) begin
+		matrowget(PMb,i,PMrw);
+			PMComments[PMrw.Code] = PMrw.Comment;
+	end;
+	
+	
 	TrHs = true;
-	ORr.OrdDate = RepSpec.sStartDate;
-	while (loopKey("OrdDate",ORr,1,TrHs)) begin
-	testf = true;
-		if (ORr.OrdDate > RepSpec.sEndDate) then begin TrHs = false; testf = false; end;		
-		if (testf) then begin
-			SHr.OrderNr = ORr.SerNr;
-			if (ReadFirstKey("OrderKey",SHr,1,true)) begin
-			end;
-			
-			
-			
-			TrHs2 = true;
-			Retr.OrdNr = ORr.SerNr;
-			while (LoopKey("OrdNr",Retr,1,TrHs2)) begin
-				if (Retr.OrdNr!=ORr.SerNr) then begin TrHs2 = false; end;
-				if (TrHs2) then begin
-				
-				end;
-			end;
-			Resetloop(Retr);
-			
-			IVr.OrderNr = ORr.SerNr;
-			if (ReadFirstKey("OrderNr",IVr,1,true)) then begin
-				
-			end;
-			
-			TrHs2 = true;
-			CredIVr.OrderNr = ORr.SerNr;
-			while (LoopKey("OrderNr",CredIVr,1,TrHs2)) begin
-				testf2 = true;
-				if (CredIVr.SerNr!=ORr.SerNr) then begin TrHs2 = false; testf2 = false; end;
-				if (CredIVr.SerNr==IVr.SerNr) then begin testf2 = false; end;
-				if (testf2) then begin
-					
+	IPr.TransDate = RepSpec.sStartDate;
+	while (loopKey("TransDate",IPr,1,TrHs)) begin
+		if (IPr.TransDate > RepSpec.sEndDate) then begin TrHs = false; end;
+		if (TrHs) then begin
+			for (i=0;i<matrowcnt(IPr);i=i+1) begin
+				matrowget(IPr,i,IPrw);
+				if (nonblank(IPrw.InvoiceNr)) then begin
+					IVPayDeal[IPrw.InvoiceNr] = PMComments[IPr.PayMode];
 				end;
 			end;
 		end;
 	end;
-	resetloop(ORr);
+
+	if (blank(RepSpec.f1)) then begin
+		TrHs = true;
+		ORr.OrdDate = RepSpec.sStartDate;
+		while (loopKey("OrdDate",ORr,1,TrHs)) begin
+			testf = true;
+			if (ORr.OrdDate > RepSpec.sEndDate) then begin TrHs = false; testf = false; end;	
+			if (testf) then begin
+				SHr.OrderNr = ORr.SerNr;
+				SHFlag = false;
+				if (ReadFirstKey("OrderKey",SHr,1,true)) begin
+					SHDate = SHr.ShipDate;
+					SHFlag = true;
+				end;
+				TrHs2 = true;
+				Retr.OrdNr = ORr.SerNr;
+				while (LoopKey("OrdNr",Retr,1,TrHs2)) begin
+					if (Retr.OrdNr!=ORr.SerNr) then begin TrHs2 = false; end;
+					if (TrHs2) then begin
+					
+					end;
+				end;
+				Resetloop(Retr);
+				PaySum = 0;
+				IVr.OrderNr = ORr.SerNr;
+				IVPM = "";
+				if (ReadFirstKey("OrderNr",IVr,1,true)) then begin
+					ARr.InvoiceNr = IVr.SerNr;
+					if (IVr.OKFlag==1) then begin
+						PaySum = IVr.Sum4;
+						if (ReadFirstMain(ARr,1,true)) then begin
+							PaySum = PaySum - ARr.RVal;
+						end;
+						if (IVr.Sum4 > ARr.RVal or ARr.RVal==blankval) then begin
+							IVPM = IVPayDeal[IVr.SerNr];
+						end;
+					end;
+				end;
+				RetSum = 0;
+				TrHs2 = true;
+				CredIVr.OrderNr = ORr.SerNr;
+				while (LoopKey("OrderNr",CredIVr,1,TrHs2)) begin
+					testf2 = true;
+					if (CredIVr.SerNr!=ORr.SerNr) then begin TrHs2 = false; testf2 = false; end;
+					if (CredIVr.SerNr==IVr.SerNr) then begin testf2 = false; end;
+					if (testf2) then begin
+						RetSum = RetSum + CredIVr.Sum4;
+					end;
+				end;
+				stocks = "";
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					if (nonblank(stocks)) then begin stocks = stocks & ","; end;
+					stocks = stocks & ORrw.ECReservStock;
+				end;
+				
+				startformat(15);
+					outstring(0,0,ORr.SerNr,false);
+					outstring(70,0,ORr.OrdDate,false);
+					if (SHFlag) then begin
+						outstring(220,0,SHDate,false);
+					end else begin
+						outstring(220,0,"",false);
+					end;
+					outstring(300,0,ORr.Sum4,false);
+					outstring(340,0,RetSum,false);
+					outstring(340,0,PaySum,false);
+					outstring(340,0,IVPM,false);
+					outstring(340,0,stocks,false);
+					outstring(340,0,ORr.Addr0,false);
+				endformat;
+			end;
+		end;
+		resetloop(ORr);
+	end else begin
+		ORr.SerNr = StringToLongInt(RepSpec.f1);
+		if (ReadFirstMain(ORr,1,true)) then begin
+			testf = true;
+			if (ORr.OrdDate > RepSpec.sEndDate or ORr.OrdDate < RepSpec.sStartDate) then begin testf = false; end;	
+			if (testf) then begin
+				SHr.OrderNr = ORr.SerNr;
+				SHFlag = false;
+				if (ReadFirstKey("OrderKey",SHr,1,true)) begin
+					SHDate = SHr.ShipDate;
+					SHFlag = true;
+				end;
+				TrHs2 = true;
+				Retr.OrdNr = ORr.SerNr;
+				while (LoopKey("OrdNr",Retr,1,TrHs2)) begin
+					if (Retr.OrdNr!=ORr.SerNr) then begin TrHs2 = false; end;
+					if (TrHs2) then begin
+					
+					end;
+				end;
+				Resetloop(Retr);
+				PaySum = 0;
+				IVr.OrderNr = ORr.SerNr;
+				IVPM = "";
+				if (ReadFirstKey("OrderNr",IVr,1,true)) then begin
+					ARr.InvoiceNr = IVr.SerNr;
+					if (IVr.OKFlag==1) then begin
+						PaySum = IVr.Sum4;
+						if (ReadFirstMain(ARr,1,true)) then begin
+							PaySum = PaySum - ARr.RVal;
+						end;
+						if (IVr.Sum4 > ARr.RVal or ARr.RVal==blankval) then begin
+							IVPM = IVPayDeal[IVr.SerNr];
+						end;
+					end;
+				end;
+				RetSum = 0;
+				TrHs2 = true;
+				CredIVr.OrderNr = ORr.SerNr;
+				while (LoopKey("OrderNr",CredIVr,1,TrHs2)) begin
+					testf2 = true;
+					if (CredIVr.SerNr!=ORr.SerNr) then begin TrHs2 = false; testf2 = false; end;
+					if (CredIVr.SerNr==IVr.SerNr) then begin testf2 = false; end;
+					if (testf2) then begin
+						RetSum = RetSum + CredIVr.Sum4;
+					end;
+				end;
+				stocks = "";
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					if (nonblank(stocks)) then begin stocks = stocks & ","; end;
+					stocks = stocks & ORrw.ECReservStock;
+				end;
+				
+				startformat(15);
+					outstring(0,0,ORr.SerNr,false);
+					outstring(70,0,ORr.OrdDate,false);
+					if (SHFlag) then begin
+						outstring(220,0,SHDate,false);
+					end else begin
+						outstring(220,0,"",false);
+					end;
+					outstring(300,0,ORr.Sum4,false);
+					outstring(340,0,RetSum,false);
+					outstring(340,0,PaySum,false);
+					outstring(340,0,IVPM,false);
+					outstring(340,0,stocks,false);
+					outstring(340,0,ORr.Addr0,false);
+				endformat;
+			end;
+		end;
+	end;
 	
 	endjob;
 return;
