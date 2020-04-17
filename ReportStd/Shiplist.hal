@@ -42,6 +42,20 @@ begin
 	vector val vRetItems, vRetOutItems;
 	vector boolean vInPerReturns;
 	val SaleTotal, Total, TotQty;
+	record ARVc ARr;
+	date SHDate;
+	val ORSum, RetSum, PaySum;
+	record IPVc IPr;
+	row IPVc IPrw;
+	vector string 255 IVPayDeal, PMComments;
+	record PMBlock PMb;
+	row PMBlock PMrw;
+	string 255 IVPM, stocks;
+	record IVVc IVr, CredIVr;
+	Boolean TrHs2, testf2, SHFlag;
+
+	
+	BlockLoad(PMb);
 
 	StartReportnoheaderjob("Отчет по продажам Е-Коммерс");
 	startformat(15);
@@ -50,11 +64,32 @@ begin
 		outstring(220,0,"№ сч.Btrx",false);
 		outstring(300,0,"Код. кл",false);
 		outstring(340,0,"Наименование",false);
-		outstring(340,0,"",false);
-		outstring(340,0,"",false);
-		outstring(340,0,"",false);
+		outstring(340,0,"Оплачен",false);
+		outstring(340,0,"Способ оплаты",false);
+		outstring(340,0,"Бутик",false);
 		outstring(340,0,"Всего",false);
 	endformat;
+	
+	
+	for (i=0;i<matrowcnt(PMb);i=i+1) begin
+		matrowget(PMb,i,PMrw);
+		PMComments[PMrw.Code] = PMrw.Comment;
+	end;
+	
+	TrHs = true;
+	IPr.TransDate = RepSpec.sStartDate;
+	while (loopKey("TransDate",IPr,1,TrHs)) begin
+		// if (IPr.TransDate > RepSpec.sEndDate) then begin TrHs = false; end;
+		if (TrHs) then begin
+			for (i=0;i<matrowcnt(IPr);i=i+1) begin
+				matrowget(IPr,i,IPrw);
+				if (nonblank(IPrw.InvoiceNr)) then begin
+					IVPayDeal[IPrw.InvoiceNr] = PMComments[IPr.PayMode];
+				end;
+			end;
+		end;
+	end;
+	
 	
 	Total = 0;
 	TrHs = true;
@@ -86,6 +121,42 @@ begin
 					SaleTotal = SaleTotal + (ORrw.Sum / ORrw.Quant * (ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]));
 					TotQty = TotQty + (ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]);
 				end;
+				PaySum = 0;
+				IVr.OrderNr = ORr.SerNr;
+				IVPM = "";
+				if (ReadFirstKey("OrderNr",IVr,1,true)) then begin
+					ARr.InvoiceNr = IVr.SerNr;
+					if (IVr.OKFlag==1) then begin
+						PaySum = IVr.Sum4;
+						if (ReadFirstMain(ARr,1,true)) then begin
+							PaySum = PaySum - ARr.RVal;
+						end;
+						if (IVr.Sum4 > ARr.RVal or ARr.RVal==blankval) then begin
+							IVPM = IVPayDeal[IVr.SerNr];
+						end;
+					end;
+				end;
+				RetSum = 0;
+				TrHs2 = true;
+				CredIVr.OrderNr = ORr.SerNr;
+				while (LoopKey("OrderNr",CredIVr,1,TrHs2)) begin
+					testf2 = true;
+					if (CredIVr.OrderNr!=ORr.SerNr) then begin TrHs2 = false; testf2 = false; end;
+					if (CredIVr.SerNr==IVr.SerNr) then begin testf2 = false; end;
+					if (CredIVr.OKFlag!=1) then begin testf2 = false; end;
+					if (testf2) then begin
+						RetSum = RetSum + CredIVr.Sum4;
+					end;
+				end;
+				resetloop(CredIVr);
+				stocks = "";
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					if (!SetInSet(ORrw.ECReservStock,stocks)) then begin
+						if (nonblank(stocks)) then begin stocks = stocks & ","; end;
+						stocks = stocks & ORrw.ECReservStock;
+					end;
+				end;
 			end;
 			if (TotQty>0) then begin
 				Total = Total + SaleTotal;
@@ -100,9 +171,9 @@ begin
 					end;
 					outstring(300,0,SHr.CustCode,false);
 					outstring(340,0,SHr.Addr0,false);
-					outstring(340,0,"",false);
-					outstring(340,0,"",false);
-					outstring(340,0,"",false);
+					outstring(340,0,PaySum - RetSum,false);
+					outstring(340,0,IVPM,false);
+					outstring(340,0,stocks,false);
 					outstring(340,0,SaleTotal,false);
 				endformat;
 				
@@ -152,9 +223,9 @@ begin
 		outstring(220,0,"№ сч.Btrx",false);
 		outstring(300,0,"Код. кл",false);
 		outstring(340,0,"Наименование",false);
-		outstring(340,0,"",false);
-		outstring(340,0,"",false);
-		outstring(340,0,"",false);
+		outstring(340,0,"Оплачен",false);
+		outstring(340,0,"Сепособ оплаты",false);
+		outstring(340,0,"Бутик",false);
 		outstring(340,0,"Всего",false);
 	endformat;
 	
@@ -180,6 +251,54 @@ begin
 					matrowget(ORr,i,ORrw);
 					SaleTotal = SaleTotal + (ORrw.Sum / ORrw.Quant * vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr]);
 				end;
+				
+				
+				
+				PaySum = 0;
+				IVr.OrderNr = ORr.SerNr;
+				IVPM = "";
+				if (ReadFirstKey("OrderNr",IVr,1,true)) then begin
+					ARr.InvoiceNr = IVr.SerNr;
+					if (IVr.OKFlag==1) then begin
+						PaySum = IVr.Sum4;
+						if (ReadFirstMain(ARr,1,true)) then begin
+							PaySum = PaySum - ARr.RVal;
+						end;
+						if (IVr.Sum4 > ARr.RVal or ARr.RVal==blankval) then begin
+							IVPM = IVPayDeal[IVr.SerNr];
+						end;
+					end;
+				end;
+				RetSum = 0;
+				TrHs2 = true;
+				CredIVr.OrderNr = ORr.SerNr;
+				while (LoopKey("OrderNr",CredIVr,1,TrHs2)) begin
+					testf2 = true;
+					if (CredIVr.OrderNr!=ORr.SerNr) then begin TrHs2 = false; testf2 = false; end;
+					if (CredIVr.SerNr==IVr.SerNr) then begin testf2 = false; end;
+					if (CredIVr.OKFlag!=1) then begin testf2 = false; end;
+					if (testf2) then begin
+						RetSum = RetSum + CredIVr.Sum4;
+					end;
+				end;
+				resetloop(CredIVr);
+				stocks = "";
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					if (!SetInSet(ORrw.ECReservStock,stocks)) then begin
+						if (nonblank(stocks)) then begin stocks = stocks & ","; end;
+						stocks = stocks & ORrw.ECReservStock;
+					end;
+				end;
+				
+				
+				
+				
+				
+				
+				
+				
+				
 			end;
 			
 			Total = Total - SaleTotal;
@@ -196,9 +315,9 @@ begin
 				end;
 				outstring(300,0,Retr.CustCode,false);
 				outstring(340,0,Retr.CustName,false);
-				outstring(340,0,"",false);
-				outstring(340,0,"",false);
-				outstring(340,0,"",false);
+				outstring(340,0,PaySum - RetSum,false);
+				outstring(340,0,IVPM,false);
+				outstring(340,0,stocks,false);
 				outstring(340,0,-SaleTotal,false);
 			endformat;
 			
@@ -295,14 +414,14 @@ begin
 	
 	for (i=0;i<matrowcnt(PMb);i=i+1) begin
 		matrowget(PMb,i,PMrw);
-			PMComments[PMrw.Code] = PMrw.Comment;
+		PMComments[PMrw.Code] = PMrw.Comment;
 	end;
 	
 	
 	TrHs = true;
 	IPr.TransDate = RepSpec.sStartDate;
 	while (loopKey("TransDate",IPr,1,TrHs)) begin
-		if (IPr.TransDate > RepSpec.sEndDate) then begin TrHs = false; end;
+		// if (IPr.TransDate > RepSpec.sEndDate) then begin TrHs = false; end;
 		if (TrHs) then begin
 			for (i=0;i<matrowcnt(IPr);i=i+1) begin
 				matrowget(IPr,i,IPrw);
