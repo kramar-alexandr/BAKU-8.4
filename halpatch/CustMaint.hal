@@ -3092,11 +3092,13 @@ array string 20 stores,brand;
 record SHVc SHr;
 record RetVc Retr;
 record IVVc IVr;
-vector string 255 upd,brandObj;
+vector string 255 upd,brandObj,objTVI;
 vector boolean brands,create;
 record BrandsBanDateBlock BBBr;
 row BrandsBanDateBlock BBBrw;
 record CompaniesBlock Compb;
+record OTypeAddControlBlock OType;
+row OTypeAddControlBlock OTypew;
 row CompaniesBlock Comprw;
 date loopDate;
 integer rownr,curAccDiffIntYc;
@@ -3106,13 +3108,14 @@ longint corrTRrNum;
 val Acc60,Acc61;
 record SDVc SDr;
 record LocationVc Locr;
-string 255 fobCust;
+string 255 fobCust, objT;
 
 testf = true;
 oldCompany = currentCompany;
 setCompany(18,false);
 blockload(BBBr);
 BlockLoad(Compb);
+BlockLoad(OType);
 ResetCompany(oldCompany);
 CompQty = matrowcnt(Compb);
 //-------------------------------Brands allowed-------------------------------------
@@ -3228,6 +3231,24 @@ while(loopDate<=RepSpec.sEndDate) begin
 						case 	SDYc	: SDr.SerNr = TRr.Number;
 								if(ReadFirstMain(SDr,1,true)) then begin
 									if(SetInSet("CENTRAL_RETURN",SDr.Objects)) then begin testf=false; end;
+									ExtractObjectsByType(SDr.Objects,"STORE",stores,oscnt);
+									objT = "";
+									for(i=0;i<matrowcnt(OType);i=i+1) begin
+										matRowget(OType,i,OTypew);
+										if(OTypew.STORE == stores[0]) then begin
+											objT = OTypew.SUBDI;
+										end;
+									end;
+									if(blank(objT)) then begin
+										switch(Comprw.CompName) begin
+											case "Lladro": objT = "LL1";
+											case "Rosental": objT = "RS1";
+											case "Baccarat": objT = "BACCARAT";
+											case "CreativeSystem": objT = "CREATIVE";
+											case "Idea": objT = "IDEA";
+											case "E-Commerce": objT = "ECOMMERCE";
+										end;	
+									end;
 									Locr.Code = SDr.Location;
 									if(ReadFirstMain(Locr,1,true)) then begin
 										fobCust = Locr.FOBSuplier;
@@ -3264,6 +3285,25 @@ while(loopDate<=RepSpec.sEndDate) begin
 										saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] + TRrw.DebVal;
 										saleSumRow[obj & brand[0]] = saleSumRow[obj & brand[0]] - TRrw.CredVal;
 										create[obj] = true;
+										if(blank(objTVI[obj])) then begin
+											ExtractObjectsByType(TRrw.Objects,"STORE",stores,oscnt);
+											for(j=0;j<matrowcnt(OType);j=j+1) begin
+												matRowget(OType,j,OTypew);
+												if(OTypew.STORE == stores[0]) then begin
+													objTVI[obj] = OTypew.SUBDI;
+												end;
+											end;
+											if(blank(objTVI[obj])) then begin
+												switch(Comprw.CompName) begin
+													case "Lladro": objTVI[obj] = "LL1";
+													case "Rosental": objTVI[obj] = "RS1";
+													case "Baccarat": objTVI[obj] = "BACCARAT";
+													case "CreativeSystem": objTVI[obj] = "CREATIVE";
+													case "Idea": objTVI[obj] = "IDEA";
+													case "E-Commerce": objTVI[obj] = "ECOMMERCE";
+												end;	
+											end;
+										end;	
 										brands[brand[0]] = true;
 									end;	
 								end else begin
@@ -3295,6 +3335,7 @@ while(loopDate<=RepSpec.sEndDate) begin
 												TRrw.Objects = RemoveObjectFromObjectList(TRrw.Objects,obj);
 												TRrw.Objects = AddObjectToObjectList(TRrw.Objects,fobCust);
 												TRrw.Objects = AddObjectToObjectList(TRrw.Objects,"CC");
+												TRrw.Objects = AddObjectToObjectList(TRrw.Objects,objT);
 												MatRowInsert(AccTRrCC,rownr,TRrw);
 												MatrowPut(AccTRrCC,rownr,TRrw);
 												rownr = rownr + 1;
@@ -3390,6 +3431,10 @@ while(loopDate<=RepSpec.sEndDate) begin
 									if(RecordUpdate(oldVIr,VIr,true)==0) then begin end;
 									RecordCopy(oldVIr,VIr);
 									rowCnt = 0;
+									if(nonblank(objTVI[tags[i]])) then begin 
+										if(blank(VIr.Objects)) then begin VIr.Objects = objTVI[tags[i]];
+										end else begin VIr.Objects = VIr.Objects & "," objTVI[tags[i]]; end;
+									end;	
 									for(j=0;j<tags1.length;j=j+1) begin
 										if(nonblank(brandObj[tags[i] & tags1[j]])) then begin
 											matRowget(VIr,rowCnt,VIrw);
@@ -3424,6 +3469,10 @@ while(loopDate<=RepSpec.sEndDate) begin
 							VIr.TransDate = loopDate;
 							if(blank(VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = tags[i]; end;
 							if(!SetInSet(tags[i],VIr.Objects) and tags[i]!="blank") then begin VIr.Objects = VIr.Objects & "," & tags[i]; end;
+							if(nonblank(objTVI[tags[i]])) then begin 
+								if(blank(VIr.Objects)) then begin VIr.Objects = objTVI[tags[i]];
+								end else begin VIr.Objects = VIr.Objects & "," objTVI[tags[i]]; end;
+							end;	
 							rowCnt = 0;
 							for(j=0;j<tags1.length;j=j+1) begin
 								if(nonblank(brandObj[tags[i] & tags1[j]])) then begin
