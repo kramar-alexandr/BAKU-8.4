@@ -60,6 +60,7 @@ remote function Boolean IVVc_PasteSum(var record IVVc,Integer,var Boolean,Intege
 external procedure ExtractObj(string,var Integer,var string);
 remote procedure IVVc_PasteLocation(var record IVVc,Integer);
 remote function boolean CompanyIsJWLikeCompany(Integer);
+external procedure ExtractObjectsByType(string, string, var array string, var integer);
 
 
 
@@ -101,7 +102,7 @@ begin
 	record IVVc IVr, OldIVr;
 	row IVVc IVrw;
 	row VIVc VIrw;
-	integer rwcnt,i,sernrf,j;
+	integer rwcnt,i,sernrf,j,oscnt;
 	string 255 warning, Acc4, setObj, LocObj, location;
 	boolean chsum, activelocf;
 	integer curcomp;
@@ -117,6 +118,10 @@ begin
 	record AccVc Accr;
 	val DebCred;
 	record CUVc CUr;
+	row OTypeAddControlBlock OTypew;
+record OTypeAddControlBlock OType;
+string 255 fobCust, objTVI;
+array string 20 stores;
 	
 	
 	activelocf = true;
@@ -134,6 +139,32 @@ begin
 			if(VIr.OKFlag==1)then begin
 				for (i=matrowcnt(IVr)-1;i>=0;i=i-1) begin
 					MatRowDelete(IVr,i);
+				end;
+				if(blank(objTVI)) then begin
+					ExtractObjectsByType(VIr.Objects,"STORE",stores,oscnt);
+					for(j=0;j<matrowcnt(OType);j=j+1) begin
+						matRowget(OType,j,OTypew);
+						if(OTypew.STORE == stores[0]) then begin
+							objTVI = OTypew.SUBDI;
+						end;
+					end;
+					if(blank(objTVI)) then begin
+						switch(Company) begin
+							case "Lladro": objTVI = "LL1";
+							case "Rosental": objTVI = "RS1";
+							case "Baccarat": objTVI = "BACCARAT";
+							case "CreativeSystem": objTVI = "CREATIVE";
+							case "Idea": objTVI = "IDEA";
+							case "E-Commerce": objTVI = "ECOMMERCE";
+						end;	
+					end;
+				end;	
+				if(nonblank(objTVI) and !SetInSet(objTVI,IVr.Objects)) then begin
+					if(nonblank(IVr.Objects)) then begin
+						IVr.Objects = IVr.Objects & "," & objTVI;
+					end else begin
+						IVr.Objects = objTVI;
+					end;
 				end;
 				for (i=0;i<matrowcnt(VIr);i=i+1) begin
 					matrowget(VIr,i,VIrw);
@@ -198,7 +229,32 @@ begin
 				if(ReadFirstMain(CUr,1,true))then begin
 					location = CUr.SortCode;
 				end;
-				
+				if(blank(objTVI)) then begin
+					ExtractObjectsByType(VIr.Objects,"STORE",stores,oscnt);
+					for(j=0;j<matrowcnt(OType);j=j+1) begin
+						matRowget(OType,j,OTypew);
+						if(OTypew.STORE == stores[0]) then begin
+							objTVI = OTypew.SUBDI;
+						end;
+					end;
+					if(blank(objTVI)) then begin
+						switch(Company) begin
+							case "Lladro": objTVI = "LL1";
+							case "Rosental": objTVI = "RS1";
+							case "Baccarat": objTVI = "BACCARAT";
+							case "CreativeSystem": objTVI = "CREATIVE";
+							case "Idea": objTVI = "IDEA";
+							case "E-Commerce": objTVI = "ECOMMERCE";
+						end;	
+					end;
+				end;	
+				if(nonblank(objTVI)) then begin
+					if(nonblank(IVr.Objects)) then begin
+						IVr.Objects = IVr.Objects & "," & objTVI;
+					end else begin
+						IVr.Objects = objTVI;
+					end;
+				end;
 				IVr.SalesMan = "AUTO";
 				BlockLoad(LMb);
 				PasteCust2InInv(IVr,LMb,"",true,warning,warning,warning,warning,warning);
