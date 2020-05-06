@@ -59,7 +59,7 @@ begin
   return;
 end;
 
-procedure CountEndSaldoInBase(string accnum, date enddate, var vector val saldo, integer serviceIntYc, var longint corrTRrNum, var array string CurencyList, var array string ObjectList,array string addobj)
+procedure CountEndSaldoInBase(string accnum, date enddate, var vector val saldo, integer serviceIntYc, var longint corrTRrNum, var array string CurencyList, var array string ObjectList,array string addobj,array string addobjsubdi)
 begin
   boolean TrHs;
   record FBVc FBr;
@@ -67,9 +67,9 @@ begin
   record TRVc TRr;
   row TRVc TRrw;
   row FBVc FBrw;
-  integer i,rwcnt,CLi,OLi,oscnt,j,oldstyle;
+  integer i,rwcnt,CLi,OLi,oscnt,j,oldstyle,oscntsubdi;
   string 20 objstore,crn;
-  array string 20 objstores;
+  array string 20 objstores,objstoressubdi;
   string 255 t;
   boolean fillobjf;
   vector boolean CurInArr,ObjInArr;
@@ -105,9 +105,17 @@ begin
               MatRowGet(TRr,i,TRrw);
               if ((TRrw.AccNumber == accnum) and (TRrw.ovst <> 1) and (TRrw.stp==1)) then begin
                 CustExtractObjectsByType(TRrw.Objects,"STORE",objstores,oscnt,addobj);
+                CustExtractObjectsByType(TRrw.Objects,"SUBDI",objstoressubdi,oscntsubdi,addobjsubdi);
                 if (oscnt==0) then begin
                   objstores[oscnt] = "BLANK";
                   oscnt = 1;
+                end;
+                if(fileexists("demoserver"))then begin
+									if(nonblank(objstoressubdi[0]))then begin
+										if(nonblank(objstores[0]))then begin
+											objstores[0] = objstores[0] & "," & objstoressubdi[0];
+										end;
+									end;
                 end;
                 for (j=0;j<oscnt;j=j+1) begin
                   if (fillobjf) then begin
@@ -267,7 +275,7 @@ begin
   longint corrTRrNum;
   longint curtick;
   record ObjVc Objr;
-  array string 20 addobj;
+  array string 20 addobj,addobjsubdi;
 	
 	
 	curtick = getcurtick();
@@ -318,7 +326,7 @@ begin
     ClearArray(tmp1);
     ClearArray(tmp2);
     corrTRrNum = -1;
-    CountEndSaldoInBase(accnumber[ai],RepSpec.d1,saldo,serviceIntYc,corrTRrNum,tmp1,tmp2,addobj);
+    CountEndSaldoInBase(accnumber[ai],RepSpec.d1,saldo,serviceIntYc,corrTRrNum,tmp1,tmp2,addobj,addobjsubdi);
     if (corrTRrNum<0) then begin
       corrTRrNum = 0;
     end;
@@ -404,7 +412,7 @@ begin
   record TRVc TRr,corrTRr;
   row TRVc TRrw,corrTRrw;
   row FBVc FBrw;
-  integer i,rwcnt,CLi,OLi,rownr,serviceIntYc,COi,pos,ai,oscnt,j,oldstyle,k;
+  integer i,rwcnt,CLi,OLi,rownr,serviceIntYc,COi,pos,ai,oscnt,j,oldstyle,k,oscntsubdi;
   val fr,to1,to2,b1,b2,tmpval;
   vector val rate,saldo,corr;
   vector boolean ObjInArr,CurInArr;
@@ -414,14 +422,13 @@ begin
   boolean TrHs,foundf;
   date curdate,td;
   string 100 t,comment,addobjtypes,addaccount;
-  string 20 crn,tstr,objstore;
-  array string 20 objstores;
+  string 20 crn,tstr,objstore,objstoresubdi;
+  array string 20 objstores,objstoressubdi;
   array string 5 accnumber;
   longint corrTRrNum;
   longint curtick;
   record ObjVc Objr;
-  array string 100 addobj;
-	
+  array string 100 addobj,addobjsubdi;	
 	
 	addobjtypes = RepSpec.f2;
 	addaccount = RepSpec.f3;
@@ -622,7 +629,7 @@ begin
     if nonblank(RepSpec.ObjStr) then begin
       ObjectList[0] = RepSpec.ObjStr;
     end;
-    CountEndSaldoInBase(accnumber[ai],curdate,saldo,serviceIntYc,corrTRrNum,CurencyList,ObjectList,addobj);
+    CountEndSaldoInBase(accnumber[ai],curdate,saldo,serviceIntYc,corrTRrNum,CurencyList,ObjectList,addobj,addobjsubdi);
     
     for (CLi=0;Cli<CurencyList.length;CLi=CLi+1) begin
       if (CurencyList[CLi]=="BLANK") then begin
@@ -676,10 +683,20 @@ begin
 												CLi = CLi + 1;
 											end;
 											CustExtractObjectsByType(TRrw.Objects,"STORE",objstores,oscnt,addobj);
+											CustExtractObjectsByType(TRrw.Objects,"SUBDI",objstoressubdi,oscntsubdi,addobjsubdi);
 											if (oscnt==0) then begin
 												objstores[oscnt] = "BLANK";
 												oscnt = 1;
 											end;
+											
+											if(fileexists("demoserver"))then begin
+												if(nonblank(objstoressubdi[0]))then begin
+													if(nonblank(objstores[0]))then begin
+														objstores[0] = objstores[0] & "," & objstoressubdi[0];
+													end;
+												end;
+											end;
+											
 											for (j=0;j<oscnt;j=j+1) begin
 												if (!ObjInArr[objstores[j]]) then begin
 													ObjectList[OLi] = objstores[j];
@@ -713,6 +730,16 @@ begin
                 rwcnt = MatRowCnt(FBr);
                 objstore= "";
                 GetObjs("STORE",FBr.Objects,objstore);
+                GetObjs("SUBDI",FBr.Objects,objstoresubdi);
+                
+                if(fileexists("demoserver"))then begin
+									if(nonblank(objstoresubdi))then begin
+										if(nonblank(objstoresubdi))then begin
+											objstore = objstore & "," & objstoresubdi;
+										end;
+									end;
+								end;
+                
                 if (FBr.Objects==objstore) then begin
                   if (objstore=="") then begin
                     objstore = "BLANK";
@@ -837,11 +864,21 @@ begin
           if ((corrTRrw.AccNumber == accnumber[ai]) and (corrTRrw.ovst <> 1) and (corrTRrw.stp==1)) then begin
             objstore= "";
             GetObjs("STORE",corrTRrw.Objects,objstore);
+            GetObjs("SUBDI",corrTRrw.Objects,objstoresubdi);
             if(currentcompany==2 or currentcompany==9 or currentcompany==4 or currentcompany==5 or currentcompany==6 or currentcompany==28 or currentcompany==29)then begin
 							if(blank(objstore))then begin
 								objstore = "BLANK";
 							end;
             end;
+            
+            if(fileexists("demoserver"))then begin
+							if(nonblank(objstore))then begin
+								if(nonblank(objstoresubdi))then begin
+									objstore = objstore & "," & objstoresubdi;
+								end;
+							end;
+						end;
+            
             if (!ObjInArr[objstore]) then begin
               ObjectList[OLi] = objstore;
               ObjInArr[ObjectList[OLi]] = true;
