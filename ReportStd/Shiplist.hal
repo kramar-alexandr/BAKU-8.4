@@ -1474,7 +1474,9 @@ global   // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
 procedure UndeliverableGoodsRn(record RcVc RepSpec)
 begin
 	record POVc POr,locPOr;
+	record IntORVc IntORr;
 	row POVc POrw;
+	row IntORVc IntORrw;
 	boolean TrHs,testf,filter;
 	integer i;
 	string 255 Brand;
@@ -1545,6 +1547,57 @@ begin
 		end;
 	end;
 	Resetloop (POr);
+	
+	
+	TrHs = true;
+	IntORr.StatusMark = 0;
+	//IntORr.SerNr = "";
+	while (LoopKey("SerNr",IntORr,2,TrHs)) begin
+			
+		testf = true;
+		if(IntORr.StatusMark!=0)then begin TrHs = false; testf = false; end;
+		if(testf)then begin
+			for (i=0;i<matrowcnt(IntORr);i=i+1) begin
+				matrowget(IntORr,i,IntORrw);
+				
+				if(IntORrw.Shipd2!=IntORrw.Quant)then begin
+				
+					INr.Code = IntORrw.ArtCode;
+					if(ReadFirstMain(INr,1,true))then begin
+						Brndr.Code = INr.BPIBrand;
+						if(ReadFirstMain(Brndr,1,true))then begin
+							Brand = Brndr.Name;
+						end;
+					end;
+										
+					filter = true;
+					
+					if(nonblank(RepSpec.f1) and RepSpec.f1!=INr.BPIBrand)then begin filter = false; end;
+					
+					if(filter)then begin
+					
+						startformat(15);
+							outstring(1,0,IntORrw.ArtCode,false);
+							outstring(1,0,INr.BarCode,false);
+							outstring(1,0,INr.AlternativeCode,false);
+							outstring(2,0,IntORrw.Spec,false);
+							outstring(3,0,Brand,false);
+							outstring(4,0,IntORrw.Quant-IntORrw.Shipd2,false);
+							outstring(5,0,IntORrw.Price,false);
+							outstring(6,0,IntORr.SerNr,false);
+							outstring(7,0,"BACKORDER",false);
+							outstring(34,0,IntORr.TransDate,false);
+							outstring(35,0,"",false);
+							outdate(36,0,"",false);//Mfr finish date
+						endformat;
+					
+					end;
+				end;
+			end;
+		end;
+	end;
+	Resetloop (IntORr);
+	
 	endjob;
 	return;
 end;   // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 17:21 09.12.2019
