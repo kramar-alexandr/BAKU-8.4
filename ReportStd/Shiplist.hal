@@ -1474,7 +1474,9 @@ global   // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
 procedure UndeliverableGoodsRn(record RcVc RepSpec)
 begin
 	record POVc POr,locPOr;
+	record IntORVc IntORr;
 	row POVc POrw;
+	row IntORVc IntORrw;
 	boolean TrHs,testf,filter;
 	integer i, j;
 	string 255 Brand;
@@ -1560,9 +1562,145 @@ begin
 		end;
 	end;
 	Resetloop (POr);
+	
+	
+	TrHs = true;
+	IntORr.StatusMark = 0;
+	//IntORr.SerNr = "";
+	while (LoopKey("SerNr",IntORr,2,TrHs)) begin
+			
+		testf = true;
+		if(IntORr.StatusMark!=0)then begin TrHs = false; testf = false; end;
+		if(testf)then begin
+			for (i=0;i<matrowcnt(IntORr);i=i+1) begin
+				matrowget(IntORr,i,IntORrw);
+				
+				if(IntORrw.Shipd2!=IntORrw.Quant)then begin
+				
+					INr.Code = IntORrw.ArtCode;
+					if(ReadFirstMain(INr,1,true))then begin
+						Brndr.Code = INr.BPIBrand;
+						if(ReadFirstMain(Brndr,1,true))then begin
+							Brand = Brndr.Name;
+						end;
+					end;
+										
+					filter = true;
+					
+					if(nonblank(RepSpec.f1) and RepSpec.f1!=INr.BPIBrand)then begin filter = false; end;
+					
+					if(filter)then begin
+					
+						startformat(15);
+							outstring(1,0,IntORrw.ArtCode,false);
+							outstring(1,0,INr.BarCode,false);
+							outstring(1,0,INr.AlternativeCode,false);
+							outstring(2,0,IntORrw.Spec,false);
+							outstring(3,0,Brand,false);
+							outstring(4,0,IntORrw.Quant-IntORrw.Shipd2,false);
+							outstring(5,0,IntORrw.Price,false);
+							outstring(6,0,IntORr.SerNr,false);
+							outstring(7,0,"BACKORDER",false);
+							outstring(34,0,IntORr.TransDate,false);
+							outstring(35,0,"",false);
+							outdate(36,0,"",false);//Mfr finish date
+						endformat;
+					
+					end;
+				end;
+			end;
+		end;
+	end;
+	Resetloop (IntORr);
+	
 	endjob;
 	return;
 end;   // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 17:21 09.12.2019
+
+
+
+
+
+global   // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Irkan Ahmadov 17:21 08.05.2020
+procedure ExportFromIncomeRn(record RcVc RepSpec)
+begin
+	record PUVc PUr;
+	row PUVc PUrw;
+	boolean TrHs,testf,filter;
+	integer i;
+	string 255 Brand;
+	record INVc INr;
+	record BPIBrandVc Brndr; 
+	
+	Brand="";
+	
+	
+	StartReportnoheaderjob("Выгрузка из потуплений");
+	startformat(15);
+		outstring(1,0,"Товар",false);
+		outstring(2,0,"Код.П.",false);
+		outstring(3,0,"Кол-во",false);
+		outstring(4,0,"Ед",false);
+		outstring(5,0,"Наименование",false);
+		outstring(6,0,"Цена",false);
+		outstring(7,0,"Сумма валюта",false);
+		outstring(8,0,"Валюта",false);
+		outstring(9,0,"Себест",false);
+		outstring(10,0,"Сумма",false);
+		outstring(11,0,"Дата поступления",false);
+		outstring(12,0,"Поставщик",false);
+		outstring(13,0,"Но.Пост",false);
+		outstring(14,0,"Но.Заказ п.",false);
+	endformat;
+	
+	TrHs = true;
+	PUr.OKFlag=1;
+	while (LoopKey("SerNr",PUr,1,TrHs)) begin
+		testf = true;
+		if ((PUr.TransDate<RepSpec.sStartDate) or (PUr.TransDate>RepSpec.sEndDate)) then begin testf = false; end;
+		if(testf)then begin
+			for (i=0;i<matrowcnt(PUr);i=i+1) begin
+				matrowget(PUr,i,PUrw);
+				
+				INr.Code = PUrw.ArtCode;
+				if(ReadFirstMain(INr,1,true))then begin
+					Brndr.Code = INr.BPIBrand;
+					if(ReadFirstMain(Brndr,1,true))then begin
+						Brand = Brndr.Name;
+					end;
+				end;
+									
+				filter = true;
+				
+				if(nonblank(RepSpec.f1) and RepSpec.f1!=INr.BPIBrand)then begin filter = false; end;
+				
+				if(filter)then begin
+				
+					startformat(15);
+						outstring(1,0,PUrw.ArtCode,false);
+						outstring(2,0,PUr.SerNr,false);
+						outstring(3,0,PUrw.Quant,false);
+						outstring(4,0,PUrw.UnitCode,false);
+						outstring(5,0,PUrw.Spec,false);
+						outstring(6,0,PUrw.UPrice,false);
+						outstring(7,0,PUrw.UPrice*PUrw.Quant,false);
+						outstring(8,0,PUr.CurncyCode,false);
+						outstring(9,0,PUrw.CostPrice,false);
+						outstring(10,0,PUrw.Sum,false);
+						outdate(11,0,PUr.TransDate,false);
+						outstring(12,0,PUr.VECode,false);
+						outstring(13,0,PUr.SerNr,false);
+						outstring(14,0,PUr.PONr,false);
+					endformat;
+				end;
+			end;
+		end;
+	end;
+	Resetloop (PUr);
+	
+	endjob;
+	return;
+end;   // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Irkan Ahmadov 17:21 08.05.2020
 
 
 
