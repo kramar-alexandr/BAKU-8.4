@@ -594,34 +594,36 @@ end;
 
 global webpublic updating procedure WebMoveTransFromIDtoFound()
 begin
-	Record TRVc TRr,copyTRr;
+	Record TRVc TRr,copyTRr,olTRr;
 	row TRVc TRrw;
 	boolean TrHs,testf,foundf,copyflag,deleteflag;
 	integer i,rwcnt,j;
 	array string 20 typrtomove;
 	string 100 temstr;
-	record CLInVc CLInr;
-	record CLOutVc CLOutr;
+	record CLInVc CLInr,oldCLInr;
+	record CLOutVc CLOutr,oldCLOutr;
 	
 	copyflag = false;//!!!!!!!!!!!!!!!!!!!!!!!!! change to true if transfer to 33!!!
 	deleteflag = false;// set tru if delete all in 18!!!
 	
 	if(fileexists("demoserver"))then begin
-		copyflag = true;
+		//copyflag = true;
+		//deleteflag = true;
 	end;
 	//copyflag = true;
+	//deleteflag = true;
 	
 	setcompany(18,false);
 	
-	/*typrtomove[0] = "HOLDING";
+	typrtomove[0] = "HOLDING";
 	typrtomove[1] = "OBJECT_2";
 	typrtomove[2] = "OBJECT_3";
 	typrtomove[3] = "OBJECT_4";
 	typrtomove[4] = "OBJECT_5";
 	typrtomove[5] = "OBJECT_6";
 	typrtomove[6] = "AMAF";
-	typrtomove[7] = "AGROPARK";*/
-	typrtomove[0] = "AZAD";
+	typrtomove[7] = "AGROPARK";
+	typrtomove[8] = "AZAD";
 	
 	weboutstring("<html>");
 	weboutstring("<head>");
@@ -695,14 +697,22 @@ begin
 					if(TRr.IntYc==212)then begin
 						CLOutr.SerNr = TRr.Number;
 						if(readfirstmain(CLOutr,1,true))then begin
-							recorddelete(CLOutr);
+							//recorddelete(CLOutr);
+							//recordcopy(oldCLOutr,CLOutr);
+								CLOutr.OKFlag = 0;
+								recordstore(CLOutr,true);
+								//recordupdate(oldCLOutr,CLOutr,true);
 							logtext(0,"CLOutr recorddelete in 18 " & CLOutr.SerNr);
 						end;
 					end;
 					if(TRr.IntYc==211)then begin
 						CLInr.SerNr = TRr.Number;
 						if(readfirstmain(CLInr,1,true))then begin
-								recorddelete(CLInr);
+								//recordcopy(oldCLInr,CLInr);
+								CLInr.OKFlag = 0;
+								recordstore(CLInr,true);
+								//recordupdate(oldCLInr,CLInr,true);
+								//recorddelete(CLInr);
 								logtext(0,"CLInr recorddelete in 18 " & CLInr.SerNr);
 						end;
 					end;
@@ -718,7 +728,7 @@ begin
 						CLOutr.SerNr = TRr.Number;
 						if(readfirstmain(CLOutr,1,true))then begin
 							setcompany(33,false);
-								recordstore(CLOutr,false);
+								//recordstore(CLOutr,false);
 								logtext(0,3);
 								logtext(0,"CLOutr saved in 33 " & CLOutr.SerNr);
 							setcompany(18,false);
@@ -730,7 +740,7 @@ begin
 						CLInr.SerNr = TRr.Number;
 						if(readfirstmain(CLInr,1,true))then begin
 							setcompany(33,false);
-								recordstore(CLInr,false);
+								//recordstore(CLInr,false);
 								logtext(0,"CLInr saved in 33 " & CLInr.SerNr);
 							setcompany(18,false);
 						end;
@@ -744,7 +754,7 @@ begin
 					setcompany(33,false);	
 					logtext(0,"CopyTR2");		
 					logtext(0,"TRVc saved in 33 " & copyTRr.Number & " " & copyTRr.IntYc);
-					recordstore(copyTRr,false);
+					//recordstore(copyTRr,false);
 					logtext(0,"CopyTR3");
 					setcompany(18,false);
 					logtext(0,"CopyTR4");
@@ -791,6 +801,307 @@ begin
 	weboutstring("</html>");
 return;
 end;
+
+
+
+
+
+global webpublic updating procedure WebFindErrorSHFromIDGroupComp()
+begin
+	record SHVc SHr;
+	row SHVc SHrw;
+	record POVc POr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	boolean TrHs, testf, remf;
+	integer MainCompany, i, LCNt;
+	record ECVendFobSetBlaock CObjr;
+	row ECVendFobSetBlaock CObjrw;
+	vector integer vObjComp;
+	vector val vItemFRV;
+	record RLinkVc RLr;
+	LongInt PUrSerNr, cnt1, cnt2, shcnt;
+	record ItemHistVc IHr;
+	
+	
+	MainCompany = 18;
+	
+	SetCompany(MainCompany,false);
+	BlockLoad(CObjr);
+	for (i=0;i<matrowcnt(CObjr);i=i+1) begin
+		matrowget(CObjr,i,CObjrw);
+		vObjComp[CObjrw.VendName] = CObjrw.CompanyNr;
+	end;
+	
+	SHr.OKFlag = 1;
+	TrHs = true;
+	
+	cnt1 = 0;
+	cnt2 = 0;
+	shcnt = 0;
+	while (loopkey("OKFlag",SHr,1,TrHs)) begin
+		if (SHr.OKFlag != 1) then begin TrHs = false; end;
+		if (TrHs) then begin
+			for (i=0;i<matrowcnt(SHr);i=i+1)begin
+				matrowget(SHr,i,SHrw);
+				vItemFRV[SHr.SerNr & "_" & SHrw.OrdRow] = SHrw.FIFORowVal;
+			end;
+			LCNt = 1;
+			while (ReadRecordLink(SHr,LCNt,PUr,RLr)) begin
+				PUrSerNr = PUr.SerNr;
+				logtext(0,PUrSerNr);
+				if(setcompany(vObjComp[SHr.CustCode],false))then begin
+					PUr.SerNr = PUrSerNr;
+					if (ReadFirstMain(PUr,1,true)) then begin
+						if (PUr.OKFlag==1) then begin
+							for (i=0;i<matrowcnt(PUr);i=i+1) begin
+								matrowget(PUr,i,PUrw);
+								if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and vItemFRV[SHr.SerNr & "_" & i]/PUrw.Sum > 1.5) then begin
+									IHr.FileName = "PUVc";
+									IHr.TransNr = PUr.SerNr;
+									IHr.Row = i;
+									remf = false;
+									if(ReadFirstKey("FNTransNr",IHr,3,true)) then begin
+										if (IHr.Qty != IHr.RemQty) then begin
+											remf = true;
+											shcnt = shcnt + 1;
+										end;
+									end;
+									weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum & " Remf: " & remf);
+									weboutstring("<BR>");
+									cnt1 = cnt1 + 1;
+								end;
+								if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and PUrw.Sum/vItemFRV[SHr.SerNr & "_" & i] > 1.5) then begin 
+									IHr.FileName = "PUVc";
+									IHr.TransNr = PUr.SerNr;
+									IHr.Row = i;
+									remf = false;
+									if(ReadFirstKey("FNTransNr",IHr,3,true)) then begin
+										if (IHr.Qty != IHr.RemQty) then begin
+											remf = true;
+											shcnt = shcnt + 1;
+										end;
+									end;
+									weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum & " Remf: " & remf);
+									weboutstring("<BR>");
+									cnt1 = cnt1 + 1;
+								end;
+								// if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum < 1) then begin 
+									// weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum);
+									// weboutstring("<BR>");
+									// cnt2 = cnt2 + 1;
+								// end;
+							end;
+						end;
+					end;
+				end;
+				resetcompany(MainCompany);
+				LCNt = LCNt + 1;
+			end;
+		end;
+	end;
+	weboutstring("Items > 1 diff " & cnt1);
+	weboutstring("<BR>");
+	weboutstring("Shipped items " & shcnt);
+	weboutstring("<BR>");
+return;
+end;
+
+
+
+
+
+
+global updating procedure CorrectErrorsSHFromIDGroupComp()
+begin
+	record SHVc SHr;
+	row SHVc SHrw;
+	record POVc POr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	boolean TrHs, testf, remf, updf;
+	integer MainCompany, i, j, LCNt, trdouble;
+	record ECVendFobSetBlaock CObjr;
+	row ECVendFobSetBlaock CObjrw;
+	vector integer vObjComp;
+	vector val vItemFRV;
+	record RLinkVc RLr;
+	LongInt PUrSerNr, cnt1, cnt2, shcnt, trmtrw;
+	record ItemHistVc IHr, oldIHr;
+	record TRVc TRr, oldTRr;
+	row TRVc TRrw;
+	
+	
+	MainCompany = 18;
+	
+	SetCompany(MainCompany,false);
+	BlockLoad(CObjr);
+	for (i=0;i<matrowcnt(CObjr);i=i+1) begin
+		matrowget(CObjr,i,CObjrw);
+		vObjComp[CObjrw.VendName] = CObjrw.CompanyNr;
+	end;
+	
+	SHr.OKFlag = 1;
+	TrHs = true;
+	
+	cnt1 = 0;
+	cnt2 = 0;
+	shcnt = 0;
+	while (loopkey("OKFlag",SHr,1,TrHs)) begin
+		updf = false;
+		if (SHr.OKFlag != 1) then begin TrHs = false; end;
+		if (TrHs) then begin
+			for (i=0;i<matrowcnt(SHr);i=i+1)begin
+				matrowget(SHr,i,SHrw);
+				vItemFRV[SHr.SerNr & "_" & SHrw.OrdRow] = SHrw.FIFORowVal;
+			end;
+			LCNt = 1;
+			while (ReadRecordLink(SHr,LCNt,PUr,RLr)) begin
+				PUrSerNr = PUr.SerNr;
+				if(setcompany(vObjComp[SHr.CustCode],false))then begin
+					PUr.SerNr = PUrSerNr;
+					if (ReadFirstMain(PUr,1,true)) then begin
+						if (PUr.OKFlag==1) then begin
+							for (i=0;i<matrowcnt(PUr);i=i+1) begin
+								matrowget(PUr,i,PUrw);
+								if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and vItemFRV[SHr.SerNr & "_" & i]/PUrw.Sum > 1.5) then begin
+									
+									IHr.FileName = "PUVc";
+									IHr.TransNr = PUr.SerNr;
+									IHr.Row = i;
+									remf = false;
+									if(ReadFirstKey("FNTransNr",IHr,3,true)) then begin
+										if (IHr.Qty == IHr.RemQty) then begin
+											weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum & " Remf: " & remf);
+											weboutstring("<BR>");
+											logtext (0,"SH SerNr: " & SHr.SerNr);
+											RecordCopy(oldIHr,IHr);
+											IHr.TotCostPrice = vItemFRV[SHr.SerNr & "_" & i];
+											IHr.RemCostPrice = vItemFRV[SHr.SerNr & "_" & i];
+											if (RecordUpdate(oldIHr,IHr,true)==0) then begin
+												weboutstring("IH Updated");
+												weboutstring("<BR>");
+												logtext (0,"IH Updated");
+												trdouble = 0;
+												trmtrw = 0;
+												TRr.Number = PUr.SerNr;
+												TRr.IntYc = PUYc;
+												if (ReadFirstMain(TRr,2,true)) then begin
+													RecordCopy(oldTRr,TRr);
+													for (j=0;j<matrowcnt(TRr);j=j+1) begin
+														if (trmtrw == i)then begin
+															matrowget(TRr,j,TRrw);
+															if (TRrw.DebVal!=blankval) then begin
+																TRrw.DebVal = vItemFRV[SHr.SerNr & "_" & i];
+															end;
+															if (TRrw.CredVal!=blankval) then begin
+																TRrw.CredVal = vItemFRV[SHr.SerNr & "_" & i];
+															end;
+															matrowput(TRr,j,TRrw);
+														end;
+														if (trdouble==1)then begin
+															trdouble = 0;
+															trmtrw = trmtrw + 1;
+														end else begin
+															trdouble = 1;
+														end;
+													end;
+													logtext(0,TRr.Number);
+													if (RecordUpdate(oldTRr,TRr,true)==0) then begin
+														weboutstring("TR Updated");
+														weboutstring("<BR>");
+														logtext (0,"TR Updated");
+														PUrw.Sum = vItemFRV[SHr.SerNr & "_" & i];
+														PUrw.CostPrice = PUrw.Sum / PUrw.Quant;
+														matrowput(PUr,i,PUrw);
+														updf = true;
+													end;
+												end;
+											end;
+										end;
+									end;
+									cnt1 = cnt1 + 1;
+								end;
+								if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and PUrw.Sum/vItemFRV[SHr.SerNr & "_" & i] > 1.5) then begin 
+									
+									IHr.FileName = "PUVc";
+									IHr.TransNr = PUr.SerNr;
+									IHr.Row = i;
+									remf = false;
+									if(ReadFirstKey("FNTransNr",IHr,3,true)) then begin
+										if (IHr.Qty == IHr.RemQty) then begin
+											weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum & " Remf: " & remf);
+											weboutstring("<BR>");
+
+											RecordCopy(oldIHr,IHr);
+											IHr.TotCostPrice = vItemFRV[SHr.SerNr & "_" & i];
+											IHr.RemCostPrice = vItemFRV[SHr.SerNr & "_" & i];
+											if (RecordUpdate(oldIHr,IHr,true)==0) then begin
+												weboutstring("IH Updated");
+												weboutstring("<BR>");
+												logtext (0,"IH Updated");
+												trdouble = 0;
+												trmtrw = 0;
+												TRr.Number = PUr.SerNr;
+												TRr.IntYc = PUYc;
+												if (ReadFirstMain(TRr,2,true)) then begin
+													RecordCopy(oldTRr,TRr);
+													for (j=0;j<matrowcnt(TRr);j=j+1) begin
+														if (trmtrw == i)then begin
+															matrowget(TRr,j,TRrw);
+															if (TRrw.DebVal!=blankval) then begin
+																TRrw.DebVal = vItemFRV[SHr.SerNr & "_" & i];
+															end;
+															if (TRrw.CredVal!=blankval) then begin
+																TRrw.CredVal = vItemFRV[SHr.SerNr & "_" & i];
+															end;
+															matrowput(TRr,j,TRrw);
+														end;
+														if (trdouble==1)then begin
+															trdouble = 0;
+															trmtrw = trmtrw + 1;
+														end else begin
+															trdouble = 1;
+														end;
+													end;
+													logtext(0,TRr.Number);
+													if (RecordUpdate(oldTRr,TRr,true)==0) then begin
+														weboutstring("TR Updated");
+														weboutstring("<BR>");
+														PUrw.Sum = vItemFRV[SHr.SerNr & "_" & i];
+														PUrw.CostPrice = PUrw.Sum / PUrw.Quant;
+														matrowput(PUr,i,PUrw);
+														updf = true;
+													end;
+												end;
+											end;
+										end;
+									end;
+									cnt1 = cnt1 + 1;
+								end;
+								// if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum < 1) then begin 
+									// weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum);
+									// weboutstring("<BR>");
+									// cnt2 = cnt2 + 1;
+								// end;
+							end;
+						end;
+						if (updf) then begin
+							RecordStore (PUr,true);
+							logtext (0,"PU Updated");
+						end;
+					end;
+				end;
+				resetcompany(MainCompany);
+				LCNt = LCNt + 1;
+			end;
+		end;
+	end;
+return;
+end;
+
+
+
 
 
 global updating procedure QueuedBenchmarkTest(var record GlobalItemVc GIr)
