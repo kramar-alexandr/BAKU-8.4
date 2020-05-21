@@ -1902,7 +1902,7 @@ begin
 	string 50 ostr,POCurCode;
 	array string 100 class,artcode,itemcurrency,aLCPOrowNr;
 	record INVc INr, LINr, UUINr;
-	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf,ccItemf,clientTypef;
+	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf,ccItemf;
 	record CUVc CUr;
 	record DIVc DIr;
 	string 200 vendor,loccode,errmsg,OffserNr, PUstock;
@@ -1910,8 +1910,8 @@ begin
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
 	vector boolean vArtCodeRepeat;
-	vector integer vArtCodeQTY, ECArt,priceinorcnt,vOutItems;
-	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant, vItemHTotCostPr, ItemORPriseWRebate, vItemHTotCostPrSH;
+	vector integer vArtCodeQTY, ECArt,priceinorcnt;
+	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant, vItemHTotCostPr, ItemORPriseWRebate;
 	record VIVc VIr, OldVIr, offVIr;
 	row VIVc VIrw, OldVIrw;
 	record RcVc RepSpec;
@@ -1946,9 +1946,6 @@ begin
 	
 	ORr.SerNr = SHr.OrderNr;
 	if(ReadFirstMain(ORr,1,true))then begin
-		if (ORr.OrderClass == "CLIEN") then begin
-			clientTypef = true;
-		end;
 		logtext(0,"ORr.OrderNr 1 " & ORr.SerNr);
 		cucnt = 0;
 		mtrw = matrowcnt(ORr);
@@ -1978,7 +1975,6 @@ begin
 							FIFOcnt = FIFOcnt + 1;
 							vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] + IHr.TotCostPriceCurncy / (IHr.Qty * -1);
 							vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] + IHr.TotCostPrice / (IHr.Qty * -1);
-							vItemHTotCostPrSH[CIr.LocCode & "_" & i + 1] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr];
 							vCurrRowCode[IHr.ArtCode] = IHr.CurncyCode;
 					end;
 				end;
@@ -1992,24 +1988,6 @@ begin
 			// logtext(0,"ORrw.ArtCode 1 " & ORrw.ArtCode & "  " & ECArt[ORrw.ArtCode]);
 			if(ECArt[ORrw.ArtCode & "_" & ORrw.LCPOrow]>0)then begin
 				chsum = false;
-				
-				if (ORrw.Quant>ECArt[ORrw.ArtCode & "_" & ORrw.LCPOrow] and ORr.OrderClass == "CLIEN") then begin
-					ORrw.Quant = ORrw.Quant - ECArt[ORrw.ArtCode & "_" & ORrw.LCPOrow];
-					ORrw.Price = 0;
-					ORrw.stp = 1;
-					ORrw.Shipd1 = blankval;
-					ORrw.Shipd2 = blankval;
-					ORrw.LCPOrow = mtrw + 1;
-					MatRowInsert(ORr,mtrw,ORrw); 
-					ORDchsum(ORr,mtrw);
-					matrowget(ORr,mtrw,ORrw); 
-					ORSumup(ORr);
-					matrowput(ORr,mtrw,ORrw); 
-					mtrw = matrowcnt(ORr);
-					matrowget(ORr,i,ORrw); 
-					chsum = false;
-				end;
-				
 				ORrw.Quant = ECArt[ORrw.ArtCode & "_" & ORrw.LCPOrow];
 				CIr.Code = ORrw.ArtCode;
 				if(ReadFirstMain(CIr,1,true))then begin 
@@ -2074,10 +2052,6 @@ begin
 								if(ECArt[CIr.Code & "_" & i + 1]>0) then begin
 									logtext(0,"POr4 " & CIr.LocCode & "  comp  " & currentcompany);
 									ResetCompany(POComp);
-									vOutItems[POrw.ArtCode & "_" & i] = 0;
-									if (clientTypef and POrw.Quant > ECArt[CIr.Code & "_" & i + 1]) then begin
-										vOutItems[POrw.ArtCode & "_" & i] = POrw.Quant - ECArt[CIr.Code & "_" & i + 1];;
-									end;
 									POrw.Quant = ECArt[CIr.Code & "_" & i + 1];
 									logtext(0,"POrw.Price1" & POrw.Price);
 									POrw.Price = vItemFifo[POrw.ArtCode & "_" & i + 1];
@@ -2089,10 +2063,8 @@ begin
 									logtext(0,"POrw.Price2" & POrw.Price);
 									POCurCode = vCurrRowCode[CIr.Code];
 								end else begin
-									if (!clientTypef) then begin 
-										ResetCompany(POComp);
-										matrowdelete(POr,i);
-									end;
+									ResetCompany(POComp);
+									matrowdelete(POr,i);
 								end;
 							end else begin
 								ResetCompany(POComp);
@@ -2124,12 +2096,11 @@ begin
 				POr.CurncyCode = POCurCode;
 				POr.CheckCurncyCode = POCurCode;
 			end;
-			
 			if(RecordStore(POr,true))then begin 
 				CreateRecordLink(POr,CurrentCompany,SHr,18);  
 				CreateRecordLink(SHr,18,POr,CurrentCompany);  
 			end;
-			CCPUFromPODsm(POr,PUr,vItemHTotCostPrSH);
+			CCPUFromPODsm(POr,PUr,vItemHTotCostPr);
 			// GetFullCurncyRate(itemcurrency[c],POr.TransDate,fr,to1,to2,br1,br2);
 			// PUr.FrRate = fr;
 			// PUr.ToRateB1 = to1;
@@ -2155,27 +2126,6 @@ begin
 				CreateRecordLink(PUr,CurrentCompany,SHr,18);  
 				CreateRecordLink(SHr,18,PUr,CurrentCompany);  				
 			end;
-			readfirstmain(POr,1,true);
-			mtrw = matrowcnt(POr);
-			logtext(0,"POr read " & POr.SerNr & "  comp  " & currentcompany);
-			POCurCode = "";
-			For(i=mtrw;i>=0;i=i-1) begin
-				matrowget(POr,i,POrw); 
-				if (clientTypef and vOutItems[POrw.ArtCode & "_" & i] > 0) then begin
-					POrw.Quant = vOutItems[POrw.ArtCode & "_" & i];
-					POrw.Price = 0;
-					POrw.stp = 1;
-					POrw.Shipd1 = blankval;
-					POrw.VEQuant = blankval;
-					MatRowInsert(POr,mtrw,POrw); 
-					matrowput(POr,mtrw,POrw);					
-					POVc_PasteQuant(POr,mtrw);
-					matrowget(POr,mtrw,POrw);
-					mtrw = matrowcnt(POr);
-					matrowget(POr,i,POrw); 
-				end;
-			end;
-			if(RecordStore(POr,true))then begin end;
 		end else begin
 			RecordNew (POr);
 			POr.SerNr = NextSerNr("POVc",CurrentDate,-1,false,""); 
