@@ -5,7 +5,7 @@ external procedure POVc_PasteQuant(var record POVc,Integer);// Edit ************
 external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
 remote function boolean CompanyIsJWLikeCompany(Integer);
 external updating procedure ECPUFromPODsm(var record POVc,var record PUVc);
-external updating procedure CCPUFromPODsm(var record POVc,var record PUVc, vector val);
+external updating procedure CCPUFromPODsm(var record POVc,var record PUVc, vector val, vector boolean);
 external updating function Integer CreateVIFromPO(LongInt,record RcVc,var record VIVc);
 remote procedure CreatePufromIVforPLHandle(record RcVc,integer,var string);
 remote updating function LongInt RecordAction_raPastePUInVI(record PUVc,var record VIVc,var string);
@@ -1909,9 +1909,9 @@ begin
 	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode,vLocCashier,vCurrRowCode;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
-	vector boolean vArtCodeRepeat;
+	vector boolean vArtCodeRepeat, shOutItems, ShippdI;
 	vector integer vArtCodeQTY, ECArt,priceinorcnt,vOutItems;
-	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant, vItemHTotCostPr, ItemORPriseWRebate, vItemHTotCostPrSH;
+	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant, vItemHTotCostPr, ItemORPriseWRebate, vItemHTotCostPrSH, vPOQty;
 	record VIVc VIr, OldVIr, offVIr;
 	row VIVc VIrw, OldVIrw;
 	record RcVc RepSpec;
@@ -2035,6 +2035,13 @@ begin
 				logtext(0,ORrw.ECReceived);
 				ItemORPriseWRebate[ORrw.ArtCode] = ORrw.Price - ((ORrw.Price / 100) * ORrw.vRebate);
 				// Logtext(0,"Цена по счету клиента дл€ заказа поставщика строка " & i & " - " & ItemORPriseWRebate[ORrw.ArtCode]);
+			end else begin
+				if (ORrw.Quant==ORrw.Shipd2) then begin
+					CIr.Code = ORrw.ArtCode;
+					if(ReadFirstMain(CIr,1,true))then begin 
+						ShippdI[CIr.LocCode & "_" & ORrw.LCPOrow] = true;
+					end;
+				end;
 			end;
 		end;
 		if(POComp<=0)then begin
@@ -2064,6 +2071,7 @@ begin
 			mtrw = matrowcnt(POr);
 			logtext(0,"POr read " & POr.SerNr & "  comp  " & currentcompany);
 			POCurCode = "";
+			j = 0;
 			For(i=mtrw;i>=0;i=i-1) begin
 				matrowget(POr,i,POrw); 
 				if(nonblank(POrw.ArtCode))then begin
@@ -2106,6 +2114,44 @@ begin
 					end;
 				end;
 			end;
+			
+			mtrw = matrowcnt(POr);
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(POr,i,POrw); 
+				if(nonblank(POrw.ArtCode))then begin
+					INr.Code = POrw.ArtCode;
+					if(readfirstmain(INr,1,true))then begin
+						if(SetCompany(18,false)) then begin
+							CIr.LocCode = POrw.ArtCode;
+							CIr.BrandCode = INr.BPIBrand;
+							if(ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
+								if(ECArt[CIr.Code & "_" & i+1]==0) then begin
+									vPOQty[POrw.ArtCode & "_" & i] = POrw.Quant;
+									POrw.Quant = 0;
+									matrowput(POr,i,POrw);
+									// if (clientTypef) then begin 
+										// if (ShippdI[POrw.ArtCode & "_" & i + 1]) then begin
+											// j=j+1;
+											// logtext(0,j & " j2");
+											// logtext(0,i & " i4");
+										// end else begin
+											// shOutItems[POrw.ArtCode & "_" & i - j] = true;
+											// logtext(0,j & " j1");
+											// logtext(0,i - j & " i1");
+										// end;
+									// end;
+								end;
+							end else begin
+								ResetCompany(POComp);
+								matrowdelete(POr,i);
+							end;
+						end;
+						ResetCompany(POComp);
+					end;
+				end;
+			end;
+			
+			
 			matrowget(CBb,OldComp-1,CBrw);
 			POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
 			ecvcnt = matrowcnt(ECVFSBb);
@@ -2132,7 +2178,7 @@ begin
 				CreateRecordLink(POr,CurrentCompany,SHr,18);  
 				CreateRecordLink(SHr,18,POr,CurrentCompany);  
 			end;
-			CCPUFromPODsm(POr,PUr,vItemHTotCostPrSH);
+			CCPUFromPODsm(POr,PUr,vItemHTotCostPrSH,shOutItems);
 			// GetFullCurncyRate(itemcurrency[c],POr.TransDate,fr,to1,to2,br1,br2);
 			// PUr.FrRate = fr;
 			// PUr.ToRateB1 = to1;
@@ -2162,20 +2208,27 @@ begin
 			mtrw = matrowcnt(POr);
 			logtext(0,"POr read " & POr.SerNr & "  comp  " & currentcompany);
 			POCurCode = "";
-			For(i=mtrw;i>=0;i=i-1) begin
-				matrowget(POr,i,POrw); 
-				if (clientTypef and vOutItems[POrw.ArtCode & "_" & i] > 0) then begin
-					POrw.Quant = vOutItems[POrw.ArtCode & "_" & i];
-					POrw.Price = 0;
-					POrw.stp = 1;
-					POrw.Shipd1 = blankval;
-					POrw.VEQuant = blankval;
-					MatRowInsert(POr,mtrw,POrw); 
-					matrowput(POr,mtrw,POrw);					
-					POVc_PasteQuant(POr,mtrw);
-					matrowget(POr,mtrw,POrw);
-					mtrw = matrowcnt(POr);
+			if (clientTypef) then begin
+				For(i=mtrw;i>=0;i=i-1) begin
 					matrowget(POr,i,POrw); 
+					if (vOutItems[POrw.ArtCode & "_" & i] > 0) then begin
+						POrw.Quant = vOutItems[POrw.ArtCode & "_" & i];
+						POrw.Price = 0;
+						POrw.stp = 1;
+						POrw.Shipd1 = blankval;
+						POrw.VEQuant = blankval;
+						MatRowInsert(POr,mtrw,POrw); 
+						matrowput(POr,mtrw,POrw);					
+						POVc_PasteQuant(POr,mtrw);
+						matrowget(POr,mtrw,POrw);
+						mtrw = matrowcnt(POr);
+						matrowget(POr,i,POrw); 
+					end else begin
+						if (vPOQty[POrw.ArtCode & "_" & i] > 0) then begin
+							POrw.Quant = vPOQty[POrw.ArtCode & "_" & i];
+							matrowput(POr,i,POrw);		
+						end;
+					end;
 				end;
 			end;
 			if(RecordStore(POr,true))then begin end;
@@ -2253,7 +2306,7 @@ begin
 					CreateRecordLink(POr,CurrentCompany,SHr,18);  
 					CreateRecordLink(SHr,18,POr,CurrentCompany);  
 				end;
-				CCPUFromPODsm(POr,PUr,vItemHTotCostPr);
+				CCPUFromPODsm(POr,PUr,vItemHTotCostPr,shOutItems);
 				POr.FrRate = PUr.FrRate;
 				POr.ToRateB1 = PUr.ToRateB1;
 				if(RecordStore(POr,true))then begin end;
