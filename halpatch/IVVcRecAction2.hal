@@ -108,6 +108,76 @@ external function Boolean ReadFirstItem(string,var record INVc,Boolean,Boolean);
 external function Boolean GetFirstItem(var string,var record INVc);
 remote updating procedure RecalcORMn(record RcVc);
 
+//Проверка на коммисию
+
+
+global updating procedure CheckIVForOldCommision(record IVVc IVr)
+begin
+	row IVVc IVrw;
+	record IVVc oldIVr;
+	integer i,rwcnt;
+	boolean foundoldcomiss;
+	integer typeres;
+	record ActVc Acrt;
+	record ARPayVc ARPayr;
+	Record IPVc IPr;
+	
+	if(IVr.InvType==kInvoiceTypeCredit)then begin
+		oldIVr.SerNr = IVr.CredInv;
+		if(readfirstmain(oldIVr,1,true))then begin
+			if(oldIVr.InvDate<stringtodate("1/10/2019"))then begin
+				foundoldcomiss = true; //Возврат товара проданного по старым правилам коммисии
+				typeres = 1; //Тип для связки документов
+				goto lCheckIVForOldCommision;
+			end;
+		end;
+	end;
+	
+	rwcnt = matrowcnt(IVr);
+	for(i=0;i<rwcnt;i=i+1)begin
+		matrowget(IVr,i,IVrw);
+		if(IVrw.Quant<0)then begin
+			if(IVrw.IVForRetNr>-1)then begin
+				oldIVr.SerNr = IVrw.IVForRetNr;
+				if(readfirstmain(oldIVr,1,true))then begin
+					if(oldIVr.InvDate<stringtodate("1/10/2019"))then begin
+						foundoldcomiss = true; //Возврат товара проданного по старым правилам коммисии
+						typeres = 1; //Тип для связки документов
+						goto lCheckIVForOldCommision;
+					end;
+				end;
+			end;
+		end;
+		
+		if(IVrw.stp==kInvoiceRowTypePrepayment)then begin
+			ARPayr.CUPNr = IVrw.CUPNr;
+			if(readfirstmain(ARPayr,1,true))then begin
+				if(ARPayr.PayDate<stringtodate("1/10/2019"))then begin
+					if(ARPayr.IPNr>-1)then begin
+						IPr.SerNr = ARPayr.IPNr;
+						if(readfirstmain(IPr,1,true))then begin
+							foundoldcomiss = true; //Возврат товара проданного по старым правилам коммисии
+							typeres = 2; //Тип для связки документов
+							goto lCheckIVForOldCommision;
+						end;
+					end;
+				end;
+			end;
+			
+		end;
+		
+	end;
+	
+	lCheckIVForOldCommision:;
+	
+	if(foundoldcomiss)then begin
+	
+	
+	end;
+	
+return;
+end;
+
 
 global updating procedure CreateGlobalGift(record IVVc IVr)
 begin
