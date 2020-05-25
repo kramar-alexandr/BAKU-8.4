@@ -118,9 +118,13 @@ begin
 	integer i,rwcnt;
 	boolean foundoldcomiss;
 	integer typeres;
-	record ActVc Acrt;
+	record ActVc Actr;
 	record ARPayVc ARPayr;
 	Record IPVc IPr;
+	record GCVc GCr;
+	record GCRVc GCRr;
+	record GCSVc GCSr;
+	
 	
 	if(IVr.InvType==kInvoiceTypeCredit)then begin
 		oldIVr.SerNr = IVr.CredInv;
@@ -163,16 +167,46 @@ begin
 					end;
 				end;
 			end;
-			
 		end;
+		
+		
+		if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment)then begin
+			GCSr.SerNr = IVrw.GCNr;
+			if (ReadFirstMain(GCSr,1,true)) then begin
+				oldIVr.SerNr = GCSr.InvSerNr;
+				if(oldIVr.InvDate<stringtodate("1/10/2019"))then begin
+					foundoldcomiss = true; //Обналичивание старого подарочного снртификата
+					typeres = 1; //Тип для связки документов
+					goto lCheckIVForOldCommision;
+				end;
+			end;			
+		end;
+		
 		
 	end;
 	
 	lCheckIVForOldCommision:;
 	
 	if(foundoldcomiss)then begin
-	
-	
+		recordNew(Actr);
+		Actr.SerNr = NextSerNr("ActVc",Actr.TransDate,-1,false,"");
+		Actr.TodoFlag = 1; 
+		Actr.StartTime = CurrentTime;
+		Actr.TransDate = Currentdate;
+		Actr.MainPersons = "SA,SA1";
+		Actr.Comment = "Проверить документы на коммиссию";
+		Actr.AlarmType = 1;
+		recordstore(Actr,true);
+		createrecordlink(Actr,currentcompany,IVr,currentcompany);
+		createrecordlink(IVr,currentcompany,Actr,currentcompany);
+		if(typeres==1)then begin
+			createrecordlink(Actr,currentcompany,oldIVr,currentcompany);
+			createrecordlink(oldIVr,currentcompany,Actr,currentcompany);
+		end;
+		if(typeres==2)then begin
+			createrecordlink(Actr,currentcompany,IPr,currentcompany);
+			createrecordlink(IPr,currentcompany,Actr,currentcompany);
+		end;
 	end;
 	
 return;
@@ -1083,6 +1117,11 @@ begin
 		end;
 	end;
   
+  
+  if (IVr.OKFlag!=0) then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 25 05 2020 y. at 10:45:02 AM
+		CheckIVForOldCommision(IVr);
+  end;
+
 LIVVcRecordSaveAfter:;
   AutomatedSales(autmsgfunciontags,kAutomatedSalesTagRandom);
   IVVcRecordSaveAfter = res; 
@@ -1949,6 +1988,12 @@ BEGIN
 			ResetCompany(OldComp);
 		end;
 	end;
+	
+	
+	if (IVr.OKFlag!=0 and IV2r.OKFlag==0) then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 25 05 2020 y. at 10:45:02 AM
+		CheckIVForOldCommision(IVr);
+  end;
+	
 LIVVcRecordUpdateAfter:;
   AutomatedSales(autmsgfunciontags,kAutomatedSalesTagRandom);
   
