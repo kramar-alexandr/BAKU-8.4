@@ -2,6 +2,7 @@ external function longint DateDiff(date,date);
 remote function boolean CompanyIsJWLikeCompany(Integer);
 external procedure YcToStr(Integer,var string);
 external updating function LongInt TRVcRecordRemove(var record TRVc,record TRVc,LongInt,LongInt);
+external function val AbsoluteVal(val);
 
 global webpublic updating procedure WebFindAndFixItems()
 begin
@@ -906,6 +907,327 @@ begin
 	weboutstring("<BR>");
 return;
 end;
+
+
+
+
+
+
+global webpublic updating procedure WebFindErrorCostPrFromIDGroup()
+begin
+	integer MainCompany, i;
+	string 255 CCitemcode, Origitemcode;
+	val cpriceazn, cpricecb, IHcostpricecur, IHtotcostprice;
+	record ConsItemVc CIr;
+	record ItemHistVc IHr;
+	boolean TrHs,testf;
+	record CompaniesBlock CBb;
+	row CompaniesBlock Comprw;
+	record INVc INr;
+	
+	BlockLoad(CBb);
+	MainCompany = 18;
+	setcompany(MainCompany,false);
+	
+	CCitemcode = UpperCase(WebGetArg("itemcode"));
+  cpriceazn = StringToVal(WebGetArg("cpriceazn"),M4Val);
+  cpricecb = StringToVal(WebGetArg("cpricecb"),M4Val);
+
+	if (nonblank(CCitemcode) and nonblank(cpriceazn) and nonblank(cpricecb)) then begin
+		CIr.Code = CCitemcode;
+		if (ReadFirstMain(CIr,1,true)) then begin
+			Origitemcode = CIr.LocCode;
+			IHr.ArtCode = CCitemcode;
+			IHr.TransDate = StringToDate("01/01/2020");
+			TrHs = true;
+			weboutstring("________________________ID Group Company________________________");
+			weboutstring("<BR>");
+			while (LoopKey("ArtCode",IHr,2,TrHs)) begin
+				testf = true;
+				IHcostpricecur = blankval;
+				IHtotcostprice = blankval;
+				IHcostpricecur = IHr.TotCostPriceCurncy / AbsoluteVal(IHr.Qty);
+				IHtotcostprice = IHr.TotCostPrice / AbsoluteVal(IHr.Qty);
+				if (IHr.ArtCode!=CCitemcode) then begin TrHs = false; testf = false; end;
+				if (IHr.TransDate<StringToDate("01/01/2020")) then begin TrHs = false; testf = false; end;
+				if (cpricecb > IHcostpricecur and 1 > cpricecb - IHcostpricecur) then begin testf = false; end;
+				if (cpricecb < IHcostpricecur and 1 > IHcostpricecur - cpricecb) then begin testf = false; end;
+				if (cpriceazn > IHtotcostprice and cpriceazn / IHtotcostprice < 1.5) then begin testf = false; end;
+				if (cpriceazn < IHtotcostprice and IHtotcostprice / cpriceazn < 1.5) then begin testf = false; end;
+				if (testf) then begin
+					weboutstring("Item hist. No.: " & IHr.SerNr & " Document: " & IHr.FileName & " Doc. SerNr: " & IHr.TransNr & " CostPrice: " & IHtotcostprice);
+					weboutstring("<BR>");
+				end;
+			end;
+			Resetloop(IHr);
+			
+			for (i=0;i<matrowcnt(CBb);i=i+1) begin
+				matrowget(CBb,i,Comprw);
+				if(Comprw.ActiveStatus==0 and i+1!=18 and i+1!=29 and i+1!=31 and i+1!=32 and i+1!=33) then begin
+					SetCompany(i+1,false);
+					INr.Code = Origitemcode;
+					if (ReadFirstMain(INr,1,true)) then begin
+						if (INr.BPIBrand==CIr.BrandCode) then begin
+							IHr.ArtCode = Origitemcode;
+							IHr.TransDate = StringToDate("01/01/2020");
+							TrHs = true;
+							weboutstring("________________________" & Comprw.CompName & " Company________________________");
+							weboutstring("<BR>");
+							while (LoopKey("ArtCode",IHr,2,TrHs)) begin
+								testf = true;
+								IHcostpricecur = blankval;
+								IHtotcostprice = blankval;
+								IHcostpricecur = IHr.TotCostPriceCurncy / AbsoluteVal(IHr.Qty);
+								IHtotcostprice = IHr.TotCostPrice / AbsoluteVal(IHr.Qty);
+								if (IHr.ArtCode!=Origitemcode) then begin TrHs = false; testf = false; end;
+								if (IHr.TransDate<StringToDate("01/01/2020")) then begin TrHs = false; testf = false; end;
+								if (cpricecb > IHcostpricecur and 1 < cpricecb - IHcostpricecur) then begin testf = false; end;
+								if (cpricecb < IHcostpricecur and 1 < IHcostpricecur - cpricecb) then begin testf = false; end;
+								if (cpriceazn > IHtotcostprice and cpriceazn / IHtotcostprice < 1.5) then begin testf = false; end;
+								if (cpriceazn < IHtotcostprice and IHtotcostprice / cpriceazn < 1.5) then begin testf = false; end;
+								if (testf) then begin
+									weboutstring("Item hist. No.: " & IHr.SerNr & " Document: " & IHr.FileName & " Doc. SerNr: " & IHr.TransNr & " CostPrice: " & IHtotcostprice);
+									weboutstring("<BR>");
+								end;
+							end;
+							Resetloop(IHr);		
+						end;
+					end;
+				end;
+			end;
+			
+			
+		end else begin
+			weboutstring("Incorrect itemcode ``" & CCitemcode & "``");
+			weboutstring("<BR>");
+		end;
+	end else begin
+		if (blank(CCitemcode)) then begin
+			weboutstring("Blank parameter `` itemcode ``");
+			weboutstring("<BR>");
+		end;
+		if (blank(cpriceazn)) then begin
+			weboutstring("Blank parameter `` cpriceazn ``");
+			weboutstring("<BR>");
+		end;
+		if (blank(cpricecb)) then begin
+			weboutstring("Blank parameter `` cpricecb ``");
+			weboutstring("<BR>");
+		end;
+	end;
+	
+	
+	
+	
+return;
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global updating procedure CorrectErrorsSHFromIDGroupComp()
+begin
+	record SHVc SHr;
+	row SHVc SHrw;
+	record POVc POr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	boolean TrHs, testf, remf, updf;
+	integer MainCompany, i, j, LCNt, trdouble;
+	record ECVendFobSetBlaock CObjr;
+	row ECVendFobSetBlaock CObjrw;
+	vector integer vObjComp;
+	vector val vItemFRV;
+	record RLinkVc RLr;
+	LongInt PUrSerNr, cnt1, cnt2, shcnt, trmtrw;
+	record ItemHistVc IHr, oldIHr;
+	record TRVc TRr, oldTRr;
+	row TRVc TRrw;
+	
+	
+	MainCompany = 18;
+	
+	SetCompany(MainCompany,false);
+	BlockLoad(CObjr);
+	for (i=0;i<matrowcnt(CObjr);i=i+1) begin
+		matrowget(CObjr,i,CObjrw);
+		vObjComp[CObjrw.VendName] = CObjrw.CompanyNr;
+	end;
+	
+	SHr.OKFlag = 1;
+	TrHs = true;
+	
+	cnt1 = 0;
+	cnt2 = 0;
+	shcnt = 0;
+	while (loopkey("OKFlag",SHr,1,TrHs)) begin
+		updf = false;
+		if (SHr.OKFlag != 1) then begin TrHs = false; end;
+		if (TrHs) then begin
+			for (i=0;i<matrowcnt(SHr);i=i+1)begin
+				matrowget(SHr,i,SHrw);
+				vItemFRV[SHr.SerNr & "_" & SHrw.OrdRow] = SHrw.FIFORowVal;
+			end;
+			LCNt = 1;
+			while (ReadRecordLink(SHr,LCNt,PUr,RLr)) begin
+				PUrSerNr = PUr.SerNr;
+				if(setcompany(vObjComp[SHr.CustCode],false))then begin
+					PUr.SerNr = PUrSerNr;
+					if (ReadFirstMain(PUr,1,true)) then begin
+						if (PUr.OKFlag==1) then begin
+							for (i=0;i<matrowcnt(PUr);i=i+1) begin
+								matrowget(PUr,i,PUrw);
+								if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and vItemFRV[SHr.SerNr & "_" & i]/PUrw.Sum > 1.5) then begin
+									
+									IHr.FileName = "PUVc";
+									IHr.TransNr = PUr.SerNr;
+									IHr.Row = i;
+									remf = false;
+									if(ReadFirstKey("FNTransNr",IHr,3,true)) then begin
+										if (IHr.Qty == IHr.RemQty) then begin
+											weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum & " Remf: " & remf);
+											weboutstring("<BR>");
+											logtext (0,"SH SerNr: " & SHr.SerNr);
+											RecordCopy(oldIHr,IHr);
+											IHr.TotCostPrice = vItemFRV[SHr.SerNr & "_" & i];
+											IHr.RemCostPrice = vItemFRV[SHr.SerNr & "_" & i];
+											if (RecordUpdate(oldIHr,IHr,true)==0) then begin
+												weboutstring("IH Updated");
+												weboutstring("<BR>");
+												logtext (0,"IH Updated");
+												trdouble = 0;
+												trmtrw = 0;
+												TRr.Number = PUr.SerNr;
+												TRr.IntYc = PUYc;
+												if (ReadFirstMain(TRr,2,true)) then begin
+													RecordCopy(oldTRr,TRr);
+													for (j=0;j<matrowcnt(TRr);j=j+1) begin
+														if (trmtrw == i)then begin
+															matrowget(TRr,j,TRrw);
+															if (TRrw.DebVal!=blankval) then begin
+																TRrw.DebVal = vItemFRV[SHr.SerNr & "_" & i];
+															end;
+															if (TRrw.CredVal!=blankval) then begin
+																TRrw.CredVal = vItemFRV[SHr.SerNr & "_" & i];
+															end;
+															matrowput(TRr,j,TRrw);
+														end;
+														if (trdouble==1)then begin
+															trdouble = 0;
+															trmtrw = trmtrw + 1;
+														end else begin
+															trdouble = 1;
+														end;
+													end;
+													logtext(0,TRr.Number);
+													if (RecordUpdate(oldTRr,TRr,true)==0) then begin
+														weboutstring("TR Updated");
+														weboutstring("<BR>");
+														logtext (0,"TR Updated");
+														PUrw.Sum = vItemFRV[SHr.SerNr & "_" & i];
+														PUrw.CostPrice = PUrw.Sum / PUrw.Quant;
+														matrowput(PUr,i,PUrw);
+														updf = true;
+													end;
+												end;
+											end;
+										end;
+									end;
+									cnt1 = cnt1 + 1;
+								end;
+								if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and PUrw.Sum/vItemFRV[SHr.SerNr & "_" & i] > 1.5) then begin 
+									
+									IHr.FileName = "PUVc";
+									IHr.TransNr = PUr.SerNr;
+									IHr.Row = i;
+									remf = false;
+									if(ReadFirstKey("FNTransNr",IHr,3,true)) then begin
+										if (IHr.Qty == IHr.RemQty) then begin
+											weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum & " Remf: " & remf);
+											weboutstring("<BR>");
+
+											RecordCopy(oldIHr,IHr);
+											IHr.TotCostPrice = vItemFRV[SHr.SerNr & "_" & i];
+											IHr.RemCostPrice = vItemFRV[SHr.SerNr & "_" & i];
+											if (RecordUpdate(oldIHr,IHr,true)==0) then begin
+												weboutstring("IH Updated");
+												weboutstring("<BR>");
+												logtext (0,"IH Updated");
+												trdouble = 0;
+												trmtrw = 0;
+												TRr.Number = PUr.SerNr;
+												TRr.IntYc = PUYc;
+												if (ReadFirstMain(TRr,2,true)) then begin
+													RecordCopy(oldTRr,TRr);
+													for (j=0;j<matrowcnt(TRr);j=j+1) begin
+														if (trmtrw == i)then begin
+															matrowget(TRr,j,TRrw);
+															if (TRrw.DebVal!=blankval) then begin
+																TRrw.DebVal = vItemFRV[SHr.SerNr & "_" & i];
+															end;
+															if (TRrw.CredVal!=blankval) then begin
+																TRrw.CredVal = vItemFRV[SHr.SerNr & "_" & i];
+															end;
+															matrowput(TRr,j,TRrw);
+														end;
+														if (trdouble==1)then begin
+															trdouble = 0;
+															trmtrw = trmtrw + 1;
+														end else begin
+															trdouble = 1;
+														end;
+													end;
+													if (RecordUpdate(oldTRr,TRr,true)==0) then begin
+														weboutstring("TR Updated");
+														weboutstring("<BR>");
+														logtext (0,"TR Updated");
+														PUrw.Sum = vItemFRV[SHr.SerNr & "_" & i];
+														PUrw.CostPrice = PUrw.Sum / PUrw.Quant;
+														matrowput(PUr,i,PUrw);
+														updf = true;
+													end;
+												end;
+											end;
+										end;
+									end;
+									cnt1 = cnt1 + 1;
+								end;
+								// if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum < 1) then begin 
+									// weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum);
+									// weboutstring("<BR>");
+									// cnt2 = cnt2 + 1;
+								// end;
+							end;
+						end;
+						if (updf) then begin
+							RecordStore (PUr,true);
+							logtext (0,"PU Updated");
+						end;
+					end;
+				end;
+				resetcompany(MainCompany);
+				LCNt = LCNt + 1;
+			end;
+		end;
+	end;
+return;
+end;
+
+
+
+
+
+
 
 
 
