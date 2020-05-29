@@ -3,6 +3,11 @@ remote function boolean CompanyIsJWLikeCompany(Integer);
 external procedure YcToStr(Integer,var string);
 external updating function LongInt TRVcRecordRemove(var record TRVc,record TRVc,LongInt,LongInt);
 external function val AbsoluteVal(val);
+external procedure RetPUSumUp(var record RetPUVc);
+remote procedure ORSumup(var record ORVc);
+remote procedure ORVc_PastePrice(var record ORVc,Integer,var Boolean);
+remote procedure ORDchsum(var record ORVc,Integer);
+external procedure PUVc_PasteCostPrice(var record PUVc,Integer);
 
 global webpublic updating procedure WebFindAndFixItems()
 begin
@@ -917,13 +922,33 @@ global webpublic updating procedure WebFindErrorCostPrFromIDGroup()
 begin
 	integer MainCompany, i;
 	string 255 CCitemcode, Origitemcode, upd;
-	val cpriceazn, cpricecb, IHcostpricecur, IHtotcostprice;
+	val cpriceazn, cpricecb, IHcostpricecur, IHtotcostprice, cpriceaznSumQty;
 	record ConsItemVc CIr;
 	record ItemHistVc IHr;
-	boolean TrHs,testf,updf;
+	boolean TrHs,testf,updf,updTRf,updDocf,transSearchf;
 	record CompaniesBlock CBb;
 	row CompaniesBlock Comprw;
 	record INVc INr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record StockMovVc SMr;
+	row StockMovVc SMrw;
+	record SHVc SHr;
+	row SHVc SHrw;
+	record SDVc SDr;
+	row SDVc SDrw;
+	record RetVc Retr;
+	row RetVc Retrw;
+	record RetPUVc RetPUr;
+	row RetPUVc RetPUrw;
+	record TRVc TRr, OldTRr;
+	row TRVc TRrw;
+	record RLinkVc RLr;
+	record ORvc ORr;
+	row ORvc ORrw;
+	
 	
 	BlockLoad(CBb);
 	MainCompany = 18;
@@ -932,7 +957,7 @@ begin
 	CCitemcode = UpperCase(WebGetArg("itemcode"));
   cpriceazn = StringToVal(WebGetArg("cpriceazn"),M4Val);
   cpricecb = StringToVal(WebGetArg("cpricecb"),M4Val);
-	upd = StringToVal(WebGetArg("updf"),M4Val);
+	upd = WebGetArg("updf");
 	if (upd=="true") then begin
 		updf = true;
 	end else begin
@@ -951,6 +976,7 @@ begin
 			while (LoopKey("ArtCode",IHr,2,TrHs)) begin
 				testf = true;
 				IHcostpricecur = blankval;
+				cpriceaznSumQty = blankval;
 				IHtotcostprice = blankval;
 				IHcostpricecur = IHr.TotCostPriceCurncy / AbsoluteVal(IHr.Qty);
 				IHtotcostprice = IHr.TotCostPrice / AbsoluteVal(IHr.Qty);
@@ -965,7 +991,192 @@ begin
 						weboutstring("Item hist. No.: " & IHr.SerNr & " Document: " & IHr.FileName & " Doc. SerNr: " & IHr.TransNr & " CostPrice: " & IHtotcostprice);
 						weboutstring("<BR>");
 					end else begin
+						updDocf = false;
+						updTRf = false;
+						transSearchf = false;
+						cpriceaznSumQty = cpriceazn * AbsoluteVal(IHr.Qty);
+						switch(IHr.FileName)begin
+							case "PUVc":
+								PUr.SerNr = IHr.TransNr;
+								if (readfirstmain(PUr,1,true)) then begin
+									matrowget(PUr,IHr.Row,PUrw);
+									PUrw.CostPrice = cpriceazn;
+									PUrw.Sum = cpriceaznSumQty;
+									matrowput(PUr,IHr.Row,PUrw);
+									PUVc_PasteCostPrice(PUr,IHr.Row);
+									matrowget(PUr,IHr.Row,PUrw);
+									matrowput(PUr,IHr.Row,PUrw);
+									TRr.Number = PUr.SerNr;
+									TRr.IntYc = PUYc;
+									if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+								end;
+							case "RetPUVc":
+								RetPUr.SerNr = IHr.TransNr;
+								if (readfirstmain(RetPUr,1,true)) then begin
+									matrowget(RetPUr,IHr.Row,RetPUrw);
+									RetPUrw.PUCostPrice = cpriceazn;
+									RetPUrw.FIFO = cpriceazn;
+									RetPUrw.FIFORowVal = cpriceaznSumQty;
+									matrowput(RetPUr,IHr.Row,RetPUrw);
+									RetPUSumUp(RetPUr);
+									TRr.Number = RetPUr.SerNr;
+									TRr.IntYc = RetPUYc;
+									if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+								end;
+							case "SHVc":
+								SHr.SerNr = IHr.TransNr;
+								if(readfirstmain(SHr,1,true))then begin
+									matrowget(SHr,IHr.Row,SHrw);
+									SHrw.BBCostPrice = cpriceazn;
+									SHrw.FIFO = cpriceazn;
+									SHrw.FIFORowVal = cpriceaznSumQty;
+									matrowput(SHr,IHr.Row,SHrw);
+									if (ReadRecordLink(SHr,1,ORr,RLr)) then begin
+										for (i=0;i<matrowcnt(ORr);i=i+1) begin
+											matrowget (ORr,i,ORrw);
+											if (ORrw.ArtCode==CCitemcode and ORrw.Quant==AbsoluteVal(IHr.Qty)) then begin
+												ORrw.Price = cpriceazn;
+												ORrw.Sum = cpriceaznSumQty;
+												matrowput(SHr,IHr.Row,SHrw);
+												ORDchsum(ORr,i);
+												matrowget(ORr,i,ORrw); 
+												ORSumup(ORr);
+												matrowput(ORr,i,ORrw); 
+											end;
+										end;	
+										recordstore(ORr,true);
+									end;
+									TRr.Number = SHr.SerNr;
+									TRr.IntYc = SHYc;
+									if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+								end;
+							case "SDVc":
+								SDr.SerNr = IHr.TransNr;
+								if(readfirstmain(SDr,1,true))then begin
+									matrowget(SDr,IHr.Row,SDrw);
+									SDrw.FIFO = cpriceazn;
+									SDrw.FIFORowVal = cpriceaznSumQty;
+									matrowput(SDr,IHr.Row,SDrw);
+									TRr.Number = SDr.SerNr;
+									TRr.IntYc = SDYc;
+									if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+								end;
+							case "RetVc":
+								Retr.SerNr = IHr.TransNr;
+								if(readfirstmain(Retr,1,true))then begin
+									matrowget(Retr,IHr.Row,Retrw);
+									Retrw.UPrice = cpriceazn;
+									Retrw.CostPrice = cpriceazn;
+									Retrw.BBCostPrice = cpriceazn;
+									matrowput(Retr,IHr.Row,Retrw);
+									TRr.Number = Retr.SerNr;
+									TRr.IntYc = RetYc;
+									if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+								end;
+							case "IVVc":
+								IVr.SerNr = IHr.TransNr;
+								if(readfirstmain(IVr,1,true))then begin
+									matrowget(IVr,IHr.Row,IVrw);
+									IVrw.BasePrice = cpriceazn;
+									IVrw.FIFO = cpriceazn;
+									IVrw.FIFORowVal = cpriceaznSumQty;
+									matrowput(IVr,IHr.Row,IVrw);
+									TRr.Number = IVr.SerNr;
+									TRr.IntYc = IVYc;
+									if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+								end;
+							case "StockMovVc":
+								SMr.SerNr = IHr.TransNr;
+								if(readfirstmain(SMr,1,true))then begin
+									matrowget(SMr,IHr.Row,SMrw);
+									SMrw.OldPrice = cpriceazn;
+									SMrw.NewPrice = cpriceazn;
+									SMrw.FIFORowVal = cpriceaznSumQty;
+									matrowput(SMr,IHr.Row,SMrw);
+									if (IHr.Qty<0) then begin
+										TRr.Number = SMr.SerNr;
+										TRr.IntYc = SentSTMovYc;
+										if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+									end else begin
+										TRr.Number = SMr.SerNr;
+										TRr.IntYc = STMovYc;
+										if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+									end;
+								end;
+							otherwise
+								weboutstring("Other filename. FileName is " & IHr.FileName);
+								weboutstring("<BR>");
+						end;
 						
+						if (transSearchf) then begin
+							RecordCopy(OldTRr,TRr);
+							matrowget(TRr,IHr.Row * 2,TRrw);
+								if (TRrw.DebVal!=blankval and TRrw.DebVal==IHr.TotCostPrice) then begin
+									TRrw.DebVal = cpriceaznSumQty;
+								end;
+								if (TRrw.CredVal!=blankval and TRrw.CredVal==IHr.TotCostPrice) then begin
+									TRrw.CredVal = cpriceaznSumQty;
+								end;
+								if (TRrw.Curncy=="AZN" and TRrw.CurDebVal!=blankval and TRrw.CurDebVal==IHr.TotCostPrice) then begin
+									TRrw.CurDebVal = cpriceaznSumQty;
+								end;
+								if (TRrw.Curncy=="AZN" and TRrw.CurCredVal!=blankval and TRrw.CurCredVal==IHr.TotCostPrice) then begin
+									TRrw.CurCredVal = cpriceaznSumQty;
+								end;
+							matrowput(TRr,IHr.Row * 2,TRrw);
+							matrowget(TRr,IHr.Row * 2 + 1,TRrw);
+								if (TRrw.DebVal!=blankval and TRrw.DebVal==IHr.TotCostPrice) then begin
+									TRrw.DebVal = cpriceaznSumQty;
+								end;
+								if (TRrw.CredVal!=blankval and TRrw.CredVal==IHr.TotCostPrice) then begin
+									TRrw.CredVal = cpriceaznSumQty;
+								end;
+								if (TRrw.Curncy=="AZN" and TRrw.CurDebVal!=blankval and TRrw.CurDebVal==IHr.TotCostPrice) then begin
+									TRrw.CurDebVal = cpriceaznSumQty;
+								end;
+								if (TRrw.Curncy=="AZN" and TRrw.CurCredVal!=blankval and TRrw.CurCredVal==IHr.TotCostPrice) then begin
+									TRrw.CurCredVal = cpriceaznSumQty;
+								end;
+							matrowput(TRr,IHr.Row * 2 + 1,TRrw);
+							if (RecordUpdate(OldTRr,TRr,true)==0) then begin
+								updTRf = true;
+							end;
+						end;
+						
+						
+						if (updTRf) then begin
+							switch(IHr.FileName)begin
+								case "PUVc":
+										recordstore(PUr,true);
+										updDocf = true;
+								case "SHVc":
+										recordstore(SHr,true);
+										updDocf = true;
+								case "SDVc":
+										recordstore(SDr,true);
+										updDocf = true;
+								case "RetVc":
+										recordstore(Retr,true);
+										updDocf = true;
+								case "IVVc":
+										recordstore(IVr,true);
+										updDocf = true;
+								case "StockMovVc":
+										recordstore(SMr,true);
+										updDocf = true;
+								case "RetPUVc":
+										recordstore(RetPUr,true);
+										updDocf = true;
+								otherwise
+									weboutstring("Other filename. FileName is " & IHr.FileName);
+									weboutstring("<BR>");
+							end;
+						end;
+						
+						if (updDocf) then begin
+							IHr.TotCostPrice = cpriceaznSumQty;
+							recordstore(IHr,true);
+						end;
 					end;
 				end;
 			end;
@@ -1000,7 +1211,176 @@ begin
 										weboutstring("Item hist. No.: " & IHr.SerNr & " Document: " & IHr.FileName & " Doc. SerNr: " & IHr.TransNr & " CostPrice: " & IHtotcostprice);
 										weboutstring("<BR>");
 									end else begin
-									
+										updDocf = false;
+										updTRf = false;
+										transSearchf = false;
+										cpriceaznSumQty = cpriceazn * AbsoluteVal(IHr.Qty);
+										switch(IHr.FileName)begin
+											case "PUVc":
+												PUr.SerNr = IHr.TransNr;
+												if (readfirstmain(PUr,1,true)) then begin
+													matrowget(PUr,IHr.Row,PUrw);
+													PUrw.CostPrice = cpriceazn;
+													PUrw.Sum = cpriceaznSumQty;
+													matrowput(PUr,IHr.Row,PUrw);
+													PUVc_PasteCostPrice(PUr,IHr.Row);
+													matrowget(PUr,IHr.Row,PUrw);
+													matrowput(PUr,IHr.Row,PUrw);
+													TRr.Number = PUr.SerNr;
+													TRr.IntYc = PUYc;
+													if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+												end;
+											case "RetPUVc":
+												RetPUr.SerNr = IHr.TransNr;
+												if (readfirstmain(RetPUr,1,true)) then begin
+													matrowget(RetPUr,IHr.Row,RetPUrw);
+													RetPUrw.PUCostPrice = cpriceazn;
+													RetPUrw.FIFO = cpriceazn;
+													RetPUrw.FIFORowVal = cpriceaznSumQty;
+													matrowput(RetPUr,IHr.Row,RetPUrw);
+													RetPUSumUp(RetPUr);
+													TRr.Number = RetPUr.SerNr;
+													TRr.IntYc = RetPUYc;
+													if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+												end;
+											case "SHVc":
+												SHr.SerNr = IHr.TransNr;
+												if(readfirstmain(SHr,1,true))then begin
+													matrowget(SHr,IHr.Row,SHrw);
+													SHrw.BBCostPrice = cpriceazn;
+													SHrw.FIFO = cpriceazn;
+													SHrw.FIFORowVal = cpriceaznSumQty;
+													matrowput(SHr,IHr.Row,SHrw);
+													TRr.Number = SHr.SerNr;
+													TRr.IntYc = SHYc;
+													if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+												end;
+											case "SDVc":
+												SDr.SerNr = IHr.TransNr;
+												if(readfirstmain(SDr,1,true))then begin
+													matrowget(SDr,IHr.Row,SDrw);
+													SDrw.FIFO = cpriceazn;
+													SDrw.FIFORowVal = cpriceaznSumQty;
+													matrowput(SDr,IHr.Row,SDrw);
+													TRr.Number = SDr.SerNr;
+													TRr.IntYc = SDYc;
+													if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+												end;
+											case "RetVc":
+												Retr.SerNr = IHr.TransNr;
+												if(readfirstmain(Retr,1,true))then begin
+													matrowget(Retr,IHr.Row,Retrw);
+													Retrw.UPrice = cpriceazn;
+													Retrw.CostPrice = cpriceazn;
+													Retrw.BBCostPrice = cpriceazn;
+													matrowput(Retr,IHr.Row,Retrw);
+													TRr.Number = Retr.SerNr;
+													TRr.IntYc = RetYc;
+													if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+												end;
+											case "IVVc":
+												IVr.SerNr = IHr.TransNr;
+												if(readfirstmain(IVr,1,true))then begin
+													matrowget(IVr,IHr.Row,IVrw);
+													IVrw.BasePrice = cpriceazn;
+													IVrw.FIFO = cpriceazn;
+													IVrw.FIFORowVal = cpriceaznSumQty;
+													matrowput(IVr,IHr.Row,IVrw);
+													TRr.Number = IVr.SerNr;
+													TRr.IntYc = IVYc;
+													if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+												end;
+											case "StockMovVc":
+												SMr.SerNr = IHr.TransNr;
+												if(readfirstmain(SMr,1,true))then begin
+													matrowget(SMr,IHr.Row,SMrw);
+													SMrw.OldPrice = cpriceazn;
+													SMrw.NewPrice = cpriceazn;
+													SMrw.FIFORowVal = cpriceaznSumQty;
+													matrowput(SMr,IHr.Row,SMrw);
+													if (IHr.Qty<0) then begin
+														TRr.Number = SMr.SerNr;
+														TRr.IntYc = SentSTMovYc;
+														if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+													end else begin
+														TRr.Number = SMr.SerNr;
+														TRr.IntYc = STMovYc;
+														if (ReadFirstMain(TRr,2,true)) then begin transSearchf = true; end;
+													end;
+												end;
+											otherwise
+												weboutstring("Other filename. FileName is " & IHr.FileName);
+												weboutstring("<BR>");
+										end;
+										
+										if (transSearchf) then begin
+											RecordCopy(OldTRr,TRr);
+											matrowget(TRr,IHr.Row * 2,TRrw);
+												if (TRrw.DebVal!=blankval and TRrw.DebVal==IHr.TotCostPrice) then begin
+													TRrw.DebVal = cpriceaznSumQty;
+												end;
+												if (TRrw.CredVal!=blankval and TRrw.CredVal==IHr.TotCostPrice) then begin
+													TRrw.CredVal = cpriceaznSumQty;
+												end;
+												if (TRrw.Curncy=="AZN" and TRrw.CurDebVal!=blankval and TRrw.CurDebVal==IHr.TotCostPrice) then begin
+													TRrw.CurDebVal = cpriceaznSumQty;
+												end;
+												if (TRrw.Curncy=="AZN" and TRrw.CurCredVal!=blankval and TRrw.CurCredVal==IHr.TotCostPrice) then begin
+													TRrw.CurCredVal = cpriceaznSumQty;
+												end;
+											matrowput(TRr,IHr.Row * 2,TRrw);
+											matrowget(TRr,IHr.Row * 2 + 1,TRrw);
+												if (TRrw.DebVal!=blankval and TRrw.DebVal==IHr.TotCostPrice) then begin
+													TRrw.DebVal = cpriceaznSumQty;
+												end;
+												if (TRrw.CredVal!=blankval and TRrw.CredVal==IHr.TotCostPrice) then begin
+													TRrw.CredVal = cpriceaznSumQty;
+												end;
+												if (TRrw.Curncy=="AZN" and TRrw.CurDebVal!=blankval and TRrw.CurDebVal==IHr.TotCostPrice) then begin
+													TRrw.CurDebVal = cpriceaznSumQty;
+												end;
+												if (TRrw.Curncy=="AZN" and TRrw.CurCredVal!=blankval and TRrw.CurCredVal==IHr.TotCostPrice) then begin
+													TRrw.CurCredVal = cpriceaznSumQty;
+												end;
+											matrowput(TRr,IHr.Row * 2 + 1,TRrw);
+											if (RecordUpdate(OldTRr,TRr,true)==0) then begin
+												updTRf = true;
+											end;
+										end;
+										
+										if (updTRf) then begin
+											switch(IHr.FileName)begin
+												case "PUVc":
+														recordstore(PUr,true);
+														updDocf = true;
+												case "SHVc":
+														recordstore(SHr,true);
+														updDocf = true;
+												case "SDVc":
+														recordstore(SDr,true);
+														updDocf = true;
+												case "RetVc":
+														recordstore(Retr,true);
+														updDocf = true;
+												case "IVVc":
+														recordstore(IVr,true);
+														updDocf = true;
+												case "StockMovVc":
+														recordstore(SMr,true);
+														updDocf = true;
+												case "RetPUVc":
+														recordstore(RetPUr,true);
+														updDocf = true;
+												otherwise
+													weboutstring("Other filename. FileName is " & IHr.FileName);
+													weboutstring("<BR>");
+											end;
+										end;
+										
+										if (updDocf) then begin
+											IHr.TotCostPrice = cpriceaznSumQty;
+											recordstore(IHr,true);
+										end;
 									end;
 								end;
 							end;
