@@ -84,7 +84,7 @@ external procedure LogProcTime(string,longint);
 remote updating function integer CreateBackStockMov(record StockMovVc, var record StockMovVc);
 external procedure StockMovSumUp(var record StockMovVc);
 remote updating procedure ExchCurrInTr41AccRow(string,longint);
-
+external procedure ExtractObj(string,var Integer,var string);
 
 function Integer ValidateBulkSerialNoRow(record SerNrTrackBlock SNrb,record RetVc Retr,row RetVc Retrw,Integer currow,var string gotofield,var Integer gotorow)
 begin
@@ -185,7 +185,7 @@ BEGIN
   record LegalInvNrBlock LINrb;
   row LegalInvNrBlock LINrbrw;
   Date td;
-  record CUVc CUr;
+  record CUVc CUr,CU2r;
   record AccBlock ARAb;
   record CostAccBlock CAb;
   record RetGoodsBlock RGb;
@@ -194,7 +194,7 @@ BEGIN
   row WSVc WSrw;
   record SerNrTrackBlock SNrb;
   string 255 gotofield;
-  Integer gotorow;
+  Integer gotorow,oscnt;
   Array string 255 otcheckaccs;
   Array string 255 otcheckobjtyps;
   Integer otcheckcnt;
@@ -203,8 +203,8 @@ BEGIN
   record IVVc IVr;
 	record SRBlock SRb;
 	Boolean nousersernr;
-	longint curtick;
-	
+	longint curtick; 
+	record BPIBrandVc BPIBr;
 	curtick = getcurtick();
   logtext(0,"RetVcRecordCheck"); 
   
@@ -624,6 +624,22 @@ BEGIN
         goto LRetVcRecordCheck;
       end;
     end;  
+		if(blank(Retrw.Objects)) then begin
+			BPIBr.Code = INr.BPIBrand;
+			if(ReadFirstMain(BPIBr,1,true)) then begin
+				oscnt = 0;
+				ExtractObj(BPIBr.Vendor,oscnt,tstr);
+				CU2r.Code = tstr;
+				if(ReadFirstMain(CU2r,1,true)) then begin
+					if(!SetInSet(CU2r.VEObjects,Retrw.Objects)) then begin
+						if(blank(Retrw.Objects)) then begin Retrw.Objects = CU2r.VEObjects; 
+						end else begin Retrw.Objects = Retrw.Objects & "," & CU2r.VEObjects; end;
+						matrowput(Retp,i,Retrw);
+						matrowget(Retp,i,Retrw);
+					end;
+				end;
+			end;
+		end;
     if (transf) then begin
     if (((INr.SerNrf>0) and (INr.SerNrf<3)) and (MSb.NoSerOnPU==0)) then begin
       if (blank(Retrw.SerialNr)) then begin
