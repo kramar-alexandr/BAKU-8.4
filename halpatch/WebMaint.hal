@@ -926,7 +926,70 @@ end;
 
 
 
+global updating procedure ClearAltcode(record INVc INr)
+begin
 
+	record INVc AltINr;
+	
+	logtext (0,"ClearAltcode");
+	AltINr.Code = INr.AlternativeCode;
+	if (ReadFirstMain(AltINr,1,true)) then begin
+		INr.AlternativeCode = "";
+		if (recordStore (INr,true)) then begin
+			weboutstring("Alt code " & INr.AlternativeCode & " in Item with code " & INr.Code & "is cleared!");
+			weboutstring("<BR>");
+			logtext (0,INr.Code);
+		end;
+	end;
+	
+return;
+end;
+
+
+
+
+global webpublic procedure WebFindAndClearAltCodesInCodes()
+begin
+	record INVc INr;
+	record CompaniesBlock CBb;
+	row CompaniesBlock Comprw;
+	integer i, slipcont, cnt, allINs;
+	array string 255 INrs;
+	
+	BlockLoad(CBb);
+	
+	for (i=0;i<matrowcnt(CBb);i=i+1) begin
+		matrowget(CBb,i,Comprw);
+		allINs = 0;
+		if(Comprw.ActiveStatus==0 and i+1!=18 and i+1!=29 and i+1!=31 and i+1!=32 and i+1!=33) then begin
+			SetCompany(i+1,false);
+			slipcont = 0;
+			INr.Code = "";
+			cnt = 0;
+			while (loopmain(INr,1,true)) begin
+				if (nonblank(INr.AlternativeCode)) then begin
+					INrs[cnt] = INr.Code;
+					cnt = cnt + 1;
+				end;
+			end;
+			resetloop(INr);
+			allINs = cnt;
+			for (cnt=0;cnt<allINs;cnt=cnt+1)begin
+				INr.Code = INrs[cnt];
+				if (ReadFirstMain(INr,1,true)) then begin
+					queued.ClearAltcode(INr);
+					slipcont = slipcont + 1;					
+					if(slipcont>10)then begin
+						millisleep(500);
+						slipcont = 0;
+					end;
+				end;
+			end;
+		end;
+	end;
+			
+return;
+end;
 
 
 global webpublic updating procedure WebFindErrorCostPrFromIDGroup()
