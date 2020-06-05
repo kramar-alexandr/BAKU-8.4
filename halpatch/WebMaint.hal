@@ -823,6 +823,138 @@ end;
 
 
 
+
+
+global webpublic updating procedure WebFindDifferencesInDocsAndIHFromSHInIDGroupComp()
+begin
+	record SHVc SHr;
+	row SHVc SHrw;
+	record POVc POr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	boolean TrHs, testf, remf;
+	integer MainCompany, i, LCNt, j;
+	record ECVendFobSetBlaock CObjr;
+	row ECVendFobSetBlaock CObjrw;
+	vector integer vObjComp;
+	vector val vItemFRV;
+	record RLinkVc RLr;
+	LongInt PUrSerNr, cnt1, cnt2, shcnt;
+	record ItemHistVc IHr;
+	vector string 255 vPosItems;
+	record ConsItemVc CIr;
+	
+	MainCompany = 18;
+	
+	SetCompany(MainCompany,false);
+	BlockLoad(CObjr);
+	for (i=0;i<matrowcnt(CObjr);i=i+1) begin
+		matrowget(CObjr,i,CObjrw);
+		vObjComp[CObjrw.VendName] = CObjrw.CompanyNr;
+	end;
+	
+	SHr.OKFlag = 1;
+	TrHs = true;
+	
+	cnt1 = 0;
+	cnt2 = 0;
+	shcnt = 0;
+	while (loopkey("OKFlag",SHr,1,TrHs)) begin
+		if (SHr.OKFlag != 1) then begin TrHs = false; end;
+		if (TrHs) then begin
+			j = 0;
+			for (i=0;i<matrowcnt(SHr);i=i+1)begin
+				matrowget(SHr,i,SHrw);
+				if (SHrw.Ship>0) then begin
+					vItemFRV[SHr.SerNr & "_" & i - j] = SHrw.FIFORowVal;
+					CIr.Code = SHrw.ArtCode;
+					if (ReadFirstMain(CIr,1,true)) then begin
+						vPosItems[SHr.SerNr & "_" & i - j] = CIr.LocCode;
+					end;
+				end else begin
+					j = j + 1;
+				end;
+			end;
+			LCNt = 1;
+			while (ReadRecordLink(SHr,LCNt,PUr,RLr)) begin
+				PUrSerNr = PUr.SerNr;
+				logtext(0,PUrSerNr);
+				if(setcompany(vObjComp[SHr.CustCode],false))then begin
+					PUr.SerNr = PUrSerNr;
+					if (ReadFirstMain(PUr,1,true)) then begin
+						if (PUr.OKFlag==1) then begin
+							for (i=0;i<matrowcnt(PUr);i=i+1) begin
+								matrowget(PUr,i,PUrw);
+								if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and vItemFRV[SHr.SerNr & "_" & i]/PUrw.Sum > 1.01 and vPosItems[SHr.SerNr & "_" & i]==PUrw.ArtCode) then begin
+									IHr.FileName = "PUVc";
+									IHr.TransNr = PUr.SerNr;
+									IHr.Row = i;
+									remf = false;
+									if(ReadFirstKey("FNTransNr",IHr,3,true)) then begin
+										if (IHr.Qty != IHr.RemQty) then begin
+											if (SHr.SerNr!=41 and SHr.SerNr!=44 and SHr.SerNr!=46 and SHr.SerNr!=91 and SHr.SerNr!=122 and SHr.SerNr!=184 and SHr.SerNr!=197 and SHr.SerNr!=437 and SHr.SerNr!=483 and IHr.TotCostPrice!=PUrw.Sum) then begin  
+												PUrw.Sum = IHr.TotCostPrice;
+												PUrw.CostPrice = IHr.TotCostPrice/PUrw.Quant;
+												matrowput(PUr,i,PUrw);
+												RecordStore(PUr,true);
+											end;
+											remf = true;
+											shcnt = shcnt + 1;
+										end;
+									end;
+									weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum & " Remf: " & remf);
+									weboutstring("<BR>");
+									cnt1 = cnt1 + 1;
+								end;
+								if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and PUrw.Sum/vItemFRV[SHr.SerNr & "_" & i] > 1.01 and vPosItems[SHr.SerNr & "_" & i]==PUrw.ArtCode) then begin 
+									IHr.FileName = "PUVc";
+									IHr.TransNr = PUr.SerNr;
+									IHr.Row = i;
+									remf = false;
+									if(ReadFirstKey("FNTransNr",IHr,3,true)) then begin
+										if (IHr.Qty != IHr.RemQty) then begin
+											if (SHr.SerNr!=41 and SHr.SerNr!=44 and SHr.SerNr!=46 and SHr.SerNr!=91 and SHr.SerNr!=122 and SHr.SerNr!=184 and SHr.SerNr!=197 and SHr.SerNr!=437 and SHr.SerNr!=483 and IHr.TotCostPrice!=PUrw.Sum) then begin  
+												PUrw.Sum = IHr.TotCostPrice;
+												PUrw.CostPrice = IHr.TotCostPrice/PUrw.Quant;
+												matrowput(PUr,i,PUrw);
+												RecordStore(PUr,true);
+											end;
+											remf = true;
+											shcnt = shcnt + 1;
+										end;
+									end;
+									weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum & " Remf: " & remf);
+									weboutstring("<BR>");
+									cnt1 = cnt1 + 1;
+								end;
+								// if (vItemFRV[SHr.SerNr & "_" & i] != PUrw.Sum and vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum < 1) then begin 
+									// weboutstring("SH SerNr: " & SHr.SerNr & " Company: " & vObjComp[SHr.CustCode] & " PU SerNr: " & PUr.SerNr & " row: " & i+1 & " Diff: " & vItemFRV[SHr.SerNr & "_" & i] - PUrw.Sum);
+									// weboutstring("<BR>");
+									// cnt2 = cnt2 + 1;
+								// end;
+							end;
+						end;
+					end;
+				end;
+				resetcompany(MainCompany);
+				LCNt = LCNt + 1;
+			end;
+		end;
+	end;
+	weboutstring("Items > 1 diff " & cnt1);
+	weboutstring("<BR>");
+	weboutstring("Shipped items " & shcnt);
+	weboutstring("<BR>");
+return;
+end;
+
+
+
+
+
+
+
+
 global webpublic updating procedure WebFindErrorSHFromIDGroupComp()
 begin
 	record SHVc SHr;
