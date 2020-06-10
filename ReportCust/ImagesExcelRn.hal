@@ -59,7 +59,7 @@ integer i;
 return;
 end;
 
-procedure ImagesExcel(record RcVc RepSpec, array integer companies)
+procedure ImagesExcel(record RcVc RepSpec)
 begin
 	
 	array string 50 sheetNames;
@@ -76,6 +76,7 @@ begin
   integer fromcol,tocol,fromrow,torow;
   integer imgCounter;
 	
+  record CompaniesBlock Compb;
 	record DIVc DIr;
   record PLVc PLr;
   record PLDefVc PLDefr;
@@ -92,7 +93,6 @@ begin
   array string 20 stocks;
   array string 100 typeClassif,classif;
   record OldDIVc OldDIr;
-
 
 	setexportcodepage("UTF8");
   logtext(0,currentcompany & " - " & currentuser & " - ImagesExcel started");
@@ -152,8 +152,28 @@ begin
 				ClearStocksStuff(SQi,stockInArr,stocks,stockQty);
 				ClearClassifStuff(TSi,typeClassif,classif);
 	//collect stocks
-				for (i=0;i<companies.length;i=i+1) begin
-					setcompany(companies[i],false);
+				setcompany(currentcompany,false);
+				ISr.Code = INr.Code;
+				TrHs = true;
+				while (loopmain(ISr,1,TrHs)) begin
+					testf = true;
+					if (ISr.Code!=INr.Code) then begin testf = false; TrHs = false; end;
+					if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
+					if (ISr.Location==";;;") then begin testf = false; end;
+					if (ISr.Instock==0) then begin testf = false; end;
+					if (testf) then begin
+						if !stockInArr[ISr.Location] then begin
+							stockInArr[ISr.Location] = true;
+							stocks[SQi] = ISr.Location;
+							SQi = SQi + 1;
+						end;
+						stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
+					end;					
+				end;
+				resetloop(ISr);
+					
+				if(currentcompany!=18 and RepSpec.flags[5]!=0)then begin
+					setcompany(18,false);
 					ISr.Code = INr.Code;
 					TrHs = true;
 					while (loopmain(ISr,1,TrHs)) begin
@@ -172,8 +192,8 @@ begin
 						end;
 					end;
 					resetloop(ISr);
-				end; 
-				resetcompany(curcomp);
+				end;
+  
 				if nonblank(stocks[0]) then begin
 	//find brand and collect classifications
 					brand = "";
@@ -242,7 +262,7 @@ begin
 						resetloop(PLr);
 						price = price/cnt;
 	//path to image
-						FindAndStoreINVcImgLink(INr,currentcompany,pathToImg,tstr);
+						FindAndStoreINVcImgLink(INr,curcomp,pathToImg,tstr);
 						Ccntr = 0;
 						Scntr = 0;
 						rowcnt = 0;
@@ -887,17 +907,7 @@ begin
   record ITVc ITr;
   integer i,char,oldCompany;
   longint curtick;
-  array integer companies;
   testf = true;
-  
-  companies[0] = currentcompany;
-  logtext(0, "-----1");
-  if(currentcompany!=18 and RepSpec.flags[5]!=0)then begin
-		companies[1] = 18;
-		logtext(0, "-----2");
-  end;
-  
-			
   curtick = getcurtick();
   if nonblank(RepSpec.f1) then begin
 	DIr.Code = RepSpec.f1;
@@ -974,7 +984,7 @@ begin
 	if RepSpec.flags[1]==1 then begin
 	  ImagesExcel2(RepSpec);
 	end else begin
-	  ImagesExcel(RepSpec, companies);
+	  ImagesExcel(RepSpec);
 	end;
 	StartReportNoHeaderJob("Ћстатки по складам с картинками");
 	  StartFormat(15);
