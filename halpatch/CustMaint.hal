@@ -5431,21 +5431,78 @@ begin
 return;
 end;
 
-global updating procedure CollectXMLItems()
+global updating procedure CreateGlobalItem(string code, string  brand, string price, string name)
+begin
+	record  GlobalItemVc GIr;
+	GIr.Code = "ECMX€" & code;
+	if(ReadFirstMain(GIr,1,true)) then begin
+		if(GIr.Price != StringToVal(price,M4Val)) then begin
+			GIr.Price = StringToVal(price,M4Val);
+			RecordStore(GIr,true);
+		end;
+	end else begin
+		GIr.Code = "ECMX€" & code;
+		GIr.Brand = brand;
+		GIr.Price =  StringToVal(price,M4Val);
+		GIr.Name = name;
+		RecordStore(GIr,true);
+	end;
+return;
+end;
+
+global procedure CollectXMLItems()
 begin
 	record ORVc ORr;
 	area text,replyPr;
-	string 255 tstr;
-	integer i,posa,cnt;
+	string 255 tstr,code,brand,price,name,paramName,parseString,coding;
+	integer i,posa,cnt,paramCnt,j,countstr,s;
 	xml xmlreply;
+	boolean codeCheck;
 	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
 	logtext(0,"start");
 	xmlreply = ParseXMLArea(replyPr);
+	posa = 0;
 	cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
-	logtext(0,"end");
 	for(i=0;i<cnt;i=i+1) begin
-		AddTextToArea(XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]","id") & " " & XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/price") & " " & XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/vendor") & chr(13),text);
+		brand = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
+		price = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/price");
+		name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/model");
+		j = 0;
+		code = "";
+		paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		while(nonblank(paramName)) begin
+			coding = "";
+			coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
+			if(coding == "åêâèçèòû") then begin
+				parseString = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
+				posa = 0;
+				ExtractObj(parseString,posa,tstr);
+				while(nonblank(tstr)) begin
+					codeCheck = false;
+					tstr = Trim(tstr);
+					if (len(tstr) == 11) then begin
+						codeCheck = true;
+						for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
+							if(asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57)  then begin
+								codeCheck = false;
+							end;
+						end;
+					end;
+					if(codeCheck) then begin
+						code = tstr;
+					end;
+					ExtractObj(parseString,posa,tstr);
+				end;
+			end;
+			j = j + 1;
+			paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		end;
+		if(nonblank(code)) then begin 
+			queued.CreateGlobalItem(code,brand,price,name);
+			MilliSleep(500);
+		end;
 	end;
+	logtext(0,"end");
 	writeareatofile(text,"areafromrequest.txt",0);
 
 return;
