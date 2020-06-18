@@ -22,6 +22,7 @@ remote procedure RetPUVc_PasteLocation(var record RetPUVc,Integer);
 remote procedure RetPUVc_PasteVendor(var record RetPUVc,Integer);
 remote function Boolean RetPUVc_PasteArtCode(var record RetPUVc,Integer,Boolean,Boolean);
 external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
+external procedure GetObjs(string,string,var string);
 
 global
 procedure RetPUSumUp(var record RetPUVc RetPUp)
@@ -202,6 +203,35 @@ BEGIN
     PutWindowRecord(wn,RetPUr);
   end;
   RetPUDClassArtCodeEFAfter = true;
+  return;
+end;
+function Boolean RetPUDClassVEItemCodeEFAfter(Integer wn, Integer rownr,Integer changed)
+BEGIN
+  record RetPUVc RetPUr;
+	row RetPUVc RetPUrw;
+	record ConsItemVc ConsIr;
+	record CUVc CUr;
+	string 255 brand;
+  if (changed!=0) then begin
+    GetWindowRecord(wn,RetPUr);
+		matrowget(RetPUr,rownr,RetPUrw);
+		if(nonblank(RetPUrw.VEItemCode) and currentCompany==18) then begin
+			CUr.Code = RetPUr.VECode;
+			if(ReadFirstMain(CUr,1,true)) then begin
+			  brand = "";
+				GetObjs("BRAND",CUr.VEObjects,brand);
+				ConsIr.LocCode = RetPUrw.VEItemCode;
+				ConsIr.BrandCode = brand;
+				if(readfirstKey("LocCodeBrand",ConsIr,2,true))then begin
+					RetPUrw.ArtCode = ConsIr.Code;
+					matrowput(RetPUr,rownr,RetPUrw);
+					RetPUVc_PasteArtCode(RetPUr,rownr,1,false);
+				end;
+			end;
+		end;
+    PutWindowRecord(wn,RetPUr);
+  end;
+  RetPUDClassVEItemCodeEFAfter = true;
   return;
 end;
 
@@ -465,6 +495,8 @@ BEGIN
 		case "VECode": res = RetPUDClassVECodeEFAfter(wn,rownr,changed);
 		case "ArtCode": res = RetPUDClassArtCodeEFAfter(wn,rownr,changed);
 		case "CurncyCode": res = RetPUDClassCurncyCodeEFAfter(wn,changed);
+		case "VEItemCode": res = RetPUDClassVEItemCodeEFAfter(wn,rownr,changed);
+		
   end;
   RetPUDClassAfterEditField = res;
   RETURN;
