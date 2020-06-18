@@ -210,22 +210,36 @@ BEGIN
   record RetPUVc RetPUr;
 	row RetPUVc RetPUrw;
 	record ConsItemVc ConsIr;
-	record CUVc CUr;
+	record INVc INr;
 	string 255 brand;
+	boolean TrHs;
+	integer count;
   if (changed!=0) then begin
     GetWindowRecord(wn,RetPUr);
 		matrowget(RetPUr,rownr,RetPUrw);
 		if(nonblank(RetPUrw.VEItemCode) and currentCompany==18) then begin
-			CUr.Code = RetPUr.VECode;
-			if(ReadFirstMain(CUr,1,true)) then begin
-			  brand = "";
-				GetObjs("BRAND",CUr.VEObjects,brand);
-				ConsIr.LocCode = RetPUrw.VEItemCode;
-				ConsIr.BrandCode = brand;
-				if(readfirstKey("LocCodeBrand",ConsIr,2,true))then begin
-					RetPUrw.ArtCode = ConsIr.Code;
-					matrowput(RetPUr,rownr,RetPUrw);
-					RetPUVc_PasteArtCode(RetPUr,rownr,1,false);
+			while(LoopKey("AlternativeCode",INr,1,TrHs)) begin
+				if(INr.AlternativeCode!=RetPUrw.VEItemCode) then begin TrHs = false; end;
+				if(TrHs) then begin
+					count = count + 1;
+				end;
+			end;
+			ResetLoop(INr);
+			if(count==1) then begin
+				INr.AlternativeCode = RetPUrw.VEItemCode;
+				ReadFirstKey("AlternativeCode",INr,1,true);
+				RetPUrw.ArtCode = INr.Code;
+				matrowput(RetPUr,rownr,RetPUrw);
+				PutWindowRecord(wn,RetPUr);
+				RetPUDClassArtCodeEFAfter(wn,rownr,1);
+			end else begin
+				matrowput(RetPUr,rownr,RetPUrw);
+				PutWindowRecord(wn,RetPUr);
+				RetPUDClassArtCodeEFAfter(wn,rownr,changed);
+				GetWindowRecord(wn,RetPUr);
+				matrowget(RetPUr,rownr,RetPUrw);
+				if(!nonblank(RetPUrw.ArtCode)) then begin
+					messagebox(0,"‘уществует несколько товаров с разными брендами, уточните код товара " & RetPUrw.VEItemCode);
 				end;
 			end;
 		end;
