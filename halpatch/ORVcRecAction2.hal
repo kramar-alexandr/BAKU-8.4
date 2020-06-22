@@ -1092,14 +1092,14 @@ begin
 	row CompaniesBlock Comprw;
 	record WEBReservStock WRSb;
 	longint i,j,rwcnt,orrwcnt,res,itemsincomp,OldComp,NxtSerNr,c,GIrwcnt,l,lc,mtrw,prcnt;
-	vector boolean ORItemToLocalOR, ItemSearchf, Compf, PasteItemGroupf, ECStockedItems; 	
+	vector boolean ORItemToLocalOR, ItemSearchf, Compf, PasteItemGroupf, ECStockedItems, vExtPrPrefixes; 	
 	vector integer ItemInStocks, NeedItQty, vItemCompQty, ItemDuplicate, ResStockQuant, StockPrioryty, vItemComp, DeSellComp, ItemGroup, PriceQuant;
 	array string 255 ArtCodes, ItemBrands;
-	string 255 strlc,HansaArtCode,Store,strlc2, rowkey, inwarn, war;
-	integer pos, pos2, p, maxp, qtyItpos, rownr, allitemqty, sbrqty;
+	string 255 strlc,HansaArtCode,Store,strlc2, rowkey, inwarn, war, ExtPrFullName;
+	integer pos, pos2, p, maxp, qtyItpos, rownr, allitemqty, sbrqty, extPrCnt;
 	boolean testf,TrHs,Insertf,warf,chsum,ECStItf;
 	record INVc INr;
-	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock, PriorityStock;
+	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock, PriorityStock, vPrefExt;
 	record GlobalItemVc GIr, GI2r, GI3r;
 	row GlobalItemVc GIrw, GI2rw;
 	record RLinkVc RLr;
@@ -1114,6 +1114,7 @@ begin
 	row POVc POrw;
 	record AccBlock ARb;
 	record LoyaltyCardVc LoyCardr;
+	record ExpProvItemRegVc EPIr;
 	
 	BlockLoad(ECMUb);
 	BlockLoad(ARb);
@@ -1147,16 +1148,25 @@ begin
 	orrwcnt = matrowcnt(ORr);
 	if(orrwcnt>0)then begin
 		RecordCopy(ORGroupr,ORr);
+		extPrCnt = 0;
 		for (i=orrwcnt-1;i>=0;i=i-1)begin
 			matrowget(ORr,i,ORrw);
 			INr.Code = ORrw.ArtCode;
 			if(blank(ORrw.ArtCode))then begin
 				INr.Code = mid(ORrw.GlobalItemArtCode,9,len(ORrw.GlobalItemArtCode)-9);
 			end;
-			if(ReadFirstMain(INr,1,true) and nonblank(INr.Group))then begin
+			if(ReadFirstMain(INr,1,true) and INr.ExtProwItRegulations>0)then begin
+				EPIr.SerNr = INr.ExtProwItRegulations;
+				if (readfirstmain(EPIr,1,true)) then begin
+					if(!vExtPrPrefixes[EPIr.PrefCode]) then begin
+						vExtPrPrefixes[EPIr.PrefCode] = true;
+						vPrefExt[extPrCnt] = EPIr.PrefCode;
+						extPrCnt = extPrCnt + 1;
+					end;
+				end;
 				ECStockedItems[INr.Code] = true;
 				ECStItf = true;
-				ORr.OrderClass = "SABIN";
+				ORr.OrderClass = "EXTPR";
 				ORrw.SerialNr = ORr.OrderClass & ORr.SerNr;
 				sbrqty = sbrqty + 1;
 				MatRowPut(ORr,i,ORrw);
@@ -1230,8 +1240,20 @@ begin
 			NeedItQty[ArtCodes[i] & i] = ORrw.Quant;
 			DeSellComp[ArtCodes[i] & i] = ORrw.ECReservComp;
 			DeSellStock[ArtCodes[i] & i] = ORrw.ECReservStock;
-			if(left(ArtCodes[i],2)=="SB" and len(ArtCodes[i])==7)then begin
-				ItemSearchf[ArtCodes[i] & i] = false;
+			INr.Code = ArtCodes[i];
+			if(ReadFirstMain(INr,1,true) and INr.ExtProwItRegulations>0)then begin
+				EPIr.SerNr = INr.ExtProwItRegulations;
+				if (ReadFirstMain(EPIr,1,true)) then begin
+					if(left(ArtCodes[i],len(EPIr.PrefCode))==EPIr.PrefCode)then begin
+						if (EPIr.PrefCode!="SB") then begin
+							ItemSearchf[ArtCodes[i] & i] = false;
+						end else begin
+							if (len(ArtCodes[i])==7) then begin
+								ItemSearchf[ArtCodes[i] & i] = false;
+							end;
+						end;
+					end;
+				end;
 			end;
 		end;
 	end;
@@ -1546,21 +1568,39 @@ begin
 	if(ECStItf and ORr.OrderConfirmed==1)then begin
 		mtrw = matrowcnt(ORr);
     if(mtrw>0 and nonblank(ORr.OrderClass) and ORr.Closed==0)then begin
-    	ECCreatestockItPOfromOR(ORr,POr);
-			RecordCopy(OldPOr,POr);
-			mtrw = matrowcnt(POr);
-			for (i=mtrw-1;i>=0;i=i-1) begin
-				matrowget(POr,i,POrw);
-				if(!ECStockedItems[POrw.ArtCode])then begin
-					matrowdelete(POr,i);
+			for (j=0;j<extPrCnt;j=j+1) begin 
+				EPIr.PrefCode = vPrefExt[j];
+				readfirstkey("PrefCode",EPIr,1,true);
+				ECCreatestockItPOfromOR(ORr,POr);
+				RecordCopy(OldPOr,POr);
+				mtrw = matrowcnt(POr);
+				for (i=mtrw-1;i>=0;i=i-1) begin
+					matrowget(POr,i,POrw);
+					if(!ECStockedItems[POrw.ArtCode])then begin
+						matrowdelete(POr,i);
+					end else begin
+						logtext(0,POrw.ArtCode & " <> " & vPrefExt[j]);
+						logtext(0,left(POrw.ArtCode,len(vPrefExt[j])) & " <> " & vPrefExt[j]);
+						if (left(POrw.ArtCode,len(vPrefExt[j]))!=vPrefExt[j]) then begin
+							matrowdelete(POr,i);
+						end;
+					end;
+				end;
+				if (matrowcnt(POr)==0) then begin
+					recorddelete(POr);
+				end else begin
+					vExtPrPrefixes[EPIr.PrefCode] = false;
+					POr.AllowOtherVEItem = 1;
+					POr.VECode = EPIr.Comment;
+					POVc_PasteVECode(POr,true);
+					POr.PayDeal = "PP";
+					POr.CheckCurncyCode = POr.CurncyCode;
+					POSumup(POr);
+					if (RecordUpdate(OldPOr,POr,true)!=0) then begin
+						recorddelete(POr);
+					end;
 				end;
 			end;
-			POr.VECode = "SABINA_PC_LLC";
-			POVc_PasteVECode(POr,true);
-			POr.PayDeal = "PP";
-			POr.CheckCurncyCode = POr.CurncyCode;
-			POSumup(POr);
-			RecordUpdate(OldPOr,POr,true);
     end else begin
     	Beep;
     	if(blank(ORr.OrderClass))then begin
