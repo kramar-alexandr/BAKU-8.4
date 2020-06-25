@@ -1548,6 +1548,78 @@ end;
 
 
 
+global webpublic updating procedure WebFindErrorsCostPrFromIDGroup2()  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:50 23.06.2020
+begin
+	record NewINVc NINr;
+	row NewINVc NINrw;
+	longint NewINSerNr, i, mainComp, j;
+	record CompaniesBlock CBb;	
+	row CompaniesBlock CBrw;	
+	array integer aCompNo;
+	record ConsItemVc CIr;
+	record PUVc PUr;
+	record ItemHistVc IHr;
+	val CostInCurrency;
+	string 255 correncyCode;
+	date PUTransDate, blankTD;
+	record INVc INr;
+	
+	blockload(CBb);
+	mainComp = 18;
+	SetCompany(mainComp,false);
+
+	NewINSerNr = StringToLongInt(WebGetArg("newinno"));
+	if (NewINSerNr) then begin
+		NINr.SerNr = NewINSerNr;
+		if (readfirstmain(NINr,1,true)) then begin
+			for (i=0;i<matrowcnt(NINr);i=i+1) begin
+				matrowget(NINr,i,NINrw);
+				CIr.Code = NINrw.Code;
+				PUTransDate = blankTD;
+				CostInCurrency = blankval;
+				correncyCode = "";
+				if (ReadFirstMain(CIr,1,true)) then begin
+					IHr.ArtCode = NINrw.Code;
+					IHr.FileName = "PUVc";
+					if (ReadLastKey("FNArtCode",IHr,2,true)) then begin
+						PUTransDate = IHr.TransDate;
+						CostInCurrency = IHr.TotCostPriceCurncy/IHr.Qty;
+						correncyCode = IHr.RemCostPriceCurncy;
+					end;
+					for (j=0;j<matrowcnt(CBb);j=j+1) begin
+						matrowget(CBb,j,CBrw);
+						if(CBrw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3) and j+1!=18 and j+1!=33 and j+1!=32)then begin
+							SetCompany(j+1,false);
+							INr.Code = CIr.LocCode;
+							if (readfirstMain(INr,1,true)) then begin
+								if (INr.BPIBrand==CIr.BrandCode) then begin
+									IHr.ArtCode = CIr.LocCode;
+									IHr.FileName = "PUVc";
+									if (ReadLastKey("FNArtCode",IHr,2,true)) then begin
+										if (PUTransDate < IHr.TransDate) then begin
+											if (IHr.TotCostPriceCurncy/IHr.Qty!=INr.LastPurchPrice2) then begin
+												weboutstring("Company: " & CBrw.ShortName & " IDG ItemCode: " & CIr.Code & " Company ItemCode: " & CIr.LocCode & " In INVc LPP: " & INr.LastPurchPrice2 & " In PUVc Price: " & IHr.TotCostPriceCurncy/IHr.Qty);
+											end;
+										end else begin
+											if (CostInCurrency!=INr.LastPurchPrice2) then begin
+												weboutstring("Company: " & CBrw.ShortName & " IDG ItemCode: " & CIr.Code & " Company ItemCode: " & CIr.LocCode & " In INVc LPP: " & INr.LastPurchPrice2 & " In PUVc Price: " & CostInCurrency);
+											end;
+										end;
+									end;
+								end;
+							end;
+						end;
+					end;
+					resetcompany(mainComp);
+				end;
+			end;
+		end;
+	end else begin
+	
+	end;
+	
+return;
+end;
 
 global webpublic updating procedure WebFindErrorCostPrFromIDGroup()  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:50 23.06.2020
 begin
