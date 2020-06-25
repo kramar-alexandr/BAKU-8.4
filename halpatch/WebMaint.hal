@@ -1552,17 +1552,19 @@ global webpublic updating procedure WebFindErrorsCostPrFromIDGroup2()  // _-_-_-
 begin
 	record NewINVc NINr;
 	row NewINVc NINrw;
-	longint NewINSerNr, i, mainComp, j;
+	longint NewINSerNr, i, mainComp, j, y;
 	record CompaniesBlock CBb;	
 	row CompaniesBlock CBrw;	
 	array integer aCompNo;
 	record ConsItemVc CIr;
 	record PUVc PUr;
 	record ItemHistVc IHr;
-	val CostInCurrency;
+	val CostInCurrency, POCompCost, POIDCost;
 	string 255 correncyCode;
-	date PUTransDate, blankTD;
+	date PUTransDate, blankTD, POIDDate;
 	record INVc INr;
+	record POVc POr;
+	row POVc POrw;
 	
 	blockload(CBb);
 	mainComp = 18;
@@ -1585,6 +1587,22 @@ begin
 						PUTransDate = IHr.TransDate;
 						CostInCurrency = IHr.TotCostPriceCurncy/IHr.Qty;
 						correncyCode = IHr.RemCostPriceCurncy;
+						POr.TransDate = PUTransDate;
+						POIDCost = blankval;
+						POIDDate = blankTD;
+						while (loopkey("TransDate",POr,1,true)) begin
+							if (POr.OKFlag==1) then begin
+								for (y=0;y<matrowcnt(POr);y=y+1) begin
+									matrowget(POr,y,POrw);
+									if (POrw.ArtCode == CIr.LocCode) then begin
+										POIDCost = POrw.Price;
+										POIDDate = POr.TransDate;
+									end;
+								end;
+							end;
+						end;
+						resetloop(POr);
+						
 						for (j=0;j<matrowcnt(CBb);j=j+1) begin
 							matrowget(CBb,j,CBrw);
 							if(CBrw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3) and j+1!=18 and j+1!=33 and j+1!=32)then begin
@@ -1597,6 +1615,34 @@ begin
 										if (ReadLastKey("FNArtCode",IHr,2,true)) then begin
 											PUr.SerNr = IHr.TransNr;
 											if (ReadFirstMain(PUr,1,true)) then begin end;
+											if (PUr.TransDate>PUTransDate) then begin
+												POr.TransDate = PUr.TransDate;
+											end else begin
+												POr.TransDate = PUTransDate;
+											end;
+											if (POIDDate>POr.TransDate) then begin
+												POr.TransDate = POIDDate;
+											end;
+											POCompCost = blankval;
+											while (loopkey("TransDate",POr,1,true)) begin
+												if (POr.OKFlag==1) then begin
+													for (y=0;y<matrowcnt(POr);y=y+1) begin
+														matrowget(POr,y,POrw);
+														if (POrw.ArtCode == CIr.LocCode) then begin
+															POCompCost = POrw.Price;
+														end;
+													end;
+												end;
+											end;
+											if (POCompCost!=blankval and POCompCost != INr.LastPurchPrice2) then begin
+												weboutstring("Company: " & CBrw.ShortName & " IDG ItemCode: " & CIr.Code & " Company ItemCode: " & CIr.LocCode & " In INVc LPP: " & INr.LastPurchPrice2 & " In PUVc Price: " & POCompCost & " From PO in current company");
+												weboutstring("<BR>");
+											end;
+											if (POCompCost==blankval and POIDCost!=INr.LastPurchPrice2 and POIDCost!=INr.LastPurchPrice2 and POIDDate>IHr.TransDate) then begin
+												weboutstring("Company: " & CBrw.ShortName & " IDG ItemCode: " & CIr.Code & " Company ItemCode: " & CIr.LocCode & " In INVc LPP: " & INr.LastPurchPrice2 & " In PUVc Price: " & POIDCost & " From PU in IDG company");
+												weboutstring("<BR>");
+											end;
+											resetloop(POr);
 											if (PUTransDate < IHr.TransDate and left(PUr.VECode,3)!="FOB") then begin
 												if (IHr.TotCostPriceCurncy/IHr.Qty!=INr.LastPurchPrice2) then begin
 													weboutstring("Company: " & CBrw.ShortName & " IDG ItemCode: " & CIr.Code & " Company ItemCode: " & CIr.LocCode & " In INVc LPP: " & INr.LastPurchPrice2 & " In PUVc Price: " & IHr.TotCostPriceCurncy/IHr.Qty & " From PU in current company");
