@@ -731,6 +731,107 @@ begin
 return;
 end;
 
+global updating procedure SaveItemsFromRetPUDsm()//_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-ABR 17:25 18.06.2020
+begin
+	integer wn,i,mtrw,rwcnt,j;
+	record RetPUVc RetPUr;
+	row RetPUVc RetPUrw;
+	record NotepadVc Noter,newNoter;
+	integer notenr, pos;
+	record SerBalVc SBr;
+	string 100 tstr,qtstr;
+	boolean serialfoundf,TrHs,testf;
+  record RLinkVc RLr;
+  boolean notercreate,skip;
+  vector boolean vartcode;
+	vector Integer vquant;
+	boolean deleteFlag;
+	
+	recordnew(newNoter);
+	
+	notercreate = false;
+	
+	wn = curwindow;
+	if(windowstate(wn)==0)then begin
+		getwindowrecord(wn,RetPUr);
+		if(RetPUr.OKFlag==0)then begin
+			mtrw = matrowcnt(RetPUr);
+			notenr = 1;
+			while (ReadRecordLink(RetPUr,notenr,Noter,RLr)) begin
+				if ("DEL"==Noter.Classification) then begin
+			
+					rwcnt = LineTextCnt(Noter);
+					for (i=0;i<rwcnt;i=i+1) begin
+						pos = 0;
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,tstr);
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,qtstr);
+						if(nonblank(tstr))then begin
+							vartcode[tstr] = true;
+							vquant[tstr] = StringToInt(qtstr);
+						end;
+					end;  
+				end;
+				notenr = notenr + 1;
+			end;
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(RetPUr,i,RetPUrw);
+				if (currentcompany!=18) then begin
+					if(vartcode[RetPUrw.ArtCode]==true)then begin
+						if(vquant[RetPUrw.ArtCode]!=RetPUrw.Quant and nonblank(vquant[RetPUrw.ArtCode]) and vquant[RetPUrw.ArtCode]!=0)then begin
+							RetPUrw.Quant = vquant[RetPUrw.ArtCode];
+						end;
+					end;
+					if(vartcode[RetPUrw.ArtCode]!=true)then begin
+						if(blank(RetPUrw.VEItemCode))then begin
+							matrowdelete(RetPUr,i);
+							i=i-1;
+							mtrw = mtrw - 1;
+						end else begin
+							RetPUrw.Quant = 0;
+							matrowput(RetPUr,i,RetPUrw);
+						end;
+					end;
+				end else begin
+					deleteFlag = false;
+					if(vartcode[RetPUrw.ArtCode]==true)then begin
+						if(vquant[RetPUrw.ArtCode]!=RetPUrw.Quant and nonblank(vquant[RetPUrw.ArtCode]) and vquant[RetPUrw.ArtCode]!=0)then begin
+							RetPUrw.Quant = vquant[RetPUrw.ArtCode];
+							matrowput(RetPUr,i,RetPUrw);
+						end;
+					end;
+					if(vartcode[RetPUrw.ArtCode]!=true and vartcode[RetPUrw.VEItemCode]!=true)then begin
+						matrowdelete(RetPUr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
+						deleteFlag = true;
+					end;
+					if(vartcode[RetPUrw.VEItemCode]==true)then begin
+						if(vquant[RetPUrw.VEItemCode]!=RetPUrw.Quant and nonblank(vquant[RetPUrw.VEItemCode]) and vquant[RetPUrw.VEItemCode]!=0)then begin
+							RetPUrw.Quant = vquant[RetPUrw.VEItemCode];
+							matrowput(RetPUr,i,RetPUrw);
+						end;
+					end;
+					if(vartcode[RetPUrw.VEItemCode]!=true and vartcode[RetPUrw.ArtCode]!=true and !deleteFlag)then begin
+						matrowdelete(RetPUr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
+					end;
+				end;
+			end; 
+			putwindowrecord(wn,RetPUr);
+			RetPUSumUp(RetPUr);
+			putwindowrecord(wn,RetPUr);
+			MessageBox(0,"Были сохранены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне поступления");
+		end else begin
+			messagebox(0,"Запись должна быть разокеена");
+		end;
+	end else begin
+		messagebox(0,"Сначала сохраните запись");
+	end;
+	
+return;
+end;
+
 
 
 
