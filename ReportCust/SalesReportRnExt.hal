@@ -656,7 +656,7 @@ begin
   integer ctypecnt,m; //Edit***************************Sasha2,12:24 11.11.2015
   array string 10 typeindex; //Edit***************************Sasha2,14:08 11.11.2015
   vector string 255 dispnames; //Edit***************************Sasha2,14:08 11.11.2015
-  
+  record IVVc locIVr;
   vector string 20 typeval; //Edit***************************Sasha2,14:11 08.02.2016
   array string 20 typecode; //Edit***************************Sasha2,14:11 08.02.2016
   vector string 200 typename; //Edit***************************Sasha2,14:11 08.02.2016
@@ -677,9 +677,15 @@ begin
   record MarketingVc MCr;
   vector string 200 vVisitName,vVisitPhone;
   record CUVc CUr;
+	record LCCashbackLevelVc LCCBLevelr;
+  row LCCashbackLevelVc LCCBLevelrw;
+  record LoyaltyCardVc LoyaltyCardr;
+  roundmode rnd;
+  Boolean found;
+  Integer rowcnt,rwcnt2;
+  val loyCardPointsBalance,cashbackPercent;
   
   userbrandf = CheckUserBrands(currentuser,userbrand);
-	
 	
   blockload(BCb);
   bcur = BCb.BaseCur1;
@@ -1012,6 +1018,9 @@ begin
   					outstring(0,0,USetStr(31073),false);
   					
 					end;
+					if(currentcompany==25 and RepSpec.flags[2]!=0) then begin
+						outstring(0,0,"Текущий процент при покупке",false);
+					end;
 					//if (addclassf) then begin //Edit***************************Sasha2,14:00 08.02.2016 {
     			 // for (j=30;j<typescnt;j=j+1) begin //if you change "30" do it in other places having "For" loop 
       		 //   outstring(0,0,typename[typecode[j]],false);
@@ -1080,9 +1089,34 @@ begin
 						end;
 					end;
 				end;
-			
+				LCCBLevelr.LCMLevel = "CASACOIN";
+				found = ReadFirstMain(LCCBLevelr,1,true);
 				TrHs = true;
 				while(loopkey(keystr,IVr,keyi,TrHs)) begin
+					if(CurrentCompany==25 and RepSpec.flags[2]!=0) then begin
+						cashbackPercent = 0;
+						LoyaltyCardr.SerNr = IVr.LoyaltyCardNr;
+						if ((nonblank(IVr.LoyaltyCardNr) and ReadFirstMain(LoyaltyCardr,1,true))) then begin
+							rnd = DefaultValRoundoff;
+							rnd.decimals = 2;
+							rnd.mode = kRoundingModeHalfUp;
+							loyCardPointsBalance = LoyaltyCardr.CashbackLevelPoints;
+							rowcnt = MatRowCnt(IVr);							
+							if (found) then begin						
+								rnd.decimals = LCCBLevelr.RndTo;
+								rwcnt = MatRowCnt(LCCBLevelr);
+								for (i=0;i<rwcnt;i=i+1) begin
+									MatRowGet(LCCBLevelr,i,LCCBLevelrw);
+									if (LCCBLevelrw.FromPoints<=loyCardPointsBalance and LCCBLevelrw.CashbackPercent>0) then begin									
+										if (LCCBLevelrw.ToPoints>=loyCardPointsBalance or LCCBLevelrw.ToPoints==BlankVal) then begin
+											cashbackPercent = LCCBLevelrw.CashbackPercent;
+											i = rwcnt;
+										end;
+									end;
+								end;
+							end;	
+						end;
+					end;
 					testf = true;
 					cred = 1;
 					if(IVr.InvType==kInvoiceTypeCredit)then begin
@@ -1812,7 +1846,13 @@ begin
 												end; 
 												MyClearVector(dispnames,typeindex,ctypecnt);*/ //Edit***************************Sasha2,15:28 11.11.2015 }
 											end;
-											
+										if(currentcompany==25 and RepSpec.flags[2]!=0) then begin
+											if(cashbackPercent!=0) then begin
+												outstring(0,0,cashbackPercent,false);
+											end else begin
+												outstring(0,0,"",false);
+											end;
+										end;	
 										if (modef) then begin	//Edit***************************Sasha2,11:12 20.11.2014								
 											endformat;
 										end;
