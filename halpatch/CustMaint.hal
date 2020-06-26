@@ -25,6 +25,7 @@ external updating procedure SendUpdateContactToCRM(var record CUVc);
 remote updating procedure CreateECPOfromLocalORForCOVID19Period(record SHVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 15:58 24.03.2020
 remote updating procedure ORLClassYellowColour(longint); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 15:29 14.04.2020
 external procedure CheckFlush(var Integer,Integer);
+external procedure NextCode(string,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -5471,7 +5472,11 @@ end;
 
 global updating procedure CreateGlobalItem(string code, string  brand, string price, string name)
 begin
-	record  GlobalItemVc GIr;
+	record GlobalItemVc GIr;
+	record BTRxBrandVc BtrxBrndr, oldBrandr;
+	boolean ExtPrBrandf, TrHs;
+	string 255 OldCode;
+	
 	GIr.Code = "ECMX€" & code;
 	if(ReadFirstMain(GIr,1,true)) then begin
 		if(GIr.Price != StringToVal(price,M4Val)) then begin
@@ -5479,13 +5484,43 @@ begin
 			RecordStore(GIr,true);
 		end;
 	end else begin
+		ExtPrBrandf = false;
+		BtrxBrndr.Name = brand;
+		TrHs = true;
+		while (loopkey("Name",BtrxBrndr,1,TrHs)) begin
+			if (BtrxBrndr.Name != brand) then begin TrHs = false; end;
+			if (TrHs) then begin
+				if (left(BtrxBrndr.Code,4)=="MXBR") then begin
+					ExtPrBrandf = true;
+				end;
+			end;
+		end;
+		if (!ExtPrBrandf) then begin
+			oldBrandr.Code = "MXBR9999";
+			TrHs = true;
+			while (LoopBackKey("Code",oldBrandr,1,TrHs)) begin
+				if (left(oldBrandr.Code,4)!="MXBR") then begin TrHs = false; end;
+				if (TrHs) then begin
+					OldCode = oldBrandr.Code;
+					TrHs = false;
+				end;
+			end;
+			ResetLoop(oldBrandr);
+			if(blank(OldCode))then begin OldCode = "MXBR0000"; end;
+			NextCode(OldCode,BtrxBrndr.Code);
+			recordnew(BtrxBrndr);
+			BtrxBrndr.Name = brand;
+			RecordStore (BtrxBrndr,true);
+		end;
 		GIr.Code = "ECMX€" & code;
 		GIr.HansaCode = "ECMX€" & code;
 		GIr.ExtProwItRegulations = 2;
 		GIr.Brand = brand;
 		GIr.Price =  StringToVal(price,M4Val);
 		GIr.Name = name;
-		RecordStore(GIr,true);
+		if (RecordStore(GIr,true)) then begin
+			logtext(0,"MAXI Global Item created: " & GIr.Code);
+		end;
 	end;
 return;
 end;
@@ -5542,7 +5577,7 @@ begin
 		end;
 		if(nonblank(code)) then begin 
 			queued.CreateGlobalItem(code,brand,price,name);
-			MilliSleep(500);
+			MilliSleep(30);
 		end;
 	end;
 	logtext(0,"end");
