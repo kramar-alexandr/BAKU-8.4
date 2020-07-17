@@ -5524,9 +5524,11 @@ end;
 global updating procedure CreateGlobalItem(string code, string  brand, string price, string name)
 begin
 	record GlobalItemVc GIr;
+	row GlobalItemVc GIrw;
 	record BTRxBrandVc BtrxBrndr, oldBrandr;
 	boolean ExtPrBrandf, TrHs;
 	string 255 OldCode, ExistBRNdCode;
+	longint i;
 	ExistBRNdCode = "";
 	logtext(0,"CreateGlobalItem MAXI")
 	GIr.Code = "ECMX€" & code;
@@ -5535,6 +5537,19 @@ begin
 			GIr.Price = StringToVal(price,M4Val);
 			RecordStore(GIr,true);
 		end;
+		// if(gethour(currenttime)>=7 and getminute(currenttime)<=8/* and fileexists("demoserver")*/)then begin
+			if (matrowcnt(GIr)<1) then begin
+				GIrw.Location = "MAIN";
+				GIrw.Instock = 2;
+				matrowput (GIr,0,GIrw);
+			end;
+			for (i=0;i<matrowcnt(GIr);i=i+1) begin
+				matrowget (GIr,i,GIrw);
+				GIrw.Instock = 2;
+				matrowput (GIr,i,GIrw);
+			end;
+			RecordStore(GIr,true);
+		// end;
 		if (blank(GIr.BPIBrand) and nonblank(brand)) then begin
 			ExtPrBrandf = false;
 			BtrxBrndr.Name = brand;
@@ -5567,7 +5582,10 @@ begin
 				ExistBRNdCode = BtrxBrndr.Code;
 			end;
 			GIr.BPIBrand = ExistBRNdCode;
-			RecordStore(GIr,true);
+
+			if (RecordStore(GIr,true)) then begin
+				logtext(0,"MAXI Global Item updated: " & GIr.Code);
+			end;
 		end;
 	end else begin
 		if (nonblank(brand)) then begin
@@ -5609,12 +5627,56 @@ begin
 		GIr.BPIBrand = ExistBRNdCode;
 		GIr.Price =  StringToVal(price,M4Val);
 		GIr.Name = name;
+		if (matrowcnt(GIr)<1) then begin
+			GIrw.Location = "MAIN";
+			GIrw.Instock = 2;
+			matrowput (GIr,0,GIrw);
+		end;
+		for (i=0;i<matrowcnt(GIr);i=i+1) begin
+			matrowget (GIr,i,GIrw);
+			GIrw.Instock = 2;
+			matrowput (GIr,i,GIrw);
+		end;
+		RecordStore(GIr,true);
 		if (RecordStore(GIr,true)) then begin
 			logtext(0,"MAXI Global Item created: " & GIr.Code);
 		end;
 	end;
 return;
 end;
+
+
+global updating procedure Instock0(string code)
+begin
+	record GlobalItemVc GIr;
+	row GlobalItemVc GIrw;
+	record BTRxBrandVc BtrxBrndr, oldBrandr;
+	boolean ExtPrBrandf, TrHs;
+	string 255 OldCode, ExistBRNdCode;
+	longint i;
+	ExistBRNdCode = "";
+	logtext(0,"CreateGlobalItem MAXI")
+	GIr.Code = code;
+	if(ReadFirstMain(GIr,1,true)) then begin
+		// if(gethour(currenttime)>=7 and getminute(currenttime)<=8/* and fileexists("demoserver")*/)then begin
+			if (matrowcnt(GIr)<1) then begin
+				GIrw.Location = "MAIN";
+				GIrw.Instock = 0;
+				matrowput (GIr,0,GIrw);
+			end;
+			for (i=0;i<matrowcnt(GIr);i=i+1) begin
+				matrowget (GIr,i,GIrw);
+				GIrw.Instock = 0;
+				matrowput (GIr,i,GIrw);
+			end;
+			RecordStore(GIr,true);
+			logtext(0,GIr.Code & "InStock = 0");
+		// end;	
+	end;
+return;
+end;
+
+
 
 global procedure CollectXMLItems()
 begin
@@ -5623,7 +5685,10 @@ begin
 	string 255 tstr,code,brand,price,name,paramName,parseString,coding;
 	integer i,posa,cnt,paramCnt,j,countstr,s;
 	xml xmlreply;
-	boolean codeCheck;
+	boolean codeCheck, TrHs;
+	vector boolean CodeInstf;
+	record GlobalItemVc GIr;
+	
 	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
 	logtext(0,"start");
 	xmlreply = ParseXMLArea(replyPr);
@@ -5668,7 +5733,17 @@ begin
 		end;
 		if(nonblank(code)) then begin 
 			queued.CreateGlobalItem(code,brand,price,name);
-			MilliSleep(30);
+			MilliSleep(50);
+			CodeInstf["ECMX€" & code] = true;
+		end;
+	end;
+	GIr.Code = "ECMX€00000000001";
+	TrHs = true;
+	while (loopMain(Gir,1,TrHs)) begin
+		if (left(GIr.Code,5)!="ECMX€") then begin TrHs = false; end;
+		if (TrHs and !CodeInstf[GIr.Code]) then begin
+			queued.Instock0(GIr.Code);
+			MilliSleep(50);
 		end;
 	end;
 	logtext(0,"end");
@@ -5676,5 +5751,76 @@ begin
 
 return;
 end;
+
+
+
+
+
+global webpublic procedure WebGetOfferIDAndArtCodeFromXML()
+begin
+	record ORVc ORr;
+	area text,replyPr;
+	string 255 tstr,code,brand,price,name,paramName,parseString,coding,offerID;
+	integer i,posa,cnt,paramCnt,j,countstr,s;
+	xml xmlreply;
+	boolean codeCheck;
+	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
+	logtext(0,"start");
+	xmlreply = ParseXMLArea(replyPr);
+	posa = 0;
+	cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
+	for(i=0;i<cnt;i=i+1) begin
+		brand = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
+		price = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/price");
+		name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/description");
+		if(blank(name)) then begin
+			name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/model");
+		end;
+		j = 0;
+		code = "";
+		offerID = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]","id");
+		paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		while(nonblank(paramName)) begin
+			coding = "";
+			coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
+			if(coding == "åêâèçèòû") then begin
+				parseString = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
+				posa = 0;
+				ExtractObj(parseString,posa,tstr);
+				while(nonblank(tstr)) begin
+					codeCheck = false;
+					tstr = Trim(tstr);
+					if (len(tstr) == 11) then begin
+						codeCheck = true;
+						for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
+							if(asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57)  then begin
+								codeCheck = false;
+							end;
+						end;
+					end;
+					if(codeCheck) then begin
+						code = tstr;
+					end;
+					ExtractObj(parseString,posa,tstr);
+				end;
+			end;
+			j = j + 1;
+			paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		end;
+		if(nonblank(code)) then begin 
+			WebOutString(offerID & "______________" & code );
+			weboutstring("<BR>");
+		end;
+	end;
+	logtext(0,"end");
+	writeareatofile(text,"areafromrequest.txt",0);
+
+return;
+end;
+
+
+
+
+
 
 

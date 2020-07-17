@@ -139,6 +139,303 @@ begin
 return;
 end;
 
+
+global procedure FillClassInM4Text(var record GlobalItemVc GIr, string ClassMachName ,string ClassNameENG, string ClassNameRUS, string ClassNameAZE, 
+																																			string ValENG, string ValRUS, string ValAZE)
+begin
+	longint tlcnt,i,newtlcnt;
+	string 255 linestr;
+	array string 255 TextLinesArray, oldTextLinesArray, Class;
+	
+	
+	newtlcnt = 0;
+	tlcnt = LineTextCnt(GIr);
+	if (tlcnt > 1) then begin
+		for (i=0;i<tlcnt;i=i+1) begin
+			linestr = LineTextGet	(GIr,i);
+			if (linestr == chr(09) & "\"" & ClassMachName & "\":{") then begin
+				TextLinesArray[newtlcnt - 1] = chr(09) & "}";
+				while (linestr!=chr(09) & "}" and linestr!=chr(09) & "}," and i<tlcnt) begin
+					i = i + 1;
+					linestr = LineTextGet	(GIr,i);
+				end;
+			end else begin
+				TextLinesArray[newtlcnt] = linestr;
+				newtlcnt = newtlcnt + 1;
+			end;
+		end;
+	end;
+	
+	if (newtlcnt<tlcnt) then begin
+		for (i=0;i<tlcnt;i=i+1) begin
+			if (nonblank(TextLinesArray[i])) then begin
+				LineTextPut	(GIr,i,TextLinesArray[i]);
+			end else begin
+				LineTextPut	(GIr,i,"");
+			end;
+		end;
+	end;
+	
+	
+	tlcnt = LineTextCnt(GIr);
+	if (tlcnt > 1) then begin
+		for (i=tlcnt-1;i>=0;i=i-1) begin
+			linestr = LineTextGet	(GIr,i);
+			if (linestr == "}") then begin
+				tlcnt = i - 1;
+				if (LineTextGet	(GIr,i-1)==chr(09) & "}") then begin
+					LineTextPut	(GIr,i-1,chr(09) & "},");
+				end;
+				i=0;
+			end;
+			if (linestr == chr(09) & "}") then begin
+				tlcnt = i;
+				LineTextPut	(GIr,tlcnt,chr(09) & "},");
+				i=0;
+			end;
+		end;
+	end;
+	if (tlcnt==0 or LineTextGet(GIr,0)!="{") then begin
+		LineTextPut	(GIr,tlcnt,"{");
+		tlcnt = 1;
+	end else begin
+		tlcnt = tlcnt + 1;
+	end;
+	if (LineTextGet(GIr,1)=="") then begin
+		tlcnt = 1;
+	end;
+	LineTextPut	(GIr,tlcnt,chr(09) & "\"" & ClassMachName & "\":{");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & "\"Name\":{");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"ENG\":\"" & ClassNameENG & "\"\,");
+	tlcnt = tlcnt + 1;
+	if (nonblank(ClassNameRUS)) then begin
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"RUS\":\"" & ClassNameRUS & "\"\,");
+		tlcnt = tlcnt + 1;
+	end;
+	if (nonblank(ClassNameAZE)) then begin
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"AZE\":\"" & ClassNameAZE & "\"");
+		tlcnt = tlcnt + 1;
+	end;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & "},");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & "\"Value\":{");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"ENG\":\"" & ValENG & "\"\,");
+	tlcnt = tlcnt + 1;
+	if (nonblank(ValRUS)) then begin
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"RUS\":\"" & ValRUS & "\"\,");
+		tlcnt = tlcnt + 1;
+	end;
+	if (nonblank(ValAZE)) then begin
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"AZE\":\"" & ValAZE & "\"");
+		tlcnt = tlcnt + 1;
+	end;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & "}");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,chr(09) & "}");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,"}");
+	tlcnt = tlcnt + 1;
+return;
+end;
+
+
+global updating procedure SaveGI (record GlobalItemVc GIr)
+begin
+	RecordStore(GIr,true);
+	// logtext(0,GIr.Code);
+return;
+end;
+
+global webpublic procedure WebClearClassInJSON()
+begin
+	record GlobalItemVc GIr, blankGIr;
+	boolean TrHs;
+	longint tlcnt,i;
+	
+	SetCompany(1,false);
+	GIr.Code = "";
+	TrHs = true;
+	while (LoopMain(GIr,1,TrHs)) begin
+		if(fileexists("stop"))then begin TrHs = false; end;
+		if (LineTextCnt(GIr)>0) then begin
+			tlcnt = LineTextCnt(GIr);
+			for (i=0;i<tlcnt;i=i+1) begin
+				LineTextPut	(GIr,i,"");
+			end;
+			queued.SaveGI(GIr);
+			MilliSleep(50);
+		end;
+	end;
+	return;
+end;
+
+
+
+
+global webpublic procedure WebFillHNForMAXI()
+begin
+record GlobalItemVc GIr;
+boolean TrHs;
+
+	logtext(0,"WebReFillClassInJSON START");
+	GIr.Code = "ECMXА00000000000";
+	TrHs = true;
+	while (LoopMain(GIr,1,TrHs)) begin
+		if(fileexists("stop"))then begin TrHs = false; end;
+		if(left(GIr.Code,5)!="ECMXА")then begin TrHs = false; end;
+		if (TrHs) then begin
+			GIr.HansaName = GIr.Name;
+			queued.SaveGI(GIr);
+			MilliSleep(100);
+		end;
+	end;
+	resetloop(GIr);
+	logtext(0,"WebReFillClassInJSON FINISH");
+return;
+end;
+
+
+global webpublic procedure WebReFillClassInJSON()
+begin
+	record GlobalItemVc GIr;
+	record JSONClassNamesVc JCNr;
+	string 255 line;
+	longint tlcnt;
+	array string 255 TextLinesArray, oldTextLinesArray, Class;
+	record BtrxAllMaterialsVc BAMr;
+	record BtrxComplicationsVc BCr;
+	record BtrxStoveCompatVc SCr;
+	record BtrxMicrowaveProtectVc BMPr;
+	record BtrxPlatingVc BPr;
+	record BtrxPowerReserveVc BPRr;
+	record BtrxWaterResistantVc BWRr;
+	record BtrxMaterialVc BMr;
+	record BtrxColourVc BClr;
+	boolean TrHs;
+	
+	SetCompany(1,false);
+	GIr.Code = "BRND0187_1877156030";
+	TrHs = true;
+	while (LoopMain(GIr,1,TrHs)) begin
+		if(fileexists("stop"))then begin TrHs = false; end;
+		if (nonblank(GIr.BtrxAllMaterials)) then begin
+			JCNr.Code = "ALL_MATERIALS";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				BAMr.Code = GIr.BtrxAllMaterials;
+				if (ReadFirstMain(BAMr,1,true)) then begin
+					FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,BAMr.Name,BAMr.NameRUS,BAMr.NameAZ);
+				end;
+			end;
+		end;
+		if (nonblank(GIr.BtrxComplications)) then begin
+			JCNr.Code = "COMPLICATIONS";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				BCr.Code = GIr.BtrxComplications;
+				if (ReadFirstMain(BCr,1,true)) then begin
+					FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,BCr.Name,BCr.NameRUS,BCr.NameAZ);
+				end;
+			end;
+		end;
+		if (nonblank(GIr.StrBTRxSetQty)) then begin
+			JCNr.Code = "QUANTITY_IN_SET";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,GIr.StrBTRxSetQty,GIr.StrBTRxSetQty,GIr.StrBTRxSetQty);
+			end;
+		end;
+		// if (nonblank(GIr.BtrxStoveCompat)) then begin
+			// JCNr.Code = "MATCHES_THIS_KITCHEN_STOVE";
+			// if (ReadFirstMain(JCNr,1,true)) then begin
+				// SCr.Code = GIr.BtrxStoveCompat;
+				// if (ReadFirstMain(SCr,1,true)) then begin
+					// FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,SCr.Name,SCr.NameRUS,SCr.NameAZ);
+				// end;
+			// end;
+		// end;
+		if (nonblank(GIr.BtrxMicrowaveProtect)) then begin
+			JCNr.Code = "MICROWAVE_SAFE";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				BMPr.Code = GIr.BtrxMicrowaveProtect;
+				if (ReadFirstMain(BMPr,1,true)) then begin
+					FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,BMPr.Name,BMPr.NameRUS,BMPr.NameAZ);
+				end;
+			end;
+		end;
+		if (nonblank(GIr.BPIPlating)) then begin
+			JCNr.Code = "PLATING";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				BPr.Code = GIr.BPIPlating;
+				if (ReadFirstMain(BPr,1,true)) then begin
+					FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,BPr.Name,BPr.NameRUS,BPr.NameAZ);
+				end;
+			end;
+		end;
+		if (nonblank(GIr.BTRxPowerReserve)) then begin
+			JCNr.Code = "POWER_RESERVE";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				BPRr.Code = GIr.BTRxPowerReserve;
+				if (ReadFirstMain(BPRr,1,true)) then begin
+					FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,BPRr.Name,BPRr.NameRUS,BPRr.NameAZ);
+				end;
+			end;
+		end;
+		if (nonblank(GIr.BtrxScratchRes)) then begin
+			JCNr.Code = "SCTRATCH_RESISTANT";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,GIr.BtrxScratchRes,GIr.BtrxScratchRes,GIr.BtrxScratchRes);
+			end;
+		end;
+		if (nonblank(GIr.BtrxWarranty)) then begin
+			JCNr.Code = "WARANTY_INFORMATION";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,GIr.BtrxWarranty,GIr.BtrxWarranty,GIr.BtrxWarranty);
+			end;
+		end;
+		if (nonblank(GIr.BTRxWatterRes)) then begin
+			JCNr.Code = "WATER_RESISTANT";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				BWRr.Code = GIr.BTRxWatterRes;
+				if (ReadFirstMain(BWRr,1,true)) then begin
+					FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,BWRr.Name,BWRr.NameRUS,BWRr.NameAZ);
+				end;
+			end;
+		end;
+		if (nonblank(GIr.StrWeight)) then begin
+			JCNr.Code = "WEIGHT";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,GIr.StrWeight,GIr.StrWeight,GIr.StrWeight);
+			end;
+		end;
+		if (nonblank(GIr.BtrxClockFaceMaterial)) then begin
+			JCNr.Code = "DIAL_MATERIAL";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				BMr.Code = GIr.BtrxClockFaceMaterial;
+				if (ReadFirstMain(BMr,1,true)) then begin
+					FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,BMr.Name,BMr.NameRUS,BMr.NameAZ);
+				end;
+			end;
+		end;
+		if (nonblank(GIr.BtrxClockFaceColour)) then begin
+			JCNr.Code = "DIAL_COLOR";
+			if (ReadFirstMain(JCNr,1,true)) then begin
+				BClr.Code = GIr.BtrxClockFaceColour;
+				if (ReadFirstMain(BClr,1,true)) then begin
+					FillClassInM4Text(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,BClr.Name,BClr.NameRUS,BClr.NameAZ);
+				end;
+			end;
+		end;
+		if (LineTextCnt(GIr)>0) then begin
+			queued.SaveGI(GIr);
+		end;
+		MilliSleep(50);
+	end;
+return;
+end;
+
+
+
 global webpublic updating procedure WebRestoreCustomNames()
 begin
 	record RHistVc RHr;
@@ -935,6 +1232,110 @@ begin
 	weboutstring("<BR>");
 return;
 end;
+
+
+
+global webpublic updating procedure WebFindBlankPathToCompPOInIDGroupComp()
+begin
+	record ORVc ORr, OrigORr;
+	record RHistVc RHr;
+	string 255 tstr;
+	
+	SetCompany(18,false);
+	ORr.SerNr = -1;
+	while (loopmain(ORr,1,true)) begin
+		if (ORr.OrderClass=="CLIEN" and blank(ORr.OfficialSerNr)) then begin
+			tstr = BuildRecordIdStr(ORr,18);
+			
+			RHr.RecidStr = tstr;
+			if(readfirstkey("RecidStr",RHr,1,true))then begin
+				ReadOriginalRecord(RHr,OrigORr);	
+				if(ORr.OfficialSerNr!=OrigORr.OfficialSerNr and nonblank(OrigORr.OfficialSerNr))then begin
+					weboutstring(" Restore OR " & ORr.SerNr & " for OfficialSerNr " & OrigORr.OfficialSerNr);
+					weboutstring("<BR>");
+					// ORr.Name = OrigORr.Name;
+					// recordstore(ORr,true);
+				end;
+			
+			end;		
+			
+		
+		
+			weboutstring("OR SerNr: " & ORr.SerNr );
+			weboutstring("<BR>");
+		end;
+	end;
+
+return;
+end;
+
+global webpublic updating procedure WebFixBlankPathToCompPOInIDGroupComp()
+begin
+	record ORVc ORr, OrigORr;
+	record RHistVc RHr;
+	string 255 tstr;
+	
+	SetCompany(18,false);
+	ORr.SerNr = -1;
+	while (loopmain(ORr,1,true)) begin
+		if (ORr.OrderClass=="CLIEN" and blank(ORr.OfficialSerNr)) then begin
+			tstr = BuildRecordIdStr(ORr,18);
+			
+			RHr.RecidStr = tstr;
+			if(readfirstkey("RecidStr",RHr,1,true))then begin
+				ReadOriginalRecord(RHr,OrigORr);	
+				if(ORr.OfficialSerNr!=OrigORr.OfficialSerNr and nonblank(OrigORr.OfficialSerNr))then begin
+					ORr.OfficialSerNr = OrigORr.OfficialSerNr;
+					recordstore(ORr,true);
+				end;
+			end;		
+		end;
+	end;
+
+return;
+end;
+
+
+
+
+
+
+
+
+
+global webpublic updating procedure WebFixBlankPathToCompPOInIDGroupComp2()
+begin
+	record PUVc PUr;
+	row PUVc PUrw;
+	record ItemHistVc IHr;
+	string 255 tstr;
+	integer i;
+	
+	SetCompany(25,false);
+	PUr.SerNr = 2312;
+	if (ReadFirstMain(PUr,1,true)) then begin
+		for (i=0;i<matrowcnt(PUr);i=i+1) begin
+			matrowget (PUr,i,PUrw);
+			if (nonblank(PUrw.ArtCode)) then begin
+				IHr.FileName = "PUVc";
+				IHr.TransNr = PUr.SerNr;
+				IHr.Row = i;
+				if(ReadFirstKey("FNTransNr",IHr,3,true)) then begin
+					IHr.TransDate = stringtodate("10/01/2020");
+					IHr.FIFODate = stringtodate("10/01/2020");
+					recordStore(IHr,true);
+				end;
+			end;
+		end;
+		PUr.TransDate = stringtodate("10/01/2020");
+		recordstore(PUr,true);
+	end;
+return;
+end;
+
+
+
+
 
 
 
@@ -3607,5 +4008,25 @@ begin
 	
 	
 	
+return;
+end;
+
+global webpublic updating procedure WebGetPing()
+begin
+	record CUVc CUr;
+	record INVc INr;
+	record IVVc IVr;
+	
+	
+	setcompany(1,false);
+	CUr.Code = random(1000,9999);
+	readfirstmain(CUr,1,false);
+	INr.Code = random(1000,9999);
+	readfirstmain(INr,1,false);
+	INr.Code = random(10000,99999);
+	readfirstmain(INr,1,false);
+	
+	weboutstring(random(0,5));
+
 return;
 end;

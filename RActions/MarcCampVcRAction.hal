@@ -4052,18 +4052,19 @@ LongInt port,pos,mtrw,cnter;
 global
  updating procedure SyncAllIVtoCRM()
  begin
- record CUVc CUr;
- record IVVc IVr;
- integer i,CompQty;
- string 100 CustCode;
- record CompaniesBlock Compb;
- row CompaniesBlock Comprw;
- boolean TrHs,TrHsCU,testf;
- string 255 host,tstr,nonce,opaque,page;
-LongInt port,pos,mtrw,cnter;
+	record CUVc CUr;
+	record IVVc IVr;
+	integer i,CompQty;
+	string 100 CustCode;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	boolean TrHs,TrHsCU,testf;
+	string 255 host,tstr,nonce,opaque,page;
+	LongInt port,pos,mtrw,cnter,LastComp,LastIVVc,StartComp,StartIV,keys;
 	record WebReportChBlock WRChb;
 	Area req,reply;
 	json jsresponse;
+	area Ar, OldAr;
  	
  	blockload(WRChb);		
  	BlockLoad(Compb);
@@ -4073,40 +4074,74 @@ LongInt port,pos,mtrw,cnter;
 	port = 8088;
 	logtext(0,"CURIPADDRESS" & CURIPADDRESS); 
 	if(fileexists("demoserver"))then begin
-	 port = 8087;
+		port = 8087;
 		logtext(0,"newport 8087");
+		testf = true;
 	end;
-	
-	TrHsCU = true;
-	CompQty = matrowcnt(Compb);
-	if(currenttime>stringtotime("02:00:00") and currenttime<stringtotime("08:00:00"))then begin
-		for (i=4;i<25;i=i+1)begin
+	if (true) then begin
+		addfiletoarea("LASTSYNCCRMPROCESS.txt",OldAr,0);
+		StartComp = StringToLongInt(GetLineFromArea(OldAr,0));
+		logtext(0,"StartComp " & StartComp);
+		if (StartComp<1) then begin StartComp = 1; end;
+		StartIV = StringToLongInt(GetLineFromArea(OldAr,1));
+		logtext(0,"StartIV " & StartIV);
+		createfile("SYNCCRMPROCESS");
+		
+		TrHsCU = true;
+		CompQty = matrowcnt(Compb);
+		for(i=StartComp-1;i<CompQty;i=i+1) begin
 			matrowget(Compb,i,Comprw);
 			if(Comprw.ActiveStatus==0 and (i+1)!=10)then begin
 				SetCompany(i+1,false);
-				IVr.InvDate = stringtodate("01/01/2016");
-				while(loopkey("InvDate",IVr,1,TrHsCU))begin
+				IVr.InvDate = stringtodate("30/03/2019");
+				keys = 1;
+				if (CurrentCompany==StartComp and fileexists("LASTSYNCCRMPROCESS.txt")) then begin
+					IVr.SerNr = StartIV;
+					keys = 2;
+				end;
+				TrHsCU = true;
+				while(loopBackkey("InvDate",IVr,keys,TrHsCU))begin
+					logtext(0,IVr.SerNr);
 					testf = true;
-					if(left(IVr.CustCode,6)=="NONAME")then begin testf = false; end;
-					if(left(IVr.CustCode,3)=="FOB")then begin testf = false; end;
-					if(nonblank(IVr.CRMid))then begin testf = false; end;
-					If(IVr.OKFlag==0 or IVr.Invalid>0) then begin testf = false; end;
-					if(currenttime>stringtotime("08:00:00"))then begin TrHsCU = false; testf = false; end;
-					if(currenttime<stringtotime("02:00:00"))then begin TrHsCU = false; testf = false; end;
-					if(fileexists("stop"))then begin TrHsCU = false; testf = false; end;
-		
+					If(IVr.OKFlag==0 or IVr.Invalid>0 or (IVr.SerNr>StartIV and CurrentCompany==StartComp)) then begin  testf = false; end;
+					if(fileexists("stop"))then begin  TrHsCU = false; testf = false; end;
+					if(IVr.InvDate < stringtodate("01/01/2018"))then begin  TrHsCU = false; testf = false; end;
+					if (gethour(currenttime)==0 and getminute(currenttime)>=25) then begin TrHsCU = false; testf = false; end;
 					if(testf)then begin
-						logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
-						SendUpdateIVVisitToCRM(IVr);
 						if(nonblank(IVr.CRMid))then begin
-							recordstore(IVr,true);
-							cnter = cnter + 1;
+							logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
+							LastComp = i+1;
+							LastIVVc = IVr.SerNr;
+							SendUpdateIVVisitToCRM(IVr);
+							if(nonblank(IVr.CRMid))then begin
+								recordstore(IVr,true);
+								LastComp = i+1;
+								LastIVVc = IVr.SerNr;
+								cnter = cnter + 1;
+							end;
+						end else begin
+							logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
+							LastComp = i+1;
+							LastIVVc = IVr.SerNr;
+							SendUpdateIVVisitToCRM(IVr);
+							if(nonblank(IVr.CRMid))then begin
+								recordstore(IVr,true);
+								LastComp = i+1;
+								LastIVVc = IVr.SerNr;
+								cnter = cnter + 1;
+							end;
 						end;
 					end;
 				end;
 				resetloop(IVr);
 			end;
 		end;
+		AddTextToArea	(LastComp & chr(10) & LastIVVc,Ar);
+		Delete_File("LASTSYNCCRMPROCESS.txt");
+		Delete_File("SYNCCRMPROCESS");
+		createfile("LASTSYNCCRMPROCESS.txt");
+		WriteAreaToFile	(Ar,"LASTSYNCCRMPROCESS.txt",0);
+		runprogram("chmod","-R a+rw LASTSYNCCRMPROCESS.txt");
 	end;
  return;
  end;
@@ -4129,10 +4164,7 @@ LongInt port,pos,mtrw,cnter;
  	
  	blockload(WRChb);		
  	BlockLoad(Compb);
-	
-	host = "192.168.3.11";
-	page = "/api/LoyaltyCard/Update";
-	port = 8088;
+
 	logtext(0,"CURIPADDRESS" & CURIPADDRESS); 
 	if(fileexists("demoserver"))then begin
 	 port = 8087;
@@ -4141,28 +4173,32 @@ LongInt port,pos,mtrw,cnter;
 	
 	TrHsCU = true;
 	CompQty = matrowcnt(Compb);
-	if(true)then begin
+	for(i=0;i<CompQty;i=i+1) begin
 			matrowget(Compb,i,Comprw);
 			if(Comprw.ActiveStatus==0 and (i+1)!=10)then begin
-				SetCompany(4,false);
-				IVr.InvDate = stringtodate("20/06/2020");
+				SetCompany(i+1,false);
+				IVr.InvDate = stringtodate("01/02/2019");
 				while(loopkey("InvDate",IVr,1,TrHsCU))begin
 					logtext(0,IVr.SerNr);
 					testf = true;
-					// if(left(IVr.CustCode,6)=="NONAME")then begin logtext(0,"NONAME"); testf = false; end;
-					// if(left(IVr.CustCode,3)=="FOB")then begin logtext(0,"FOB"); testf = false; end;
-					if(blank(IVr.CRMid))then begin logtext(0,"CRMID"); testf = false; end;
 					If(IVr.OKFlag==0 or IVr.Invalid>0) then begin logtext(0,"4"); testf = false; end;
-					// if(currenttime>stringtotime("08:00:00"))then begin TrHsCU = false; testf = false; end;
-					// if(currenttime<stringtotime("02:00:00"))then begin TrHsCU = false; testf = false; end;
 					if(fileexists("stop"))then begin logtext(0,"5");  TrHsCU = false; testf = false; end;
-		
+					if(IVr.InvDate > stringtodate("01/03/2019"))then begin  TrHsCU = false; testf = false; end;
 					if(testf)then begin
-						logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
-						SendUpdateIVVisitToCRM(IVr);
 						if(nonblank(IVr.CRMid))then begin
-							recordstore(IVr,true);
-							cnter = cnter + 1;
+							logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
+							SendUpdateIVVisitToCRM(IVr);
+							if(nonblank(IVr.CRMid))then begin
+								recordstore(IVr,true);
+								cnter = cnter + 1;
+							end;
+						end else begin
+							logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
+							SendUpdateIVVisitToCRM(IVr);
+							if(nonblank(IVr.CRMid))then begin
+								recordstore(IVr,true);
+								cnter = cnter + 1;
+							end;
 						end;
 					end;
 				end;
