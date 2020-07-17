@@ -9,7 +9,9 @@ external function string 255 imgStrReplace(string);// Edit *********************
 external procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var string);
 external  function string 100 BPICodeToName(string);
 external function boolean CheckUserBrands(string,var vector boolean);
-
+external procedure GetPriceItem(string,var val,var val);
+remote function Boolean GetTempItemPrice(var val,string,var string, date,var string);
+external function roundmode GetTotalRoundMode(record RoundBlock);
 
 SetLangMode(LangRussian,"RUS",0); //Edit***************************Sasha2,18:20 11.12.2014
 
@@ -1325,7 +1327,12 @@ begin
 	record ORVc ORr;
 	row ORVc ORrw;
 	record BPIBrandVc Brndr;
-	date dat;
+	date dat,sd;
+	val ITRebate,TempItemPrice, inprice;
+	string 255 tpcurrency,crn,obj;
+	record RoundBlock RB;
+	
+	blockload(RB);
 	
   rmode5 = SetRoundMode(0,kRoundingDirectionToFromPosInf,kRoundingModeHalfUp,/*kRoundingStep5*/kRoundingStepNone);	//Edit----------------------Dima  17.04.2015
   
@@ -1758,7 +1765,27 @@ begin
 			end;
 			brandprice = baseprice / to1 * fr;
 		end; 
-		
+		if(RepSpec.flags[6]) then begin
+			GetPriceItem(INr.Code,inprice,ITRebate);
+			if (GetTempItemPrice(TempItemPrice,INr.Code,tpcurrency,CurrentDate,obj)) then begin
+				if(tpcurrency!="AZN")then begin
+					crn = tpcurrency;
+					sd = CurrentDate;
+					fr = 0;
+					to1 = 0;
+					to2 = 0;
+					br1 = 0;
+					br2 = 0;
+					GetFullCurncyRate(crn,sd,fr,to1,to2,br1,br2);
+					TempItemPrice = TempItemPrice/fr*to1;
+				end;
+			end;
+			if(TempItemPrice!=0) begin
+				outstring(0,0,round(TempItemPrice - TempItemPrice*ITRebate/100,GetTotalRoundMode(RB)),false);
+			end else begin
+				outstring(0,0,round(inprice - inprice*ITRebate/100,GetTotalRoundMode(RB)),false);
+			end;
+		end;
 		outval(0,0,price,m4val,false);
 		if(nonblank(brandcur))then begin
 			outval(0,0,brandprice,m4val,false);
@@ -2983,7 +3010,12 @@ begin
   if(RepSpec.flags[8]==0) then begin
 		startreportnoheaderjob(USetStr(31179));
 	end;	
-  
+  if(RepSpec.flags[6] and blank(RepSpec.f4)) then begin
+		startformat(15);
+			outstring(0,0,USetStr(36353),false);
+		endformat;
+		goto LItemStockStatExtRn;
+	end;
   
   if(blank(todate))then begin
   	todate = currentdate;
@@ -3093,6 +3125,9 @@ begin
 					outstring(0,0,USetStr(31058) & basecur,false);			
 				end;
 				outstring(0,0,"Цена последней закупки в валюте Бренда",false);
+				if(RepSpec.flags[6]) then begin
+					outstring(0,0,USetStr(36360),false); // Cena so skidkoi
+				end;
 				outstring(0,0,USetStr(31059),false);
 				if(nonblank(brandcur))then begin
 					outstring(0,0,USetStr(31061) & brandcur,false);
@@ -3108,6 +3143,9 @@ begin
 				outstring(0,0,USetStr(31171),false);// Sebestoimost za ed-cu v valute PLN
 				outstring(0,0,USetStr(31056),false);// Summa po Sebestoimosti v valute brenda
 				outstring(0,0,USetStr(31172),false);// Summa po Sebestoimosti v valute PLN
+				if(RepSpec.flags[3]) then begin
+					outstring(0,0,USetStr(36360),false);// Cena so skidkoi
+				end;
 				outstring(0,0,"Цена последней закупки в валюте Бренда",false);
 				outstring(0,0,USetStr(31059),false);// Riteil za ed-cu v valute brenda
 				outstring(0,0,USetStr(31173),false);// Riteil za ed-cu v valute PLN
