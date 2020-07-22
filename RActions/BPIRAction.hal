@@ -280,6 +280,67 @@ BEGIN
 return;
 end;
 
+
+global updating function LongInt CheckDuplicesInAllCompanies (string OrigCode, string DupCode, var longint errorComp)
+begin
+	longint i, res;
+	integer OrigCompany;
+	record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+	record INVc INr;
+	record ConsItemVc CIr;
+	string 255 thisDupCode, thisOrigCode;
+	
+	res = 0;
+	OrigCompany = CurrentCompany;
+	
+	blockload(Compb);
+	
+	errorComp = 0;
+	
+	if (OrigCompany==18) then begin
+		CIr.Code = DupCode;
+		if (ReadFirstMain(Cir,1,true)) then begin
+			thisDupCode = CIr.LocCode;
+		end;
+		CIr.Code = OrigCode;
+		if (ReadFirstMain(Cir,1,true)) then begin
+			thisOrigCode = CIr.LocCode;
+		end;
+	end else begin
+		thisOrigCode = OrigCode;
+		thisDupCode = DupCode;
+	end;
+	
+	for(i=1;i<=matrowcnt(Compb);i=i+1)begin
+		setcompany(i,false);
+		matrowget(Compb,i-1,Comprw);
+		if((CompanyIsJWLikeCompany(i)==false or i==3) and Comprw.ActiveStatus==0 and i!=CurrentCompany and i!=18 and i!=29) then begin
+			INr.Code = thisOrigCode;
+			if (ReadFirstMain(INr,1,true)) then begin
+				if (blank(INr.BPIBrand)) then begin
+					res = 36365;
+					errorComp = i;
+				end;
+			end;
+			INr.Code = thisDupCode;
+			if (ReadFirstMain(INr,1,true)) then begin
+				if (blank(INr.BPIBrand)) then begin
+					res = 36366;
+					errorComp = i;
+				end;
+			end;
+		end;
+	end;
+	
+	ResetCompany(OrigCompany);
+	CheckDuplicesInAllCompanies = res;
+return;
+end;
+
+
+
+
 global updating procedure CreateDuplicesInAllCompanies (string OrigCode, string DupCode)
 begin
 	integer OrigCompany;
@@ -289,28 +350,100 @@ begin
 	record CompaniesBlock Compb;
   row CompaniesBlock Comprw;
 	longint i;
-	string 255 OrigBrand, DubBrand;
+	string 255 OrigBrand, DubBrand, ConsOrigCode, ConsDupCode, OtherCompOrigBrand, OtherCompDubBrand, thisOrigCode, thisDupCode;
 	
 	blockload(Compb);
 	OrigCompany = CurrentCompany;
-	
-	INr.Code = OrigCode;
-	if (ReadFirstMain(INr,1,true)) then begin
-		OrigBrand = INr.BPIBrand;
-	end;
-	
-	INr.Code = DupCode;
-	if (ReadFirstMain(INr,1,true)) then begin
-		DubBrand = INr.BPIBrand;
-	end;
-	
-	
-	for(i=1;i<26;i=i+1)begin
-		setcompany(i,false);
-		matrowget(Compb,i-1,Comprw);
-		if((CompanyIsJWLikeCompany(i)==false or i==3) and Comprw.ActiveStatus==0) then begin
-		
+	if (nonblank(OrigCode) and nonblank(DupCode)) then begin
+		if (OrigCompany!=18) then begin
+			INr.Code = OrigCode;
+			if (ReadFirstMain(INr,1,true)) then begin
+				OrigBrand = INr.BPIBrand;
+			end;
+			
+			INr.Code = DupCode;
+			if (ReadFirstMain(INr,1,true)) then begin
+				DubBrand = INr.BPIBrand;
+			end;
+			
+			IDr.DupCode = DupCode;
+			IDr.OrigCode = OrigCode;
+			if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
+				RecordNew(IDr);
+				IDr.DupCode = DupCode;
+				IDr.OrigCode = OrigCode;
+				RecordStore(IDr,true);
+			end;
+			SetCompany(18,false);
+			CIr.LocCode = OrigCode;
+			CIr.BrandCode = OrigBrand;
+			if (ReadFirstKey("LocCode",CIr,2,true)) then begin
+				ConsOrigCode = CIr.Code;
+			end;
+			
+			CIr.LocCode = DupCode;
+			CIr.BrandCode = DubBrand;
+			if (ReadFirstKey("LocCode",CIr,2,true)) then begin
+				ConsDupCode = CIr.Code;
+			end;
+			
+			IDr.DupCode = ConsDupCode;
+			IDr.OrigCode = ConsOrigCode;
+			if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
+				RecordNew(IDr);
+				IDr.DupCode = ConsDupCode;
+				IDr.OrigCode = ConsOrigCode;
+				RecordStore(IDr,true);
+			end;
+			thisDupCode = DupCode;
+			thisOrigCode = OrigCode;
+		end else begin
+			IDr.DupCode = DupCode;
+			IDr.OrigCode = OrigCode;
+			if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
+				RecordNew(IDr);
+				IDr.DupCode = DupCode;
+				IDr.OrigCode = OrigCode;
+				RecordStore(IDr,true);
+			end;
+			CIr.Code = DupCode;
+			if (ReadFirstMain(Cir,1,true)) then begin
+				thisDupCode = CIr.LocCode;
+			end;
+			CIr.Code = OrigCode;
+			if (ReadFirstMain(Cir,1,true)) then begin
+				thisOrigCode = CIr.LocCode;
+			end;
 		end;
+		
+		for(i=1;i<=matrowcnt(Compb);i=i+1)begin
+			setcompany(i,false);
+			matrowget(Compb,i-1,Comprw);
+			if((CompanyIsJWLikeCompany(i)==false or i==3) and Comprw.ActiveStatus==0 and i!=OrigCompany and i!=18) then begin
+				OtherCompOrigBrand = "";
+				OtherCompDubBrand = "";
+				INr.Code = thisOrigCode;
+				if (ReadFirstMain(INr,1,true)) then begin
+					OtherCompOrigBrand = INr.BPIBrand;
+				end;
+				
+				INr.Code = thisDupCode;
+				if (ReadFirstMain(INr,1,true)) then begin
+					OtherCompDubBrand = INr.BPIBrand;
+				end;
+				if (OtherCompOrigBrand==OrigBrand and OtherCompDubBrand==DubBrand) then begin
+					IDr.DupCode = thisDupCode;
+					IDr.OrigCode = thisOrigCode;
+					if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
+						RecordNew(IDr);
+						IDr.DupCode = thisDupCode;
+						IDr.OrigCode = thisOrigCode;
+						RecordStore(IDr,true);
+					end;
+				end;
+			end;
+		end;
+		resetCompany (OrigCompany);
 	end;
 	
 return
@@ -2799,16 +2932,39 @@ end;
 global
 updating function LongInt ItemDuplicatesVcRecordCheck(var record ItemDuplicatesVc IDr,record ItemDuplicatesVc ID2r,LongInt stat,LongInt long4)
 begin
-	longint res;
+	longint res, ErrComp;
+	record INVc INr;
 	
 	res = 0;
 	if(blank(IDr.OrigCode))then begin
-		RecordCheckError(36358,"",-1,"OrigCode");      
+		RecordCheckError(36361,"",-1,"OrigCode");      
 		res = -1;
 		goto LItemDuplicatesVcRecordCheck;
 	end;
 	if(blank(IDr.DupCode))then begin
-		RecordCheckError(36359,"",-1,"DupCode");      
+		RecordCheckError(36362,"",-1,"DupCode");      
+		res = -1;
+		goto LItemDuplicatesVcRecordCheck;
+	end;
+	INr.Code = IDr.OrigCode;
+	if (ReadFirstMain(INr,1,true)) then begin
+		if (blank(INr.BPIBrand)) then begin
+			RecordCheckError(36363,"",-1,"OrigCode");      
+			res = -1;
+			goto LItemDuplicatesVcRecordCheck;
+		end;
+	end;
+	INr.Code = IDr.DupCode;
+	if (ReadFirstMain(INr,1,true)) then begin
+		if (blank(INr.BPIBrand)) then begin
+			RecordCheckError(36364,"",-1,"DupCode");      
+			res = -1;
+			goto LItemDuplicatesVcRecordCheck;
+		end;
+	end;
+	res = CheckDuplicesInAllCompanies(IDr.OrigCode,IDr.DupCode,ErrComp);
+	if (res!=0) then begin
+		RecordCheckError(res,ErrComp,-1,"DupCode");      
 		res = -1;
 		goto LItemDuplicatesVcRecordCheck;
 	end;
@@ -2816,6 +2972,34 @@ begin
 	ItemDuplicatesVcRecordCheck = res;
 	return;
 end;
+
+
+global
+updating function LongInt ItemDuplicatesVcRecordSaveAfter(var record ItemDuplicatesVc IDr,record ItemDuplicatesVc ID2r,LongInt stat,LongInt long4)
+begin
+	longint res;
+	res = 0;
+
+	CreateDuplicesInAllCompanies (IDr.OrigCode, IDr.DupCode);
+
+		
+	ItemDuplicatesVcRecordSaveAfter = res; 
+return;
+end; 
+
+
+global
+updating function LongInt ItemDuplicatesVcRecordUpdateAfter(var record ItemDuplicatesVc IDr,record ItemDuplicatesVc ID2r,LongInt stat,LongInt long4)
+begin
+	longint res;
+	res = 0;
+
+	CreateDuplicesInAllCompanies (IDr.OrigCode, IDr.DupCode);
+
+		
+	ItemDuplicatesVcRecordUpdateAfter = res; 
+return;
+end; 
 
 
 
