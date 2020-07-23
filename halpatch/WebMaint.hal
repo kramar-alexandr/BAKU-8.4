@@ -1315,7 +1315,7 @@ begin
 	array integer aQuant;
 	integer i, pos;
 	record ConsItemVc CIr;
-	boolean SHf, updf;
+	boolean SHf, updf, IHSavef;
 	longint ORSer;
 	
 	
@@ -1339,8 +1339,8 @@ begin
 				end;
 			end;
 			updf = false;
+			IHSavef = false;
 			if (!SHf) then begin
-			
 				pos = 0;
 				ExtractObjWithSeparator(":",ORr.OfficialSerNr,true,pos,POSerNrstr);
 				ExtractObjWithSeparator(":",ORr.OfficialSerNr,true,pos,Companystr);
@@ -1356,6 +1356,7 @@ begin
 						if (POrw.ArtCode!=artCodes[i]) then begin
 							weboutstring("OR SerNr: " & ORr.SerNr & " PO SerNr: " & POr.SerNr & " ArtCodes in row " & i + 1 & " do not match in company " & CurrentCompany );
 							weboutstring("<BR>");
+							IHSavef = true;
 						end else begin
 							if (POrw.Quant!=aQuant[i]) then begin
 								weboutstring("OR SerNr: " & ORr.SerNr & " PO SerNr: " & POr.SerNr & " Different quantities in row " & i + 1 & "in company " & CurrentCompany );
@@ -1371,16 +1372,25 @@ begin
 			resetcompany(OrigComp);
 			ORr.SerNr = ORSer;
 			if (ReadFirstMain(ORr,1,true)) then begin 
-				for (i=0;i<matrowcnt(ORr);i=i+1) begin
-					matrowget(ORr,i,ORrw);
-					if (aQuant[i]!=ORrw.Quant) then begin
-						ORrw.Quant = aQuant[i];
-						matrowput(ORr,i,ORrw);
-						updf = true;
+				if (IHSavef) then begin
+					tstr = BuildRecordIdStr(ORr,18);
+					RHr.RecidStr = tstr;
+					if(readfirstkey("RecidStr",RHr,1,true))then begin
+						ReadOriginalRecord(RHr,OrigORr);	
+						recordstore(OrigORr,true);
+					end;		
+				end else begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						if (aQuant[i]!=ORrw.Quant) then begin
+							ORrw.Quant = aQuant[i];
+							matrowput(ORr,i,ORrw);
+							updf = true;
+						end;
 					end;
-				end;
-				if (updf) then begin
-					RecordStore(ORr,true);
+					if (updf) then begin
+						RecordStore(ORr,true);
+					end;
 				end;
 			end;
 			ClearArray(artCodes);
