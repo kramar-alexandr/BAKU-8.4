@@ -1301,7 +1301,7 @@ end;
 
 
 
-global webpublic procedure WebFindIncorrectPOInCompFromIDGroupComp()
+global webpublic updating procedure WebFindIncorrectPOInCompFromIDGroupComp()
 begin
 	record ORVc ORr, OrigORr;
 	record RHistVc RHr;
@@ -1315,7 +1315,8 @@ begin
 	array integer aQuant;
 	integer i, pos;
 	record ConsItemVc CIr;
-	boolean SHf;
+	boolean SHf, updf;
+	longint ORSer;
 	
 	
 	SetCompany(18,false);
@@ -1326,6 +1327,7 @@ begin
 		if (ORr.OrderClass=="CLIEN" and nonblank(ORr.OfficialSerNr)) then begin
 			Companystr = "";
 			POSerNrstr = "";
+			ORSer = ORr.SerNr;
 			SHf = false;
 			for (i=0;i<matrowcnt(ORr);i=i+1) begin
 				matrowget(ORr,i,ORrw);
@@ -1336,7 +1338,7 @@ begin
 					aQuant[i] = ORrw.Quant;
 				end;
 			end;
-			
+			updf = false;
 			if (!SHf) then begin
 			
 				pos = 0;
@@ -1358,16 +1360,31 @@ begin
 							if (POrw.Quant!=aQuant[i]) then begin
 								weboutstring("OR SerNr: " & ORr.SerNr & " PO SerNr: " & POr.SerNr & " Different quantities in row " & i + 1 & "in company " & CurrentCompany );
 								weboutstring("<BR>");
+								aQuant[i] = POrw.Quant;
 							end;
 						end;
 						
 					end;
 				end;
 			end;
-			ClearArray(artCodes);
-			ClearArray(aQuant);
 			
 			resetcompany(OrigComp);
+			ORr.SerNr = ORSer;
+			if (ReadFirstMain(ORr,1,true)) then begin 
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					if (aQuant[i]!=ORrw.Quant) then begin
+						ORrw.Quant = aQuant[i];
+						matrowput(ORr,i,ORrw);
+						updf = true;
+					end;
+				end;
+				if (updf) then begin
+					RecordStore(ORr,true);
+				end;
+			end;
+			ClearArray(artCodes);
+			ClearArray(aQuant);
 		end;
 	end;
 
