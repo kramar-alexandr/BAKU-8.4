@@ -18,6 +18,7 @@ external updating procedure AddTTrans_PUVc(record TRVc,record PUVc);
 external updating procedure DeleteTransaction(LongInt,Integer);
 external updating procedure AddTTrans_IVVc(record TRVc,record IVVc);
 external function Integer MakeTransFromIV(var record TRVc,var record SMVc,record IVVc,Boolean,Boolean,record IVVc);
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 
 
 global webpublic updating procedure WebFindAndFixItems()
@@ -1296,6 +1297,79 @@ begin
 
 return;
 end;
+
+
+
+
+global webpublic procedure WebFindIncorrectPOInCompFromIDGroupComp()
+begin
+	record ORVc ORr, OrigORr;
+	record RHistVc RHr;
+	string 255 tstr;
+	record POVc POr;
+	integer OrigComp;
+	string 255 Companystr, POSerNrstr;
+	row ORVc ORrw;
+	row POVc POrw;
+	array string 255 artCodes;
+	array integer aQuant;
+	integer i, pos;
+	
+	OrigComp = CurrentCompany;
+	
+	SetCompany(18,false);
+	ORr.SerNr = -1;
+	while (loopmain(ORr,1,true)) begin
+		if (ORr.OrderClass=="CLIEN" and nonblank(ORr.OfficialSerNr)) then begin
+			Companystr = "";
+			POSerNrstr = "";
+			for (i=0;i<matrowcnt(ORr);i=i+1) begin
+				matrowget(ORr,i,ORrw);
+				artCodes[i] = ORrw.ArtCode;
+				aQuant[i] = ORrw.Quant;
+			end;
+		
+			pos = 1;
+			ExtractObjWithSeparator(":",ORr.OfficialSerNr,true,pos,Companystr);
+			pos = 0;
+			ExtractObjWithSeparator(":",ORr.OfficialSerNr,true,pos,POSerNrstr);
+			
+			
+			SetCompany(StringToInt(Companystr),false);
+			
+			POr.SerNr = StringToInt(POSerNrstr);
+			if (ReadFirstMain(POr,1,true)) then begin
+				for (i=0;i<matrowcnt(POr);i=i+1) begin
+					matrowget(POr,i,POrw);
+					if (POrw.ArtCode!=artCodes[i]) then begin
+						weboutstring("OR SerNr: " & ORr.SerNr & " ArtCodes in row " & i & " do not match " );
+						weboutstring("<BR>");
+					end else begin
+						if (POrw.Quant!=aQuant[i]) then begin
+							weboutstring("OR SerNr: " & ORr.SerNr & " Вifferent quantities in row " & i );
+							weboutstring("<BR>");
+						end;
+					end;
+					
+				end;
+			end;
+		
+			ClearArray(artCodes);
+			ClearArray(aQuant);
+			
+			resetcompany(OrigComp);
+		end;
+	end;
+
+return;
+end;
+
+
+
+
+
+
+
 
 global webpublic updating procedure WebFixBlankPathToCompPOInIDGroupComp()
 begin
