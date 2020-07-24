@@ -351,7 +351,8 @@ begin
 	record CompaniesBlock Compb;
   row CompaniesBlock Comprw;
 	longint j;
-	string 255 OrigBrand, DubBrand, ConsOrigCode, ConsDupCode, OtherCompOrigBrand, OtherCompDubBrand, thisOrigCode, thisDupCode;
+	string 255 OrigBrand, DubBrand, ConsOrigCode, ConsDupCode, OtherCompOrigBrand, OtherCompDubBrand, thisOrigCode, thisDupCode, ECOrigCode, ECDupCode;
+	boolean TrHs;
 	
 	blockload(Compb);
 	OrigCompany = CurrentCompany;
@@ -442,23 +443,53 @@ begin
 				setcompany(j,false);
 				OtherCompOrigBrand = "";
 				OtherCompDubBrand = "";
-				INr.Code = thisOrigCode;
-				if (ReadFirstMain(INr,1,true)) then begin
-					OtherCompOrigBrand = INr.BPIBrand;
-				end;
-				
-				INr.Code = thisDupCode;
-				if (ReadFirstMain(INr,1,true)) then begin
-					OtherCompDubBrand = INr.BPIBrand;
-				end;
-				if (OtherCompOrigBrand==OrigBrand and OtherCompDubBrand==DubBrand) then begin
-					IDr.DupCode = thisDupCode;
-					IDr.OrigCode = thisOrigCode;
-					if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
-						RecordNew(IDr);
+				if (CurrentCompany!=29) then begin
+					INr.Code = thisOrigCode;
+					if (ReadFirstMain(INr,1,true)) then begin
+						OtherCompOrigBrand = INr.BPIBrand;
+					end;
+					INr.Code = thisDupCode;
+					if (ReadFirstMain(INr,1,true)) then begin
+						OtherCompDubBrand = INr.BPIBrand;
+					end;
+					if (OtherCompOrigBrand==OrigBrand and OtherCompDubBrand==DubBrand) then begin
 						IDr.DupCode = thisDupCode;
 						IDr.OrigCode = thisOrigCode;
-						RecordStore(IDr,true);
+						if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
+							RecordNew(IDr);
+							IDr.DupCode = thisDupCode;
+							IDr.OrigCode = thisOrigCode;
+							RecordStore(IDr,true);
+						end;
+					end;
+				end else begin
+					INr.Code = "";
+					TrHs = true;
+					while (loopMain(INr,1,TrHs)) begin
+						if (INr.GlobalArtCode==OrigBrand & "_" & thisOrigCode) then begin
+							ECOrigCode = INr.Code;
+							TrHs = false;
+						end;
+					end;
+					
+					INr.Code = "";
+					TrHs = true;
+					while (loopMain(INr,1,TrHs)) begin
+						if (INr.GlobalArtCode==DubBrand & "_" & thisDupCode) then begin
+							ECDupCode = INr.Code;
+							TrHs = false;
+						end;
+					end;
+					
+					if (nonblank(ECOrigCode) and nonblank(ECDupCode)) then begin
+						IDr.DupCode = ECDupCode;
+						IDr.OrigCode = ECOrigCode;
+						if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
+							RecordNew(IDr);
+							IDr.DupCode = ECDupCode;
+							IDr.OrigCode = ECOrigCode;
+							RecordStore(IDr,true);
+						end;
 					end;
 				end;
 			end;
