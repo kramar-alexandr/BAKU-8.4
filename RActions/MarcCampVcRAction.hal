@@ -3774,14 +3774,15 @@ begin
 	json datajson;
 	record ORVc ORr,OldORr;
 	row ORVc ORrw,OldORrw;
-	string 255 uname,pn,ph,em,sn,bitrono,pay,stat;
+	string 255 uname,pn,ph,em,sn,bitrono,pay,stat,city,street,house,apart;
 	string 155 id,sum;
 	array string 255 prod,prodn,quant,suma,code;
 	integer i,j,wn;
 	longint a;
-	string 255 hex,out,warning,errstr,loyaltycard;
+	string 255 hex,out,warning,errstr,loyaltycard,namesname;
 	boolean UPDf,chsum;
 	record AccBlock ARb;
+	record CUVc CUr;
 	
 	BlockLoad(ARb);
 	
@@ -3789,6 +3790,11 @@ begin
 	logtext(0,"WebCreateOrder");
 	webgetpostdata(getpost);
 	//AddfiletoArea("C:/Users/Anton/Desktop/BitrixOrderlast.txt",getpost,false);
+	if (!fileexists("getpost.txt")) then begin
+		CreateFile("getpost.txt");
+	end;
+	WriteAreaToFile(getpost,"getpost.txt",0);
+	CloseFile;
 	a = GetArealength(getpost);
 	datajson = ParseJsonArea(getpost);
 	filename = "Orders/Order" & datetostring(currentdate,"YYYYMMDD") & TimeToString(currenttime,"HHMMSS",false) & ".txt";
@@ -3799,9 +3805,19 @@ begin
 	ph = JSONGet(datajson,"user[0]/phone");
 	em = JSONGet(datajson,"user[0]/email");
 	sn = JSONGet(datajson,"user[0]/surname");
+	city = JSONGet(datajson,"user[0]/city");
+	street = JSONGet(datajson,"user[0]/street");
+	house = JSONGet(datajson,"user[0]/house");
+	apart = JSONGet(datajson,"user[0]/apart");
+	
 	bitrono = JSONGet(datajson,"order[0]/id");
 	sn = ParseHEX(sn);
 	pn = ParseHEX(pn);
+	city = ParseHEX(city);
+	street = ParseHEX(street);
+	house = ParseHEX(house);
+	apart = ParseHEX(apart);
+	namesname = pn & " " & sn;
 	id = JSONGet(datajson,"order[0]/id");
 	sum = JSONGet(datajson,"order[0]/summ");
 	pay = JSONGet(datajson,"order[0]/pay");
@@ -3839,11 +3855,36 @@ begin
 				ORrw.SalesAcc = ARb.DomSalesAcc;
 				MatRowPut(ORr,i,ORrw);
 			end;
+			
+			CUr.Name = namesname;
+			if (ReadFirstKey("Name",CUr,1,true)) then begin
+				ORr.ECLoyaltyCard = CUr.Code;
+			end else begin
+				CUr.Code = "EC_" & ph;
+				if (ReadFirstMain(CUr,1,true)) then begin
+					ORr.ECLoyaltyCard = CUr.Code;
+				end else begin
+					// recordNew(CUr);
+					// CUr.Code =  "EC_" & ph;
+					// CUr.Name = namesname;
+					// CUr.Phone = ph;
+					// CUr.CRMLName = sn;
+					// CUr.CRMName = pn;
+					// CUr.CRMName = city;
+					// CUr.CRMName = street;
+					// CUr.CRMName = house;
+					// CUr.CRMName = apart;
+					// CUr.CreateLocation = "MAIN";
+					// recordStore(CUr,true);
+				end;
+			end;
+			
 		
 			ORr.CustCode = "NOFULLNAME";
 			
-			ORr.ECLoyaltyCard = loyaltycard;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 10 04 2020 y. at 6:27:38 PM
-			
+			if (blank(ORr.ECLoyaltyCard)) then begin
+				ORr.ECLoyaltyCard = loyaltycard;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 10 04 2020 y. at 6:27:38 PM
+			end;
 			ORr.Addr0 = pn & " " & sn;
 			if(pay=="false")then begin
 				ORr.PayDeal = "PP";
