@@ -347,12 +347,13 @@ begin
 	integer OrigCompany;
 	record ItemDuplicatesVc IDr;
 	record ConsItemVc CIr;
-	record INVc INr;
+	record INVc INr, oldINr;
 	record CompaniesBlock Compb;
   row CompaniesBlock Comprw;
 	longint j;
-	string 255 OrigBrand, DubBrand, ConsOrigCode, ConsDupCode, OtherCompOrigBrand, OtherCompDubBrand, thisOrigCode, thisDupCode, ECOrigCode, ECDupCode;
+	string 255 OrigBrand, DubBrand, ConsOrigCode, ConsDupCode, OtherCompOrigBrand, OtherCompDubBrand, thisOrigCode, thisDupCode, ECOrigCode, ECDupCode, OldINCode, NewINCode;
 	boolean TrHs;
+	record GlobalItemVc GIr;
 	
 	blockload(Compb);
 	OrigCompany = CurrentCompany;
@@ -452,7 +453,7 @@ begin
 					if (ReadFirstMain(INr,1,true)) then begin
 						OtherCompDubBrand = INr.BPIBrand;
 					end;
-					if (OtherCompOrigBrand==OrigBrand and OtherCompDubBrand==DubBrand) then begin
+					if (OtherCompOrigBrand==OrigBrand and OtherCompDubBrand==DubBrand and nonblank(OtherCompOrigBrand) and nonblank(OtherCompDubBrand)) then begin
 						IDr.DupCode = thisDupCode;
 						IDr.OrigCode = thisOrigCode;
 						if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
@@ -482,6 +483,57 @@ begin
 						end;
 					end;
 					ResetLoop(INr);
+					
+					OldINCode = "";
+					NewINCode = "";
+					
+					if (blank(ECOrigCode)) then begin
+						GIr.Code = OrigBrand & "_" & thisOrigCode;
+						if (ReadFirstMain(GIr,1,true)) then begin
+							oldINr.Code = "INZZZZZZ";
+							TrHs = true;
+							while (LoopBackKey("Code",oldINr,1,TrHs)) begin OldINCode = oldINr.Code; TrHs = false; end;
+							ResetLoop(oldINr);
+							if(Blank(OldINCode))then begin OldINCode = "IN000000"; end;
+							RecordNew(INr);
+							NextM4SerialNumber(OldINCode,NewINCode);
+							INr.Code = NewINCode;
+							INr.Name = GIr.HansaName;
+							INr.GlobalArtCode = GIr.Code; 
+							INr.VATCode = "0%"; 
+							INr.ItemType = kItemTypeStocked;
+							INr.SerNrf = 2;
+							if(RecordStore(INr,true))then begin 
+								ECOrigCode = INr.Code;
+							end;
+						end;
+					end;				
+
+					OldINCode = "";
+					NewINCode = "";
+					
+					if (blank(ECDupCode)) then begin
+						GIr.Code = DubBrand & "_" & thisDupCode;
+						if (ReadFirstMain(GIr,1,true)) then begin
+							oldINr.Code = "INZZZZZZ";
+							TrHs = true;
+							while (LoopBackKey("Code",oldINr,1,TrHs)) begin OldINCode = oldINr.Code; TrHs = false; end;
+							ResetLoop(oldINr);
+							if(Blank(OldINCode))then begin OldINCode = "IN000000"; end;
+							RecordNew(INr);
+							NextM4SerialNumber(OldINCode,NewINCode);
+							INr.Code = NewINCode;
+							INr.Name = GIr.HansaName;
+							INr.GlobalArtCode = GIr.Code; 
+							INr.VATCode = "0%"; 
+							INr.ItemType = kItemTypeStocked;
+							INr.SerNrf = 2;
+							if(RecordStore(INr,true))then begin 
+								ECDupCode = INr.Code;
+							end;
+						end;
+					end;					
+					
 					
 					if (nonblank(ECOrigCode) and nonblank(ECDupCode)) then begin
 						IDr.DupCode = ECDupCode;
