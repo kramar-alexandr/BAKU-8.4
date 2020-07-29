@@ -1523,6 +1523,24 @@ BEGIN
 										goto LNewINVcRecordCheck;
 									end;
 								end;
+							end else begin
+								tmpINr.Code = newINrw.Code;
+								if(ReadFirstMain(tmpINr,1,true)) then begin
+									if(tmpINr.BPIBrand==newINr.Brand) then begin
+											CompFlag = false;
+											if(blank(companies[newINrw.Code])) then begin
+												companies[newINrw.Code] = Comprw.ShortName;
+											end else begin
+												companies[newINrw.Code] = companies[newINrw.Code] & "," & Comprw.ShortName;
+											end;	
+									end else begin
+										if(blank(tmpINr.BPIBrand)) then begin
+											res = -1;
+											RecordCheckError(31228," \"BRAND\": не заполнена!  Компания " & Comprw.ShortName,i,"VendorCode");
+											goto LNewINVcRecordCheck;
+										end;
+									end;
+								end;
 							end;
 						end;
 					end;
@@ -2798,7 +2816,7 @@ BEGIN
 				ExtractObj(compstr,pos,comp);
 				locompcritemf = false;
 				while (nonblank(comp)) begin
-					if(!SetInSet(comp,companies[newINrw.VendorCode])) then begin
+					if(!SetInSet(comp,companies[newINrw.VendorCode]) and !SetInSet(comp,companies[newINrw.Code])) then begin
 					compNumber = 0;
 						for (k=0;k<CompQty;k=k+1) begin
 							matrowget (Compb,k,Comprw);
@@ -2834,7 +2852,7 @@ BEGIN
 							k = CompQty;
 						end;
 					end;
-					if(!SetInSet(comp,companies[newINrw.VendorCode]) and Comprw.ActiveStatus==0 and compNumber!=33 and compNumber!=10 and compNumber!=32 and compNumber!=18 and compNumber!=0) then begin
+					if(!SetInSet(comp,companies[newINrw.VendorCode]) and !SetInSet(comp,companies[newINrw.Code]) and Comprw.ActiveStatus==0 and compNumber!=33 and compNumber!=10 and compNumber!=32 and compNumber!=18 and compNumber!=0) then begin
 						logtext(0,"SetCompanyCode(Comprw.CompCode, " & Comprw.CompCode);
 						if (SetCompanyCode(Comprw.CompCode,false)) then begin
 							if(InJwSavedf and CompanyIsJWLikeCompany(CurrentCompany))then begin testf2 = false; end;
@@ -2883,7 +2901,7 @@ BEGIN
 				for (k=0;k<CompQty;k=k+1) begin
 					matrowget (Compb,k,Comprw);
 					testf2 = true;
-					if(SetInSet(Comprw.ShortName,companies[newINrw.VendorCode]) or Comprw.ShortName==companies[newINrw.VendorCode])then begin
+					if(SetInSet(Comprw.ShortName,companies[newINrw.VendorCode]) or SetInSet(comp,companies[newINrw.Code]) or Comprw.ShortName==companies[newINrw.VendorCode] or Comprw.ShortName==companies[newINrw.Code])then begin
 						if(Comprw.ActiveStatus==0 and k+1!=10 and k+1!=32 and k+1!=33)then begin
 							SetCompany(k+1,false);
 							if(InJwSavedf and CompanyIsJWLikeCompany(CurrentCompany))then begin testf2 = false; end;
@@ -2904,7 +2922,24 @@ BEGIN
 											goto LNewINVcRecordCheck;
 										end;
 									end;
-								end;	
+								end;
+								INr.Code = NewINrw.Code;
+								if(ReadFirstMain(INr,1,true) and INr.BPIBrand==newINr.Brand) then begin
+									recordcopy(IN2r,INr);
+									NewINrw.Code = INr.Code;
+									newINr.LastPurchCurncyCode = "";
+									newINrw.LastPurchCurncyCode = "";
+									newINrw.LastPurchPrice2 = 0;
+									FullFillINVc(INr,newINr,newINrw,group,type,insertDispNameNotCode);
+									if(newINr.OKFlag==1)then begin
+										INr.Group=newINrw.Group;
+										INr.ConsgType = newINrw.ConsgType;
+										if (recordupdate(IN2r,INr,true)!=0) then begin
+											res = -1; 
+											goto LNewINVcRecordCheck;
+										end;
+									end;
+								end;
 							end;	
 						end;	
 					end;
