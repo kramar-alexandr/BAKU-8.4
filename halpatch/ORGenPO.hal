@@ -1893,7 +1893,7 @@ end; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
 
 global updating procedure CreatePOfromCCSH(record SHVc SHr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:43 02.07.2019
 begin
-	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c,vimtrw,vii,ecvcnt,v,cmpnmb,VIOFFCnt,lcnt,ccnt,FIFOcnt;
+	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c,vimtrw,vii,ecvcnt,v,cmpnmb,VIOFFCnt,lcnt,ccnt,FIFOcnt,keys;
 	record ORVc ORr, ECORr;
 	row ORVc ORrw, ECORrw;
 	record SHVc SH2r;
@@ -1906,11 +1906,11 @@ begin
 	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf,ccItemf,clientTypef;
 	record CUVc CUr;
 	record DIVc DIr;
-	string 200 vendor,loccode,errmsg,OffserNr, PUstock;
-	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode,vLocCashier,vCurrRowCode;
+	string 200 vendor,loccode,errmsg,OffserNr, PUstock, key;
+	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode,vLocCashier,vCurrRowCode, INCOde;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
-	vector boolean vArtCodeRepeat, shOutItems, ShippdI;
+	vector boolean vArtCodeRepeat, shOutItems, ShippdI, INCOdef;
 	vector integer vArtCodeQTY, ECArt,priceinorcnt,vOutItems;
 	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant, vItemHTotCostPr, ItemORPriseWRebate, vItemHTotCostPrSH, vPOQty;
 	record VIVc VIr, OldVIr, offVIr;
@@ -1987,11 +1987,13 @@ begin
 				end;
 				ResetLoop (IHr);
 				vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] / SumIHQty;
+				vItemFifo[CIr.Code & "_" & SHrw.LCPOrowNr] = vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr];
 				vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] / SumIHQty;
 				if(SHrw.Ship == 0) then begin
 					j = j + 1;
 				end else begin
 					vItemHTotCostPrSH[CIr.LocCode & "_" & i + 1 - j] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr];
+					vItemHTotCostPrSH[CIr.Code & "_" & i + 1 - j] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr];
 				end;
 			end;
 		end;
@@ -2084,9 +2086,17 @@ begin
 					INr.Code = POrw.ArtCode;
 					if(readfirstmain(INr,1,true))then begin
 						if(SetCompany(18,false)) then begin
-							CIr.LocCode = POrw.ArtCode;
-							CIr.BrandCode = INr.BPIBrand;
-							if(ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
+							if (left(INr.Code,3)=="IN_") then begin
+								CIr.Code = POrw.ArtCode;
+								key = "Code";
+								keys = 1;
+							end else begin
+								CIr.LocCode = POrw.ArtCode;
+								CIr.BrandCode = INr.BPIBrand;
+								key = "LocCodeBrand";
+								keys = 2;
+							end;
+							if(ReadFirstKey(key,CIr,keys,true))then begin
 								if(ECArt[CIr.Code & "_" & i + 1]>0) then begin
 									logtext(0,"POr4 " & CIr.LocCode & "  comp  " & currentcompany);
 									ResetCompany(POComp);
@@ -2127,9 +2137,17 @@ begin
 					INr.Code = POrw.ArtCode;
 					if(readfirstmain(INr,1,true))then begin
 						if(SetCompany(18,false)) then begin
-							CIr.LocCode = POrw.ArtCode;
-							CIr.BrandCode = INr.BPIBrand;
-							if(ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
+							if (left(INr.Code,3)=="IN_") then begin
+								CIr.Code = POrw.ArtCode;
+								key = "Code";
+								keys = 1;
+							end else begin
+								CIr.LocCode = POrw.ArtCode;
+								CIr.BrandCode = INr.BPIBrand;
+								key = "LocCodeBrand";
+								keys = 2;
+							end;
+							if(ReadFirstKey(key,CIr,keys,true))then begin
 								if(ECArt[CIr.Code & "_" & i+1]==0) then begin
 									vPOQty[POrw.ArtCode & "_" & i] = POrw.Quant;
 									POrw.Quant = 0;
@@ -2268,8 +2286,28 @@ begin
 									RecordStore (LINr,true);
 									logtext(0,LINr.Code & "  Товар");
 									logtext(0,CIr.LocCode & "  Товар");
+								end else begin
+									if (LINr.BPIBrand!=CIr.BrandCode) then begin
+									  LINr.Code = CIr.Code;
+										INCOde[CIr.LocCode & "_" & aLCPOrowNr[i]] = LINr.Code;
+										if(!ReadFirstMain(LINr,1,true))then begin
+											RecordNew (UUINr);
+											RecordNew (LINr);
+											RecordCopy (LINr,INr);
+											LINr.Code = CIr.Code;
+											LINr.UUID = UUINr.UUID;
+											RecordStore (LINr,true);
+											logtext(0,LINr.Code & "  Товар");
+											logtext(0,CIr.Code & "  Товар");
+											INCOde[CIr.LocCode & "_" & aLCPOrowNr[i]] = LINr.Code;
+										end;
+									end;
 								end;
-								POrw.ArtCode = CIr.LocCode;
+								if (nonblank(INCOde[CIr.LocCode & "_" & aLCPOrowNr[i]])) then begin
+									POrw.ArtCode = INCOde[CIr.LocCode & "_" & aLCPOrowNr[i]];
+								end else begin
+									POrw.ArtCode = CIr.LocCode;
+								end;
 								matrowput(POr,j,POrw);							
 								POVc_PasteArtCode(POr,j,false);
 								matrowget(POr,j,POrw);
