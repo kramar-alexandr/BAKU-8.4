@@ -344,7 +344,7 @@ end;
 
 global updating procedure CreateDuplicesInAllCompanies (record ItemDuplicatesVc IDr)
 begin
-	integer OrigCompany;
+	integer OrigCompany, SourceComp, i;
 	record ItemDuplicatesVc newIDr, thisIDr;
 	record ConsItemVc CIr;
 	record INVc INr, oldINr;
@@ -355,6 +355,7 @@ begin
 	boolean TrHs;
 	record GlobalItemVc GIr;
 	string 255 OrigCode, DupCode;
+	boolean INSorcesf;
 	
 	blockload(Compb);
 	OrigCompany = CurrentCompany;
@@ -362,6 +363,33 @@ begin
 	DupCode = IDr.DupCode;
 	OrigBrand = IDr.OrigBrandCode;
 	DubBrand = IDr.DupBrandCode;
+	SourceComp = OrigCompany;
+	
+	
+	for(i=1;i<=matrowcnt(Compb);i=i+1)begin
+		setcompany(i,false);
+		matrowget(Compb,i-1,Comprw);
+		if((CompanyIsJWLikeCompany(i)==false or i==3) and Comprw.ActiveStatus==0 and i!=CurrentCompany and i!=18 and i!=29) then begin
+			INr.Code = OrigCode;
+			INSorcesf = true;
+			if (!ReadFirstMain(INr,1,true)) then begin
+				INSorcesf = false;
+			end;
+			if (blank(INr.BPIBrand) or INr.BPIBrand!=OrigBrand) then begin
+				INSorcesf = false;
+			end;
+			INr.Code = DupCode;
+			if (!ReadFirstMain(INr,1,true)) then begin
+				INSorcesf = false;
+			end;
+			if (blank(INr.BPIBrand)or INr.BPIBrand!=DubBrand) then begin
+				INSorcesf = false;
+			end;
+			if (INSorcesf) then begin
+				SourceComp = CurrentCompany;
+			end;
+		end;
+	end;
 	
 	
 	
@@ -397,7 +425,7 @@ begin
 			
 			if (nonblank(OrigCode) and nonblank(DupCode)) then begin
 				if (blank(ConsOrigCode)) then begin
-					CreateINConsItem(OrigCode, OrigBrand, OrigCompany);
+					CreateINConsItem(OrigCode, OrigBrand, SourceComp);
 					CIr.LocCode = OrigCode;
 					CIr.BrandCode = OrigBrand;
 					if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
@@ -406,7 +434,7 @@ begin
 				end;
 				
 				if (blank(ConsDupCode)) then begin
-					CreateINConsItem(DupCode, DubBrand, OrigCompany);
+					CreateINConsItem(DupCode, DubBrand, SourceComp);
 					CIr.LocCode = DupCode;
 					CIr.BrandCode = DubBrand;
 					if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
