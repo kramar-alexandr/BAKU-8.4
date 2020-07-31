@@ -342,10 +342,10 @@ end;
 
 
 
-global updating procedure CreateDuplicesInAllCompanies (string OrigCode, string DupCode)
+global updating procedure CreateDuplicesInAllCompanies (record ItemDuplicatesVc IDr)
 begin
 	integer OrigCompany;
-	record ItemDuplicatesVc IDr;
+	record ItemDuplicatesVc newIDr, thisIDr;
 	record ConsItemVc CIr;
 	record INVc INr, oldINr;
 	record CompaniesBlock Compb;
@@ -354,29 +354,31 @@ begin
 	string 255 OrigBrand, DubBrand, ConsOrigCode, ConsDupCode, OtherCompOrigBrand, OtherCompDubBrand, thisOrigCode, thisDupCode, ECOrigCode, ECDupCode, OldINCode, NewINCode;
 	boolean TrHs;
 	record GlobalItemVc GIr;
+	string 255 OrigCode, DupCode;
 	
 	blockload(Compb);
 	OrigCompany = CurrentCompany;
+	OrigCode = IDr.OrigCode;
+	DupCode = IDr.DupCode;
+	OrigBrand = IDr.OrigBrandCode;
+	DubBrand = IDr.DupBrandCode;
 	if (nonblank(OrigCode) and nonblank(DupCode)) then begin
+			
+		thisIDr.OrigCode = OrigCode;
+		thisIDr.DupCode = DupCode;
+		thisIDr.OrigBrandCode = OrigBrand;
+		thisIDr.DupBrandCode = DubBrand;
+		
+		if (!ReadFirstMain(thisIDr,1,true)) then begin
+			recordnew(thisIDr);
+			thisIDr.OrigCode = OrigCode;
+			thisIDr.DupCode = DupCode;
+			thisIDr.OrigBrandCode = OrigBrand;
+			thisIDr.DupBrandCode = DubBrand;
+			recordStore(thisIDr,true);
+		end;
+		
 		if (OrigCompany!=18) then begin
-			INr.Code = OrigCode;
-			if (ReadFirstMain(INr,1,true)) then begin
-				OrigBrand = INr.BPIBrand;
-			end;
-			
-			INr.Code = DupCode;
-			if (ReadFirstMain(INr,1,true)) then begin
-				DubBrand = INr.BPIBrand;
-			end;
-			
-			IDr.DupCode = DupCode;
-			IDr.OrigCode = OrigCode;
-			if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
-				RecordNew(IDr);
-				IDr.DupCode = DupCode;
-				IDr.OrigCode = OrigCode;
-				RecordStore(IDr,true);
-			end;
 			SetCompany(18,false);
 			CIr.LocCode = OrigCode;
 			CIr.BrandCode = OrigBrand;
@@ -389,6 +391,7 @@ begin
 			if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
 				ConsDupCode = CIr.Code;
 			end;
+			
 			
 			if (blank(ConsOrigCode)) then begin
 				CreateINConsItem(OrigCode, OrigBrand, OrigCompany);
@@ -409,146 +412,43 @@ begin
 			end;
 			
 			if (nonblank(ConsDupCode) and nonblank(ConsOrigCode)) then begin
-				IDr.DupCode = ConsDupCode;
-				IDr.OrigCode = ConsOrigCode;
-				if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
-					IDr.DupCode = ConsDupCode;
-					IDr.OrigCode = ConsOrigCode;
-					RecordStore(IDr,true);
+				newIDr.DupCode = ConsDupCode;
+				newIDr.OrigCode = ConsOrigCode;
+				if (!ReadFirstKey("DupCode",newIDr,2,true)) then begin
+					newIDr.DupCode = ConsDupCode;
+					newIDr.OrigCode = ConsOrigCode;
+					RecordStore(newIDr,true);
 				end;
 			end;
-			thisDupCode = DupCode;
-			thisOrigCode = OrigCode;
 		end else begin
-			IDr.DupCode = DupCode;
-			IDr.OrigCode = OrigCode;
-			if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
-				IDr.DupCode = DupCode;
-				IDr.OrigCode = OrigCode;
-				RecordStore(IDr,true);
-			end;
-			CIr.Code = DupCode;
-			if (ReadFirstMain(Cir,1,true)) then begin
-				thisDupCode = CIr.LocCode;
-			end;
+			SetCompany(1,false);
 			CIr.Code = OrigCode;
-			if (ReadFirstMain(Cir,1,true)) then begin
-				thisOrigCode = CIr.LocCode;
+			if (ReadFirstMain(CIr,2,true)) then begin
+				OrigCode = CIr.Code;
 			end;
+			
+			CIr.Code = DupCode;
+			if (ReadFirstMain(CIr,2,true)) then begin
+				DupCode = CIr.Code;
+			end;
+			
+			thisIDr.OrigCode = OrigCode;
+			thisIDr.DupCode = DupCode;
+			thisIDr.OrigBrandCode = OrigBrand;
+			thisIDr.DupBrandCode = DubBrand;
+			if (!ReadFirstMain(thisIDr,1,true)) then begin
+				recordnew(thisIDr);
+				thisIDr.OrigCode = OrigCode;
+				thisIDr.DupCode = DupCode;
+				thisIDr.OrigBrandCode = OrigBrand;
+				thisIDr.DupBrandCode = DubBrand;
+				recordStore(thisIDr,true);
+			end;
+			
 		end;
+		
 		ResetCompany(OrigCompany)
-		blockload(Compb);
-		for(j=1;j<=matrowcnt(Compb);j=j+1)begin
-			matrowget(Compb,j-1,Comprw);
-			if((CompanyIsJWLikeCompany(j)==false or j==3) and Comprw.ActiveStatus==0 and j!=OrigCompany and j!=18) then begin
-				setcompany(j,false);
-				OtherCompOrigBrand = "";
-				OtherCompDubBrand = "";
-				if (CurrentCompany!=29) then begin
-					INr.Code = thisOrigCode;
-					if (ReadFirstMain(INr,1,true)) then begin
-						OtherCompOrigBrand = INr.BPIBrand;
-					end;
-					INr.Code = thisDupCode;
-					if (ReadFirstMain(INr,1,true)) then begin
-						OtherCompDubBrand = INr.BPIBrand;
-					end;
-					if (OtherCompOrigBrand==OrigBrand and OtherCompDubBrand==DubBrand and nonblank(OtherCompOrigBrand) and nonblank(OtherCompDubBrand)) then begin
-						IDr.DupCode = thisDupCode;
-						IDr.OrigCode = thisOrigCode;
-						if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
-							RecordNew(IDr);
-							IDr.DupCode = thisDupCode;
-							IDr.OrigCode = thisOrigCode;
-							RecordStore(IDr,true);
-						end;
-					end;
-				end else begin
-					INr.Code = "";
-					TrHs = true;
-					while (loopMain(INr,1,TrHs)) begin
-						if (INr.GlobalArtCode==OrigBrand & "_" & thisOrigCode) then begin
-							ECOrigCode = INr.Code;
-							TrHs = false;
-						end;
-					end;
-					ResetLoop(INr);
-					
-					INr.Code = "";
-					TrHs = true;
-					while (loopMain(INr,1,TrHs)) begin
-						if (INr.GlobalArtCode==DubBrand & "_" & thisDupCode) then begin
-							ECDupCode = INr.Code;
-							TrHs = false;
-						end;
-					end;
-					ResetLoop(INr);
-					
-					OldINCode = "";
-					NewINCode = "";
-					
-					if (blank(ECOrigCode)) then begin
-						GIr.Code = OrigBrand & "_" & thisOrigCode;
-						if (ReadFirstMain(GIr,1,true)) then begin
-							oldINr.Code = "INZZZZZZ";
-							TrHs = true;
-							while (LoopBackKey("Code",oldINr,1,TrHs)) begin OldINCode = oldINr.Code; TrHs = false; end;
-							ResetLoop(oldINr);
-							if(Blank(OldINCode))then begin OldINCode = "IN000000"; end;
-							RecordNew(INr);
-							NextM4SerialNumber(OldINCode,NewINCode);
-							INr.Code = NewINCode;
-							INr.Name = GIr.HansaName;
-							INr.GlobalArtCode = GIr.Code; 
-							INr.VATCode = "0%"; 
-							INr.ItemType = kItemTypeStocked;
-							INr.SerNrf = 2;
-							if(RecordStore(INr,true))then begin 
-								ECOrigCode = INr.Code;
-							end;
-						end;
-					end;				
-
-					OldINCode = "";
-					NewINCode = "";
-					
-					if (blank(ECDupCode)) then begin
-						GIr.Code = DubBrand & "_" & thisDupCode;
-						if (ReadFirstMain(GIr,1,true)) then begin
-							oldINr.Code = "INZZZZZZ";
-							TrHs = true;
-							while (LoopBackKey("Code",oldINr,1,TrHs)) begin OldINCode = oldINr.Code; TrHs = false; end;
-							ResetLoop(oldINr);
-							if(Blank(OldINCode))then begin OldINCode = "IN000000"; end;
-							RecordNew(INr);
-							NextM4SerialNumber(OldINCode,NewINCode);
-							INr.Code = NewINCode;
-							INr.Name = GIr.HansaName;
-							INr.GlobalArtCode = GIr.Code; 
-							INr.VATCode = "0%"; 
-							INr.ItemType = kItemTypeStocked;
-							INr.SerNrf = 2;
-							if(RecordStore(INr,true))then begin 
-								ECDupCode = INr.Code;
-							end;
-						end;
-					end;					
-					
-					
-					if (nonblank(ECOrigCode) and nonblank(ECDupCode)) then begin
-						IDr.DupCode = ECDupCode;
-						IDr.OrigCode = ECOrigCode;
-						if (!ReadFirstKey("DupCode",IDr,2,true)) then begin
-							RecordNew(IDr);
-							IDr.DupCode = ECDupCode;
-							IDr.OrigCode = ECOrigCode;
-							RecordStore(IDr,true);
-						end;
-					end;
-				end;
-			end;
-			resetCompany (OrigCompany);
-		end;
+		
 	end;
 	
 return
@@ -3051,6 +2951,17 @@ begin
 		res = -1;
 		goto LItemDuplicatesVcRecordCheck;
 	end;
+	if(blank(IDr.OrigBrandCode))then begin
+		RecordCheckError(36367,"",-1,"OrigBrandCode");      
+		res = -1;
+		goto LItemDuplicatesVcRecordCheck;
+	end;
+	if(blank(IDr.DupBrandCode))then begin
+		RecordCheckError(36368,"",-1,"DupBrandCode");      
+		res = -1;
+		goto LItemDuplicatesVcRecordCheck;
+	end;
+	
 	INr.Code = IDr.OrigCode;
 	if (ReadFirstMain(INr,1,true)) then begin
 		if (blank(INr.BPIBrand)) then begin
@@ -3069,7 +2980,7 @@ begin
 	end;
 	res = CheckDuplicesInAllCompanies(IDr.OrigCode,IDr.DupCode,ErrComp);
 	if (res!=0) then begin
-		RecordCheckError(res,ErrComp,-1,"DupCode");      
+		RecordCheckError(res,ErrComp,-1,"");      
 		res = -1;
 		goto LItemDuplicatesVcRecordCheck;
 	end;
@@ -3085,7 +2996,7 @@ begin
 	longint res;
 	res = 0;
 
-	CreateDuplicesInAllCompanies (IDr.OrigCode, IDr.DupCode);
+	CreateDuplicesInAllCompanies (IDr);
 
 		
 	ItemDuplicatesVcRecordSaveAfter = res; 
@@ -3099,7 +3010,7 @@ begin
 	longint res;
 	res = 0;
 
-	CreateDuplicesInAllCompanies (IDr.OrigCode, IDr.DupCode);
+	CreateDuplicesInAllCompanies (IDr);
 
 		
 	ItemDuplicatesVcRecordUpdateAfter = res; 
