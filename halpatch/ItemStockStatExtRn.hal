@@ -2757,24 +2757,23 @@ end;
 
 
 //Edit----------------------Dima  23.02.2016
-procedure CollectAndPrintData(record RcVc RepSpec,record INVc INr, var record TotalsRepVc Totals,var vector string typeval,array string typecode,Integer typescnt,boolean addclassf,string brandcur)
+procedure CollectAndPrintData(record RcVc RepSpec,record INVc INr, var record TotalsRepVc Totals,var vector string typeval,array string typecode,Integer typescnt,boolean addclassf,string brandcur,boolean print)
 begin
  record ItemStatusVc ISr;
  record SerBalVc SBr;
  boolean TrHs2,testf2,TrHs,testf;
  date todate;
  record ItemHistVc IHr;
- integer acnt;
- vector val cqty,ccost;
- array string 10 acur;
- integer i;
+ integer acnt,acnt2;
+ vector val cqty,ccost,cqty2,ccost2;
+ array string 10 acur,acur2;
+ integer i,j;
  string 10 realcur;
  string 255 tstr2,filename,serverip;
  record LocationVc Locr;
  record ItemDuplicatesVc IDr;
 	record INVc dupINr;
 	record ItemStatusVc IS2r;
-	boolean qtyDup;
 	
   todate = RepSpec.d1;
   if(blank(todate))then begin
@@ -2802,7 +2801,6 @@ begin
 			SBr.CostPrice = 0;
 			ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,"",SBr.CostPrice,acnt,cqty,ccost,acur,brandcur);
 			//logtext(0,"CollectAndPrintData " & ISr.Instock & " " & ISr.Location);
-			qtyDup = false;
 			if(currentcompany!=18) then begin
 				IDr.OrigCode = INr.Code;
 				while(LoopKey("OrigCode",IDr,1,true)) begin
@@ -2813,8 +2811,22 @@ begin
 							IS2r.Location = ISr.Location;
 							if(ReadFirstMain(IS2r,2,true)) then begin
 								if(IS2r.Instock>0) then begin
-									ISr.Instock = ISr.Instock + ItemQtyPerDate(IS2r.Code,todate,ISr.Location,"",SBr.CostPrice,acnt,cqty,ccost,acur,brandcur);
-									qtyDup = true;
+									IS2r.Instock = ItemQtyPerDate(IS2r.Code,todate,ISr.Location,"",SBr.CostPrice,acnt2,cqty2,ccost2,acur2,brandcur);
+									For(i=0;i<acnt2;i=i+1) begin
+										testf = false;
+										For(j=0;j<acnt;j=j+1) begin
+											if(acur2[i]==acur[j])then begin
+												cqty[INr.LastPurchCurncyCode] = cqty[INr.LastPurchCurncyCode] + cqty2[INr.LastPurchCurncyCode] + cqty2[""];
+												ccost[INr.LastPurchCurncyCode] = ccost[INr.LastPurchCurncyCode] + ccost2[INr.LastPurchCurncyCode] + ccost2[""];
+												cqty2[""] = blankval;
+												ccost2[""] = blankval;
+												testf = true;
+											end;
+										end;
+										if(!testf) then begin
+											acur[acur.length + 1] = acur2[i];
+										end;
+									end; 
 								end;
 								if(IS2r.RsrvQty>0) then begin
 									ISr.RsrvQty = ISr.RsrvQty + IS2r.RsrvQty;
@@ -2846,7 +2858,9 @@ begin
 						if(left(currentuser,2)=="SA")then begin
 							//logtext(0,"PrintInfo2 1 " & INr.LastPurchCurncyCode);
 						end;
-						PrintInfo2(INr,ISr,"",0,0,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,realcur,brandcur,RepSpec);
+						if(print) then begin
+							PrintInfo2(INr,ISr,"",0,0,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,realcur,brandcur,RepSpec);
+						end;
 					end;
 				end;
 				
@@ -3248,7 +3262,7 @@ begin
 										end;
 									end;
 									if(checkBrand) then begin
-										CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+										CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur, true);
 									end;	
 								end else begin
 									IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
@@ -3258,7 +3272,7 @@ begin
 						ResetCompany(oldcompany);	
 					end else begin
 						if(CurrentCompany!=28)then begin
-							CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+							CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur, true);
 						end else begin
 							IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
 						end;
@@ -3359,8 +3373,8 @@ begin
 												if(Brcbw.Brand==INr.BPIBrand) then begin checkBrand = true; end;
 											end;
 										end;
-										if(checkBrand and !dublikateItem) then begin
-											CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+										if(checkBrand) then begin
+											CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur,!dublikateItem);
 										end;	
 									end else begin
 										IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
@@ -3370,9 +3384,7 @@ begin
 							ResetCompany(oldcompany);	
 						end else begin
 							if(CurrentCompany!=28)then begin
-								if(!dublikateItem) then begin
-									CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
-								end;
+								CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur,!dublikateItem);
 							end else begin
 								IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
 							end;
