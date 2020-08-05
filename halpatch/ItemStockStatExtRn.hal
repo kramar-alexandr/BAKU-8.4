@@ -1333,11 +1333,16 @@ begin
 	string 255 tpcurrency,crn,obj;
 	record CurncyRoundOffBlock CROb;
   row CurncyRoundOffBlock CRObrw;
-	
+	record ItemDuplicatesVc IDr;
+	record INVc dupINr;
+	record ItemStatusVc IS2r;
+	boolean testf2, TrHs2;
+	record LocationVc Locr;
+	record SerBalVc SBr;
+	integer qtyDup;
 	blockload(CROb);
 	
   rmode5 = SetRoundMode(0,kRoundingDirectionToFromPosInf,kRoundingModeHalfUp,/*kRoundingStep5*/kRoundingStepNone);	//Edit----------------------Dima  17.04.2015
-  
 	IHr.ArtCode=INr.Code;
 	IHr.FileName="PUVc";
 	IHr.TransDate=todate;
@@ -1636,11 +1641,31 @@ begin
 			awercost = 0;
 			awercostcur = 0;
 			awercostbrandcur = 0;
+			qtyDup = 1;
 			MyFindAwerageCost(INr.Code,ISr.Location,INr.LastPurchCurncyCode,todate,realcur,brandcur,cost,curcost,curcost2);
 			awercost = cost;
 			awercostcur = curcost;
 			awercostbrandcur = curcost2;
+			IDr.OrigCode = INr.Code;
+			if(currentcompany!=18) then begin
+				while(LoopKey("OrigCode",IDr,1,true)) begin
+					dupINr.Code = IDr.DupCode;
+					if(ReadFirstMain(dupINr,1,true)) then begin
+						if(INr.BPIBrand==dupINr.BPIBrand) then begin
+							MyFindAwerageCost(dupINr.Code,ISr.Location,dupINr.LastPurchCurncyCode,todate,realcur,brandcur,cost,curcost,curcost2);
+							awercost = awercost + cost;
+							awercostcur = awercostcur + curcost;
+							awercostbrandcur = awercostbrandcur + curcost2;
+							qtyDup = qtyDup + 1;
+						end;
+					end;
+				end;
+				ResetLoop(IDr);
+			end;
 		// end;
+		awercost = awercost / qtyDup;
+		awercostcur = awercostcur / qtyDup;
+		awercostbrandcur = awercostbrandcur / qtyDup;
 		
 		
 		if(costprice>0 and nonblank(serial) and INr.SerNrf>0)then begin
@@ -1788,23 +1813,23 @@ begin
 					i = matrowcnt(CROb);
 				end;
 			end;
-			if(TempItemPrice!=0) begin
-				outstring(0,0,round(TempItemPrice - TempItemPrice*ITRebate/100,SetRoundModeD(CRObrw.RndRowsumMode)),false);
-			end else begin
-				outstring(0,0,round(inprice - inprice*ITRebate/100,SetRoundModeD(CRObrw.RndRowsumMode)),false);
-			end; 
+				if(TempItemPrice!=0) begin
+					outstring(0,0,round(TempItemPrice - TempItemPrice*ITRebate/100,SetRoundModeD(CRObrw.RndRowsumMode)),false);
+				end else begin
+					outstring(0,0,round(inprice - inprice*ITRebate/100,SetRoundModeD(CRObrw.RndRowsumMode)),false);
+				end; 
 		end;
-		outval(0,0,price,m4val,false);
-		if(nonblank(brandcur))then begin
-			outval(0,0,brandprice,m4val,false);
-		end;
-		outval(0,0,baseprice5,m4val,false);
-		//outstring(0,0,baseprice,false);
-		outstring(0,0,price*instock,false);
-		if(nonblank(brandcur))then begin
-			outval(0,0,brandprice*instock,m4val,false);
-		end;
-		outstring(0,0,baseprice*instock,false);
+			outval(0,0,price,m4val,false);
+			if(nonblank(brandcur))then begin
+				outval(0,0,brandprice,m4val,false);
+			end;
+			outval(0,0,baseprice5,m4val,false);
+			//outstring(0,0,baseprice,false);
+			outstring(0,0,price*instock,false);
+			if(nonblank(brandcur))then begin
+				outval(0,0,brandprice*instock,m4val,false);
+			end;
+			outstring(0,0,baseprice*instock,false);
 		total_price = total_price + baseprice*instock;
 		if(left(currentuser,2)=="SA")then begin
 			//logtext(0,"INr.LastPurchCurncyCode 2 " & INr.LastPurchCurncyCode);
@@ -1812,31 +1837,31 @@ begin
 		if(left(currentuser,2)=="SA")then begin
 				//logtext(0,"INr.LastPurchCurncyCode 4 " & INr.LastPurchCurncyCode);
 			end;
-		outstring(0,0,INr.LastPurchCurncyCode,false);
-		if (addclassf) then begin //Edit***************************Sasha2,14:37 08.02.2016 {
-		  for (i=30;i<typescnt;i=i+1) begin //if you change "30" do it in other places having "For" loop 
-		    pos = 0;
-		    ExtractObjWithSeparator(";",typeval[typecode[i]],true,pos,uloc);
-		    if (uloc==INr.Code) then begin
-		      ExtractObjWithSeparator(";",typeval[typecode[i]],true,pos,uloc);
-          outstring(0,0,uloc,false);
-        end else begin
-          outstring(0,0,"",false);
-		    end;
-		  end;
-		end; //Edit***************************Sasha2,14:37 08.02.2016 }
-	FindAndStoreINVcImgLink(INr,currentcompany,tstr2,filename);
-	if(left(tstr2,8)=="webcust/")then begin
-		tstr2 = right(tstr2,len(tstr2)-8);
-	end;
-	if(nonblank(tstr2))then begin
-		tstr2 = "http://" & RepSpec.f9 & "/" & tstr2;
-	end else begin
-		tstr2 = "";
-	end;
-	outstring(0,0,tstr2,false);
-	outstring(0,0,INr.GlobalArtCode,false);
-	endformat;
+			outstring(0,0,INr.LastPurchCurncyCode,false);
+			if (addclassf) then begin //Edit***************************Sasha2,14:37 08.02.2016 {
+				for (i=30;i<typescnt;i=i+1) begin //if you change "30" do it in other places having "For" loop 
+					pos = 0;
+					ExtractObjWithSeparator(";",typeval[typecode[i]],true,pos,uloc);
+					if (uloc==INr.Code) then begin
+						ExtractObjWithSeparator(";",typeval[typecode[i]],true,pos,uloc);
+						outstring(0,0,uloc,false);
+					end else begin
+						outstring(0,0,"",false);
+					end;
+				end;
+			end; //Edit***************************Sasha2,14:37 08.02.2016 }
+		FindAndStoreINVcImgLink(INr,currentcompany,tstr2,filename);
+		if(left(tstr2,8)=="webcust/")then begin
+			tstr2 = right(tstr2,len(tstr2)-8);
+		end;
+		if(nonblank(tstr2))then begin
+			tstr2 = "http://" & RepSpec.f9 & "/" & tstr2;
+		end else begin
+			tstr2 = "";
+		end;
+		outstring(0,0,tstr2,false);
+		outstring(0,0,INr.GlobalArtCode,false);
+		endformat;
 
 return;
 end;
@@ -2732,21 +2757,23 @@ end;
 
 
 //Edit----------------------Dima  23.02.2016
-procedure CollectAndPrintData(record RcVc RepSpec,record INVc INr, var record TotalsRepVc Totals,var vector string typeval,array string typecode,Integer typescnt,boolean addclassf,string brandcur)
+procedure CollectAndPrintData(record RcVc RepSpec,record INVc INr, var record TotalsRepVc Totals,var vector string typeval,array string typecode,Integer typescnt,boolean addclassf,string brandcur,boolean print)
 begin
  record ItemStatusVc ISr;
  record SerBalVc SBr;
  boolean TrHs2,testf2,TrHs,testf;
  date todate;
  record ItemHistVc IHr;
- integer acnt;
- vector val cqty,ccost;
- array string 10 acur;
- integer i;
+ integer acnt,acnt2;
+ vector val cqty,ccost,cqty2,ccost2;
+ array string 10 acur,acur2;
+ integer i,j;
  string 10 realcur;
  string 255 tstr2,filename,serverip;
  record LocationVc Locr;
-  
+ record ItemDuplicatesVc IDr;
+	record INVc dupINr;
+	record ItemStatusVc IS2r;
 	
   todate = RepSpec.d1;
   if(blank(todate))then begin
@@ -2774,9 +2801,42 @@ begin
 			SBr.CostPrice = 0;
 			ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,"",SBr.CostPrice,acnt,cqty,ccost,acur,brandcur);
 			//logtext(0,"CollectAndPrintData " & ISr.Instock & " " & ISr.Location);
+			if(currentcompany!=18) then begin
+				IDr.OrigCode = INr.Code;
+				TrHs = true;
+				while(LoopKey("OrigCode",IDr,1,TrHs)) begin
+					if(IDr.OrigCode!=INr.Code) then begin TrHs = false; end;
+					if(TrHs) then begin
+						dupINr.Code = IDr.DupCode;
+						if(ReadFirstMain(dupINr,1,true)) then begin
+							if(INr.BPIBrand==dupINr.BPIBrand) then begin
+								IS2r.Code = dupINr.Code;
+								IS2r.Location = ISr.Location;
+								if(ReadFirstMain(IS2r,2,true)) then begin
+									if(IS2r.Instock>0) then begin
+										IS2r.Instock = ItemQtyPerDate(IS2r.Code,todate,ISr.Location,"",SBr.CostPrice,acnt2,cqty2,ccost2,acur2,brandcur);
+										ISr.Instock = ISr.Instock + IS2r.Instock;
+										For(i=0;i<acnt2;i=i+1) begin
+											if(INr.LastPurchCurncyCode==acur2[i] and nonblank(INr.LastPurchCurncyCode))then begin
+												cqty[INr.LastPurchCurncyCode] = cqty[INr.LastPurchCurncyCode] + cqty2[INr.LastPurchCurncyCode] + cqty2[""];
+												ccost[INr.LastPurchCurncyCode] = ccost[INr.LastPurchCurncyCode] + ccost2[INr.LastPurchCurncyCode] + ccost2[""];
+												cqty2[""] = blankval;
+												ccost2[""] = blankval;
+											end;
+										end; 
+									end;
+									if(IS2r.RsrvQty>0) then begin
+										ISr.RsrvQty = ISr.RsrvQty + IS2r.RsrvQty;
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+				ResetLoop(IDr);
+			end;
 		end;
 		if(ISr.Instock<=0)then begin testf2 = false; end;
-		
 		if(testf2)then begin
 			if(INr.SerNrf==0)then begin
 				For(i=0;i<acnt;i=i+1) begin
@@ -2796,7 +2856,9 @@ begin
 						if(left(currentuser,2)=="SA")then begin
 							//logtext(0,"PrintInfo2 1 " & INr.LastPurchCurncyCode);
 						end;
-						PrintInfo2(INr,ISr,"",0,0,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,realcur,brandcur,RepSpec);
+						if(print) then begin
+							PrintInfo2(INr,ISr,"",0,0,todate,Totals.TotQuant,Totals.TotCost,Totals.TotPrice,typeval,typecode,typescnt,addclassf,realcur,brandcur,RepSpec);
+						end;
 					end;
 				end;
 				
@@ -2816,7 +2878,6 @@ begin
 						end;
 					end;
 				end;
-				resetloop(SBr);
 			end;
 		end;
 	end;
@@ -2865,7 +2926,9 @@ begin
 	boolean userbrandf, checkBrand;
 	record BrandsReportCCBlock Brcb;
 	row BrandsReportCCBlock Brcbw;
-
+	record ItemDuplicatesVc IDr;
+	record INVc dupINr;
+	boolean dublikateItem;
 	if(RepSpec.flags[8]!=0) then begin
 		SetCompany(RepSpec.flags[8],false);
 		blockload(Brcb);
@@ -3197,7 +3260,7 @@ begin
 										end;
 									end;
 									if(checkBrand) then begin
-										CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+										CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur, true);
 									end;	
 								end else begin
 									IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
@@ -3207,7 +3270,7 @@ begin
 						ResetCompany(oldcompany);	
 					end else begin
 						if(CurrentCompany!=28)then begin
-							CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+							CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur, true);
 						end else begin
 							IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
 						end;
@@ -3219,9 +3282,19 @@ begin
 			INr.DispGroups = "";//= RepSpec.f3;
 			class = RepSpec.f3;
 			TrHs1 = true;
-
 			while(loopkey("MyDispGroups",INr,1,TrHs1)) begin
-			
+				dublikateItem = false;
+				IDr.DupCode = INr.Code;
+				if(ReadFirstKey("DupCode",IDr,1,true)) then begin
+					dupINr.Code = IDr.OrigCode;
+					TrHs = true;
+					while(LoopMain(dupINr,1,TrHs)) begin
+						if(dupINr.BPIBrand==INr.BPIBrand) then begin
+							dublikateItem = true;
+						end;
+					end;
+					ResetLoop(dupINr);
+				end;
 				testf1 = true;
 				if(nonblank(RepSpec.f3))then begin
 					testf1 = SetInSet2(class,INr.DispGroups);
@@ -3299,7 +3372,7 @@ begin
 											end;
 										end;
 										if(checkBrand) then begin
-											CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+											CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur,!dublikateItem);
 										end;	
 									end else begin
 										IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
@@ -3309,7 +3382,7 @@ begin
 							ResetCompany(oldcompany);	
 						end else begin
 							if(CurrentCompany!=28)then begin
-								CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+								CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur,!dublikateItem);
 							end else begin
 								IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
 							end;
