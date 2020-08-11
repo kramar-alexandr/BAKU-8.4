@@ -39,6 +39,7 @@ external procedure NextCode(string,var string);
 external procedure CheckFlush(var Integer,Integer);
 external procedure FillClassInM4Text(var record GlobalItemVc, string, string, string, string, 
 																																			string, string, string);
+external updating procedure CreateChiccoGlobalItem(string, string, string, string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -13885,6 +13886,142 @@ return;
 end;
 
  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 15:35 08.05.2020
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+global procedure ImportAddChiccoItemsFromFolderQueuedIn()  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 15:34 07.05.2020
+begin
+record INVc INr,oldINr;
+integer i,flushcnt,curcomp,cnt,j,k,CompQty,ErrCnt1,ErrCnt2,mtrw,INComp,StatAllRows,StatOkRows,StatFailItemRows,StatFailClassRows,ErrClasscnt,ErrCnt3,slipcont;
+record GlobalItemVc GIr, ExtPrGIr;
+string 100 artcode,brand,newBrand,code,glCode,tstr,bltstr,cntstr,origartcode;
+record BPIBrandVc BPIBrandr;
+record BPIBrandVc BPIBrand1r;
+area ErrAr1, ErrAr2, reply;
+array string 255 abrand,anewbrand,ErrArr,ErrAr3;
+array string 100 headers,params;
+record CompaniesBlock Compb;
+row CompaniesBlock Comprw;
+vector boolean Errf, Classf;
+array string 255 ItemCode,ItemName,ItemBrand,ItemPrice;
+boolean INrf, ExtPrItemf;
+vector string 255 classCode;
+string 255 filename, FinRow;
+LongInt rcnt, r, okend ;
+vector string 255 vparams, vartcode, vbrand, vorigartcode,vJSONParENG,vJSONParRUS,vJSONParAZE;
+record JSONClassNamesVc JCNr;
+vector boolean vJSONClassf;
+		
+	BlockLoad(Compb);
+	
+	CompQty = matrowcnt(Compb);
+	curcomp = currentcompany;	
+	// SetImportCodePage("CP1251");
+	SetCompany(1,false);
+	okend = 0;
+	for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ChiccoIN");i=i+1) begin
+		if (right(GetFileNameInDir("/mnt/database/Ecommerce/ChiccoIN",i),4) == ".txt") then begin 
+			filename = GetFileNameInDir("/mnt/database/Ecommerce/ChiccoIN",i);
+			i = CountFilesInDir("/mnt/database/Ecommerce/ChiccoIN"); 
+		end;
+	end;
+	if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/ChiccoIN/" & filename))then begin
+		if (fileexists("/mnt/database/Ecommerce/ChiccoOUT/" & filename)) then begin
+			delete_file("/mnt/database/Ecommerce/ChiccoOUT/" & filename);
+		end;
+		logtext(0,"start ImportAddChiccoItemsFromFolderQueuedIn");
+		SetImportCodePage("UTF-8");
+		openfile("/mnt/database/Ecommerce/ChiccoIN/" & filename);
+	// _______________________________________________________________________
+	// for (i=0;i<CountFilesInDir("ChiccoIN");i=i+1) begin
+		// if (right(GetFileNameInDir("ChiccoIN",i),4) == ".txt") then begin 
+			// filename = GetFileNameInDir("ChiccoIN",i);
+			// i = CountFilesInDir("ChiccoIN"); 
+		// end;
+	// end;
+	// if(nonblank(filename) and fileexists("ChiccoIN/" & filename))then begin
+		// if (fileexists("ChiccoOUT/" & filename)) then begin
+			// delete_file("ChiccoOUT/" & filename);
+		// end;
+		// logtext(0,"start ImportAddChiccoItemsFromFolderQueuedIn");
+		// SetImportCodePage("UTF-8");
+		// openfile("ChiccoIN/" & filename);
+		// _______________________________________________________________________
+		tstr = importfield;
+		tstr = right(tstr,(len(tstr)-1));
+		logtext(0,tstr);
+		logtext(0,USetStr(36229));
+		if(tstr!=USetStr(36229))then begin
+			logtext(0,"ImportAddClassIn codepage error");
+			AddTextToArea	(USetStr(36351) & chr(09),ErrAr1);
+			while (TestEOF()==false) begin
+				if (NextImportLine(true)) then begin end;
+			end;
+		end;
+		if (NextImportLine(true)) then begin end;
+		if (NextImportLine(true)) then begin end;
+		i=0;
+		while (TestEOF()==false) begin
+			tstr = trim(ImportField);
+			ItemCode[i] = tstr;
+			tstr = trim(ImportField);
+			ItemName[i] = tstr;
+			tstr = trim(ImportField);
+			ItemBrand[i] = tstr;
+			tstr = trim(ImportField);
+			// ItemPrice[i] = tstr;
+			for (j=0;j<len(tstr);j=j+1) begin
+				if(Mid(tstr,j,1)==",") then begin
+					ItemPrice[i] = ItemPrice[i] & ".";
+				end else begin
+					ItemPrice[i] = ItemPrice[i] & Mid(tstr,j,1);
+				end;
+			end;
+			if (NextImportLine(true)) then begin end;
+			i=i+1;
+		end;
+		cnt = i;
+		CloseFile;
+		MoveFile(filename,"/mnt/database/Ecommerce/ChiccoIN","/mnt/database/Ecommerce/ChiccoOUT");
+		delete_file("/mnt/database/Ecommerce/ChiccoIN/" & filename);
+		runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
+		// _________________________________________________________________
+		// MoveFile(filename,"ChiccoIN","ChiccoOUT");
+		// delete_file("ChiccoIN/" & filename);
+		// runprogram("chmod","-R a+rw Ecommerce");
+		
+		for (i=0;i<cnt;i=i+1) begin
+			if(nonblank(ItemCode[i])) then begin 
+				queued.CreateChiccoGlobalItem(ItemCode[i],ItemBrand[i],ItemPrice[i],ItemName[i]);
+				MilliSleep(50);
+			end;
+		end;
+	end;
+	return;
+end;
+
+
+
+
+
+
+
+
 
 
 
