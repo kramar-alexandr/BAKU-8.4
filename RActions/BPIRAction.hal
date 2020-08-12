@@ -344,18 +344,18 @@ end;
 
 global updating procedure CreateDuplicesInAllCompanies (record ItemDuplicatesVc IDr)
 begin
-	integer OrigCompany, SourceComp, i;
+	integer OrigCompany, SourceComp, i, j;
 	record ItemDuplicatesVc newIDr, thisIDr;
 	record ConsItemVc CIr;
 	record INVc INr, oldINr;
 	record CompaniesBlock Compb;
   row CompaniesBlock Comprw;
-	longint j;
 	string 255 OrigBrand, DubBrand, ConsOrigCode, ConsDupCode, OtherCompOrigBrand, OtherCompDubBrand, thisOrigCode, thisDupCode, ECOrigCode, ECDupCode, OldINCode, NewINCode;
 	boolean TrHs;
-	record GlobalItemVc GIr;
+	record GlobalItemVc DupGIr, OrigGIr, OldDupGIr, OldOrigGIr;
+	row GlobalItemVc DupGIrw, OrigGIrw;
 	string 255 OrigCode, DupCode;
-	boolean INSorcesf;
+	boolean INSorcesf, LocAddDupInstf;
 	
 	blockload(Compb);
 	OrigCompany = CurrentCompany;
@@ -410,6 +410,42 @@ begin
 		end;
 		
 		if (OrigCompany!=18) then begin
+			DupGIr.Code = DubBrand & "_" & DupCode;
+			if (ReadFirstMain(DupGIr,1,true)) then begin
+				OrigGIr.Code = OrigBrand & "_" & OrigCode;
+				if (ReadFirstMain(OrigGIr,1,true)) then begin
+					for (i=0;i<matrowcnt(DupGIr);i=i+1) begin
+						matrowget(DupGIr,i,DupGIrw);
+						if (DupGIrw.Instock>0) then begin
+							LocAddDupInstf = false;
+							for (j=0;j<matrowcnt(OrigGIr);j=j+1) begin
+								matrowget(OrigGIr,j,OrigGIrw);
+								if (OrigGIrw.Location==DupGIrw.Location) then begin
+									OrigGIrw.Instock = OrigGIrw.Instock + DupGIrw.Instock;
+									matrowput (OrigGIr,j,OrigGIrw);
+									recordStore(OrigGIr,true);
+									LocAddDupInstf = true;
+								end;
+								if (!LocAddDupInstf) then begin
+									OrigGIrw.Location = DupGIrw.Location;
+									OrigGIrw.Instock = DupGIrw.Instock;
+									matrowput (OrigGIr,matrowcnt(OrigGIr),OrigGIrw);
+									recordStore(OrigGIr,true);
+								end;
+							end;
+						end;
+					end;
+				end;
+				RecordCopy(OldDupGIr,DupGIr);
+				DupGIr.HansaName = "";
+				RecordUpdate(OldDupGIr,DupGIr,true);
+				logtext(0,DupGIr.Code & " Key fields cleared");
+				RecordCopy(OldOrigGIr,OrigGIr);
+				RecordUpdate(OldOrigGIr,OrigGIr,true);
+			end;
+			
+			
+			
 			SetCompany(18,false);
 			CIr.LocCode = OrigCode;
 			CIr.BrandCode = OrigBrand;
@@ -471,6 +507,41 @@ begin
 				DupCode = CIr.LocCode;
 			end;
 			SetCompany(1,false);
+			
+			DupGIr.Code = DubBrand & "_" & DupCode;
+			if (ReadFirstMain(DupGIr,1,true)) then begin
+				OrigGIr.Code = OrigBrand & "_" & OrigCode;
+				if (ReadFirstMain(OrigGIr,1,true)) then begin
+					for (i=0;i<matrowcnt(DupGIr);i=i+1) begin
+						matrowget(DupGIr,i,DupGIrw);
+						if (DupGIrw.Instock>0) then begin
+							LocAddDupInstf = false;
+							for (j=0;j<matrowcnt(OrigGIr);j=j+1) begin
+								matrowget(OrigGIr,j,OrigGIrw);
+								if (OrigGIrw.Location==DupGIrw.Location) then begin
+									OrigGIrw.Instock = OrigGIrw.Instock + DupGIrw.Instock;
+									matrowput (OrigGIr,j,OrigGIrw);
+									recordStore(OrigGIr,true);
+									LocAddDupInstf = true;
+								end;
+								if (!LocAddDupInstf) then begin
+									OrigGIrw.Location = DupGIrw.Location;
+									OrigGIrw.Instock = DupGIrw.Instock;
+									matrowput (OrigGIr,matrowcnt(OrigGIr),OrigGIrw);
+									recordStore(OrigGIr,true);
+								end;
+							end;
+						end;
+					end;
+				end;
+				RecordCopy(OldDupGIr,DupGIr);
+				DupGIr.HansaName = "";
+				RecordUpdate(OldDupGIr,DupGIr,true);
+				logtext(0,DupGIr.Code & " Key fields cleared");
+				RecordCopy(OldOrigGIr,OrigGIr);
+				RecordUpdate(OldOrigGIr,OrigGIr,true);
+			end;
+			
 			thisIDr.OrigCode = OrigCode;
 			thisIDr.DupCode = DupCode;
 			thisIDr.OrigBrandCode = OrigBrand;
