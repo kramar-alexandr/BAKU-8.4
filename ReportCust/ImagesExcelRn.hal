@@ -86,13 +86,14 @@ begin
   string 100 tstr;
   string 50 uloc,brand,brandcode,pricecur,dicode,diname,ditype;
   integer pos,cnt,SQi,TSi,i,Ccntr,Scntr,rowcnt,mtrw,curcomp;
-  boolean TrHs,testf,test2f,f,testf1;
+  boolean TrHs,testf,test2f,f,testf1,locflag;
   val price;
   vector boolean stockInArr;
   vector integer stockQty;
   array string 20 stocks;
   array string 100 typeClassif,classif;
   record OldDIVc OldDIr;
+  record ConsItemVc CIr;
 
 	setexportcodepage("UTF8");
   logtext(0,currentcompany & " - " & currentuser & " - ImagesExcel started");
@@ -152,7 +153,7 @@ begin
 				ClearStocksStuff(SQi,stockInArr,stocks,stockQty);
 				ClearClassifStuff(TSi,typeClassif,classif);
 	//collect stocks
-				setcompany(currentcompany,false);
+				//setcompany(currentcompany,false);
 				ISr.Code = INr.Code;
 				TrHs = true;
 				while (loopmain(ISr,1,TrHs)) begin
@@ -171,31 +172,35 @@ begin
 					end;					
 				end;
 				resetloop(ISr);
-					
-				if(currentcompany!=18 and RepSpec.flags[5]!=BlankVal and RepSpec.flags[5]!=0)then begin
+
+				if(currentcompany!=18 and RepSpec.flags[5]!=0)then begin
 					setcompany(18,false);
-					ISr.Code = INr.AlternativeCode;
-					TrHs = true;
-					while (loopmain(ISr,1,TrHs)) begin
-						testf = true;
-						if (ISr.Code!=INr.Code) then begin testf = false; TrHs = false; end;
-						if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
-						if (ISr.Location==";;;") then begin testf = false; end;
-						if (ISr.Instock==0) then begin testf = false; end;
-						if (testf) then begin
-							if !stockInArr[ISr.Location] then begin
-								stockInArr[ISr.Location] = true;
-								stocks[SQi] = ISr.Location;
-								SQi = SQi + 1;
+					CIr.LocCode = INr.Code;
+					CIr.BrandCode = INr.BPIBrand;
+					if(ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
+						ISr.Code = CIr.Code;
+						TrHs = true;
+						while (loopmain(ISr,1,TrHs)) begin
+							testf = true;
+							if (ISr.Code!=CIr.Code) then begin testf = false; TrHs = false; end;
+							if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
+							if (ISr.Location==";;;") then begin testf = false; end;
+							if (ISr.Instock==0) then begin testf = false; end;
+							if (testf) then begin
+								if !stockInArr[ISr.Location] then begin
+									stockInArr[ISr.Location] = true;
+									stocks[SQi] = ISr.Location;
+									SQi = SQi + 1;
+								end;
+								stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
 							end;
-							stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
 						end;
+						resetloop(ISr);
 					end;
-					resetloop(ISr);
 					resetcompany(curcomp);
 				end;
 				
-				if(currentcompany!=4 and RepSpec.flags[6]!=BlankVal and RepSpec.flags[6]!=0)then begin
+				if(currentcompany!=4 and RepSpec.flags[6]!=0)then begin
 					setcompany(4,false);
 					ISr.Code = INr.Code;
 					TrHs = true;
@@ -211,12 +216,12 @@ begin
 								stocks[SQi] = ISr.Location;
 								SQi = SQi + 1;
 							end;
-							stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
 						end;
 					end;
 					resetloop(ISr);
 					resetcompany(curcomp);
 				end;
+
   
 				if nonblank(stocks[0]) then begin
 	//find brand and collect classifications
@@ -497,12 +502,14 @@ begin
 						BeginRow(sheetnum,fileToSave,rownum,0,blankval);
 							colnum = 2;
 							f = false;
+							locflag = false;
 							if (Scntr<stocks.length) then begin
 								if (nonblank(stocks[Scntr])) then begin
 									style = 12;
 									StringCell(sheetnum,fileToSave,colnum,rownum,style,"Склад",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
 									style = 13;
 									StringCell(sheetnum,fileToSave,colnum,rownum,style,"Кол-во",SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
+									locflag = true;
 								end;
 							end;
 							if (!f) then begin
@@ -513,9 +520,11 @@ begin
 								qtyOfEmpStr = 1;
 								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
 							end;
-							style = 2;
-							qtyOfEmpStr = 2;
-							EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							if(!locflag)then begin
+								style = 2;
+								qtyOfEmpStr = 2;
+								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+							end;
 							f = false;
 							if (Ccntr<typeClassif.length) then begin
 								if (nonblank(typeClassif[Ccntr])) then begin
@@ -542,8 +551,10 @@ begin
 							BeginRow(sheetnum,fileToSave,rownum,0,blankval);
 								colnum = 2;
 								f = false;
+								locflag = false;
 								if (Scntr<stocks.length) then begin
 									if (nonblank(stocks[Scntr])) then begin
+										locflag = true;
 										style = 14;
 										StringCell(sheetnum,fileToSave,colnum,rownum,style,stocks[Scntr],SharedStrings,numOfUniqueSharedStrings,numOfSharedStrings);
 										style = 15;
@@ -559,9 +570,11 @@ begin
 									qtyOfEmpStr = 1;
 									EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
 								end;
-								style = 2;
-								qtyOfEmpStr = 2;
-								EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								if(!locflag)then begin
+									style = 2;
+									qtyOfEmpStr = 2;
+									EmptyCell(sheetnum,fileToSave,colnum,rownum,style,qtyOfEmpStr);
+								end;
 								f = false;
 								if (Ccntr<typeClassif.length) then begin
 									if (nonblank(typeClassif[Ccntr])) then begin
@@ -702,7 +715,7 @@ begin
   INr.Code = "";
   INCi = 0;
   while (loopmain(INr,1,true)) begin
-		if(RepSpec.flags[2]!=0) then begin
+		if(RepSpec.flags[2]!=0 or currentcompany==18) then begin
 			tempINCodes[INCi] = INr.AlternativeCode;
 		end else begin
 			tempINCodes[INCi] = INr.Code;
