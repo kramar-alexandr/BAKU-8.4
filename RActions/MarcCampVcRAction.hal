@@ -3787,12 +3787,14 @@ begin
 	integer i,j,wn;
 	longint a;
 	string 255 hex,out,warning,errstr,loyaltycard,namesname;
-	boolean UPDf,chsum, TrHs;
+	boolean UPDf,chsum, TrHs, IdentClientf;
 	record AccBlock ARb;
 	record CUVc CUr;
 	record ItemDuplicatesVc IDr;
 	record GlobalItemVc GIr, DupGIr;
 	row GlobalItemVc GIrw, DupGIrw;
+	record LoyaltyCardVc LoyCardr;
+
 	
 	BlockLoad(ARb);
 	
@@ -3827,7 +3829,7 @@ begin
 	street = ParseHEX(street);
 	house = ParseHEX(house);
 	apart = ParseHEX(apart);
-	namesname = pn & " " & sn;
+	namesname = uname & " " & sn;
 	id = JSONGet(datajson,"order[0]/id");
 	sum = JSONGet(datajson,"order[0]/summ");
 	pay = JSONGet(datajson,"order[0]/pay");
@@ -3887,39 +3889,86 @@ begin
 				ORrw.SalesAcc = ARb.DomSalesAcc;
 				MatRowPut(ORr,i,ORrw);
 			end;
-			
-			CUr.Name = namesname;
-			if (ReadFirstKey("Name",CUr,1,true)) then begin
-				ORr.ECLoyaltyCard = CUr.Code;
-			end else begin
-				CUr.Code = "EC_" & ph;
-				if (ReadFirstMain(CUr,1,true)) then begin
-					ORr.ECLoyaltyCard = CUr.Code;
+			IdentClientf = false;
+			if (blank(ORr.ECLoyaltyCard) and nonblank(loyaltycard)) then begin
+				LoyCardr.CustCode = loyaltycard;
+				if (ReadFirstKey("CustCode",LoyCardr,1,true)) then begin
+					ORr.ECLoyaltyCard = LoyCardr.SerNr;
+					IdentClientf = true;
 				end else begin
-				  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:48 29.07.2020
-					// recordNew(CUr);
-					// CUr.Code =  "EC_" & ph;
-					// CUr.Name = namesname;
-					// CUr.Phone = ph;
-					// CUr.CRMLName = sn;
-					// CUr.CRMName = pn;
-					// CUr.CRMName = city;
-					// CUr.CRMName = street;
-					// CUr.CRMName = house;
-					// CUr.CRMName = apart;
-					// CUr.CreateLocation = "MAIN";
-					// recordStore(CUr,true);
-					// ORr.ECLoyaltyCard = CUr.Code;
-					// _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:48 29.07.2020
+					LoyCardr.SerNr = loyaltycard;
+					if (ReadFirstMain(LoyCardr,1,true)) then begin
+						ORr.ECLoyaltyCard = LoyCardr.SerNr;
+						IdentClientf = true;
+					end;
+				end;	
+			end;
+			
+			if (!IdentClientf) then begin
+				CUr.Name = "EC_" & ph;
+				if (ReadFirstKey("Name",CUr,1,true)) then begin
+					ORr.ECLoyaltyCard = CUr.Code;
+					IdentClientf = true;
 				end;
+			end;
+			if (!IdentClientf) then begin
+				if (left(ph,6)=="+99412") then begin
+					CUr.Phone = ph;
+					if (ReadFirstKey("Phone",CUr,1,true)) then begin
+						ORr.ECLoyaltyCard = CUr.Code;
+						IdentClientf = true;
+					end;
+				end;
+			end;
+			if (!IdentClientf) then begin
+				if (left(ph,6)=="+99450" or left(ph,6)=="+99451" or left(ph,6)=="+99455" or left(ph,6)=="+99470" or left(ph,6)=="+99477") then begin
+					CUr.Mobile = ph;
+					if (ReadFirstKey("Mobile",CUr,1,true)) then begin
+						ORr.ECLoyaltyCard = CUr.Code;
+						IdentClientf = true;
+					end;
+				end;
+			end;
+			if (!IdentClientf) then begin
+				if (left(ph,6)=="+99450" or left(ph,6)=="+99451" or left(ph,6)=="+99455" or left(ph,6)=="+99470" or left(ph,6)=="+99477") then begin
+					CUr.AltPhone = ph;
+					if (ReadFirstKey("AltPhone",CUr,1,true)) then begin
+						ORr.ECLoyaltyCard = CUr.Code;
+						IdentClientf = true;
+					end;
+				end;
+			end;
+			if (!IdentClientf) then begin
+				CUr.eMail = em;
+				if (ReadFirstKey("eMail",CUr,1,true)) then begin
+					ORr.ECLoyaltyCard = CUr.Code;
+					IdentClientf = true;
+				end;
+			end;
+			if (!IdentClientf) then begin
+				recordNew(CUr);
+				CUr.Code =  "EC_" & ph;
+				CUr.Name = namesname;
+				if (left(ph,6)=="+99412") then begin
+					CUr.Phone = ph;
+				end;
+				if (left(ph,6)=="+99450" or left(ph,6)=="+99451" or left(ph,6)=="+99455" or left(ph,6)=="+99470" or left(ph,6)=="+99477") then begin
+					CUr.Mobile = ph;
+				end;
+				CUr.eMail = em;
+				CUr.CRMLName = sn;
+				CUr.CRMName = uname;
+				CUr.InvAddr4 = city;
+				CUr.InvAddr0 = street;
+				CUr.InvAddr1 = house;
+				CUr.InvAddr2 = apart;
+				CUr.CreateLocation = "MAIN";
+				recordStore(CUr,true);
+				ORr.ECLoyaltyCard = CUr.Code;
 			end;
 			
 		
 			ORr.CustCode = "NOFULLNAME";
-			
-			if (blank(ORr.ECLoyaltyCard)) then begin
-				ORr.ECLoyaltyCard = loyaltycard;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 10 04 2020 y. at 6:27:38 PM
-			end;
 			ORr.Addr0 = pn & " " & sn;
 			if(pay=="false")then begin
 				ORr.PayDeal = "PP";
