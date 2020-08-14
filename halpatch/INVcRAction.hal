@@ -251,8 +251,8 @@ end;
 
 global updating procedure UpdateGlobalItem(var record INVc INr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger10:31 21.08.2018
 begin
-	record GlobalItemVc GIr,mainGIr, TPCPGIr;
-	row GlobalItemVc GIrw;
+	record GlobalItemVc GIr,mainGIr, TPCPGIr, dupGIr;
+	row GlobalItemVc GIrw, dupGIrw;
 	record INVc oldINr;
 	record DIVc DIr;
 	record ItemHistVc IHr;
@@ -276,7 +276,8 @@ begin
 	row INVc INrw;
 	string 255 obj,crn,tpcurrency;
 	val fr,to1,to2,br1,br2,TempItemPrice,tprice; 
-	date td,tdp;	
+	date td,tdp;
+	record ItemDuplicatesVc IDr;	
 	
 	logtext(0,currentcompany & "UpdateGlobalItem " & INr.Code);
 	
@@ -441,9 +442,28 @@ begin
 						for(i=0;i<matrowcnt(GIr);i=i+1)begin
 							matrowget(GIr,i,GIrw);
 							if(GIrw.Location==ISr.Location)then begin
-							 foundf = true;
-							 GIrw.Instock = ISr.Instock - ISr.RsrvQty;
-							 MatRowPut(GIr,i,GIrw);
+								foundf = true;
+								GIrw.Instock = ISr.Instock - ISr.RsrvQty;
+								MatRowPut(GIr,i,GIrw);
+								IDr.OrigCode = right(GIr.Code,len(GIr.Code)-9);
+								TrHs = true;
+								while (loopmain(IDr,1,TrHs)) begin
+									testf = true;
+									if (IDr.OrigCode!=right(GIr.Code,len(GIr.Code)-9)) then begin TrHs = false; testf = false; end;
+									if (IDr.OrigBrandCode!=left(GIr.Code,8)) then begin testf = false; end;
+									if (testf) then begin
+										dupGIr.Code = IDr.DupBrandCode & "_" & IDr.DupCode;
+										if (ReadFirstMain(dupGIr,1,true)) then begin
+											for(j=0;j<matrowcnt(dupGIr);j=j+1)begin
+												matrowget(dupGIr,j,dupGIrw);
+												if(dupGIrw.Location==ISr.Location)then begin
+													GIrw.Instock = GIrw.Instock + dupGIrw.Instock;
+													MatRowPut(dupGIr,i,dupGIrw);
+												end;
+											end;
+										end;
+									end;
+								end;
 							end;
 						end;
 						if(foundf==false)then begin
