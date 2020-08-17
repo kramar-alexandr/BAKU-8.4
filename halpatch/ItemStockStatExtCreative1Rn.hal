@@ -522,13 +522,13 @@ begin
   record ItemStatusVc ISr;
   record PLVc PLr;
   string 100 item,location,findkey,class;
-  record INVc INr;
+  record INVc INr,INccr;
   boolean TrHs,testf,TrHs1,testf1,TrHs2,testf2;
   record DIVc DIr;
   integer findint;
   record UserVc User;
   boolean userlocation;
-  integer pos;
+  integer pos,curcomp;
   string 50 uloc,brand,model,classfind,retailbasecur;
   record SerBalVc SBr;
   date todate;
@@ -538,9 +538,12 @@ begin
 	vector boolean userbrand;
   boolean userbrandf;
   longint curtick;
+  record ConsItemVc CIr;
 	
 	curtick = getcurtick();
   userbrandf = CheckUserBrands(currentuser,userbrand);
+  
+  curcomp = currentcompany;
   
   BlockLoad(BCb);
   
@@ -728,6 +731,54 @@ begin
 						end;
 					end;
 					resetloop(ISr);
+					
+					if(RepSpec.flags[0]==1)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 17 08 2020 y. at 9:45:08 AM
+						setcompany(18,false);
+							CIr.LocCode = INr.Code;
+							CIr.BrandCode = INr.BPIBrand;
+							if(readfirstkey("LocCodeBrand",CIr,2,true))then begin
+								INccr.Code = CIr.Code;
+								readfirstmain(INccr,1,true);
+								ISr.Code = INccr.Code;
+								TrHs2 = true;
+								while(loopmain(ISr,1,TrHs2))begin
+									testf2 = true;
+									if(ISr.Code!=INccr.Code)then begin testf2 = false; TrHs2 = false; end;
+									if(nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2)then begin testf2 = false; end;
+									if(ISr.Location==";;;")then begin testf2 = false; end;
+									if(testf2)then begin
+										SBr.CostPrice = 0;
+										ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,"",SBr.CostPrice);
+									end;
+									if(ISr.Instock<=0)then begin testf2 = false; end;
+					
+									if(testf2)then begin
+										if(INccr.SerNrf==0)then begin
+											setcompany(curcomp,false);
+												PrintInfo(INr,ISr,"",0,0,todate,total_qty,total_cost,total_price);
+											setcompany(18,false);
+										end else begin
+											SBr.Item = INccr.Code;
+											SBr.Location = ISr.Location;
+											while(loopmain(SBr,2,(SBr.Item==INccr.Code and SBr.Location==ISr.Location)))begin
+												if(SBr.Item==INccr.Code and SBr.Location==ISr.Location)then begin
+													ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,SBr.Serial,SBr.CostPrice);
+													if(ISr.Instock>0)then begin
+														setcompany(curcomp,false);
+															PrintInfo(INr,ISr,SBr.Serial,SBr.Quant,SBr.CostPrice,todate,total_qty,total_cost,total_price);
+														setcompany(18,false);
+													end;
+												end;
+											end;
+											resetloop(SBr);
+										end;
+									end;
+								end;
+								resetloop(ISr);
+							end;
+						setcompany(curcomp,false);
+					end;
+					
 				end;
 			end;
 			resetloop(INr);
