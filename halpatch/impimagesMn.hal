@@ -4150,8 +4150,8 @@ end;
 
 global updating procedure GlobalItemVcRecStPrMn(record RcVc RepSpec) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger10:31 21.08.2018
 begin
- record GlobalItemVc GIr,mainGIr;
-	row GlobalItemVc GIrw;
+ record GlobalItemVc GIr,mainGIr,DupGir,OldGir;
+	row GlobalItemVc GIrw, DupGIrw;
 	record INVc INr,oldINr;
 	record DIVc DIr;
 	record ItemHistVc IHr;
@@ -4161,7 +4161,7 @@ begin
 	row CompaniesBlock Comprw;
 	row RebVc Rebrw;
 	record LocationVc LCr;
-	integer CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant;
+	LongInt CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant,k,OrGCcnt,y;
 	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1;
 	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
 	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
@@ -4173,10 +4173,26 @@ begin
 	record BPIBrandVc BPIBr;
 	record WEBReservStock WRSb;
 	boolean entf,locfnd;
+	record ItemDuplicatesVc IDr;
+	vector boolean OrigCodes;
+	vector string 255 OrigBrandCodes;
+	array string 255 aOrigGlobalCodes;
 	
 	CompQty = 29;
 	OldComp = CurrentCompany;
 	BlockLoad(Compb);
+	
+	i=0;
+	IDr.OrigCode = "";
+	while (loopMain(IDr,1,true)) begin
+		OrigCodes[IDr.OrigCode] = true;
+		OrigBrandCodes[IDr.OrigCode] = IDr.OrigBrandCode;
+		aOrigGlobalCodes[i] = IDr.OrigBrandCode & "_" & IDr.OrigCode;
+		i=i+1;
+	end;
+	ResetLoop(IDr);
+	OrGCcnt = i;
+	
 	
 	TrHs1=true;
 	if(nonblank(RepSpec.f1)) then begin
@@ -4184,9 +4200,11 @@ begin
 	end else begin
 		GIr.Code = "";
 	end;	
-	while(loopmain(GIr,1,TrHs1))begin
-		if(nonblank(RepSpec.f1) and GIr.Code!=RepSpec.f1)then begin TrHs1 = false; end;
-		if(TrHs1)then begin
+	while (loopmain(GIr,1,TrHs1)) begin
+		testf = true;
+		if(nonblank(RepSpec.f1) and GIr.Code!=RepSpec.f1)then begin TrHs1 = false; testf = false; end;
+		if (OrigCodes[GIr.HansaCode] and OrigBrandCodes[GIr.HansaCode]==GIr.BPIBrand) then begin testf = false; end;
+		if(testf)then begin
 			for (i=0;i<CompQty;i=i+1)begin
 				matrowget(Compb,i,Comprw);
 				if(Comprw.ActiveStatus==0)then begin
@@ -4216,6 +4234,9 @@ begin
 										if(GIrw.Instock!=(ISr.Instock-ISr.RsrvQty))then begin
 											logtext(0,ISr.Code & "<> Old" & GIrw.Instock & "<> New" & (ISr.Instock - ISr.RsrvQty));
 											GIrw.Instock = ISr.Instock - ISr.RsrvQty;
+											if (CurrentCompany==1 and GIrw.Instock==1) then begin
+												GIrw.Instock = 0;
+											end;
 											MatRowPut(GIr,j,GIrw);
 											entf = true;
 										end;
@@ -4226,6 +4247,9 @@ begin
 								GIrw.Location = aloc[li];
 								if(ReadFirstMain(ISr,2,true))then begin
 									GIrw.Instock = ISr.Instock - ISr.RsrvQty;
+									if (CurrentCompany==1 and GIrw.Instock==1) then begin
+										GIrw.Instock = 0;
+									end;
 									entf = true;
 									MatRowPut(GIr,matrowcnt(GIr),GIrw);
 								end;
@@ -4240,6 +4264,93 @@ begin
 			end;
 		end;
 	end;	
+	ResetLoop(GIr);
+	for (y=0;y<OrGCcnt;y=y+1) begin 
+		GIr.Code = aOrigGlobalCodes[y];
+		if (ReadFirstMain(GIr,1,true)) then begin
+			for (i=0;i<CompQty;i=i+1)begin
+				matrowget(Compb,i,Comprw);
+				if(Comprw.ActiveStatus==0)then begin
+					entf = false;
+					SetCompany(i+1,false);
+					blockload(WRSb);
+					aloccnt = 0;
+					LCr.Code = "";
+					while (LoopMain(LCr,1,true)) begin
+						aloc[aloccnt] = LCr.Code;
+						aloccnt = aloccnt + 1;
+					end;
+					resetloop(LCr);
+					TrHs = true;
+					For(li=0;li<aloccnt;li=li+1) begin
+						locfnd = false;
+						if(setinset(aloc[li],WRSb.ResStockSet))then begin
+							ISr.Code = GIr.HansaCode;
+							ISr.Location = aloc[li];
+							for(j=0;j<matrowcnt(GIr);j=j+1) begin
+								MatRowGet(GIr,j,GIrw);
+								if(GIrw.Location==ISr.Location) then begin
+									locfnd = true;
+									if(ReadFirstMain(ISr,2,true))then begin
+										if(GIrw.Instock!=(ISr.Instock-ISr.RsrvQty))then begin
+											logtext(0,ISr.Code & "<> Old" & GIrw.Instock & "<> New" & (ISr.Instock - ISr.RsrvQty));
+											GIrw.Instock = ISr.Instock - ISr.RsrvQty;
+											if (CurrentCompany==1 and GIrw.Instock==1) then begin
+												GIrw.Instock = 0;
+											end;
+											MatRowPut(GIr,j,GIrw);
+											entf = true;
+										end;
+									end;	
+								end;
+							end;
+							if(locfnd==false)then begin
+								GIrw.Location = aloc[li];
+								if(ReadFirstMain(ISr,2,true))then begin
+									GIrw.Instock = ISr.Instock - ISr.RsrvQty;
+									if (CurrentCompany==1 and GIrw.Instock==1) then begin
+										GIrw.Instock = 0;
+									end;
+									entf = true;
+									MatRowPut(GIr,matrowcnt(GIr),GIrw);
+								end;
+							end;	
+						end; 
+					end;	
+					ResetLoop(IDr);
+					RecordStore(GIr,true);
+					IDr.OrigCode = right(GIr.Code,len(GIr.Code)-9);
+					RecordCopy(OldGir,GIr);
+					TrHs = true;
+					while (loopmain(IDr,1,TrHs)) begin
+						testf1 = true;
+						if (IDr.OrigCode!=right(GIr.Code,len(GIr.Code)-9)) then begin TrHs = false; testf1 = false; end;
+						if (IDr.OrigBrandCode!=left(GIr.Code,8)) then begin testf1 = false; end;
+						if (testf1) then begin
+							DupGir.Code = IDr.DupBrandCode & "_" & IDr.DupCode;
+							if (ReadFirstMain(DupGir,1,true)) then begin
+								for (k=0;k<matrowcnt(DupGir);k=k+1) begin
+									matrowget(DupGir,k,DupGirw);
+									if (DupGIrw.Instock>0) then begin
+										for (j=0;j<matrowcnt(GIr);j=j+1) begin
+											matrowget(GIr,j,GIrw);
+											if (GIrw.Location==DupGirw.Location) then begin
+												GIrw.Instock = GIrw.Instock + DupGIrw.Instock;
+												matrowput(GIr,j,GIrw);
+												recordUpdate(OldGir,GIr,true);
+											end;
+										end;
+									end;
+								end;
+							end;
+						end;
+					end;
+					logtext(0,GIr.Code);
+				end;
+			end;
+		end;
+	end;
+	ResetLoop(GIr);
 	ResetCompany(OldComp);
   return;
 end;
