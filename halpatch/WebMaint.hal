@@ -27,6 +27,9 @@ external procedure ExtractObjectsByType(string, string, var array string, var in
 external procedure IPVc_PasteCustCode(var record IPVc,Integer,var LongInt);
 external procedure IPVc_PasteRecVal(var record IPVc,Integer);
 external procedure RecordAction_raExpandPay(var record IPVc,Integer);
+external function Boolean TRVc_PasteAccNumber(var record TRVc,Integer,Integer,Boolean);
+external procedure TRVc_PasteDebVal(var record TRVc,Integer);
+external procedure TRVc_PasteCredVal(var record TRVc,Integer);
 
 
 global webpublic updating procedure WebFindAndFixItems()
@@ -4534,10 +4537,9 @@ end;
 
 global webpublic updating procedure WebColelctPaymentsCCAndOthers()
 begin
-	record TRVc TRr;
 	record CompaniesBlock Compb;
   row CompaniesBlock Comprw;
-  integer i,rwcnt,oscnt;
+  integer i,rwcnt,oscnt,rownr;
   record LocationVc Locr;
   record ObjVc Objr, Obj2r;
   boolean TrHs,testf;
@@ -4550,6 +4552,7 @@ begin
   row IPVc IPrw;
   longint lg;
   record TRVc TRr,oldTRr;
+  row TRVc TRrw;
   
   blockload(Compb);
   rwcnt = matrowcnt(Compb);
@@ -4632,7 +4635,41 @@ begin
   			if(matrowcnt(IPr)>0)then begin
 					recordcopy(oldIPr,IPr);
 					IPr.OKFlag = 1;
-					recordupdate(oldIPr,IPr,true);
+					if(recordupdate(oldIPr,IPr,true)==0)then begin
+						if(IPr.SerNr>0)then begin
+							TRr.Number = IPr.SerNr;
+							TRr.IntYc = IPYc;
+							if(readfirstmain(TRr,2,true))then begin
+								recordcopy(oldTRr,TRr);
+								clearrow(TRr,TRrw,1);
+								rownr = matrowcnt(TRr);
+								TRrw.AccNumber = "46/04";
+								MatRowPut(TRr,rownr,TRrw);
+								TRVc_PasteAccNumber(TRr,1,rownr,true);
+								MatRowGet(TRr,rownr,TRrw);
+								TRrw.DebVal = IPr.CurPayVal;
+								MatRowPut(TRr,rownr,TRrw);
+								TRVc_PasteDebVal(TRr,rownr);
+								MatRowGet(TRr,rownr,TRrw);
+								TRrw.Objects = "CC," & Objr.Code;
+								MatRowPut(TRr,rownr,TRrw);
+								
+								clearrow(TRr,TRrw,1);
+								rownr = matrowcnt(TRr);
+								TRrw.AccNumber = "76/01";
+								MatRowPut(TRr,rownr,TRrw);
+								TRVc_PasteAccNumber(TRr,1,rownr,true);
+								MatRowGet(TRr,rownr,TRrw);
+								TRrw.CredVal = IPr.CurPayVal;
+								MatRowPut(TRr,rownr,TRrw);
+								TRVc_PasteCredVal(TRr,rownr);
+								MatRowGet(TRr,rownr,TRrw);
+								TRrw.Objects = "FOB_CC," & vFOBObjStore[Objr.Code];
+								MatRowPut(TRr,rownr,TRrw);
+								recordupdate(oldTRr,TRr,true);
+							end;
+						end;
+					end;
   			end;
   		end;
   		
