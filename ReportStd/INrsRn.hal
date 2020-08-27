@@ -25,6 +25,7 @@ external procedure HTItemHistType2(Integer,Integer,Integer,Integer,Integer,var s
 external procedure PrintCustName(string,string,integer);
 external function Boolean FindStringInString(string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 08 2020 y. at 4:04:17 PM
 external procedure ExtractObj(string,var Integer,var string);
+external procedure NormalizeObjstr(var string);
 
 procedure PrintItemTotals_Overview(record RcVc RepSpec,record INVc INr,
                                    val fwdqty,val fwdcp,val fwdtotcp,val itemqin,val itemqout,val itemcpin,val itemcpout)
@@ -1493,13 +1494,16 @@ begin
   record MainStockBlock MSb;
   record CostAccBlock CAb;
   record LocationVc Locr;
-  Boolean found,testf,TrHs;
-  string 255 frloc,toloc,resf1;
+  Boolean found,testf,TrHs,TrHs1;
+  string 255 frloc,toloc,resf1,codes;
   val SumQIn,SumQOut,SumQFwd,SumCPIn,SumCPOut,SumCPFwd,SumQ2;
   val bal;
   val LocSumQIn,LocSumQOut,LocSumQFwd,LocSumCPIn,LocSumCPOut,LocSumCPFwd,LocSumQ2;
   record ConsItemVc CIr;// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 08 2020 y. at 3:59:37 PM
-
+	record ItemDuplicatesVc IDr;
+	record INVc dupINr,INr;
+	boolean orItem;
+	
   frloc = FirstInRange(RepSpec.f6,20);
   toloc = LastInRange(RepSpec.f6,20);
   
@@ -1516,9 +1520,50 @@ begin
 					end;
 				end;
 				if(nonblank(resf1))then begin
-					RepSpec.f1 = left(resf1,len(resf1)-1);
+				codes = left(resf1,len(resf1)-1);
+				NormalizeObjstr(codes)
+					RepSpec.f1 = codes;
 				end;
 			end;
+		end else begin
+			orItem = false;
+			IDr.OrigCode = RepSpec.f1;
+			TrHs1 = true;
+			codes = RepSpec.f1;
+			INr.Code = RepSpec.f1;
+			ReadFirstMain(INr,1,true);
+			while(LoopKey("OrigCode",IDr,1,TrHs1)) begin
+				if(IDr.OrigCode!=RepSpec.f1) then begin TrHs1 = false; end;
+				if(TrHs1) then begin
+					dupINr.Code = IDr.DupCode;
+					if(ReadFirstMain(dupINr,1,true)) then begin
+						if(INr.BPIBrand==dupINr.BPIBrand) then begin
+							codes = codes & "," & dupINr.Code;
+							orItem = true;
+						end;
+					end;
+				end;
+			end;
+			ResetLoop(dupINr);
+			if(!orItem) then begin
+				IDr.DupCode = RepSpec.f1;
+				codes = RepSpec.f1;
+				INr.Code = RepSpec.f1;
+				ReadFirstMain(INr,1,true);
+				if(ReadFirstKey("DupCode",IDr,1,true)) then begin
+					dupINr.Code = IDr.OrigCode;
+					TrHs1 = true;
+					while(LoopMain(dupINr,1,TrHs1)) begin
+						if(dupINr.Code!=IDr.OrigCode) then begin TrHs1 = false; end;
+						if(dupINr.BPIBrand==INr.BPIBrand) then begin
+							codes = codes & "," &  dupINr.Code;
+						end;
+					end;
+					ResetLoop(dupINr);
+				end;
+			end;
+			NormalizeObjstr(codes)
+			RepSpec.f1 = codes;
 		end;
   end;// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 08 2020 y. at 3:59:35 PM
   logtext(0,"resf1 " & resf1);

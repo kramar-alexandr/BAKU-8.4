@@ -80,13 +80,13 @@ begin
 	record DIVc DIr;
   record PLVc PLr;
   record PLDefVc PLDefr;
-  record ItemStatusVc ISr;
-  record INVc INr;
+  record ItemStatusVc ISr,IS2r;
+  record INVc INr,dupINr;
   record CTypeVc CTyper;
   string 100 tstr;
   string 50 uloc,brand,brandcode,pricecur,dicode,diname,ditype;
   integer pos,cnt,SQi,TSi,i,Ccntr,Scntr,rowcnt,mtrw,curcomp;
-  boolean TrHs,testf,test2f,f,testf1,locflag;
+  boolean TrHs,TrHs1,testf,test2f,f,testf1,locflag,dublikateItem;
   val price;
   vector boolean stockInArr;
   vector integer stockQty;
@@ -94,7 +94,8 @@ begin
   array string 100 typeClassif,classif;
   record OldDIVc OldDIr;
   record ConsItemVc CIr;
-
+	record ItemDuplicatesVc IDr;
+	
 	setexportcodepage("UTF8");
   logtext(0,currentcompany & " - " & currentuser & " - ImagesExcel started");
 	reportName = "ImagesExcelRn";
@@ -153,6 +154,19 @@ begin
 				ClearStocksStuff(SQi,stockInArr,stocks,stockQty);
 				ClearClassifStuff(TSi,typeClassif,classif);
 	//collect stocks
+				dublikateItem = false;
+				IDr.DupCode = INr.Code;
+				if(ReadFirstKey("DupCode",IDr,1,true)) then begin
+					dupINr.Code = IDr.OrigCode;
+					TrHs = true;
+					while(LoopMain(dupINr,1,TrHs)) begin
+						if(dupINr.Code!=IDr.OrigCode) then begin TrHs = false; end;
+						if(dupINr.BPIBrand==INr.BPIBrand) then begin
+							dublikateItem = true;
+						end;
+					end;
+					ResetLoop(dupINr);
+				end;
 				//setcompany(currentcompany,false);
 				ISr.Code = INr.Code;
 				TrHs = true;
@@ -162,6 +176,33 @@ begin
 					if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
 					if (ISr.Location==";;;") then begin testf = false; end;
 					if (ISr.Instock==0) then begin testf = false; end;
+					if(currentcompany!=18) then begin
+						IDr.OrigCode = INr.Code;
+						TrHs1 = true;
+						while(LoopKey("OrigCode",IDr,1,TrHs1)) begin
+							if(IDr.OrigCode!=INr.Code) then begin TrHs1 = false; end;
+							if(TrHs1) then begin
+								dupINr.Code = IDr.DupCode;
+								if(ReadFirstMain(dupINr,1,true)) then begin
+									if(INr.BPIBrand==dupINr.BPIBrand) then begin
+										IS2r.Code = dupINr.Code;
+										IS2r.Location = ISr.Location;
+										if(ReadFirstMain(IS2r,2,true)) then begin
+											if(IS2r.Instock>0) then begin
+												if !stockInArr[IS2r.Location] then begin
+													stockInArr[IS2r.Location] = true;
+													stocks[SQi] = IS2r.Location;
+													SQi = SQi + 1;
+												end;
+												stockQty[IS2r.Location] = stockQty[IS2r.Location] + IS2r.Instock;
+											end;
+										end;
+									end;
+								end;
+							end;
+						end;
+						ResetLoop(IDr);
+					end;
 					if (testf) then begin
 						if !stockInArr[ISr.Location] then begin
 							stockInArr[ISr.Location] = true;
@@ -210,6 +251,31 @@ begin
 						if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
 						if (ISr.Location==";;;") then begin testf = false; end;
 						if (ISr.Instock==0) then begin testf = false; end;
+						IDr.OrigCode = INr.Code;
+						TrHs1 = true;
+						while(LoopKey("OrigCode",IDr,1,TrHs1)) begin
+							if(IDr.OrigCode!=INr.Code) then begin TrHs1 = false; end;
+							if(TrHs1) then begin
+								dupINr.Code = IDr.DupCode;
+								if(ReadFirstMain(dupINr,1,true)) then begin
+									if(INr.BPIBrand==dupINr.BPIBrand) then begin
+										IS2r.Code = dupINr.Code;
+										IS2r.Location = ISr.Location;
+										if(ReadFirstMain(IS2r,2,true)) then begin
+											if(IS2r.Instock>0) then begin
+												if !stockInArr[IS2r.Location] then begin
+													stockInArr[IS2r.Location] = true;
+													stocks[SQi] = IS2r.Location;
+													SQi = SQi + 1;
+												end;
+												stockQty[IS2r.Location] = stockQty[IS2r.Location] + IS2r.Instock;
+											end;
+										end;
+									end;
+								end;
+							end;
+						end;
+						ResetLoop(IDr);
 						if (testf) then begin
 							if !stockInArr[ISr.Location] then begin
 								stockInArr[ISr.Location] = true;
@@ -222,8 +288,7 @@ begin
 					resetcompany(curcomp);
 				end;
 
-  
-				if nonblank(stocks[0]) then begin
+				if(nonblank(stocks[0]) and !dublikateItem) then begin
 	//find brand and collect classifications
 					brand = "";
 					pos = 0;

@@ -463,8 +463,8 @@ end;
 
 procedure ItemStockCombination(record RcVc RepSpec,string group,date sd,date ed,string location)
 begin
-  record INVc INr;
-  Boolean TrHs,testf;
+  record INVc INr,dupINr;
+  Boolean TrHs,testf,TrHs1;
   integer i,reprownr,mark,gi,pos;
   val rate,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,gp,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost;
   array val iv_neg_qty,iv_neg_sum,iv_neg_cost,iv_poz_sum,iv_poz_qty,iv_poz_cost;
@@ -475,7 +475,8 @@ begin
   string 10 basecur;
   record UserVc User;
   vector boolean userbrand;
-  boolean userbrandf;
+  boolean userbrandf,dublikateItem;
+	record ItemDuplicatesVc IDr;
   
   userbrandf = CheckUserBrands(currentuser,userbrand);
   //SetLangMode(LangRussian,"RUS",0);
@@ -549,8 +550,38 @@ begin
       gp = 0;
       rpu_cost = 0;
       rpu_qty = 0;
-      ItemStockIHSerch(RepSpec,INr.Code,location,sd,ed,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost);
-      if (qty_start==0 and pu_qty==0 and sd_qty==0 and sm_poz_qty==0 and sm_neg_qty==0 and iv_poz_qty[0]==0  and iv_poz_qty[1]==0 and iv_neg_qty[0]==0 and iv_neg_qty[1]==0 and rpu_qty==0 and cost_start==0 and cost_end==0) then begin
+			dublikateItem = false;
+			IDr.DupCode = INr.Code;
+			if(ReadFirstKey("DupCode",IDr,1,true)) then begin
+				dupINr.Code = IDr.OrigCode;
+				TrHs = true;
+				while(LoopMain(dupINr,1,TrHs1)) begin
+					if(dupINr.Code!=IDr.OrigCode) then begin TrHs1 = false; end;
+					if(dupINr.BPIBrand==INr.BPIBrand) then begin
+						dublikateItem = true;
+					end;
+				end;
+				ResetLoop(dupINr);
+			end;
+			if(!dublikateItem) then begin 
+				ItemStockIHSerch(RepSpec,INr.Code,location,sd,ed,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost);
+				if(currentcompany!=18) then begin
+					IDr.OrigCode = INr.Code;
+					TrHs1 = true;
+					while(LoopKey("OrigCode",IDr,1,TrHs1)) begin
+						if(IDr.OrigCode!=INr.Code) then begin TrHs1 = false; end;
+						if(TrHs1) then begin
+							dupINr.Code = IDr.DupCode;
+							if(ReadFirstMain(dupINr,1,true)) then begin
+								if(INr.BPIBrand==dupINr.BPIBrand) then begin
+									ItemStockIHSerch(RepSpec,dupINr.Code,location,sd,ed,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost);
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+			if (dublikateItem or (qty_start==0 and pu_qty==0 and sd_qty==0 and sm_poz_qty==0 and sm_neg_qty==0 and iv_poz_qty[0]==0  and iv_poz_qty[1]==0 and iv_neg_qty[0]==0 and iv_neg_qty[1]==0 and rpu_qty==0 and cost_start==0 and cost_end==0)) then begin
         reprownr = reprownr - 1;
       end else begin
         StartFormat(15);
