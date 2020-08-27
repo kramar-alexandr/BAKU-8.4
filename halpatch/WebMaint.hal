@@ -32,6 +32,12 @@ external procedure TRVc_PasteDebVal(var record TRVc,Integer);
 external procedure TRVc_PasteCredVal(var record TRVc,Integer);
 external procedure IPPastePayMode2(var record IPVc,string);
 external procedure NormalizeObjstr(var string);
+external function Boolean PasteInvIn2OPr(var record OPVc,Integer,Date,Integer,val,var string,Boolean,var Boolean);
+external procedure OPVc_PasteRecCurncy(var record OPVc,Integer);
+external procedure OPVc_PasteRecVal(var record OPVc,Integer);
+external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
+external procedure OPSumup(var record OPVc,Boolean);
+external procedure OPVc_PasteVECode(var record OPVc,Integer);
 
 
 global webpublic updating procedure WebFindAndFixItems()
@@ -4537,13 +4543,164 @@ begin
 return;
 end;
 
-updating procedure ChangeOPTR(var record TRVc TRr, record IPVc IPr,string vfob,string objcode)
+procedure OpenInvoiceNumber(string custcode, var LongInt lastpos,var record APVc resAPr)
+begin
+  record APVc APr;
+  Boolean found;
+  string 255 ckey;
+
+  RecordNew(resAPr);  
+  APr.VECode = custcode;
+  found = true;
+  SetLoopPosition(APr,lastpos);
+
+  
+  ckey = "VECode";
+  while (LoopKey(ckey,APr,1,found)) begin
+    if (APr.VECode!=custcode) then begin found = false; end;
+    if (found) then begin
+      lastpos = GetLoopPosition(APr);
+      RecordCopy(resAPr,APr);     
+      goto LOpenInvoiceNumber;
+    end;    
+  end;
+
+LOpenInvoiceNumber:;
+  return;
+end;
+
+procedure ChangeOPRows(record OPVc OPp,LongInt VISerNr,string reccurncy,Integer currow,var val curv,Boolean installmentf)
+begin
+  row OPVc OPrw;
+  row OPVc newOPrw;
+  Integer i,rwcnt;
+  val v;
+         
+  v = curv;
+  curv = blankval;
+  rwcnt = MatRowCnt(OPp);
+  for (i=currow+1;i<rwcnt;i=i+1) begin
+    MatRowGet(OPp,i,OPrw);
+    if (OPrw.VISerNr==VISerNr) then begin
+	    switch (OPrw.stp) begin
+	      case 1:
+	        if (installmentf) then begin
+	        end;
+	      case 5: 
+	        CopyRow(OPp,OPrw,newOPrw);
+			newOPrw.RecCurncy = reccurncy;
+			MatRowPut(OPp,i,newOPrw);
+			OPVc_PasteRecCurncy(OPp,i);				  
+			MatRowGet(OPp,i,newOPrw);
+	        v = v - newOPrw.RecVal;
+	        curv = curv + newOPrw.RecVal;
+	    end;
+	  end;
+  end;
+
+  MatRowGet(OPp,currow,newOPrw);    
+  newOPrw.RecCurncy = RecCurncy;
+  MatRowPut(OPp,currow,newOPrw);
+  OPVc_PasteRecCurncy(OPp,currow);
+    MatRowGet(OPp,currow,newOPrw);
+	curv = curv + newOPrw.RecVal;
+  
+	if (installmentf==false) then begin
+    MatRowGet(OPp,currow,newOPrw);
+    newOPrw.RecVal = v;
+    MatRowPut(OPp,currow,newOPrw);
+    OPVc_PasteRecVal(OPp,currow);
+    MatRowGet(OPp,currow,newOPrw);
+  end;
+  RETURN;
+END;
+
+global
+procedure RecordAction_raExpandOPPay(var record OPVc OPp,Integer rownr)
+begin
+  row OPVc OP0rw;
+  row OPVc newOPrw;
+  Integer i,rwcnt,currow;
+  record APVc APr;
+  record VIVc VIr;
+  Boolean loopf,testf,installmentf;
+  LongInt lastpos;
+  record BaseCurBlock BCb;
+  val v,remv,chk;  
+  string 255 warning;
+  
+  BlockLoad(BCb);
+
+  rwcnt = MatRowCnt(OPp);
+  currow = rwcnt;
+  MatRowGet(OPp,rownr,OP0rw);
+  remv = OP0rw.RecVal;
+  if (OP0rw.VISerNr<0) and (OP0rw.RecVal>0) then begin
+    loopf = true;
+  end;
+  while (loopf) begin
+    OpenInvoiceNumber(OP0rw.VECode,lastpos,APr);    
+    if (APr.SerNr<=0) then begin
+      loopf = false;
+    end;
+    if (remv<=0) then begin
+      loopf = false;
+    end;
+    if (loopf) then begin
+      testf = true;
+      VIr.SerNr = APr.SerNr;
+      if (ReadFirstMain(VIr,1,true)) then begin
+        testf = true;
+        if (VIr.Invalid!=0) then begin
+          testf = false;
+        end;
+      end;
+      if (testf) then begin
+        if (VIr.CurncyCode!=OP0rw.RecCurncy) then begin
+          CurValToOtherCur(OPp.TransDate,VIr.CurncyCode,APr.RVal,OP0rw.RecCurncy,v,DefaultCurRoundOff);
+        end else begin
+          v = APr.RVal;
+        end;
+        if (remv<v) then begin
+          v = remv;
+        end;
+
+        ClearRow(OPp,newOPrw,1)
+        newOPrw.VISerNr = APr.SerNr;
+        MatRowPut(OPp,currow,newOPrw);
+        PasteInvIn2OPr(OPp,currow,OPp.TransDate,1,chk,warning,false,installmentf)
+        ChangeOPRows(OPp,newOPrw.VISerNr,OP0rw.RecCurncy,currow,v,installmentf);
+                
+//        currow = currow + 1;
+        currow = MatRowCnt(OPp);
+        remv = remv - v;        
+      end;
+    end;    
+  end;  
+  
+  MatRowDelete(OPp,rownr);
+  if (remv>0) then begin
+    currow = MatRowCnt(OPp);
+    CopyRow(OPp,OP0rw,newOPrw);
+    MatRowPut(OPp,currow,newOPrw);
+    MatRowGet(OPp,currow,newOPrw);
+    newOPrw.RecVal = remv;
+    MatRowPut(OPp,currow,newOPrw);
+    OPVc_PasteRecVal(OPp,currow);
+  end;
+  OPSumup(OPp,true);
+  return;
+end;
+
+updating procedure ChangeOPTR(var record TRVc TRr, record IPVc IPr,string vfob,string objcode,integer comtoop)
 begin
 	record TRVc oldTRr;
 	row TRVc TRrw;
 	integer rownr,rwcnt,i,oscnt;
 	string 50 subdi,expen;
 	array string 20 tstr;
+	record OPVc OPr;
+	row OPVc OPrw;
 				
 		rwcnt = matrowcnt(TRr);
 		for(i=0;i<rwcnt;i=i+1)begin
@@ -4562,24 +4719,18 @@ begin
 			end;
 		end;
 		
-		logtext(0,"before recordcopy(oldTRr,TRr);");
 		recordcopy(oldTRr,TRr);
-		logtext(0,"before clearrow(TRr,TRrw,1);");
 		clearrow(oldTRr,TRrw,1);
-		logtext(0,"before rownr = matrowcnt(TRr);");
 		rownr = matrowcnt(TRr);
-		logtext(0,"before TRrw.AccNumber = \"46/04\";" & rownr);
 		TRrw.AccNumber = "46/04";
-		logtext(0,"begore rownr " & rownr);
 		MatRowPut(TRr,rownr,TRrw);
-		logtext(0,"rownr " & rownr);
 		TRVc_PasteAccNumber(TRr,1,rownr,true);
 		MatRowGet(TRr,rownr,TRrw);
 		TRrw.DebVal = IPr.CurPayVal;
 		MatRowPut(TRr,rownr,TRrw);
 		TRVc_PasteDebVal(TRr,rownr);
 		MatRowGet(TRr,rownr,TRrw);
-		TRrw.Objects = "CC," & objcode;
+		TRrw.Objects = "FOB_CC" & vfob;
 		if(nonblank(subdi))then begin
 			TRrw.Objects = TRrw.Objects & "," & subdi;
 		end;
@@ -4608,7 +4759,22 @@ begin
 		end;
 		NormalizeObjstr(TRrw.Objects);
 		MatRowPut(TRr,rownr,TRrw);
-		recordupdate(oldTRr,TRr,true);
+		if(recordupdate(oldTRr,TRr,true)==0)then begin
+			setcompany(comtoop,false);
+				recordnew(OPr);
+					OPr.TransDate = addday(currentdate,-1);
+					clearrow(OPr,OPrw,1);
+					OPrw.VECode = "FOB_SKLAD";
+					matrowput(OPr,0,OPrw);
+					OPVc_PasteVECode(OPr,0);
+					MatRowGet(OPr,0,OPrw);
+					OPrw.RecVal = IPr.CurPayVal;
+					MatRowPut(OPr,0,OPrw);
+					OPVc_PasteRecVal(OPr,0);
+					RecordAction_raExpandOPPay(OPr,0);
+				recordstore(OPr,true);
+			setcompany(18,false);
+		end;
 
 return
 end;
@@ -4632,6 +4798,7 @@ begin
   longint lg;
   record TRVc TRr,oldTRr;
   row TRVc TRrw;
+  vector integer vFomCompNr;
     
   blockload(Compb);
   rwcnt = matrowcnt(Compb);
@@ -4644,6 +4811,7 @@ begin
   		while(loopmain(Locr,1,true))begin
   			if(nonblank(Locr.FOBSuplier))then begin
   				vFOBObjStore[Locr.FOBSuplier] = Locr.Objects;
+  				vFomCompNr[Locr.FOBSuplier] = i+1;
   			end;
   		end;
   	end;
@@ -4681,8 +4849,6 @@ begin
 			ReadFirstMain(ObjBalr,2,true); 
 			res1 = blankval;
 			res2 = blankval;
-  		//GetAccStartBalance("76/01",Objr.Code,currentdate,ObjBalr,0,1,"AZN",0,res1);
-			//GetAccBalance("76/01",Objr.Code,currentdate,ObjBalr,0,1,0,"AZN",0,res2);
 			FindNLAccBal("76/01","CC," & Objr.Code,"",0,"",currentdate,0,0,false,"",0,"","",res1);
   		weboutstring("&nbsp");
   		weboutstring(-res1);
@@ -4726,7 +4892,7 @@ begin
 							TRr.IntYc = IPYc;
 							logtext(0,"before if(readfirstmain(TRr,2,true))then begin");
 							if(readfirstmain(TRr,2,true))then begin
-								ChangeOPTR(TRr,IPr,vFOBObjStore[Objr.Code],Objr.Code);
+								ChangeOPTR(TRr,IPr,vFOBObjStore[Objr.Code],Objr.Code,vFomCompNr[Objr.Code]);
 							end;
 						end;
 					end;
