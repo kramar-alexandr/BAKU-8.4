@@ -38,6 +38,7 @@ external procedure OPVc_PasteRecVal(var record OPVc,Integer);
 external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
 external procedure OPSumup(var record OPVc,Boolean);
 external procedure OPVc_PasteVECode(var record OPVc,Integer);
+external procedure OPPastePayMode2(var record OPVc,string);
 
 
 global webpublic updating procedure WebFindAndFixItems()
@@ -4699,7 +4700,7 @@ begin
 	integer rownr,rwcnt,i,oscnt;
 	string 50 subdi,expen;
 	array string 20 tstr;
-	record OPVc OPr;
+	record OPVc OPr,oldOPr;
 	row OPVc OPrw;
 				
 		rwcnt = matrowcnt(TRr);
@@ -4763,6 +4764,10 @@ begin
 			setcompany(comtoop,false);
 				recordnew(OPr);
 					OPr.TransDate = addday(currentdate,-1);
+					OPr.PayDate = OPr.TransDate;
+					OPr.PayMode = "VZ";
+					OPPastePayMode2(OPr,"");
+					OPr.SerNr = NextSerNr("OPVc",OPr.TransDate,-1,false,"");
 					clearrow(OPr,OPrw,1);
 					OPrw.VECode = "FOB_SKLAD";
 					matrowput(OPr,0,OPrw);
@@ -4772,7 +4777,19 @@ begin
 					MatRowPut(OPr,0,OPrw);
 					OPVc_PasteRecVal(OPr,0);
 					RecordAction_raExpandOPPay(OPr,0);
-				recordstore(OPr,true);
+					if(matrowcnt(OPr)>0)then begin
+						MatRowPut(OPr,matrowcnt(OPr),OPrw);
+						if(OPrw.VISerNr<0)then begin
+							matrowdelete(OPr,matrowcnt(OPr)-1);
+						end;
+					end;
+				if(matrowcnt(OPr)>0)then begin
+					recordstore(OPr,true);
+					recordcopy(oldOPr,OPr);
+					OPr.OrderedFlag = 1;
+					OPr.DoneFlag = 1;
+					recordupdate(oldOPr,OPr,true);
+				end;
 			setcompany(18,false);
 		end;
 
