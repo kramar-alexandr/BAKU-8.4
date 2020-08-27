@@ -658,13 +658,15 @@ BEGIN
   Integer keys;
   string 255 lastgroup;
   Boolean itemout,testf;
-  record INVc INr;
+  record INVc INr,dupINr;
   string 255 fromart,toart;
   string 255 frit,toit;
-  Boolean TrHs;
+  Boolean TrHs,TrHs1,dublikateItem;
   record LocationVc Locr;
   string 50 tstr;
-  integer pos
+  integer pos;
+	vector boolean INCodes;
+	record ItemDuplicatesVc IDr;
 
   itemout = false;
   fromart = FirstInRange(RepSpec.f1,20);
@@ -685,6 +687,19 @@ BEGIN
   TrHs = true;
   while (LoopKey(ckey,INr,keys,TrHs)) begin
     testf = true;
+		dublikateItem = false;
+		IDr.DupCode = INr.Code;
+		if(ReadFirstKey("DupCode",IDr,1,true) and !INCodes[IDr.OrigCode]) then begin
+			dupINr.Code = IDr.OrigCode;
+			TrHs = true;
+			while(LoopMain(dupINr,1,TrHs1)) begin
+				if(dupINr.Code!=IDr.OrigCode) then begin TrHs1 = false; end;
+				if(dupINr.BPIBrand==INr.BPIBrand) then begin
+					dublikateItem = true;
+				end;
+			end;
+			ResetLoop(dupINr);
+		end;
     if (TrHs) then begin
       if (nonblank(RepSpec.f3)) then begin
         switch (RepSpec.flags[2]) begin
@@ -760,7 +775,7 @@ BEGIN
     	if(RepSpec.flags[8]==1 and INr.ConsgType==2)then begin testf = false; end;  //Edit----------------------Dima  28.05.2015  
     	if(INr.ConsgType>2)then begin testf = false; end;
     end;  
-    if (TrHs==false) then begin testf = false; end;
+    if (TrHs==false or dublikateItem) then begin testf = false; end;
     if (testf) then begin      
       if (nonblank(RepSpec.AccStr)) then begin
         Locr.Code = RepSpec.AccStr;
@@ -775,6 +790,110 @@ BEGIN
         STCompOneItem(RepSpec,INr,itemout,instock,instock2,counted,diff,totinprice,tab,toweb);
       end;
     end;
+		IDr.DupCode = INr.Code;
+		if(ReadFirstKey("DupCode",IDr,1,true) and !INCodes[IDr.OrigCode]) then begin
+			dupINr.Code = IDr.OrigCode;
+			TrHs1 = true;
+			OutString(0,0,"Дубликаты",false);
+			while(LoopMain(dupINr,1,TrHs1)) begin
+				if(dupINr.Code!=IDr.OrigCode) then begin TrHs1 = false; end;
+				if(dupINr.BPIBrand==INr.BPIBrand) then begin
+					if (TrHs) then begin
+						if (nonblank(RepSpec.f3)) then begin
+							switch (RepSpec.flags[2]) begin
+								case 2:
+									if (INr.Group>toit) then begin
+										testf = false;
+									end;
+								case 1:
+									if (INr.Group>toit) then begin
+										TrHs = false;
+									end;
+								otherwise
+									if (INr.Group>toit) then begin
+										testf = false;
+									end;
+							end;
+						end;
+					end;        
+					if (TrHs) then begin
+						if (nonblank(RepSpec.f1)) then begin
+							switch (RepSpec.flags[2]) begin
+								case 1:
+									if (INr.Code>toart) then begin
+										testf = false;
+									end;
+								case 2:
+									if (INr.Code>toart) then begin
+										testf = false;
+									end;
+								otherwise
+									if (INr.Code>toart) then begin
+										TrHs = false;
+									end;
+							end;
+						end;
+					end;        
+					if (TrHs) then begin
+						if (nonblank(RepSpec.f3)) then begin
+							if (INr.Group<frit) then begin
+								testf = false;
+							end;
+						end;
+					end;    
+					if (nonblank(RepSpec.f4)) then begin
+						pos = 0;
+						tstr = "";
+						ExtractObj(RepSpec.f4,pos,tstr);
+						testf = false;
+						while (nonblank(tstr)) begin
+							if (SetInSet2(tstr,INr.DispGroups)) then begin
+								testf = true;
+							end;
+							ExtractObj(RepSpec.f4,pos,tstr);
+						end;
+					end;
+					if (nonblank(RepSpec.f5)) then begin
+						if (testf==true) then begin
+							testf = false;
+							ItemClassTypef(RepSpec.f5,INr.DispGroups,testf);
+						end;
+					end;
+					
+					if (nonblank(RepSpec.f6)) then begin
+						if (testf==true) then begin
+							testf = false;
+							if(RepSpec.f6==INr.BPIBrand)then begin testf = true; end;
+						end;
+					end;
+					
+					if (CompanyIsJWLikeCompany(currentcompany)) then begin
+						if(RepSpec.flags[6]==1 and INr.ConsgType==0)then begin testf = false; end;	//Edit----------------------Dima 11:50 28.05.2015
+						if(RepSpec.flags[7]==1 and INr.ConsgType==1)then begin testf = false; end;
+						if(RepSpec.flags[8]==1 and INr.ConsgType==2)then begin testf = false; end;  //Edit----------------------Dima  28.05.2015  
+						if(INr.ConsgType>2)then begin testf = false; end;
+					end;  
+					if (TrHs==false) then begin testf = false; end;
+					if (testf) then begin      
+						if (nonblank(RepSpec.AccStr)) then begin
+							Locr.Code = RepSpec.AccStr;
+							ReadFirstMain(Locr,1,true);
+							if (Locr.RequirePos!=0) then begin
+								STCompOneItem_PerPosition(RepSpec,INr,itemout,instock,instock2,counted,diff,totinprice,tab,toweb);
+			//          STCompOneItem(RepSpec,INr,itemout,instock,instock2,counted,diff,tab);
+							end else begin
+								STCompOneItem(RepSpec,INr,itemout,instock,instock2,counted,diff,totinprice,tab,toweb);
+							end;
+						end else begin
+							STCompOneItem(RepSpec,INr,itemout,instock,instock2,counted,diff,totinprice,tab,toweb);
+						end;
+					end;
+				end;
+			end;
+			OutString(0,0,"",false);
+			ResetLoop(dupINr);
+		end;
+		INCodes[INr.Code] = true;
   end;
   RETURN;
 END;
