@@ -6,6 +6,9 @@ external  function string 100 BPICodeToName(string);
 external function boolean CheckUserBrands(string,var vector boolean);
 external procedure LogProcTime(string,longint);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external procedure GetPriceItem(string,var val,var val);
+remote function Boolean GetTempItemPrice(var val,string,var string, date,var string); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- ABR 14:18 24.03.2020
+external function roundmode SetRoundModeD(Integer);
 
 //SetLangMode(LangRussian,"RUS",0);
 
@@ -348,11 +351,11 @@ begin
 return;
 end;
 
-procedure PrintInfo(record INVc INr, record ItemStatusVc ISr,string serial,val serstock,val costprice,date todate,var val total_qty,var val total_cost,var val total_price)
+procedure PrintInfo(record INVc INr, record ItemStatusVc ISr,string serial,val serstock,val costprice,date todate,var val total_qty,var val total_cost,var val total_price,record RcVc RepSpec)
 begin 
 	record DIVc DIr;
 	record PLVc PLr;
-	integer pos,cnt;
+	integer pos,cnt,i;
   string 50 uloc,pricecur;
   val fr,to1,to2,br1,br2;
   val baseprice,cur,price;
@@ -365,10 +368,13 @@ begin
   record IVVc IVr;
   row IVVc IVrw;
   record ItemStatusVc IS1r;
-  val totresqty;
-  string 255 brand,model;
-	record OldDIVc OldDIr;					
-  
+  val totresqty,ITRebate,inprice,TempItemPrice;
+  string 255 brand,model,tpcurrency,obj,crn;
+	record OldDIVc OldDIr;	
+  date sd;
+	record CurncyRoundOffBlock CROb;
+	row CurncyRoundOffBlock CRObrw;
+	
   totresqty = 0;
   totresqty = ISr.RsrvQty;
   if(ISr.Location=="MAIN" or ISr.Location=="CS1" or ISr.Location=="OUTLET_14")then begin
@@ -451,7 +457,7 @@ begin
 		end;
 		outstring(0,0,INr.Name,false);
 		outstring(0,0,INr.InvCode,false);// Edit ************************** Thursday, 24 July 2014 10:34:00
-		outstring(0,0,INr.OrigCode,false);
+		// outstring(0,0,INr.OrigCode,false); // Edit ************************** ABR, 28.08.2020 10:34:00
 		outstring(0,0,INr.Colour,false);
 		outstring(0,0,INr.Size,false);
 		outstring(0,0,serial,false);// Edit ************************** Tuesday, 7 May 2013 10:13:07		
@@ -508,6 +514,33 @@ begin
 				fr=1; to1=1;
 			end;
 			price = baseprice*fr/to1;
+		end;
+		if(RepSpec.flags[1]) then begin
+			GetPriceItem(INr.Code,inprice,ITRebate);
+			if (GetTempItemPrice(TempItemPrice,INr.Code,tpcurrency,CurrentDate,obj)) then begin
+				if(tpcurrency!="AZN")then begin
+					crn = tpcurrency;
+					sd = CurrentDate;
+					fr = 0;
+					to1 = 0;
+					to2 = 0;
+					br1 = 0;
+					br2 = 0;
+					GetFullCurncyRate(crn,sd,fr,to1,to2,br1,br2);
+					TempItemPrice = TempItemPrice/fr*to1;
+				end;
+			end;
+			for(i=0;i<matrowcnt(CROb); i=i+1) begin
+				matrowget(CROb,i,CRObrw);
+				if(CRObrw.CurncyCode=="AZN" and CRObrw.VcName== "IVVc") then begin
+					i = matrowcnt(CROb);
+				end;
+			end;
+			if(TempItemPrice!=0) begin
+				outstring(0,0,round(TempItemPrice - TempItemPrice*ITRebate/100,SetRoundModeD(CRObrw.RndRowsumMode)),false);
+			end else begin
+				outstring(0,0,round(inprice - inprice*ITRebate/100,SetRoundModeD(CRObrw.RndRowsumMode)),false);
+			end; 
 		end;
 		outstring(0,0,price,false);
 		outstring(0,0,INr.LastPurchCurncyCode,false);
@@ -600,6 +633,9 @@ begin
 			outstring(0,0,USetStr(31238),false);
 			outstring(0,0,USetStr(16141),false);//Reserve
 			outstring(0,0,USetStr(31175),false);
+			if(RepSpec.flags[1]) then begin
+				outstring(0,0,USetStr(36360),false); // Cena so skidkoi
+			end;
 			outstring(0,0,USetStr(35009),false);
 			outstring(0,0,USetStr(16018),false);		//Edit----------------------Dima  12.05.2015
 			retailbasecur = USetStr(35011) & BCb.BaseCur1;//Edit----------------------Dima  12.05.2015
@@ -623,7 +659,7 @@ begin
 					INr.Code = ISr.Code;
 					readfirstmain(INr,1,true);
 					if(INr.SerNrf==0)then begin
-						PrintInfo(INr,ISr,"",0,0,todate,total_qty,total_cost,total_price);
+						PrintInfo(INr,ISr,"",0,0,todate,total_qty,total_cost,total_price,RepSpec);
 					end else begin
 						SBr.Item = INr.Code;
 						SBr.Location = ISr.Location;
@@ -631,7 +667,7 @@ begin
 							if(SBr.Item==INr.Code and SBr.Location==ISr.Location)then begin
 								ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,SBr.Serial,SBr.CostPrice);
 								if(ISr.Instock>0)then begin
-									PrintInfo(INr,ISr,SBr.Serial,ISr.Instock,SBr.CostPrice,todate,total_qty,total_cost,total_price);
+									PrintInfo(INr,ISr,SBr.Serial,ISr.Instock,SBr.CostPrice,todate,total_qty,total_cost,total_price,RepSpec);
 								end;
 							end;
 						end;
@@ -714,7 +750,7 @@ begin
 					
 						if(testf2)then begin
 							if(INr.SerNrf==0)then begin
-								PrintInfo(INr,ISr,"",0,0,todate,total_qty,total_cost,total_price);
+								PrintInfo(INr,ISr,"",0,0,todate,total_qty,total_cost,total_price,RepSpec);
 							end else begin
 								SBr.Item = INr.Code;
 								SBr.Location = ISr.Location;
@@ -722,7 +758,7 @@ begin
 									if(SBr.Item==INr.Code and SBr.Location==ISr.Location)then begin
 										ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,SBr.Serial,SBr.CostPrice);
 										if(ISr.Instock>0)then begin
-											PrintInfo(INr,ISr,SBr.Serial,SBr.Quant,SBr.CostPrice,todate,total_qty,total_cost,total_price);
+											PrintInfo(INr,ISr,SBr.Serial,SBr.Quant,SBr.CostPrice,todate,total_qty,total_cost,total_price,RepSpec);
 										end;
 									end;
 								end;
@@ -755,7 +791,7 @@ begin
 									if(testf2)then begin
 										if(INccr.SerNrf==0)then begin
 											setcompany(curcomp,false);
-												PrintInfo(INr,ISr,"",0,0,todate,total_qty,total_cost,total_price);
+												PrintInfo(INr,ISr,"",0,0,todate,total_qty,total_cost,total_price,RepSpec);
 											setcompany(18,false);
 										end else begin
 											SBr.Item = INccr.Code;
@@ -765,7 +801,7 @@ begin
 													ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,SBr.Serial,SBr.CostPrice);
 													if(ISr.Instock>0)then begin
 														setcompany(curcomp,false);
-															PrintInfo(INr,ISr,SBr.Serial,SBr.Quant,SBr.CostPrice,todate,total_qty,total_cost,total_price);
+															PrintInfo(INr,ISr,SBr.Serial,SBr.Quant,SBr.CostPrice,todate,total_qty,total_cost,total_price,RepSpec);
 														setcompany(18,false);
 													end;
 												end;
