@@ -39,6 +39,8 @@ external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
 external procedure OPSumup(var record OPVc,Boolean);
 external procedure OPVc_PasteVECode(var record OPVc,Integer);
 external procedure OPPastePayMode2(var record OPVc,string);
+external procedure IPSumup(var record IPVc);
+external procedure TRSumup(var record TRVc,var val);
 
 
 global webpublic updating procedure WebFindAndFixItems()
@@ -4617,7 +4619,7 @@ begin
 END;
 
 global
-procedure RecordAction_raExpandOPPay(var record OPVc OPp,Integer rownr)
+procedure RecordAction_raExpandOPPay(var record OPVc OPp,Integer rownr,string fobobj)
 begin
   row OPVc OP0rw;
   row OPVc newOPrw;
@@ -4656,6 +4658,10 @@ begin
           testf = false;
         end;
       end;
+      if(!setinset(fobobj,VIr.Objects))then begin
+      	 testf = false;
+      end;
+      
       if (testf) then begin
         if (VIr.CurncyCode!=OP0rw.RecCurncy) then begin
           CurValToOtherCur(OPp.TransDate,VIr.CurncyCode,APr.RVal,OP0rw.RecCurncy,v,DefaultCurRoundOff);
@@ -4702,6 +4708,7 @@ begin
 	array string 20 tstr;
 	record OPVc OPr,oldOPr;
 	row OPVc OPrw;
+	val tmpval;
 				
 		rwcnt = matrowcnt(TRr);
 		for(i=0;i<rwcnt;i=i+1)begin
@@ -4760,6 +4767,7 @@ begin
 		end;
 		NormalizeObjstr(TRrw.Objects);
 		MatRowPut(TRr,rownr,TRrw);
+		TRSumup(TRr,tmpval);
 		if(recordupdate(oldTRr,TRr,true)==0)then begin
 			setcompany(comtoop,false);
 				recordnew(OPr);
@@ -4776,11 +4784,12 @@ begin
 					OPrw.RecVal = IPr.CurPayVal;
 					MatRowPut(OPr,0,OPrw);
 					OPVc_PasteRecVal(OPr,0);
-					RecordAction_raExpandOPPay(OPr,0);
+					RecordAction_raExpandOPPay(OPr,0,vfob);
 					if(matrowcnt(OPr)>0)then begin
-						MatRowPut(OPr,matrowcnt(OPr),OPrw);
+						MatRowget(OPr,matrowcnt(OPr)-1,OPrw);
 						if(OPrw.VISerNr<0)then begin
 							matrowdelete(OPr,matrowcnt(OPr)-1);
+							OPSumup(OPr,true);
 						end;
 					end;
 				if(matrowcnt(OPr)>0)then begin
@@ -4898,6 +4907,7 @@ begin
 					matrowget(IPr,matrowcnt(IPr)-1,IPrw);
 					if(IPrw.InvoiceNr<=0)then begin
 						matrowdelete(IPr,matrowcnt(IPr)-1);
+						IPSumup(IPr);
 					end;
   			end;
   			
@@ -4909,7 +4919,6 @@ begin
 						if(IPr.SerNr>0)then begin
 							TRr.Number = IPr.SerNr;
 							TRr.IntYc = IPYc;
-							logtext(0,"before if(readfirstmain(TRr,2,true))then begin");
 							if(readfirstmain(TRr,2,true))then begin
 								ChangeOPTR(TRr,IPr,vFOBObjStore[Objr.Code],Objr.Code,vFomCompNr[Objr.Code]);
 							end;
