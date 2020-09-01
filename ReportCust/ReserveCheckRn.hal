@@ -1,6 +1,7 @@
 //server-only
 external procedure LogProcTime(string,longint);
 external procedure ExtractObj(string,var Integer,var string);
+remote function boolean CompanyIsJWLikeCompany(Integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -16,16 +17,20 @@ begin
   longint curtick;
 	integer rowcnt,i,j,c;
 	array string 255 tags,tags1;
-	integer itemall,pos,rwcnt;
+	integer itemall,pos,rwcnt,oldCompany;
 	string 255 orderNr;
 	record CompaniesBlock CBb;
+	row CompaniesBlock Comprw;
 	record ItemStatusVc ISr;
 	
+	oldCompany = currentCompany;
 	blockload(CBb);
   rwcnt = matrowcnt(CBb);
 	startreportnoheaderjob("Reserved Report");
   For(j=0;j<rwcnt;j=j+1) begin
-    if (SetCompany(j+1,false)) then begin
+    matrowget(CBb,j,Comprw);
+		if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3) and j+1!=33)then begin
+			SetCompany(j+1,false);
 			ClearVector(orders);
 			ClearVector(quantShip);
 			ClearVector(loc);
@@ -41,8 +46,8 @@ begin
 						if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
 						if(ORrw.Quant>0 and testf and ORrw.Quant>ORrw.Shipd2) then begin
 							orders[ORrw.ArtCode] = "true";
-							quantShip[ORrw.ArtCode & ORrw.Location] = ORrw.Quant-ORrw.Shipd2;
-							loc[ORrw.Location] = "true";
+							quantShip[ORrw.ArtCode & ORr.Location] = ORrw.Quant-ORrw.Shipd2;
+							loc[ORr.Location] = "true";
 						end;
 					end;
 				end;
@@ -78,6 +83,7 @@ begin
 		end;
 	end;
   EndJob;
+	ResetCompany(oldCompany);
 	LogProcTime("ItemLocationStatusRn",getcurtick() - curtick);
   return;
 end;
