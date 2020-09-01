@@ -1,7 +1,165 @@
 //server-only
 external procedure LogProcTime(string,longint);
+external procedure ExtractObj(string,var Integer,var string);
 
 SetLangMode(LangRussian,"RUS",0);
+
+global
+procedure ReserveCheckAllCompRn(record RcVc RepSpec)
+begin
+  record INVc INr;
+  record ORVc ORr;
+	row ORVc ORrw;
+	boolean TrHs,testf;
+	vector string 255 orders,loc,custName,OrdDate,reservDate;
+	vector integer quantShip,rownr;
+  longint curtick;
+	integer rowcnt,i,j,c;
+	array string 255 tags,tags1;
+	integer itemall,pos,rwcnt;
+	string 255 orderNr;
+	record CompaniesBlock CBb;
+	record ItemStatusVc ISr;
+	
+	blockload(CBb);
+  rwcnt = matrowcnt(CBb);
+	startreportnoheaderjob("Reserved Report");
+  For(j=0;j<rwcnt;j=j+1) begin
+    if (SetCompany(j+1,false)) then begin
+			ORr.Reserved = 1;
+			TrHs = true;
+			while(LoopKey("Reserved",ORr,1,TrHs)) begin
+				if(ORr.Reserved<1) then begin TrHs = false; end;
+				if(TrHs) then begin
+					rowcnt = MatRowCnt(ORr);
+					for(i=0;i<rowcnt;i=i+1) begin
+						testf = true;
+						matrowget(ORr,i,ORrw);
+						if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
+						if(ORrw.Quant>0 and testf and ORrw.Quant>ORrw.Shipd2) then begin
+							orders[ORrw.ArtCode] = "true";
+							quantShip[ORrw.ArtCode & ORrw.Location] = ORrw.Quant-ORrw.Shipd2;
+							loc[ORrw.Location] = "true";
+						end;
+					end;
+				end;
+			end;
+			startformat(15);
+				outstring(0,0,"товар",false);
+				outstring(50,0,"кол-во в счетах",false);
+				outstring(75,0,"кол-во в статусе",false);
+				outstring(100,0,"склад",false);
+			endformat;
+			getvectortags(orders,tags);
+			getvectortags(loc,tags1);
+			Black_Divider(0,1);
+			for(i=0;i<tags.length;i=i+1) begin
+				for(c=0;c<tags1.length;c=c+1) begin
+					ISr.Code = tags[i];
+					ISr.Location = tags1[c];
+					readfirstmain(ISr,2,true);
+					if(ISr.RsrvQty!=0 or quantShip[tags[i] & tags1[c]]!=0)then begin
+						if(ISr.RsrvQty!=quantShip[tags[i] & tags1[c]])then begin
+							startformat(15);
+								outstring(0,0,tags[i],false);
+								outstring(100,0,quantShip[tags[i] & tags1[c]],false);
+								outstring(150,0,ISr.RsrvQty,false);
+								outstring(200,0,tags1[c],false);
+							endformat;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+  EndJob;
+	LogProcTime("ItemLocationStatusRn",getcurtick() - curtick);
+  return;
+end;
+
+global
+procedure ReserveRn(record RcVc RepSpec)
+begin
+  record INVc INr;
+  record ORVc ORr;
+	row ORVc ORrw;
+	boolean TrHs,testf;
+	vector string 255 orders,custCode,custName,OrdDate,reservDate;
+	vector integer quantShip,rownr;
+  longint curtick;
+	integer rowcnt,i;
+	array string 255 tags;
+	integer itemall,pos;
+	string 255 orderNr;
+	
+	ORr.Reserved = 1;
+	TrHs = true;
+	while(LoopKey("Reserved",ORr,1,TrHs)) begin
+		if(ORr.Reserved<1) then begin TrHs = false; end;
+		if(TrHs) then begin
+			rowcnt = MatRowCnt(ORr);
+			for(i=0;i<rowcnt;i=i+1) begin
+				testf = true;
+				matrowget(ORr,i,ORrw);
+				if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
+				if(ORrw.Quant>0 and testf and ORrw.Quant>ORrw.Shipd2) then begin
+					if(blank(orders[ORrw.ArtCode])) then begin
+						orders[ORrw.ArtCode] = ORr.SerNr;
+					end else begin
+						orders[ORrw.ArtCode] = orders[ORrw.ArtCode] & "," & ORr.SerNr;
+					end;
+					quantShip[ORrw.ArtCode & ORr.SerNr] = ORrw.Quant-ORrw.Shipd2;
+					rownr[ORrw.ArtCode & ORr.SerNr] = i;
+					custCode[ORrw.ArtCode & ORr.SerNr] = ORr.CustCode;
+					custName[ORrw.ArtCode & ORr.SerNr] =	ORr.Addr0;
+					OrdDate[ORrw.ArtCode & ORr.SerNr] = ORr.OrdDate;
+					reservDate[ORrw.ArtCode & ORr.SerNr] = ORr.EndReserv;
+				end;
+			end;
+		end;
+	end;
+	startreportnoheaderjob("Reserved Report");
+	startformat(15);
+		outstring(0,0,"Заказ",false);
+		outstring(50,0,"Резерв",false);
+		outstring(75,0,"Стр.",false);
+		outstring(100,0,"Клиент",false);
+		outstring(200,0,"Имя клиента",false);
+		outstring(300,0,"Дата заказа",false);
+		outstring(350,0,"Резерв до",false);
+	endformat;
+	getvectortags(orders,tags);
+	Black_Divider(0,1);
+	for(i=0;i<tags.length;i=i+1) begin
+		itemall = 0;
+		pos = 0;
+		ExtractObj(orders[tags[i]],pos,orderNr);
+		startformat(15);
+				outstring(0,"DblINVc", tags[i],false);
+			endformat;
+		while(nonblank(orderNr)) begin
+			itemall = itemall + quantShip[tags[i] & orderNr];
+			startformat(15);
+				outstring(0,"DblORVc",orderNr,false);
+				outstring(50,0,quantShip[tags[i] & orderNr],false);
+				outstring(75,0,rownr[tags[i] & orderNr],false);
+				outstring(100,0,custCode[tags[i] & orderNr],false);
+				outstring(200,0,custName[tags[i] & orderNr],false);
+				outstring(300,0,OrdDate[tags[i] & orderNr],false);
+				outstring(350,0,reservDate[tags[i] & orderNr],false);
+			endformat;
+			ExtractObj(orders[tags[i]],pos,orderNr);
+		end;
+		startformat(15);
+				outstring(0,0,"Всего",false);
+				outstring(50,0,itemall,false);
+			endformat;
+			Black_Divider(0,1);
+	end;
+  EndJob;
+	LogProcTime("ItemLocationStatusRn",getcurtick() - curtick);
+  return;
+end;
 
 global procedure ReserveCheckRn(record RcVc RepSpec)
 begin
