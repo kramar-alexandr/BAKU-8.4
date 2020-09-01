@@ -5,6 +5,79 @@ external procedure ExtractObj(string,var Integer,var string);
 SetLangMode(LangRussian,"RUS",0);
 
 global
+procedure ReserveCheckAllCompRn(record RcVc RepSpec)
+begin
+  record INVc INr;
+  record ORVc ORr;
+	row ORVc ORrw;
+	boolean TrHs,testf;
+	vector string 255 orders,loc,custName,OrdDate,reservDate;
+	vector integer quantShip,rownr;
+  longint curtick;
+	integer rowcnt,i,j,c;
+	array string 255 tags,tags1;
+	integer itemall,pos,rwcnt;
+	string 255 orderNr;
+	record CompaniesBlock CBb;
+	record ItemStatusVc ISr;
+	
+	blockload(CBb);
+  rwcnt = matrowcnt(CBb);
+	startreportnoheaderjob("Reserved Report");
+  For(j=0;j<rwcnt;j=j+1) begin
+    if (SetCompany(j+1,false)) then begin
+			ORr.Reserved = 1;
+			TrHs = true;
+			while(LoopKey("Reserved",ORr,1,TrHs)) begin
+				if(ORr.Reserved<1) then begin TrHs = false; end;
+				if(TrHs) then begin
+					rowcnt = MatRowCnt(ORr);
+					for(i=0;i<rowcnt;i=i+1) begin
+						testf = true;
+						matrowget(ORr,i,ORrw);
+						if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
+						if(ORrw.Quant>0 and testf and ORrw.Quant>ORrw.Shipd2) then begin
+							orders[ORrw.ArtCode] = "true";
+							quantShip[ORrw.ArtCode & ORrw.Location] = ORrw.Quant-ORrw.Shipd2;
+							loc[ORrw.Location] = "true";
+						end;
+					end;
+				end;
+			end;
+			startformat(15);
+				outstring(0,0,"товар",false);
+				outstring(50,0,"кол-во в счетах",false);
+				outstring(75,0,"кол-во в статусе",false);
+				outstring(100,0,"склад",false);
+			endformat;
+			getvectortags(orders,tags);
+			getvectortags(loc,tags1);
+			Black_Divider(0,1);
+			for(i=0;i<tags.length;i=i+1) begin
+				for(c=0;c<tags1.length;c=c+1) begin
+					ISr.Code = tags[i];
+					ISr.Location = tags1[c];
+					readfirstmain(ISr,2,true);
+					if(ISr.RsrvQty!=0 or quantShip[tags[i] & tags1[c]]!=0)then begin
+						if(ISr.RsrvQty!=quantShip[tags[i] & tags1[c]])then begin
+							startformat(15);
+								outstring(0,0,tags[i],false);
+								outstring(100,0,quantShip[tags[i] & tags1[c]],false);
+								outstring(150,0,ISr.RsrvQty,false);
+								outstring(200,0,tags1[c],false);
+							endformat;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+  EndJob;
+	LogProcTime("ItemLocationStatusRn",getcurtick() - curtick);
+  return;
+end;
+
+global
 procedure ReserveRn(record RcVc RepSpec)
 begin
   record INVc INr;
