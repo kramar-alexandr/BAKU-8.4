@@ -22,6 +22,10 @@ begin
 	record CompaniesBlock CBb;
 	row CompaniesBlock Comprw;
 	record ItemStatusVc ISr;
+	vector string 255 ordersSM,OrdDateSM;
+	vector integer quantShipSM,rownrSM;
+	record StockMovVc SMr;
+	row StockMovVc SMrw;
 	
 	oldCompany = currentCompany;
 	blockload(CBb);
@@ -34,6 +38,7 @@ begin
 			ClearVector(orders);
 			ClearVector(quantShip);
 			ClearVector(loc);
+			ClearVector(quantShipSM);
 			ORr.Reserved = 1;
 			TrHs = true;
 			while(LoopKey("Reserved",ORr,1,TrHs)) begin
@@ -52,11 +57,31 @@ begin
 					end;
 				end;
 			end;
+			ResetLoop(ORr);
+			SMr.SerNr = 0;
+			while(LoopMain(SMr,1,true)) begin
+				TrHs = true;
+				if(SMr.Reserved<1 or SMr.OKFlag>0) then begin TrHs = false; end;
+				if(TrHs) then begin
+					rowcnt = MatRowCnt(SMr);
+					for(i=0;i<rowcnt;i=i+1) begin
+						testf = true;
+						matrowget(SMr,i,SMrw);
+						if(nonblank(RepSpec.f1) and RepSpec.f1!=SMrw.ArtCode) then begin testf = false; end;
+						if(SMrw.Quant>0 and testf) then begin
+							orders[SMrw.ArtCode] = "true";
+							quantShipSM[SMrw.ArtCode & SMr.FrLocation] = SMrw.Quant;
+							loc[SMr.FrLocation] = "true";
+						end;
+					end;
+				end;
+			end;
 			startformat(15);
 				outstring(0,0,"товар",false);
 				outstring(100,0,"в счетах",false);
-				outstring(150,0,"в статусе",false);
-				outstring(200,0,"склад",false);
+				outstring(150,0,"в перем.",false);
+				outstring(200,0,"в статусе",false);
+				outstring(250,0,"склад",false);
 				outstring(300,0,"Company " & j+1,false);
 			endformat;
 			getvectortags(orders,tags);
@@ -69,12 +94,13 @@ begin
 					ISr.Location = tags1[c];
 					if(readfirstmain(ISr,2,true)) then begin
 						if(ISr.RsrvQty!=0 or quantShip[tags[i] & tags1[c]]!=0)then begin
-							if(ISr.RsrvQty!=quantShip[tags[i] & tags1[c]])then begin
+							if(ISr.RsrvQty!=quantShip[tags[i] & tags1[c]]+quantShipSM[tags[i] & tags1[c]])then begin
 								startformat(15);
 									outstring(0,0,tags[i],false);
 									outstring(100,0,quantShip[tags[i] & tags1[c]],false);
-									outstring(150,0,ISr.RsrvQty,false);
-									outstring(200,0,tags1[c],false);
+									outstring(150,0,quantShipSM[tags[i] & tags1[c]],false);
+									outstring(200,0,ISr.RsrvQty,false);
+									outstring(250,0,tags1[c],false);
 								endformat;
 							end;
 						end;
@@ -96,13 +122,15 @@ begin
   record ORVc ORr;
 	row ORVc ORrw;
 	boolean TrHs,testf;
-	vector string 255 orders,custCode,custName,OrdDate,reservDate;
-	vector integer quantShip,rownr;
+	vector string 255 orders,custCode,custName,OrdDate,reservDate,ordersSM,OrdDateSM;
+	vector integer quantShip,rownr,quantShipSM,rownrSM;
   longint curtick;
 	integer rowcnt,i;
 	array string 255 tags;
 	integer itemall,pos;
 	string 255 orderNr;
+	record StockMovVc SMr;
+	row StockMovVc SMrw;
 	
 	ORr.Reserved = 1;
 	TrHs = true;
@@ -121,11 +149,34 @@ begin
 						orders[ORrw.ArtCode] = orders[ORrw.ArtCode] & "," & ORr.SerNr;
 					end;
 					quantShip[ORrw.ArtCode & ORr.SerNr] = ORrw.Quant-ORrw.Shipd2;
-					rownr[ORrw.ArtCode & ORr.SerNr] = i;
+					rownr[ORrw.ArtCode & ORr.SerNr] = i+1;
 					custCode[ORrw.ArtCode & ORr.SerNr] = ORr.CustCode;
 					custName[ORrw.ArtCode & ORr.SerNr] =	ORr.Addr0;
 					OrdDate[ORrw.ArtCode & ORr.SerNr] = ORr.OrdDate;
 					reservDate[ORrw.ArtCode & ORr.SerNr] = ORr.EndReserv;
+				end;
+			end;
+		end;
+	end;
+	SMr.SerNr = 0;
+	while(LoopMain(SMr,1,true)) begin
+		TrHs = true;
+		if(SMr.Reserved<1 or SMr.OKFlag>0) then begin TrHs = false; end;
+		if(TrHs) then begin
+			rowcnt = MatRowCnt(SMr);
+			for(i=0;i<rowcnt;i=i+1) begin
+				testf = true;
+				matrowget(SMr,i,SMrw);
+				if(nonblank(RepSpec.f1) and RepSpec.f1!=SMrw.ArtCode) then begin testf = false; end;
+				if(SMrw.Quant>0 and testf) then begin
+					if(blank(ordersSM[SMrw.ArtCode])) then begin
+						ordersSM[SMrw.ArtCode] = SMr.SerNr;
+					end else begin
+						ordersSM[SMrw.ArtCode] = ordersSM[SMrw.ArtCode] & "," & SMr.SerNr;
+					end;
+					quantShipSM[SMrw.ArtCode & SMr.SerNr] = SMrw.Quant;
+					rownrSM[SMrw.ArtCode & SMr.SerNr] = i+1;
+					OrdDateSM[SMrw.ArtCode & SMr.SerNr] = SMr.OrdTransDate;
 				end;
 			end;
 		end;
@@ -161,6 +212,18 @@ begin
 				outstring(350,0,reservDate[tags[i] & orderNr],false);
 			endformat;
 			ExtractObj(orders[tags[i]],pos,orderNr);
+		end;
+		pos = 0;
+		ExtractObj(ordersSM[tags[i]],pos,orderNr);
+		while(nonblank(orderNr)) begin
+			itemall = itemall + quantShipSM[tags[i] & orderNr];
+			startformat(15);
+				outstring(0,"DblStockMovVc",orderNr,false);
+				outstring(50,0,quantShipSM[tags[i] & orderNr],false);
+				outstring(75,0,rownrSM[tags[i] & orderNr],false);
+				outstring(300,0,OrdDateSM[tags[i] & orderNr],false);
+			endformat;
+			ExtractObj(ordersSM[tags[i]],pos,orderNr);
 		end;
 		startformat(15);
 				outstring(0,0,"‚сего",false);
