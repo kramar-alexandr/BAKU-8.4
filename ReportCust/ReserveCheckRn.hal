@@ -1,6 +1,7 @@
 //server-only
 external procedure LogProcTime(string,longint);
 external procedure ExtractObj(string,var Integer,var string);
+remote function boolean CompanyIsJWLikeCompany(Integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -16,16 +17,23 @@ begin
   longint curtick;
 	integer rowcnt,i,j,c;
 	array string 255 tags,tags1;
-	integer itemall,pos,rwcnt;
+	integer itemall,pos,rwcnt,oldCompany;
 	string 255 orderNr;
 	record CompaniesBlock CBb;
+	row CompaniesBlock Comprw;
 	record ItemStatusVc ISr;
 	
+	oldCompany = currentCompany;
 	blockload(CBb);
   rwcnt = matrowcnt(CBb);
 	startreportnoheaderjob("Reserved Report");
   For(j=0;j<rwcnt;j=j+1) begin
-    if (SetCompany(j+1,false)) then begin
+    matrowget(CBb,j,Comprw);
+		if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3) and j+1!=33)then begin
+			SetCompany(j+1,false);
+			ClearVector(orders);
+			ClearVector(quantShip);
+			ClearVector(loc);
 			ORr.Reserved = 1;
 			TrHs = true;
 			while(LoopKey("Reserved",ORr,1,TrHs)) begin
@@ -38,34 +46,37 @@ begin
 						if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
 						if(ORrw.Quant>0 and testf and ORrw.Quant>ORrw.Shipd2) then begin
 							orders[ORrw.ArtCode] = "true";
-							quantShip[ORrw.ArtCode & ORrw.Location] = ORrw.Quant-ORrw.Shipd2;
-							loc[ORrw.Location] = "true";
+							quantShip[ORrw.ArtCode & ORr.Location] = ORrw.Quant-ORrw.Shipd2;
+							loc[ORr.Location] = "true";
 						end;
 					end;
 				end;
 			end;
 			startformat(15);
 				outstring(0,0,"товар",false);
-				outstring(50,0,"кол-во в счетах",false);
-				outstring(75,0,"кол-во в статусе",false);
-				outstring(100,0,"склад",false);
+				outstring(100,0,"в счетах",false);
+				outstring(150,0,"в статусе",false);
+				outstring(200,0,"склад",false);
+				outstring(300,0,"Company " & j+1,false);
 			endformat;
 			getvectortags(orders,tags);
 			getvectortags(loc,tags1);
 			Black_Divider(0,1);
 			for(i=0;i<tags.length;i=i+1) begin
+				
 				for(c=0;c<tags1.length;c=c+1) begin
 					ISr.Code = tags[i];
 					ISr.Location = tags1[c];
-					readfirstmain(ISr,2,true);
-					if(ISr.RsrvQty!=0 or quantShip[tags[i] & tags1[c]]!=0)then begin
-						if(ISr.RsrvQty!=quantShip[tags[i] & tags1[c]])then begin
-							startformat(15);
-								outstring(0,0,tags[i],false);
-								outstring(100,0,quantShip[tags[i] & tags1[c]],false);
-								outstring(150,0,ISr.RsrvQty,false);
-								outstring(200,0,tags1[c],false);
-							endformat;
+					if(readfirstmain(ISr,2,true)) then begin
+						if(ISr.RsrvQty!=0 or quantShip[tags[i] & tags1[c]]!=0)then begin
+							if(ISr.RsrvQty!=quantShip[tags[i] & tags1[c]])then begin
+								startformat(15);
+									outstring(0,0,tags[i],false);
+									outstring(100,0,quantShip[tags[i] & tags1[c]],false);
+									outstring(150,0,ISr.RsrvQty,false);
+									outstring(200,0,tags1[c],false);
+								endformat;
+							end;
 						end;
 					end;
 				end;
@@ -73,6 +84,7 @@ begin
 		end;
 	end;
   EndJob;
+	ResetCompany(oldCompany);
 	LogProcTime("ItemLocationStatusRn",getcurtick() - curtick);
   return;
 end;
