@@ -4,7 +4,6 @@ external procedure HTArtSel(string,string, var string);
 external procedure GetStockValue(string,string,var record ItemStatusVc);
 external procedure GetItemLocationTurnover(string,record INVc,Boolean,Date,Date,string,string,string,string,Integer,var val);
 external procedure LogProcTime(string,longint);
-external procedure ExtractObj(string,var Integer,var string);
 
 function val FindMinLevel(record INVc INr,string location)
 begin
@@ -254,65 +253,4 @@ begin
   return;
 end;
 
-global
-procedure ReserveRn(record RcVc RepSpec)
-begin
-  record INVc INr;
-  record ORVc ORr;
-	row ORVc ORrw;
-	boolean TrHs,testf;
-	vector string 255 orders;
-	vector integer quantShip;
-  longint curtick;
-	integer rowcnt,i;
-	array string 255 tags;
-	integer itemall,pos;
-	string 255 orderNr;
-	
-	ORr.Reserved = 1;
-	TrHs = true;
-	while(LoopKey("Reserved",ORr,1,TrHs)) begin
-		if(ORr.Reserved<1) then begin TrHs = false; end;
-		if(TrHs) then begin
-			rowcnt = MatRowCnt(ORr);
-			for(i=0;i<rowcnt;i=i+1) begin
-				testf = true;
-				matrowget(ORr,i,ORrw);
-				if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
-				if(ORrw.Shipd2>0 and testf) then begin
-					if(blank(orders[ORrw.ArtCode])) then begin
-						orders[ORrw.ArtCode] = ORr.SerNr;
-					end else begin
-						orders[ORrw.ArtCode] = orders[ORrw.ArtCode] & "," & ORr.SerNr;
-					end;
-					quantShip[ORrw.ArtCode & ORr.SerNr] = ORrw.Shipd2;
-				end;
-			end;
-		end;
-	end;
-	startreportnoheaderjob("Reserved Report");
-	getvectortags(orders,tags);
-	for(i=0;i<tags.length;i=i+1) begin
-		itemall = 0;
-		pos = 0;
-		ExtractObj(orders[tags[i]],pos,orderNr);
-		startformat(15);
-				outstring(0,0,"Item " & tags[i],false);
-			endformat;
-		while(nonblank(orderNr)) begin
-			itemall = itemall + quantShip[tags[i] & orderNr];
-			startformat(15);
-				outstring(0,0,orderNr,false);
-				outstring(50,0,quantShip[tags[i] & orderNr],false);
-			endformat;
-			ExtractObj(orders[tags[i]],pos,orderNr);
-		end;
-		startformat(15);
-				outstring(0,0,"InReserve",false);
-				outstring(50,0,itemall,false);
-			endformat;
-	end;
-  EndJob;
-	LogProcTime("ItemLocationStatusRn",getcurtick() - curtick);
-  return;
-end;
+
