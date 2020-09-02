@@ -13,7 +13,7 @@ external procedure GetPriceItem(string,var val,var val);
 remote function Boolean GetTempItemPrice(var val,string,var string, date,var string);
 external function roundmode GetTotalRoundMode(record RoundBlock);
 external function roundmode SetRoundModeD(Integer);
-
+ 
 SetLangMode(LangRussian,"RUS",0); //Edit***************************Sasha2,18:20 11.12.2014
 
 
@@ -1330,7 +1330,7 @@ begin
 	record BPIBrandVc Brndr;
 	date dat,sd;
 	val ITRebate,TempItemPrice, inprice;
-	string 255 tpcurrency,crn,obj;
+	string 255 tpcurrency,crn,obj,Dubl;
 	record CurncyRoundOffBlock CROb;
   row CurncyRoundOffBlock CRObrw;
 	record ItemDuplicatesVc IDr;
@@ -1651,23 +1651,19 @@ begin
 			awercostbrandcur = curcost2;
 			IDr.OrigCode = INr.Code;
 			if(currentcompany!=18) then begin
-				TrHs = true;
-				while(LoopKey("OrigCode",IDr,1,TrHs)) begin
-					if(IDr.OrigCode!=INr.Code) then begin TrHs = false; end;
-					if(TrHs) then begin
-						dupINr.Code = IDr.DupCode;
-						if(ReadFirstMain(dupINr,1,true)) then begin
-							if(INr.BPIBrand==dupINr.BPIBrand) then begin
-								MyFindAwerageCost(dupINr.Code,ISr.Location,dupINr.LastPurchCurncyCode,todate,realcur,brandcur,cost,curcost,curcost2);
-								awercost = awercost + cost;
-								awercostcur = awercostcur + curcost;
-								awercostbrandcur = awercostbrandcur + curcost2;
-								qtyDup = qtyDup + 1;
-							end;
-						end;
+				pos = 0;
+				ExtractObj(DubCodes[INr.Code],pos,Dubl);
+				while(nonblank(Dubl)) begin
+					dupINr.Code = Dubl;
+					if(ReadFirstMain(dupINr,1,true)) then begin
+						MyFindAwerageCost(dupINr.Code,ISr.Location,dupINr.LastPurchCurncyCode,todate,realcur,brandcur,cost,curcost,curcost2);
+						awercost = awercost + cost;
+						awercostcur = awercostcur + curcost;
+						awercostbrandcur = awercostbrandcur + curcost2;
+						qtyDup = qtyDup + 1;
 					end;
+					ExtractObj(DubCodes[INr.Code],pos,Dubl);
 				end;
-				ResetLoop(IDr);
 			end;
 		// end;
 		awercost = awercost / qtyDup;
@@ -2824,10 +2820,12 @@ begin
 									if(IS2r.Instock>0 or (nonblank(todate) and todate<currentdate)) then begin
 										IS2r.Instock = ItemQtyPerDate(IS2r.Code,todate,ISr.Location,"",SBr.CostPrice,acnt2,cqty2,ccost2,acur2,brandcur);
 										ISr.Instock = ISr.Instock + IS2r.Instock;
-										if(blank(DubCodes[INr.Code])) then begin
-											DubCodes[INr.Code] = dupINr.Code;
-										end else begin
-											DubCodes[INr.Code] = DubCodes[INr.Code] & "," & dupINr.Code;
+										if(IS2r.Instock>0) then begin 
+											if(blank(DubCodes[INr.Code])) then begin
+												DubCodes[INr.Code] = dupINr.Code;
+											end else begin
+												DubCodes[INr.Code] = DubCodes[INr.Code] & "," & dupINr.Code;
+											end;
 										end;
 										For(i=0;i<acnt2;i=i+1) begin
 											if(INr.LastPurchCurncyCode==acur2[i] and nonblank(INr.LastPurchCurncyCode))then begin
