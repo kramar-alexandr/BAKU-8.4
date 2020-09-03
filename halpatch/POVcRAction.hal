@@ -1809,17 +1809,54 @@ begin
 	record ORVc ORr;
 	record ItemDuplicatesVc IDr;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:42 17.08.2020
 
-	
+	res = 0;
   GetFullCurncyRate(POr.CurncyCode,currentdate,fr,to1,to2,br1,br2);
 	
 	
 	// Edit Start ---------------------------------------------- Edit Start
 	
-	BlockLoad(BOb);
-
-  res = 0;
+	BlockLoad(BOb);  
   insertmode = 1;
   updatemode = 2;
+  
+  BlockLoad(SRb);
+  if (long4>0) then begin
+    check = true;
+  end else begin
+    check = false;
+  end;
+  BlockLoad(SNrb);
+  BlockLoad(POSettingRec);
+  rwcnt = MatRowCnt(POr);
+  if (stat==Rs_update) then begin
+    if (POr.SerNr<=0) and (PO2r.OKFlag==0) then begin
+      POr.SerNr = PO2r.SerNr;
+    end;
+  end;  
+  if (stat==Rs_update) then begin
+    if (PO2r.OKFlag!=0) then begin
+      goto LPOVcRecordCheck;
+    end;
+  end;
+  oldnr = POr.SerNr;
+  if (POr.SerNr<=0) then begin
+    newnr = GetCurUserLastNr("POVc");
+    if (newnr==-1) then begin newnr = SRb.LastPONr; end;
+    POr.SerNr = NextSerNr("POVc",POr.TransDate,newnr,false,"");
+  end;
+  if (SerNrTestPOVc(POr.SerNr,POr.TransDate,gentrans)==false) then begin
+    if (disperrf) then begin
+      RecordCheckError(1557,"",-1,"SerNr");      
+    end;
+    res = 1557; 
+    goto LPOVcRecordCheck;
+  end;
+  if (DisallowFutureDateCheck(disperrf,POr.TransDate,"TransDate",-1)) then begin
+    res = -1;
+    goto LPOVcRecordCheck;
+  end;
+  
+  
   //Wednesday, 13 November 2013 16:24:21
 	if(nonblank(POr.CustomsCost))then begin
 		ChCustCost = 0;
@@ -1979,42 +2016,7 @@ begin
 		end;
 	end;
   
-  BlockLoad(SRb);
-  if (long4>0) then begin
-    check = true;
-  end else begin
-    check = false;
-  end;
-  BlockLoad(SNrb);
-  BlockLoad(POSettingRec);
-  rwcnt = MatRowCnt(POr);
-  if (stat==Rs_update) then begin
-    if (POr.SerNr<=0) and (PO2r.OKFlag==0) then begin
-      POr.SerNr = PO2r.SerNr;
-    end;
-  end;  
-  if (stat==Rs_update) then begin
-    if (PO2r.OKFlag!=0) then begin
-      goto LPOVcRecordCheck;
-    end;
-  end;
-  oldnr = POr.SerNr;
-  if (POr.SerNr<=0) then begin
-    newnr = GetCurUserLastNr("POVc");
-    if (newnr==-1) then begin newnr = SRb.LastPONr; end;
-    POr.SerNr = NextSerNr("POVc",POr.TransDate,newnr,false,"");
-  end;
-  if (SerNrTestPOVc(POr.SerNr,POr.TransDate,gentrans)==false) then begin
-    if (disperrf) then begin
-      RecordCheckError(1557,"",-1,"SerNr");      
-    end;
-    res = 1557; 
-    goto LPOVcRecordCheck;
-  end;
-  if (DisallowFutureDateCheck(disperrf,POr.TransDate,"TransDate",-1)) then begin
-    res = -1;
-    goto LPOVcRecordCheck;
-  end;
+  
   transf = false;
   if (POr.OKFlag==1) then begin
     if (stat==insertmode) then begin transf = true; end;
