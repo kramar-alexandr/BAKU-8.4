@@ -7,6 +7,7 @@ external function Boolean LoggedInTest();
 external procedure FindAndStoreINVcImgLink(record INVc,integer,var string,var string);
 external procedure ExtractObj(string,var Integer,var string);
 remote function boolean CompanyIsJWLikeCompany(Integer);
+external function string 60 AddObjectToObjectList(string,string);
 
 global function string 255 imgStrReplace(string instr)
 begin
@@ -840,15 +841,20 @@ return
 end;
 
 webpublic global
-procedure WebGetCode()
+updating procedure WebGetCode()
 begin
   LongInt ser;
 	record MyRebVc MRr;
+	row MyRebVc MRrw;
   record CompaniesBlock CBb;
 	row CompaniesBlock Comprw;
-	integer j,oldCompany,rwcnt;
-	boolean TrHs;
-	
+	integer j,oldCompany,rwcnt,i;
+	boolean TrHs,TrHs1,update;
+	vector string 255 Codes,Groups;
+	record IVVc IVr;
+	row IVVc IVrw;
+	array string 255 tags;
+	record INVc INr;
 	oldCompany = currentCompany;
 	blockload(CBb);
   rwcnt = matrowcnt(CBb);
@@ -860,10 +866,50 @@ begin
 			TrHs = true;
 			while(LoopMain(MRr,1,TrHs)) begin
 				if(nonblankdate(MRr.FromDate) and nonblank(MRr.Object) and TrHs) then begin
-					weboutstring(MRr.FromDate & " " & MRr.Object & " " & j);
-					weboutstring("<BR>");
-					TrHs = false;
+					ClearVector(Groups);
+					ClearVector(Codes);
+					rwcnt = matrowcnt(MRr);
+					for(i=0;i<rwcnt;i=i+1) begin
+						matrowget(MRr,i,MRrw);
+						if(MRrw.CodeType=0) then begin
+							Groups[MRrw.ITCode] = MRr.Object;
+						end else begin
+							Codes[MRrw.ITCode] = MRr.Object;
+						end;
+					end;
 					//logtext(0,"<img src=\"" & filename & "\" height=\"400\"/></div></td>"); 
+					IVr.TransDate = MRr.FromDate;
+					TrHs1 = true;
+					while(loopkey("TransDate",IVr,1,TrHs1)) begin
+						if(IVr.TransDate>MRr.ToDate) then begin TrHs1 = false; end;
+						if(TrHs1) then begin
+							rwcnt = matrowcnt(IVr);
+							update = false;
+							for(i=0;i<rwcnt;i=i+1) begin
+								if(nonblank(Codes[MRrw.ITCode])) then begin
+									IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
+									matrowput(MRr,i,MRrw);
+									update = true;
+								end else begin
+									getvectortags(Groups,tags);
+									if(tags.length>0) then begin
+										INr.Code = IVrw.ArtCode;
+										if(ReadFirstMain(INr,1,true)) then begin
+											if(nonblank(Groups(INr.Group))) then begin
+												IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
+												matrowput(MRr,i,MRrw);
+												update = true;
+											end;
+										end;
+									end;
+								end;
+							end;
+							if(update) then begin
+								RecordStore(IVr,true);
+							end;
+						end;
+					end;
+					ResetLoop(IVr);
 				end;
 			end;
 			ResetLoop(MRr);
