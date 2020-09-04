@@ -840,41 +840,51 @@ begin
 return
 end;
 
-updating procedure updateIV(record IVVc IVr,record MyRebVc MRr,vector string Codes, vector string Groups)
+updating procedure updateIV(record MyRebVc MRr,vector string Codes, vector string Groups)
 begin
 integer i,rwcnt;
 row IVVc IVrw;
 record INVc INr;
 boolean update;
 array string 255 tags;
-	rwcnt = matrowcnt(IVr);
-	update = false;
-	for(i=0;i<rwcnt;i=i+1) begin
-		if(nonblank(Codes[IVrw.ArtCode])) then begin
-			logtext(0,"IVr update code" & IVr.SerNr); 
-			IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
-			matrowput(IVr,i,IVrw);
-			update = true;
-		end else begin
-			getvectortags(Groups,tags);
-			if(tags.length>0) then begin
-				INr.Code = IVrw.ArtCode;
-				if(ReadFirstMain(INr,1,true)) then begin
-					if(nonblank(Groups(INr.Group))) then begin
-						logtext(0,"IVr update group" & IVr.SerNr); 
-						IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
-						matrowput(IVr,i,IVrw);
-						update = true;
+record IVVc IVr;
+boolean TrHs1;
+	IVr.TransDate = MRr.FromDate;
+	TrHs1 = true;
+	while(loopkey("TransDate",IVr,1,TrHs1)) begin
+		if(IVr.TransDate>MRr.ToDate) then begin TrHs1 = false; end;
+		if(TrHs1) then begin
+			rwcnt = matrowcnt(IVr);
+			update = false;
+			for(i=0;i<rwcnt;i=i+1) begin
+				if(nonblank(Codes[IVrw.ArtCode])) then begin
+					logtext(0,"IVr update code" & IVr.SerNr); 
+					IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
+					matrowput(IVr,i,IVrw);
+					update = true;
+				end else begin
+					getvectortags(Groups,tags);
+					if(tags.length>0) then begin
+						INr.Code = IVrw.ArtCode;
+						if(ReadFirstMain(INr,1,true)) then begin
+							if(nonblank(Groups(INr.Group))) then begin
+								logtext(0,"IVr update group" & IVr.SerNr); 
+								IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
+								matrowput(IVr,i,IVrw);
+								update = true;
+							end;
+						end;
 					end;
 				end;
 			end;
+			if(update) then begin
+				logtext(0,"IVr store start " & IVr.SerNr); 
+				RecordStore(IVr,true);
+				logtext(0,"IVr store end " & IVr.SerNr); 
+			end;
 		end;
 	end;
-	if(update) then begin
-		logtext(0,"IVr store start " & IVr.SerNr); 
-		RecordStore(IVr,true);
-		logtext(0,"IVr store end " & IVr.SerNr); 
-	end;
+	ResetLoop(IVr);
 end;
 webpublic global
 updating procedure WebGetCode()
@@ -914,18 +924,8 @@ begin
 							Codes[MRrw.ITCode] = MRr.Object;
 						end;
 					end;
+					updateIV(MRr,Codes,Groups);
 					//logtext(0,"<img src=\"" & filename & "\" height=\"400\"/></div></td>"); 
-					IVr.TransDate = MRr.FromDate;
-					TrHs1 = true;
-					while(loopkey("TransDate",IVr,1,TrHs1)) begin
-						if(IVr.TransDate>MRr.ToDate) then begin TrHs1 = false; end;
-						if(TrHs1) then begin
-							logtext(0,"IVr1 " & IVr.SerNr); 
-							updateIV(IVr,MRr,Codes,Groups);
-							logtext(0,"IVr2 " & IVr.SerNr); 
-						end;
-					end;
-					ResetLoop(IVr);
 				end;
 			end;
 			ResetLoop(MRr);
