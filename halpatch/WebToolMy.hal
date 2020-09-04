@@ -840,6 +840,38 @@ begin
 return
 end;
 
+updating procedure updateIV(record IVVc IVr,record MyRebVc MRr,vector string Codes, vector string Groups)
+begin
+integer i,rwcnt;
+row IVVc IVrw;
+record INVc INr;
+boolean update;
+array string 255 tags;
+	rwcnt = matrowcnt(IVr);
+	update = false;
+	for(i=0;i<rwcnt;i=i+1) begin
+		if(nonblank(Codes[IVrw.ArtCode])) then begin
+			IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
+			matrowput(IVr,i,IVrw);
+			update = true;
+		end else begin
+			getvectortags(Groups,tags);
+			if(tags.length>0) then begin
+				INr.Code = IVrw.ArtCode;
+				if(ReadFirstMain(INr,1,true)) then begin
+					if(nonblank(Groups(INr.Group))) then begin
+						IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
+						matrowput(IVr,i,IVrw);
+						update = true;
+					end;
+				end;
+			end;
+		end;
+	end;
+	if(update) then begin
+		RecordStore(IVr,true);
+	end;
+end;
 webpublic global
 updating procedure WebGetCode()
 begin
@@ -853,7 +885,6 @@ begin
 	vector string 255 Codes,Groups;
 	record IVVc IVr;
 	row IVVc IVrw;
-	array string 255 tags;
 	record INVc INr;
 	oldCompany = currentCompany;
 	blockload(CBb);
@@ -883,30 +914,7 @@ begin
 					while(loopkey("TransDate",IVr,1,TrHs1)) begin
 						if(IVr.TransDate>MRr.ToDate) then begin TrHs1 = false; end;
 						if(TrHs1) then begin
-							rwcnt = matrowcnt(IVr);
-							update = false;
-							for(i=0;i<rwcnt;i=i+1) begin
-								if(nonblank(Codes[MRrw.ITCode])) then begin
-									IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
-									matrowput(MRr,i,MRrw);
-									update = true;
-								end else begin
-									getvectortags(Groups,tags);
-									if(tags.length>0) then begin
-										INr.Code = IVrw.ArtCode;
-										if(ReadFirstMain(INr,1,true)) then begin
-											if(nonblank(Groups(INr.Group))) then begin
-												IVrw.Objects = AddObjectToObjectList(IVrw.Objects,MRr.Object);
-												matrowput(MRr,i,MRrw);
-												update = true;
-											end;
-										end;
-									end;
-								end;
-							end;
-							if(update) then begin
-								RecordStore(IVr,true);
-							end;
+							updateIV(IVr,MRr,Codes,Groups);
 						end;
 					end;
 					ResetLoop(IVr);
