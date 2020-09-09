@@ -56,6 +56,8 @@ external updating procedure UpdatePrice(record PLVc);
 external procedure LogProcTime(string,longint);
 remote procedure POSumup(var record POVc);
 remote function boolean PTCCCodesCheck(string);
+external function string 60 AddObjectToObjectList(string,string);
+remote function Boolean SDVc_PasteArtCode(var record SDVc,Integer,Integer,var string,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -436,6 +438,158 @@ begin
 end;
 
 global
+updating function LongInt POChekItemStockInCompSenderDo(record POVc POp,string Location,integer OldComp)
+begin
+	row POVc POrw;
+  record LocationVc Lcr;
+	record SDVc SDr, OldSDr;
+	row SDVc SDrw;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	LongInt i, compcnt, rwcnt, j, OldCompany, res;
+	boolean TrHs;
+	string 255 tstr;
+	record ItemStatusVc ISr;
+	vector integer ItemQty;
+	
+	res = -1;
+	
+	for (i=0;i<matrowcnt(POp);i=i+1) begin
+		matrowget(POp,i,POrw);
+		if (nonblank(POrw.ArtCode)) then begin
+			ItemQty[POrw.ArtCode] = ItemQty[POrw.ArtCode] + POrw.Quant;
+		end;
+	end;
+	
+	
+	for (i=matrowcnt(POp)-1;i>=0;i=i-1) begin
+		matrowget(POp,i,POrw);
+		if (ItemQty[POrw.ArtCode]>0) then begin
+			ISr.Code = POrw.ArtCode;
+			ISr.Location = Location;
+			if(ReadFirstMain(ISr,2,true)) then begin 
+				if (ISr.Instock-ISr.RsrvQty<ItemQty[POrw.ArtCode]) then begin
+					res = i;
+				end;
+			end;
+		end;
+	end;
+	
+	
+	
+	POChekItemStockInCompSenderDo = res;
+  return;
+end;
+
+
+
+global
+updating procedure POCreateSDInCompSenderDo(record POVc POp,string Location,integer OldComp)
+begin
+	row POVc POrw;
+  record LocationVc Lcr;
+	record SDVc SDr, OldSDr;
+	row SDVc SDrw;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	LongInt i, compcnt, rwcnt, j, OldCompany;
+	boolean TrHs;
+	string 255 tstr;
+	
+	RecordNew(SDr);
+	SDr.SerNr = NextSerNr("SDVc",SDr.TransDate,-1,false,""); 
+	SDr.Location = Location;
+	SDr.CostAcc = "41/06";
+	if (nonblank(SDr.Location)) then begin
+		Lcr.Code = SDr.Location;
+		ReadFirstMain(Lcr,1,true);
+		SDr.Objects = AddObjectToObjectList(SDr.Objects,Lcr.Objects);
+		SDr.Objects = SDr.Objects & ",CENTRAL_RETURN";
+	end;
+	
+	for (i=0;i<matrowcnt(POp);i=i+1) begin
+		MatRowGet(POp,i,POrw);
+		ClearRow(SDr,SDrw,1);
+		SDrw.ArtCode = POrw.ArtCode;
+		SDrw.Qty = POrw.Quant;
+		MatRowPut(SDr,i,SDrw);
+		SDVc_PasteArtCode(SDr,i,1,tstr,tstr);
+	end;
+	recordStore (SDr,true);
+	RecordCopy(OldSDr,SDr);
+	SDr.Reservf = 1;
+	if(RecordUpdate(OldSDr,SDr,true)==0) then begin
+		createrecordlink(SDr,CurrentCompany,POp,OldComp);
+		createrecordlink(POp,OldComp,SDr,CurrentCompany);
+	end;	
+  return;
+end;
+
+global
+updating function LongInt POCheckItemStockInCompSender(record POVc POp)
+begin
+  record LocationVc Lcr;
+	record CompaniesBlock Compb;
+	LongInt i, OldCompany, res;
+	boolean TrHs;
+	
+	res = -1;
+	
+	logtext(0,"POCheckItemStockInCompSender");
+	
+	OldCompany = CurrentCompany;
+	blockLoad(Compb);
+	for (i=0;i<matrowcnt(Compb);i=i+1) begin
+		SetCompany(i+1,false);
+		Lcr.Code = "";
+		TrHs = true;
+		while (LoopMain(Lcr,1,TrHs)) begin
+			if (POp.ItemFromOtherSTockObj==Lcr.FOBSuplier) then begin
+				TrHs = false;
+				res = POChekItemStockInCompSenderDo(POp,Lcr.Code,OldCompany);
+			end;
+		end;
+		ResetLoop(Lcr);
+	end;
+	resetCompany(OldCompany);
+	POCheckItemStockInCompSender = res;
+  return;
+end;
+
+
+
+
+
+global
+updating procedure POCreateSDInCompSender(record POVc POp)
+begin
+  record LocationVc Lcr;
+	record CompaniesBlock Compb;
+	LongInt i, OldCompany;
+	boolean TrHs;
+	
+	OldCompany = CurrentCompany;
+	blockLoad(Compb);
+	for (i=0;i<matrowcnt(Compb);i=i+1) begin
+		SetCompany(i+1,false);
+		Lcr.Code = "";
+		TrHs = true;
+		while (LoopMain(Lcr,1,TrHs)) begin
+			if (POp.ItemFromOtherSTockObj==Lcr.FOBSuplier) then begin
+				TrHs = false;
+				POCreateSDInCompSenderDo(POp,Lcr.Code,OldCompany);
+			end;
+		end;
+		ResetLoop(Lcr);
+	end;
+	resetCompany(OldCompany);
+  return;
+end;
+
+
+
+
+global
 updating procedure POUpdatePOCO(record POVc POp,Boolean negf)
 begin
   record POCOVc oldPOCOr;
@@ -682,6 +836,9 @@ begin
   UpdateVARItemsPO(POr);
   if (POr.OKFlag!=0) then begin
     AssignStockResFromPO(POr);
+		if (nonblank(POr.ItemFromOtherSTockObj)) then begin
+			 POCreateSDInCompSender(POr);
+		end;
   end;
   POCreatePlannedPayment(POr);
   if (POr.OKFlag!=0) then begin
@@ -713,6 +870,9 @@ begin
   if ((POr.OKFlag!=0) and (PO2r.OKFlag==0)) then begin
     AssignStockResFromPO(POr);
     POCreateInterCompanyOR(POr);
+		if (nonblank(POr.ItemFromOtherSTockObj)) then begin
+			 POCreateSDInCompSender(POr);
+		end;
   end;
   UpdateStockResFromPO(POr,POr.Closed);
   if (PO2r.Sum4!=POr.Sum4) then begin
@@ -1808,6 +1968,7 @@ begin
 	val ChCustCost;
 	record ORVc ORr;
 	record ItemDuplicatesVc IDr;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:42 17.08.2020
+	integer ErrRow;
 
 	res = 0;
   GetFullCurncyRate(POr.CurncyCode,currentdate,fr,to1,to2,br1,br2);
@@ -2227,6 +2388,32 @@ begin
       end;
     end;
   end;
+	if (stat==updatemode) then begin
+		if ((POr.OKFlag!=0) and (PO2r.OKFlag==0)) then begin
+			if (nonblank(POr.ItemFromOtherSTockObj)) then begin
+				ErrRow = POCheckItemStockInCompSender(POr);
+				if (ErrRow>-1) then begin
+					RecordCheckError(36373,"",ErrRow,"ArtCode");      
+					res = -1;
+					goto LPOVcRecordCheck;
+				end;
+			end;
+		end;
+	end;
+	
+	if (stat==insertmode) then begin
+		if (POr.OKFlag!=0) then begin
+			if (nonblank(POr.ItemFromOtherSTockObj)) then begin
+				ErrRow = POCheckItemStockInCompSender(POr);
+				if (ErrRow>-1) then begin
+					RecordCheckError(36373,"",ErrRow,"ArtCode");      
+					res = -1;
+					goto LPOVcRecordCheck;
+				end;
+			end;
+		end;
+	end;
+	
   found = true; 
   if (stat==updatemode) then begin
     if (POr.Closed!=0) and (PO2r.Closed==0) then begin
