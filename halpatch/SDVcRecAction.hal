@@ -79,6 +79,8 @@ external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var
 remote procedure CreateINConsItem(string, string, integer);
 remote updating procedure ExchCurrInTr41AccRow(string,longint);
 remote updating procedure updateResQtyFromSD (record SDVc,boolean);
+external procedure ExtractObj(string,var Integer,var string);
+remote updating procedure ORFromPOCons(record POVc);
 
 
 updating procedure SDCreateTBIV(record SDVc SDp,Integer rownr,Boolean setinvd,Integer UseDiscount,Boolean negf)
@@ -1103,9 +1105,9 @@ begin
 	LongInt res;
 	record PUVc PUr, OldPUr;
 	row PUVc PUrw;
-	integer oldComp,i,rwcnt,k,m,curcnt;
-	string 255 VECode,warning,inwarn;
-	record LocationVc Locr,Loc1r;
+	integer oldComp,i,rwcnt,k,m,curcnt,pos;
+	string 255 VECode,warning,inwarn,Obj,storeObj;
+	record LocationVc Locr,Loc1r,Lcr;
 	row SDVc SDrw;
 	record ConsItemVc CIr;
 	record BPIBrandVc BBr;
@@ -1120,6 +1122,8 @@ begin
 	record SDVc SD1r;
 	record INVc INr;
 	record RLinkVc RLr;
+	record ObjVc OBJr;
+	boolean TrHs;
 	
 	oldComp = CurrentCompany;
 	BlockLoad(Compb);
@@ -1245,7 +1249,36 @@ begin
 					SetCompany(18,false);
 					RecordCopy(OldPUr,PUr);
 					PUr.OKFlag = 1;
-					RecordUpdate(OldPUr,PUr,true);
+					if (RecordUpdate(OldPUr,PUr,true)==0)then begin
+						pos = 0;
+						ExtractObj(POr.Objects,pos,Obj);
+						while (nonblank(Obj)) begin 
+							OBJr.Code = Obj;
+							if (ReadFirstMain(OBJr,1,true)) then begin
+								if (OBJr.OTCode=="STORE") then begin
+									storeObj = OBJr.Code;
+								end;
+							end;
+							ExtractObj(POr.Objects,pos,Obj);
+						end;
+						if (nonblank(storeObj)) then begin
+							for (i=0;i<matrowcnt(Compb);i=i+1) begin
+								SetCompany(i+1,false);
+								Lcr.Code = "";
+								TrHs = true;
+								while (LoopMain(Lcr,1,TrHs)) begin
+									if (storeObj==Lcr.Objects) then begin
+										TrHs = false;
+										if (ReadFirstMain(POr,1,true)) then begin
+											ORFromPOCons(POr);
+										end;
+									end;
+								end;
+								ResetLoop(Lcr);
+							end;
+							SetCompany(18,false);
+						end;
+					end;
 				end;
 			end;
 		end;	
