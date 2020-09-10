@@ -1106,7 +1106,7 @@ begin
 	record PUVc PUr, OldPUr;
 	row PUVc PUrw;
 	integer oldComp,i,rwcnt,k,m,curcnt,pos;
-	string 255 VECode,warning,inwarn,Obj,storeObj;
+	string 255 VECode,warning,inwarn,Obj,storeObj,subdiObj;
 	record LocationVc Locr,Loc1r,Lcr;
 	row SDVc SDrw;
 	record ConsItemVc CIr;
@@ -1124,6 +1124,8 @@ begin
 	record RLinkVc RLr;
 	record ObjVc OBJr;
 	boolean TrHs;
+	record OTypeAddControlBlock OType;
+	row OTypeAddControlBlock OTyperw;
 	
 	oldComp = CurrentCompany;
 	BlockLoad(Compb);
@@ -1245,12 +1247,32 @@ begin
 			end;	
 			ResetCompany(oldComp);
 			if(ReadRecordLink(SDr,1,POr,RLr))then begin
+				pos = 0;
+				storeObj = "";
+				ExtractObj(SDr.Objects,pos,Obj);
+				while (nonblank(Obj)) begin 
+					OBJr.Code = Obj;
+					if (ReadFirstMain(OBJr,1,true)) then begin
+						if (OBJr.OTCode=="STORE") then begin
+							storeObj = OBJr.Code;
+						end;
+					end;
+					ExtractObj(SDr.Objects,pos,Obj);
+				end;
 				if(nonblank(POr.ItemFromOtherSTockObj)) then begin
 					SetCompany(18,false);
+					for (i=0;matrowcnt(OType);i=i+1) begin
+						matrowget(OType,i,OTyperw);
+						if (OTyperw.STORE==storeObj) then begin
+							subdiObj = OTyperw.SUBDI;
+						end;
+					end;
 					RecordCopy(OldPUr,PUr);
 					PUr.OKFlag = 1;
+					PUr.Objects = subdiObj;
 					if (RecordUpdate(OldPUr,PUr,true)==0)then begin
 						pos = 0;
+						storeObj = "";
 						ExtractObj(POr.Objects,pos,Obj);
 						while (nonblank(Obj)) begin 
 							OBJr.Code = Obj;
