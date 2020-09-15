@@ -25,8 +25,80 @@ external procedure HTItemHistType2(Integer,Integer,Integer,Integer,Integer,var s
 external procedure PrintCustName(string,string,integer);
 external function Boolean FindStringInString(string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 08 2020 y. at 4:04:17 PM
 external procedure ExtractObj(string,var Integer,var string);
-external procedure NormalizeObjstr(var string);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+
+procedure NormalizeObjstr(var string objstr)
+BEGIN 
+  record SMVc SMobjsr;
+  record SMVc SMresobjsr;
+  row SMVc SMorw;
+  row SMVc SMrrw;
+  row SMVc SM2rrw;
+  Integer i,j,k;
+  Integer ocnt;
+  Integer pos;
+  Integer nlen;
+  Integer maxobjcnt;
+  string 255 ostr;
+  string 60 maxobjstr;
+  Integer rrwcnt;
+  
+  //RecordClear(SMobjsr);
+  //RecordClear(SMresobjsr);
+  pos = 0;
+  ExtractObjWithSeparator(",",objstr,true,pos,ostr);
+  while (nonblank(ostr)) begin
+    SMorw.Objects = ostr;
+    MatRowPut(SMobjsr,ocnt,SMorw);
+    ExtractObjWithSeparator(",",objstr,true,pos,ostr);
+    ocnt = ocnt + 1;    
+  end;    
+  if (IsStandardProduct) then begin
+//    maxobjstr = HasObjectsMaxNumber;//done in record check
+    maxobjstr = USetStr(1799);
+  end else begin
+    maxobjstr = USetStr(1799);
+  end;
+  maxobjcnt = StringToInt(maxobjstr);
+  if (nonblank(maxobjstr)) then begin
+    if (ocnt>maxobjcnt) then begin ocnt = maxobjcnt; end;
+  end;
+
+  for (i=0;i<ocnt; i=i+1) begin
+    for (j=0;j<i;j=j+1) begin     
+      MatRowGet(SMobjsr,i,SMorw);
+      rrwcnt = MatRowCnt(SMresobjsr);    
+      if (rrwcnt<>0) then begin      
+        MatRowGet(SMresobjsr,j,SMrrw);
+      end;  
+      if (SMorw.Objects<SMrrw.Objects) then begin goto L44; end;
+    end;
+L44:;
+    rrwcnt = MatRowCnt(SMresobjsr);    
+    for (k=i;k>=j;k=k-1) begin
+      if (rrwcnt<>0) then begin
+        MatRowGet(SMresobjsr,k,SMrrw);
+      end;  
+      MatRowPut(SMresobjsr,k+1,SMrrw);
+    end;
+    MatRowGet(SMobjsr,i,SMorw);
+    SMrrw.Objects = SMorw.Objects;
+    MatRowPut(SMresobjsr,j,SMrrw);
+  end;  
+  objstr = "";
+  for (i=0;i<ocnt;i=i+1) begin
+    MatRowGet(SMresobjsr,i,SMrrw);
+    if (nonblank(SMrrw.Objects)) then begin
+      nlen = len(objstr)+len(SMrrw.Objects);
+      if (i<>0) then begin nlen = nlen + 1; end;;
+      if (nlen>60) then begin goto L99; end;
+      if (i<>0) then begin objstr = objstr & ","; end;
+      objstr = objstr & SMrrw.Objects;
+    end;
+  end; 
+L99:;
+  RETURN;
+END;
 
 procedure PrintItemTotals_Overview(record RcVc RepSpec,record INVc INr,
                                    val fwdqty,val fwdcp,val fwdtotcp,val itemqin,val itemqout,val itemcpin,val itemcpout)
