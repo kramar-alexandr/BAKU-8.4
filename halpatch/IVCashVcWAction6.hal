@@ -3904,8 +3904,9 @@ begin
   string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
-  string 255 category;
+  string 255 category, transactionId, parentDocument;
   json jsresponse;
+  val cash, terminal, discount;
 
   wn = CurWindow;
   GetWindowRecord(wn,RepSpec);
@@ -3914,7 +3915,7 @@ begin
 
   ReadFirstMain(IVr,1,true);
   
-  host = "192.168.1.104"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  host = "10.10.11.76"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   //http://192.168.5.236:8989
@@ -3923,6 +3924,9 @@ begin
     if (ReadFirstMain(Userr,1,true)) then begin
         host = Userr.KassaIPAddr;
     end;
+	cash = 0.0;
+	terminal = 0.0;
+	discount = 0.0;
 
 	addtexttoarea("{" & chr(13) & chr(10),req);
 			addtexttoarea("\"requestData\":{" & chr(13) & chr(10),req);
@@ -3936,6 +3940,21 @@ begin
 											mtrw = matrowcnt(IVr);
 											For(i=0;i<mtrw;i=i+1) begin
 												matrowget(IVr,i,IVrw);
+												if(nonblank(IVrw.PayMode)) then begin
+													if(IVrw.PayMode=="T1" or 
+													IVrw.PayMode=="T2" or 
+													IVrw.PayMode=="T3" or 
+													IVrw.PayMode=="T4" or 
+													IVrw.PayMode=="T5" or 
+													IVrw.PayMode=="T6" or 
+													IVrw.PayMode=="T7") then begin 
+														terminal=terminal+IVrw.Sum;
+													end else begin
+														cash=cash+IVrw.Sum;
+													end;
+												end;
+												
+												
 												/*MessageBox(0, IVrw.SalesAcc & 
 												" 1- " & IVrw.TaxTemplateCode & 
 												" 2- " & IVrw.VATCode & 
@@ -3996,20 +4015,20 @@ begin
 											addtexttoarea("]," & chr(13) & chr(10),req);
 											tstr = ValToString(IVr.Sum4,M45Val,"",".",0);
 											addtexttoarea("\"sum\":" & tstr & "," & chr(13) & chr(10),req);
-											switch (RepSpec.flags[2]) begin
-											    case 0:
-														addtexttoarea("\"cashSum\":" & tstr & "," & chr(13) & chr(10),req);
-														addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
-														addtexttoarea("\"creditSum\":0.0," & chr(13) & chr(10),req);
-											    case 1: 
-														addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
-														addtexttoarea("\"cashlessSum\":" & tstr & "," & chr(13) & chr(10),req);
-														addtexttoarea("\"creditSum\":0.0," & chr(13) & chr(10),req);
-											    case 2: 
-														addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
-														addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
-														addtexttoarea("\"creditSum\":" & tstr & "," & chr(13) & chr(10),req);
-											end;										
+											
+											if(cash>0) then begin
+												addtexttoarea("\"cashSum\":" & cash & "," & chr(13) & chr(10),req);
+											end else begin
+												addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
+											end;
+											
+											if(terminal>0) then begin
+												addtexttoarea("\"cashlessSum\":" & terminal & "," & chr(13) & chr(10),req);
+											end else begin
+												addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
+											end;
+											
+											addtexttoarea("\"creditSum\":0.0," & chr(13) & chr(10),req);
 										    addtexttoarea("\"prepaymentSum\":0.0," & chr(13) & chr(10),req);
 										    addtexttoarea("\"bonusSum\":0.0," & chr(13) & chr(10),req);
 											addtexttoarea("\"vatAmounts\":[" & chr(13) & chr(10),req);
@@ -4029,28 +4048,167 @@ begin
 					addtexttoarea("}" & chr(13) & chr(10),req);
 			addtexttoarea("}" & chr(13) & chr(10),req);
 	addtexttoarea("}" & chr(13) & chr(10),req);
-  
-  
-  //MessageBox(0, host);
-  //MessageBox(0, req);
 
 
   writeareatofile(req,"SendTAXRequest.txt",1);
   
   SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
 	
-  /*jsresponse = ParseJSONArea(reply);
-	if(nonblank(JSONGet(jsresponse,"result")))then begin
-		logtext(0, JSONGet(jsresponse,"code"));
-		logtext(0, JSONGet(jsresponse,"message"));
-		logtext(0, JSONGet(jsresponse,"parentDocument"));
-		logtext(0, JSONGet(jsresponse,"transactionId"));
-	end;*/
+    jsresponse = ParseJSONArea(reply);
+	
+	if(nonblank(JSONGet(jsresponse,"transactionId")))then begin
+		transactionId=JSONGet(jsresponse,"transactionId");
+		IVr.TaxTransactionCode=transactionId;
+		parentDocument=JSONGet(jsresponse,"parentDocument");
+		IVr.TaxParentDocument=parentDocument;
+		RecordStore(IVr,true);
+	end;
 
 
   DeselectWindow(wn,true);
   CloseWindow(wn);
 LProceedSendTaxNPTSOClass:;
+  return;
+end;
+
+
+global
+updating procedure ProceedReturnTaxNPTSOClass()
+begin
+  Integer wn,mwn,rownr,mtrw,i,loopcount;
+  record RcVc RepSpec;
+  record IVVc IVr;
+  record UserVc Userr;
+  row IVVc IVrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId;
+  json jsresponse;
+  val cash, terminal, discount, summary;
+  array string 50 artCode;
+
+
+  wn = CurWindow;
+  DeselectWindow(wn, true);
+  GetWindowRecord(wn,RepSpec);
+  
+
+  IVr.SerNr = RepSpec.long1;
+
+  ReadFirstMain(IVr,1,true);
+  
+  host = "10.10.11.76"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  //http://192.168.5.236:8989
+  
+    Userr.Code = CurrentUser;
+    if (ReadFirstMain(Userr,1,true)) then begin
+        host = Userr.KassaIPAddr;
+    end;
+	
+	cash = 0.0;
+	terminal = 0.0;
+	discount = 0.0;
+	summary = 0.0;
+	loopcount = 0;
+
+	addtexttoarea("{" & chr(13) & chr(10),req);
+	addtexttoarea("\"requestData\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"tokenData\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"operationId\":\"createDocument\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"parameters\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"doc_type\":\"money_back\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"data\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"cashier\":\"" & IVr.SalesMan & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"currency\":\"AZN\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"firstOperationAtUtc\":\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"lastOperationAtUtc\":\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"parentDocument\":\"" & IVr.TaxParentDocument & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"refund_document_number\":\"1\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"refund_short_document_id\":\"" & IVr.TaxTransactionCode & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"items\":[" & chr(13) & chr(10),req);
+	mtrw = matrowcnt(IVr);
+	For(i=0;i<mtrw;i=i+1) begin
+		matrowget(IVr,i,IVrw);
+		//MessageBox(0, RepSpec.f1 & " - " & IVrw.ArtCode);
+		if(IVrw.ArtCode==RepSpec.f1 or IVrw.ArtCode==RepSpec.f2 or IVrw.ArtCode==RepSpec.f3 or IVrw.ArtCode==RepSpec.f4 or IVrw.ArtCode==RepSpec.f5) then begin
+			if(nonblank(IVrw.PayMode)) then begin
+				if(IVrw.PayMode=="T1" or 
+				IVrw.PayMode=="T2" or 
+				IVrw.PayMode=="T3" or 
+				IVrw.PayMode=="T4" or 
+				IVrw.PayMode=="T5" or 
+				IVrw.PayMode=="T6" or 
+				IVrw.PayMode=="T7") then begin 
+					terminal=terminal+IVrw.Sum;
+				end else begin
+					cash=cash+IVrw.Sum;
+				end;
+			end;
+			if(IVrw.stp==1) then begin
+				if(loopcount>0) then begin
+					addtexttoarea(",",req);
+				end;
+				loopcount = loopcount+1;
+				addtexttoarea("{",req);
+				addtexttoarea("\"itemName\":" & "\"" & IVrw.Spec & "\",",req);
+				addtexttoarea("\"itemCodeType\":0,",req);
+				addtexttoarea("\"itemCode\":" & "\"" & IVrw.ArtCode & "\",",req);
+				addtexttoarea("\"itemQuantityType\":0,",req);
+				tstr = ValToString(IVrw.Quant,M45Val,"",".",0);
+				addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
+				tstr = ValToString(IVrw.Sum/IVrw.Quant,M45Val,"",".",0);
+				addtexttoarea("\"itemPrice\":" & tstr & ",",req);
+				tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
+				addtexttoarea("\"itemSum\":" & tstr & ",",req);
+				addtexttoarea("\"discount\":0.0,",req);
+				addtexttoarea("\"itemVatPercent\":18",req);
+				addtexttoarea("}",req);
+				summary = summary+IVrw.Sum;
+			end;
+		end;
+	end;
+	addtexttoarea("]," & chr(13) & chr(10),req);
+	addtexttoarea("\"sum\":" & summary & "," & chr(13) & chr(10),req);
+	
+	if(terminal>0) then begin
+		addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
+		addtexttoarea("\"cashlessSum\":" & summary & "," & chr(13) & chr(10),req);
+	end else begin
+		addtexttoarea("\"cashSum\":" & summary & "," & chr(13) & chr(10),req);
+		addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
+	end;
+													
+													
+	addtexttoarea("\"creditSum\":0.0," & chr(13) & chr(10),req);
+	addtexttoarea("\"prepaymentSum\":0.0," & chr(13) & chr(10),req);
+	addtexttoarea("\"bonusSum\":0.0," & chr(13) & chr(10),req);
+	addtexttoarea("\"vatAmounts\":[" & chr(13) & chr(10),req);
+	addtexttoarea("{" & chr(13) & chr(10),req);
+	addtexttoarea("\"vatSum\":" & summary & ",",req);
+	addtexttoarea("\"vatPercent\":18.0",req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("]" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("}," & chr(13) & chr(10),req);
+	addtexttoarea("\"version\":1" & chr(13) & chr(10),req);
+	addtexttoarea("}," & chr(13) & chr(10),req);
+	addtexttoarea("\"checkData\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"check_type\":100" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+
+
+    writeareatofile(req,"ReturnTAXRequest.txt",1);
+    SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+    jsresponse = ParseJSONArea(reply);
+    DeselectWindow(wn,true);
+    CloseWindow(wn);
+    LProceedReturnTaxNPTSOClass:;
   return;
 end;
 
