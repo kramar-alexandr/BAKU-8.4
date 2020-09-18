@@ -3659,34 +3659,46 @@ begin
  row BigPUVc BPUrw;
  integer i;
  val total;
- val FInBase;
+ val FInBase,startcustcost,calccost,sumcost;
  record ConsCompBlock CCBb;
  record INVc INr;
- vector boolean consgItem;
+ 
+ 
+ startcustcost = BPUr.CustomsCost;
+ sumcost = blankval;
  for(i=0;i<matrowcnt(BPUr);i=i+1) begin
 		MatRowGet(BPUr,i,BPUrw);
 		INr.Code = BPUrw.ArtCode;
 		if(ReadFirstMain(INr,1,true)) then begin end;
 		if(INr.ConsgType!=1) then begin
 			total = total + BPUrw.Quant * BPUrw.UPrice;
-			consgItem[INr.Code] = true;
 		end;	
 	end;
 	if(nonblank(BPUr.CurrencyT) and BPUr.CurrencyT!="AZN") then begin
 		FInBase = MulRateToBase1(BPUr.CurrencyT,BPUr.CustomsCost,BPUr.FrRateT,BPUr.ToRateT,BPUr.ToRateT,BPUr.FrRateT,BPUr.ToRateT,SetROundModeD(5));
-	end else begin 	FInBase = BPUr.CustomsCost; end;
+	end else begin 	
+		FInBase = BPUr.CustomsCost; 
+	end;
 	if(BPUr.ConsManualCost==1)then begin
 		BPUr.ConsManualCost = 0;
 	end;
 	BPUr.CustomsCost = 0;
 	for(i=0;i<matrowcnt(BPUr);i=i+1) begin
 		MatRowGet(BPUr,i,BPUrw);
-		if(consgItem[BPUrw.ArtCode]) then begin
-			BPUrw.CustomsCost = FInBase * Round(BPUrw.UPrice/total,SetRoundModeD(5));
-			BPUr.CustomsCost = BPUr.CustomsCost + Round(BPUrw.Quant * BPUrw.CustomsCost,SetRoundModeD(5));
+		INr.Code = BPUrw.ArtCode;
+		if(ReadFirstMain(INr,1,true)) then begin end;
+		if(INr.ConsgType!=1) then begin
+			calccost = blankval;
+			calccost = FInBase * (BPUrw.UPrice/total);
+			sumcost = sumcost + calccost;
+			BPUrw.CustomsCost = round(calccost,SetRoundModeD(5));
+			//BPUr.CustomsCost = BPUr.CustomsCost + BPUrw.Quant * BPUrw.CustomsCost;
 		end;	
 		MatRowPut(BPUr,i,BPUrw);
 	end;
+	BPUr.CustomsCost = sumcost;
+	
+	
 	BigPUSumUp(BPUr);
  return;
 end;
