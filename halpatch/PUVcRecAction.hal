@@ -88,7 +88,9 @@ external procedure ExtractObj(string,var Integer,var string);
 external function roundmode DefaultRoundMode();
 external procedure CustExtractObjectsByType(string,string,var array string,var integer,array string);
 external updating procedure RecalculatePricesfromConsComp(record INVc);// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 25 06 2020 y. at 8:48:21 AM
-
+external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+remote procedure BigPUSumUp(var record BigPUVc);
+external function roundmode SetRoundModeD(Integer);
 
 SetLangMode(LangRussian,"RUS",0);
  
@@ -504,7 +506,9 @@ begin
 	record INVc INr;
   record GlobalItemVc GIr; 
 	record POVc POr;
+	longint curtick;
 	
+	curtick = getcurtick();
   if (PUp.Invalid!=0) then begin // not finnished
     goto LPurUpdateStock;
   end;
@@ -550,7 +554,7 @@ begin
 				if(!ReadFirstMain(GIr,1,true) and CurrentCompany!=10 and CurrentCompany!=32 and CurrentCompany!=18)then begin 
 					CreateNewGlobalItem(INr);
 				end;
-			end;
+			end; 
 			if (negf) then begin 
 				POr.SerNr = PUp.PONr;
 				if(ReadFIrstMain(POr,1,true))then begin
@@ -564,7 +568,7 @@ begin
 				end;
 			end else begin
 				UpdateInstock("PUVc",PUp.SerNr,PUrw.ArtCode,thelocation,PUp.TransDate,t2,t,t,t,t,q2,t,t,t);
-			end;
+			end; 
     end;
   end;
 LPurUpdateStock:;
@@ -583,7 +587,10 @@ end;
 updating procedure SavePurchase(var record PUVc PUp,Boolean saverec)
 begin
   record PUVc PU2r;
-  
+  longint curtick;
+	
+	curtick = getcurtick();
+	
   if (PUp.OKFlag!=0) then begin
     PurUpdateStock(PUp,false);
     PurUpdateCostPrice(PUp,false);  // this should never be called during import!!! 
@@ -620,14 +627,20 @@ updating function LongInt PUVcRecordSaveAfter(var record PUVc PUr,record PUVc PU
 begin
   LongInt res;
   record UserVc Userr;
+	longint curtick;
+	
+	curtick = getcurtick();
 
   Userr.Code = PUr.Sign;
   ReadFirstMain(Userr,1,true);
   PUr.SalesGroup = Userr.SalesGroup;  
   SavePurchase(PUr,false);
+	logtext(0,"PUVcRecordSaveAfter SavePurchase " & getcurtick()-curtick); 
   if (PUr.OKFlag!=0) then begin
     PUMakeStockMovement(PUr,false);
+		logtext(0,"PUVcRecordSaveAfter PUMakeStockMovement " & getcurtick()-curtick); 
     UpdateVarianceStatusPU(PUr);
+		logtext(0,"PUVcRecordSaveAfter UpdateVarianceStatusPU " & getcurtick()-curtick); 
   end;
   PUVcRecordSaveAfter = res;
   return;
@@ -2449,11 +2462,8 @@ begin
 				consPOf = false; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 18:22 16.12.2019
 				if(matrowcnt(POr)>0)then begin
 					matrowget(POr,0,POrw);
-					INr.Code = POrw.ArtCode;
-					if(ReadFIrstMain(INr,1,true))then begin
-						if(INr.ConsgType==1)then begin
-							consPOf = true;
-						end;
+					if(POrw.ConsgType==1)then begin
+						consPOf = true;
 					end;
 				end;
 				
@@ -2605,11 +2615,8 @@ begin
 				consPOf = false; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 18:22 16.12.2019
 				if(matrowcnt(POr)>0)then begin
 					matrowget(POr,0,POrw);
-					INr.Code = POrw.ArtCode;
-					if(ReadFIrstMain(INr,1,true))then begin
-						if(INr.ConsgType==1)then begin
-							consPOf = true;
-						end;
+					if(POrw.ConsgType==1)then begin
+						consPOf = true;
 					end;
 				end;
 			end;
@@ -3431,6 +3438,7 @@ LPUVcRecordCheck_GenTrans:;
 L99PUVcRecordCheck:;
   if (res!=0) then begin PUr.SerNr = oldnr; end;
 	LogProcTime("PUVcRecordCheck",getcurtick()-curtick); 
+	logtext(0,"PUVcRecordCheck " & getcurtick()-curtick); 
   PUVcRecordCheck = res;
   return;
 end;
@@ -3645,3 +3653,40 @@ begin
   return;
 end;
 */
+global
+procedure BPUDClassCustomsCostDo(var record BigPUVc BPUr)
+begin
+ row BigPUVc BPUrw;
+ integer i;
+ val total;
+ val FInBase;
+ record ConsCompBlock CCBb;
+ record INVc INr;
+ for(i=0;i<matrowcnt(BPUr);i=i+1) begin
+		MatRowGet(BPUr,i,BPUrw);
+		INr.Code = BPUrw.ArtCode;
+		if(ReadFirstMain(INr,1,true)) then begin end;
+		if(INr.ConsgType!=1) then begin
+			total = total + BPUrw.Quant * BPUrw.UPrice;
+		end;	
+	end;
+	if(nonblank(BPUr.CurrencyT) and BPUr.CurrencyT!="AZN") then begin
+		FInBase = MulRateToBase1(BPUr.CurrencyT,BPUr.CustomsCost,BPUr.FrRateT,BPUr.ToRateT,BPUr.ToRateT,BPUr.FrRateT,BPUr.ToRateT,SetROundModeD(5));
+	end else begin 	FInBase = BPUr.CustomsCost; end;
+	if(BPUr.ConsManualCost==1)then begin
+		BPUr.ConsManualCost = 0;
+	end;
+	BPUr.CustomsCost = 0;
+	for(i=0;i<matrowcnt(BPUr);i=i+1) begin
+		MatRowGet(BPUr,i,BPUrw);
+		INr.Code = BPUrw.ArtCode;
+		if(ReadFirstMain(INr,1,true)) then begin end;
+		if(INr.ConsgType!=1) then begin
+			BPUrw.CustomsCost = FInBase * (BPUrw.UPrice/total);
+			BPUr.CustomsCost = BPUr.CustomsCost + BPUrw.Quant * BPUrw.CustomsCost;
+		end;	
+		MatRowPut(BPUr,i,BPUrw);
+	end;
+	BigPUSumUp(BPUr);
+ return;
+end;
