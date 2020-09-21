@@ -1137,7 +1137,151 @@ end;
 
 
 
+global  updating procedure RecalcPriceRebateMn2(record RcVc RepSpec)  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:34 11.07.2019
+begin
+	record CoinSettingsBlock CoinSb;
+  string 255 path;
+  integer compnr,CompQty,i,j,stop,oldCompany,startCompany;
+  record WebReportChBlock WRChb;
+	record BtrxReportChBlock BRChb;
+  area req,reply;
+  json jsresponse;
+  string 100 host;
+  longint port;
+  record NewClassifChBlock NCb;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record ECAutoRetSMBlock ECARSMb;
+  area text,replyPr,text2;
+	record GlobalItemVc GIr,mainGIr,TPCPGIr;
+	boolean TrHs,testf,testf1;
+	val ITRebate,price;
+	record INVc INr;
+	vector boolean compCh;
+  boolean OldItemf;
+	vector val ItemOldPrice, ItemOldRebate, NewItemPrice, NewItemRebate, DifferPrices, DifferRebates,ItemPriceComp,ItemRebComp;
+	array string 255 ItemCodes, DiffItemCodes,tags;
+	longint DiffItemsCnt;
+	val oldPrice;
+	val oldReb;
+	record ItemStatusVc ISr;
+	string 255 file1,file2,obj,crn,tpcurrency;
+	val fr,to1,to2,br1,br2,TempItemPrice,tprice;  
+	date td,tdp;
+	
+	startCompany = currentCompany;
+  blockload(WRChb);
+	blockload(Compb);
+	
+	CompQty = matrowcnt(Compb);
+	AddTextToArea	("Code" & chr(9) & "Price old" & chr(9) & "Price new" & chr(9) & "Dif Price" & chr(9) & "Reb old" & chr(9) & "Reb new" & chr(9) & "Reb diff" & chr(9) & "Company name" & chr(13),text);
+	AddTextToArea	("Code" & chr(9) & "Price" & chr(9) & "Rebate" & chr(9) & "Company name" & chr(13),text2);
+	logtext(0,"Company num - " & currentcompany);
+	logtext(0,"RecalcPriceRebateMn start");
+	
+	ResetLoop(GIr);
+	GIr.Code = "";
+	stop = 0;
+	matrowget(Compb,currentcompany-1,Comprw);
+	
+	if(nonblank(RepSpec.f1))then begin
+		GIr.Code = RepSpec.f1;
+		if(ReadFirstMain(GIr,1,true))then begin 
+			updateGIrAuto(GIr);
+		end;
+	end;
+	
+	TrHs = true;
+	if(nonblank(RepSpec.f2) and blank(RepSpec.f1)) then begin
+		testf = false;
+		oldCompany = currentCompany;
+		SetCompany(stringToInt(RepSpec.f2),false);
+		INr.Code = "";
+		while(loopMain(INr,1,true)) begin
+			ISr.Code = INr.Code;
+			testf1 = true;
+			ISr.Location = ";;;";
+			if(nonblank(RepSpec.f3)) then begin
+				if(INr.LastPurchCurncyCode!=RepSpec.f3) then begin
+					testf1 = false;
+				end;
+			end;
+			if(testf1 and ReadFirstMain(ISr,2,true)) then begin 
+				if(ISr.Instock>0) then begin
+					GIr.Code = INr.GlobalArtCode;
+					if(ReadFirstMain(GIr,1,true))then begin
+						updateGIrAuto(GIr);
+					end;
+				end;
+			end;
+		end;
+		ResetCompany(oldCompany);
+	end else begin
+		if(blank(RepSpec.f1)) then begin
+			while(loopmain(GIr,1,TrHs)) begin	
+				updateGIrAuto(GIr);
+			end;
+		end;
+	end;
+	logtext(0,"RecalcPriceRebateMn end");
+	
+	
+	
+	if(blank(RepSpec.f1) and blank(RepSpec.f2)) then begin
+		file1 = "PriceChanges" & Datetostring(currentdate,"DD.MM.YYYY") & ".txt";
+		file2 = "PriceDiff" & Datetostring(currentdate,"DD.MM.YYYY")  & ".txt";
+		
+		WriteAreaToFile(text,file1,0);
+		WriteAreaToFile(text2,file2,0);
+		logtext(0,file1);
+		if(fileexists(file1))then begin
+			setareazerosize(text);
+			addtexttoarea("{",text);
+			addtexttoarea("\"host\":\"smtp.gmail.com\",",text);
+			addtexttoarea("\"port\":465,",text);
+			addtexttoarea("\"secure\":true,",text);
+			addtexttoarea("\"user\":\"IDReporSender@gmail.com\",",text);
+			addtexttoarea("\"pass\":\"c2h5ohc2h5oh\",",text);
+			addtexttoarea("\"from\":\"IDReportSender@gmail.com\",",text);
+			addtexttoarea("\"to\":\"" & "forfun942@gmail.com" & "\",",text);
+			addtexttoarea("\"subject\":\"" & USetStr(36260) & " " & CurrentDate & "\",",text);
+			addtexttoarea("\"plaintext\":\"notblank\",",text);			
+			addtexttoarea("\"filename\":\"" & file1 & "\",",text);			
+			addtexttoarea("\"path\":\"/usr/local/bin/StandardERPServer/" & file1 & "\"",text);
+			addtexttoarea("}",text);
+			logtext(0,file1);
+			logtext(0,"reply length " & getarealength(replyPr));
 
+			SendWebRequest("127.0.0.1",1071,-1,false,"POST","/sendMail","application/json","",false,text,replyPr,5);
+			MilliSleep(2000);
+		end;	
+		
+		
+		if(fileexists(file2))then begin
+			setareazerosize(text2);
+			addtexttoarea("{",text2);
+			addtexttoarea("\"host\":\"smtp.gmail.com\",",text2);
+			addtexttoarea("\"port\":465,",text2);
+			addtexttoarea("\"secure\":true,",text2);
+			addtexttoarea("\"user\":\"IDReporSender@gmail.com\",",text2);
+			addtexttoarea("\"pass\":\"c2h5ohc2h5oh\",",text2);
+			addtexttoarea("\"from\":\"IDReportSender@gmail.com\",",text2);
+			addtexttoarea("\"to\":\"" & "forfun942@gmail.com" & "\",",text2);
+			addtexttoarea("\"subject\":\"" & USetStr(36260) & " " & CurrentDate & "\",",text2);
+			addtexttoarea("\"plaintext\":\"notblank\",",text2);			
+			addtexttoarea("\"filename\":\""& file2 & "\",",text2);			
+			addtexttoarea("\"path\":\"/usr/local/bin/StandardERPServer/" &  file2  & "\"",text2);
+			addtexttoarea("}",text2);
+			logtext(0,file2);
+			logtext(0,"reply length " & getarealength(replyPr));
+
+			SendWebRequest("127.0.0.1",1071,-1,false,"POST","/sendMail","application/json","",false,text2,replyPr,5);
+			MilliSleep(2000);
+		end;	
+	end;
+	ResetCompany(startCompany);
+return;
+end;
 
 
 
@@ -1182,7 +1326,7 @@ begin
 		if(gethour(currenttime)==3 and getminute(currenttime)>=0 and getminute(currenttime)<=10)then begin // Recalculating prices and rebates in global items 
 			recordnew(RepSpec);
 			GlobalItemVcRecStPrMn(RepSpec);
-			RecalcPriceRebateMn(RepSpec); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:32 11.07.2019
+			RecalcPriceRebateMn2(RepSpec); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:32 11.07.2019
 		end;	
 		
 		// ImportAddClassFromFolderIn;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 16:38 08.05.2020
