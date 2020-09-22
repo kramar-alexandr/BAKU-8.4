@@ -3954,45 +3954,7 @@ begin
 													end;
 												end;
 												
-												
-												/*MessageBox(0, IVrw.SalesAcc & 
-												" 1- " & IVrw.TaxTemplateCode & 
-												" 2- " & IVrw.VATCode & 
-												" 3- " & IVrw.CUPNr & 
-												" 4- " & IVrw.BasePrice & 
-												" 5- " & IVrw.CuAccCode & 
-												" 6- " & IVrw.Objects & 
-												" 7- " & IVrw.VoidedSign & 
-												" 8- " & IVrw.vRebate & 
-												" 9- " & IVrw.GCNr & 
-												" 10- " & IVrw.PayMode & 
-												" 11- " & IVrw.TAX2Prc & 
-												" 12- " & IVrw.WHTax & 
-												" 13- " & IVrw.MBRCode & 
-												" 14- " & IVrw.PeriodCode & 
-												" 15- " & IVrw.Location & 
-												" 16- " & IVrw.PosCode & 
-												" 17- " & IVrw.BasePriceB2 & 
-												" 18- " & IVrw.rowGP & 
-												" 19- " & IVrw.FIFO & 
-												" 20- " & IVrw.Recepy & 
-												" 21- " & IVrw.PriceFactor & 
-												" 22- " & IVrw.FIFORowVal & 
-												" 23- " & IVrw.MotherArtCode & 
-												" 24- " & IVrw.RecipeQuant & 
-												" 25- " & IVrw.UnitCode & 
-												" 26- " & IVrw.UnitFactQuant & 
-												" 27- " & IVrw.CustArtCode & 
-												" 28- " & IVrw.CUServiceHistNr & 
-												" 29- " & IVrw.CreditedRow & 
-												" 30- " & IVrw.RepaExVAT & 
-												" 31- " & IVrw.BasePriceB2 & 
-												" 32- " & IVrw.TAX2Prc & 
-												" 33- " & IVrw.Price & 
-												" 34- " & IVrw.Sum
-												);*/
-												
-												if(IVrw.stp==1) then begin
+												if(IVrw.stp==1 and nonblank(IVrw.ArtCode)) then begin
 													if(i>0) then begin
 														addtexttoarea(",",req);
 													end;
@@ -4059,6 +4021,7 @@ begin
 	if(nonblank(JSONGet(jsresponse,"transactionId")))then begin
 		transactionId=JSONGet(jsresponse,"transactionId");
 		IVr.TaxTransactionCode=transactionId;
+		IVr.TaxTransactionDate=CurrentDate;
 		parentDocument=JSONGet(jsresponse,"parentDocument");
 		IVr.TaxParentDocument=parentDocument;
 		RecordStore(IVr,true);
@@ -4205,10 +4168,130 @@ begin
 
     writeareatofile(req,"ReturnTAXRequest.txt",1);
     SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
-    jsresponse = ParseJSONArea(reply);
+	
+	jsresponse = ParseJSONArea(reply);
+	
+	if(nonblank(JSONGet(jsresponse,"transactionId")))then begin
+		transactionId=JSONGet(jsresponse,"transactionId");
+		IVr.TaxReturnCode=transactionId;
+		IVr.TaxReturnDate=CurrentDate;
+		RecordStore(IVr,true);
+	end;
     DeselectWindow(wn,true);
     CloseWindow(wn);
     LProceedReturnTaxNPTSOClass:;
+  return;
+end;
+
+
+
+global
+updating procedure ProceedCancelTaxNPTSOClass()
+begin
+  Integer wn,mwn,rownr,mtrw,i;
+  record RcVc RepSpec;
+  record IVVc IVr;
+  record UserVc Userr;
+  row IVVc IVrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId;
+  json jsresponse;
+  array string 50 artCode;
+
+
+  wn = CurWindow;
+  DeselectWindow(wn, true);
+  GetWindowRecord(wn,RepSpec);
+  
+
+  IVr.SerNr = RepSpec.long1;
+
+  ReadFirstMain(IVr,1,true);
+  
+  //{"requestData": {"checkData": {"check_type":10}, "fiscalId":"esyf3p4xkhuj"}}
+  
+  host = "10.10.11.76"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  //http://192.168.5.236:8989
+  
+    Userr.Code = CurrentUser;
+    if (ReadFirstMain(Userr,1,true)) then begin
+        host = Userr.KassaIPAddr;
+    end;
+	
+	addtexttoarea("{" & chr(13) & chr(10),req);
+	addtexttoarea("\"requestData\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"checkData\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"check_type\":10" & chr(13) & chr(10),req);
+	addtexttoarea("}," & chr(13) & chr(10),req);
+	addtexttoarea("\"fiscalId\":\"" & IVr.TaxTransactionCode & "\"" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+
+
+    writeareatofile(req,"CancelTAXRequest.txt",1);
+    SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+	
+	jsresponse = ParseJSONArea(reply);
+	
+	if(nonblank(JSONGet(jsresponse,"transactionId")))then begin
+		transactionId=JSONGet(jsresponse,"transactionId");
+		IVr.TaxCancelCode=transactionId;
+		IVr.TaxCancelDate=CurrentDate;
+		RecordStore(IVr,true);
+	end;
+	
+    DeselectWindow(wn,true);
+    CloseWindow(wn);
+    LProceedCancelTaxNPTSOClass:;
+  return;
+end;
+
+
+
+global
+updating procedure ProceedHistoryTaxNPTSOClass()
+begin
+  Integer wn,mwn,rownr,mtrw,i;
+  record RcVc RepSpec;
+  record IVVc IVr;
+  record UserVc Userr;
+  row IVVc IVrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId;
+  json jsresponse;
+  array string 50 artCode;
+
+
+  wn = CurWindow;
+  DeselectWindow(wn, true);
+  GetWindowRecord(wn,RepSpec);
+  
+
+  IVr.SerNr = RepSpec.long1;
+
+  ReadFirstMain(IVr,1,true);
+  
+  MessageBox(0, 
+  "TaxTransactionCode: " & IVr.TaxTransactionCode 
+  & "  TaxTransactionDate: " & IVr.TaxTransactionDate 
+  & "  TaxParentDocument: " & IVr.TaxParentDocument 
+  & "  TaxReturnCode: " & IVr.TaxReturnCode 
+  & "  TaxReturnDate: " & IVr.TaxReturnDate 
+  & "  TaxCancelCode: " & IVr.TaxCancelCode 
+  & "  TaxCancelDate: " & IVr.TaxCancelDate 
+  );
+  	
+    DeselectWindow(wn,true);
+    CloseWindow(wn);
+    LProceedHistoryTaxNPTSOClass:;
   return;
 end;
 
