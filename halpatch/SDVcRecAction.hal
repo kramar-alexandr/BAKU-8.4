@@ -372,7 +372,8 @@ begin
 	record BPIBrandVc BPIBrandr;
 	vector val AbsItemqty;
 	record SerBalVc SBr;
-  
+  val reservrQty;
+	
   res = 0;
   insertmode = 1;//Rs_insert
   updatemode = 2;//Rs_update
@@ -610,26 +611,27 @@ begin
   for (i=0;i<rwcnt;i=i+1) begin
     thesamelocf = false;
     MatRowGet(SDp,i,SDrw);
+		reservrQty = 0;
 		Locationr.Code = SDp.Location;
 		if(ReadFirstMain(Locationr,1,true)) then begin
-			SDrw.Location = Locationr.Code;
 			if(nonblank(Locationr.ConsigStockCode)) then begin
 				IS1r.Code = SDrw.ArtCode;
 				IS1r.Location = Locationr.ConsigStockCode;
 				if(ReadFirstMain(IS1r,2,true)) then begin
-					if(IS1r.Instock-IS1r.RsrvQty>=SDrw.Qty) then begin
+					reservrQty = IS1r.Instock-IS1r.RsrvQty;
+					if(nonblank(SDrw.Location) and SDrw.Location==Locationr.ConsigStockCode) then begin reservrQty = reservrQty + SDrw.Qty; end;
+					if(reservrQty>=SDrw.Qty) then begin
 						IS2r.Code = SDrw.ArtCode;
 						IS2r.Location = SDp.Location;
 						if(ReadFirstMain(IS2r,2,true)) then begin
-							if(IS2r.Instock-IS2r.RsrvQty>=SDrw.Qty) then begin
+							reservrQty = IS2r.Instock-IS2r.RsrvQty;
+							if(nonblank(SDrw.Location) and SDrw.Location==Locationr.Code) then begin reservrQty = reservrQty + SDrw.Qty; end;
+							if(reservrQty>=SDrw.Qty) then begin
 								if(blank(SDrw.Location)) then begin
-									MatRowGet(SDp,i,SDrw);
 									RecordCheckError(36374,"",i,"Location");
 									res = -1; 
 									goto LSDVcRecordCheck;
 								end;
-							end else begin
-								SDrw.Location = Locationr.ConsigStockCode;	
 							end;
 						end else begin
 							SDrw.Location = Locationr.ConsigStockCode;	
