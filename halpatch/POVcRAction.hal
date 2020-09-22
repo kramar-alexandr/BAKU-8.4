@@ -2025,6 +2025,9 @@ begin
 	record ORVc ORr;
 	record ItemDuplicatesVc IDr;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:42 17.08.2020
 	integer ErrRow;
+	record BPIBrandVc BBr;
+	string 255 vendors;
+	boolean findVendors;
 
 	res = 0;
   GetFullCurncyRate(POr.CurncyCode,currentdate,fr,to1,to2,br1,br2);
@@ -2097,6 +2100,27 @@ begin
 		if (nonblank(POrw.ArtCode)) then begin
 			INr.Code = POrw.ArtCode;
 			if (ReadFIrstMain(INr,1,true)) then begin
+				findVendors = false;
+				if(Left(POr.VECode,3)=="FOB") then begin findVendors = true; end;
+				if(nonblank(INr.BPIBrand) and findVendors==false) then begin
+					BBr.Code = INr.BPIBrand;
+					if(ReadFirstMain(BBr,1,true)) then begin
+						pos = 0;
+						vendors = "";
+						ExtractObj(BBr.Vendor,pos,vendors);
+						while(nonblank(vendors))begin
+							if(vendors==POr.VECode) then begin
+								findVendors = true;
+							end;
+							ExtractObj(BBr.Vendor,pos,vendors);
+						end;
+					end;
+				end;
+				if(findVendors==false) then begin
+						RecordCheckError(36375,"",i,"ArtCode");      
+						res = -1;
+						goto LPOVcRecordCheck;
+				end;
 				IDr.DupCode = POrw.ArtCode;
 				TrHs = true;
 				while (loopkey("DupCode",IDr,1,TrHs)) begin
