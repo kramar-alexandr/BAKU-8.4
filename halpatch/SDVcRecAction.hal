@@ -78,7 +78,7 @@ external procedure PUVc_PasteLocation(var record PUVc,Integer);
 external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
 remote procedure CreateINConsItem(string, string, integer);
 remote updating procedure ExchCurrInTr41AccRow(string,longint);
-remote updating procedure updateResQtyFromSD (record SDVc,boolean);
+remote inner updating procedure updateResQtyFromSD (record SDVc,boolean);
 external procedure ExtractObj(string,var Integer,var string);
 remote updating procedure ORFromPOCons(record POVc,LongInt);
 
@@ -372,7 +372,8 @@ begin
 	record BPIBrandVc BPIBrandr;
 	vector val AbsItemqty;
 	record SerBalVc SBr;
-  
+  val reservrQty;
+	
   res = 0;
   insertmode = 1;//Rs_insert
   updatemode = 2;//Rs_update
@@ -610,27 +611,30 @@ begin
   for (i=0;i<rwcnt;i=i+1) begin
     thesamelocf = false;
     MatRowGet(SDp,i,SDrw);
+		reservrQty = 0;
 		Locationr.Code = SDp.Location;
 		if(ReadFirstMain(Locationr,1,true)) then begin
-			SDrw.Location = Locationr.Code;
 			if(nonblank(Locationr.ConsigStockCode)) then begin
 				IS1r.Code = SDrw.ArtCode;
 				IS1r.Location = Locationr.ConsigStockCode;
 				if(ReadFirstMain(IS1r,2,true)) then begin
-					if(IS1r.Instock>0) then begin
+					reservrQty = IS1r.Instock-IS1r.RsrvQty;
+					if(nonblank(SDrw.Location) and SDrw.Location==Locationr.ConsigStockCode) then begin reservrQty = reservrQty + SDrw.Qty; end;
+					if(reservrQty>=SDrw.Qty) then begin
 						IS2r.Code = SDrw.ArtCode;
 						IS2r.Location = SDp.Location;
 						if(ReadFirstMain(IS2r,2,true)) then begin
-							if(IS2r.Instock>0) then begin
-								MatRowGet(SDp,i,SDrw);
-								if(nonblank(SDrw.Location)) then begin
+							reservrQty = IS2r.Instock-IS2r.RsrvQty;
+							if(nonblank(SDrw.Location) and SDrw.Location==Locationr.Code) then begin reservrQty = reservrQty + SDrw.Qty; end;
+							if(reservrQty>=SDrw.Qty) then begin
+								if(blank(SDrw.Location)) then begin
 									RecordCheckError(36374,"",i,"Location");
 									res = -1; 
 									goto LSDVcRecordCheck;
 								end;
-							end else begin
-								SDrw.Location = Locationr.ConsigStockCode;
 							end;
+						end else begin
+							SDrw.Location = Locationr.ConsigStockCode;	
 						end;
 					end;
 				end;
@@ -1168,6 +1172,7 @@ begin
 		if(curcnt==0) then begin curcnt=1; curSD[0] = SDr; end;
   	for (m=0;m<curcnt;m=m+1) begin
 			SD1r = curSD[m];
+			if (ReadFirstMain(SD1r,1,true)) then begin end;
 			Loc1r.Code = SD1r.Location;
 			if(ReadFirstMain(Loc1r,1,true)) then begin
 				if(nonblank(Loc1r.FOBSuplier)) then begin
@@ -1211,11 +1216,13 @@ begin
 				TrHs1 = true;
 				consItem = false;
 				while(LoopMain(Lcr,1,TrHs1)) begin
-					if(Lcr.ConsigStockCode==SDrw.Location) then begin
+					logtext(0,SDrw.Location & " ++++++++++++++++++++++++++++++");
+					if(nonblank(SDrw.Location) and Lcr.ConsigStockCode==SDrw.Location) then begin
 						consItem = true;
 						TrHs1 = false;
 					end;
 				end;
+				ResetLoop(Lcr);
 				INr.Code = SDrw.ArtCode;
 				if(ReadFirstMain(INr,1,true)) then begin end;
 				SetCompany(18,false);
@@ -1233,14 +1240,25 @@ begin
 				if(ReadFirstMain(BBr,1,true)) then begin end;
 				Posr.Code = BBr.CWHCode;
 				if(ReadFirstMain(Posr,1,true)) then begin end;
-				if(consItem==false) then begin
+				logtext(0,Posr.Location & "    1235667!!!!!!!!!!!!!!!!!!!!!!!!!!1");
+				if(!consItem) then begin
+					logtext(0,consItem & "    1235667!!!!!!!!!!!!!!!!!!!!!!!!!!3");
 					PUrw.Location = Posr.Location;
 					PUrw.ToPosCode = BBr.CWHCode;
 				end else begin
+					logtext(0,Posr.Location & "    1235667!!!!!!!!!!!!!!!!!!!!!!!!!!2");
 					Lcr.Code = Posr.Location;
 					if(ReadFirstMain(Lcr,1,true)) then begin
 						if(nonblank(Lcr.ConsigStockCode)) then begin
 							PUrw.Location = Lcr.ConsigStockCode;
+							switch(BBr.CWHCode) begin
+								case "CWH10": PUrw.ToPosCode = "CWHJCSG10";
+								case "CWH11": PUrw.ToPosCode = "CWHJCSG11";
+								case "CWH12": PUrw.ToPosCode = "CWHJCSG12";
+								case "CWH7": PUrw.ToPosCode = "CWHJCSG7";
+								case "CWH8": PUrw.ToPosCode = "CWHJCSG8";
+								case "CWH9": PUrw.ToPosCode = "CWHJCSG9";
+							end;
 						end;
 					end;
 				end;
@@ -1367,6 +1385,35 @@ begin
 return;
 end;
 
+
+
+
+
+global updating procedure saveResQtyFromSD (record SDVc SDr)
+begin
+	row SDVc SDrw;
+	longint i,rwcnt;
+	string 20 theloc;
+	val t, t2;
+	
+	
+	for (i=0;i<matrowcnt(SDr);i=i+1) begin
+		theloc = SDr.Location;
+		matrowget(SDr,i,SDrw);
+		if (nonblank(SDrw.Location)) then begin	theloc = SDrw.Location; end;
+		t2 = SDrw.Qty;
+		UpdateInstock("SDVc",SDr.SerNr,SDrw.ArtCode,theloc,CurrentDate,t,t,t2,t,t,t,t,t,t);
+	end;
+	
+	return;
+end;
+
+
+
+
+
+
+
 global
 updating function LongInt SDVcRecordSaveAfter(var record SDVc SDr,record SDVc SD2r,LongInt stat,LongInt long4)
 begin
@@ -1399,7 +1446,7 @@ begin
     end;
   end;
 	if (SDr.Reservf!=0 and SDr.OKFlag==0) then begin
-		updateResQtyFromSD(SDr,true);
+		saveResQtyFromSD(SDr);
 	end;
 	
   SDVcRecordSaveAfter = res;

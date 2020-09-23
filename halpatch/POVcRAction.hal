@@ -477,8 +477,10 @@ begin
 				if(nonblank(Lcr.ConsigStockCode)) then begin
 					IS1r.Code = POrw.ArtCode;
 					IS1r.Location = Lcr.ConsigStockCode;
-					if (IS1r.Instock-IS1r.RsrvQty>ItemQty[POrw.ArtCode]) then begin
-						res = -1;
+					if(ReadFirstMain(IS1r,2,true)) then begin 
+						if (IS1r.Instock-IS1r.RsrvQty>=ItemQty[POrw.ArtCode]) then begin
+							res = -1;
+						end;
 					end;
 				end;
 			end;
@@ -502,14 +504,14 @@ begin
 	row SDVc SDrw;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
-	LongInt i, compcnt, rwcnt, j, OldCompany;
+	LongInt i, compcnt, rwcnt, j, curCompany;
 	boolean TrHs;
 	string 255 tstr, MainPersonsStr;
 	record ActVc Actr;
 	record UserVc Userr;
 	record ItemStatusVc ISr,IS1r;
 	
-	
+	curCompany = currentcompany;
 	Userr.Code = "";
 	while (LoopMain(Userr,1,true)) begin
 		if (Userr.Location==Location and Userr.AccessGroup=="STORE") then begin
@@ -538,19 +540,27 @@ begin
 		Lcr.Code = Location;
 		if(ReadFirstMain(Lcr,1,true)) then begin
 			if(nonblank(Lcr.ConsigStockCode)) then begin
-				ISr.Code = SDrw.ArtCode;
+				ISr.Code = POrw.ArtCode;
 				ISr.Location = Location;
+				SDrw.Location = Lcr.Code;
+				POrw.ConsgType = 0;
+				MatRowPut(POp,i,POrw);
 				if(ReadfirstMain(ISr,2,true)) then begin
-					if(ISr.Instock-ISr.RsrvQty<=0) then begin
-						IS1r.Code = SDrw.ArtCode;
+					if(ISr.Instock-ISr.RsrvQty<POrw.Quant) then begin
+						IS1r.Code = POrw.ArtCode;
 						IS1r.Location = Lcr.ConsigStockCode;
 						if(ReadfirstMain(IS1r,2,true)) then begin
-							if(IS1r.Instock-IS1r.RsrvQty>0) then begin
+							if(IS1r.Instock-IS1r.RsrvQty>=POrw.Quant) then begin
 								SDrw.Location = Lcr.ConsigStockCode;
+								POrw.ConsgType = 1;
+								MatRowPut(POp,i,POrw);
 							end;
 						end;
 					end;
 				end;
+				SetCompany(OldComp,false);
+				recordStore(POp,true);
+				ResetCompany(curCompany);
 			end;
 		end;
 		SDrw.ArtCode = POrw.ArtCode;
@@ -558,7 +568,7 @@ begin
 		MatRowPut(SDr,i,SDrw);
 		SDVc_PasteArtCode(SDr,i,1,tstr,tstr);
 	end;
-	recordStore (SDr,true);
+	recordStore (SDr,false);
 	RecordCopy(OldSDr,SDr);
 	SDr.Reservf = 1;
 	if(RecordUpdate(OldSDr,SDr,true)==0) then begin
@@ -2028,6 +2038,7 @@ begin
 	record BPIBrandVc BBr;
 	string 255 vendors;
 	boolean findVendors;
+
 
 	res = 0;
   GetFullCurncyRate(POr.CurncyCode,currentdate,fr,to1,to2,br1,br2);

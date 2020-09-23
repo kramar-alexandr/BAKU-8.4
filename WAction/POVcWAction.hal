@@ -76,7 +76,7 @@ remote function Boolean PUDchrsum(record PUVc,Integer);
 remote procedure PUVc_PasteCostPrice(var record PUVc,Integer);
 remote function boolean PTCCCodesCheck(string);
 remote updating function LongInt RecordAction_raPasteOrdInShip2(var record SHVc,LongInt,var string);
-
+remote updating function integer Remote_ORFromPOConsDsm2(var record POVc,var record ORVc,var string,longint);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -330,11 +330,8 @@ BEGIN
 								consPOf = false; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 18:22 16.12.2019
 								if(matrowcnt(POr)>0)then begin
 									matrowget(POr,0,POrw);
-									INr.Code = POrw.ArtCode;
-									if(ReadFIrstMain(INr,1,true))then begin
-										if(INr.ConsgType==1)then begin
-											consPOf = true;
-										end;
+									if(POrw.ConsgType==1)then begin
+										consPOf = true;
 									end;
 								end;
 								
@@ -592,7 +589,7 @@ BEGIN
 end;
 
 global
-updating procedure CCPUFromPODsm(var record POVc POr, var record PUVc PUr, vector val TotCostPrice, vector boolean SHOutItems)
+updating procedure CCPUFromPODsm(var record POVc POr, var record PUVc PUr, vector val TotCostPrice, vector boolean SHOutItems, vector boolean SHConsItems)
 BEGIN
   row POVc POrw;
   row PUVc PUrw;
@@ -604,14 +601,20 @@ BEGIN
   record POSettingBlock POSb;
 	vector string 255 SerialNumber;
 	record VIVc VIr;
-	string 255 errmsg;
+	string 255 errmsg, ConsStock;
 	record RLinkVc RLinkr;
 	record IVVc IVr;
 	record RcVc RepSpec;
+	record LocationVc Locr;
   
   
   r = RecordAction_raPastePOInPU(POr,PUr);
 	if(Readfirstmain(PUr,1,true))then begin
+		Locr.Code = PUr.Location;
+		if (ReadFIrstMain(Locr,1,true)) then begin
+			ConsStock = Locr.ConsigStockCode;
+		end;
+		
 		if(r==0)then begin
 			ORr.SerNr = POr.InvAddr4;
 			if(ReadFirstMain(ORr,1,true))then begin
@@ -634,6 +637,10 @@ BEGIN
 					PUVc_PasteCostPrice(PUr,i);
 					matrowget(PUr,i,PUrw);
 					matrowput(PUr,i,PUrw);
+					if (SHConsItems[PUrw.ArtCode & "_" & i + 1]) then begin
+						PUrw.Location = ConsStock;
+						matrowput(PUr,i,PUrw);
+					end;
 				end;
 			end;
 			// PUSumUp(PUr);
@@ -4345,6 +4352,7 @@ begin
 end;
 
 
+
 global updating procedure ORFromPOConsDsm()
 begin
 	record POVc POr;
@@ -4426,6 +4434,7 @@ begin
 	string 60 warning;
 	record SHVc SHr, OldSHr;
 	record PUVc PUr;
+	row SDVc SDrw;
 	
 	if(windowstate(wn)!=Rs_normal)then begin
 		messagebox(0,"Save document first");
@@ -4452,7 +4461,8 @@ begin
 				
 				//SetCompany(18,false);//++++++++++++++++++++++++ CC in
 					//recordnew(ORr);
-					res = Remote_ORFromPOConsDsm(POr,ORr,msg);
+						res = Remote_ORFromPOConsDsm2(POr,ORr,msg,PUSerNr);
+
 					if(res==-1)then begin
 						messagebox(0,msg);
 						goto lORFromPOConsDsm;
