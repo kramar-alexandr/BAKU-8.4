@@ -1136,7 +1136,7 @@ begin
 	record PUVc PUr, OldPUr;
 	row PUVc PUrw;
 	integer oldComp,i,rwcnt,k,m,curcnt,pos;
-	string 255 VECode,warning,inwarn,Obj,storeObj,subdiObj;
+	string 255 VECode,warning,inwarn,Obj,storeObj,subdiObj, fobObj;
 	record LocationVc Locr,Loc1r,Lcr;
 	row SDVc SDrw;
 	record ConsItemVc CIr;
@@ -1158,7 +1158,8 @@ begin
 	row OTypeAddControlBlock OTyperw;
 	boolean consItem;
 	longint POSerNr, PUSerNr;
-
+	vector boolean SDCompConsigStocks;
+	vector string 255 IDGrPosLocs, IDGCompStockConsigStockCodes, IDGCompStockObects;
 	
 	oldComp = CurrentCompany;
 	BlockLoad(Compb);
@@ -1178,6 +1179,20 @@ begin
 				end;	
 			end;	
 			SetCompany(18,false);
+			Posr.Code = "";
+			while (LoopMain(Posr,1,true)) begin 
+				IDGrPosLocs[Posr.Code] = Posr.Location;
+			end;
+			ResetLoop(Posr);
+			
+			Lcr.Code = "";
+			while (LoopMain(Lcr,1,true)) begin 
+				IDGCompStockConsigStockCodes[Lcr.Code] = Lcr.ConsigStockCode;
+				IDGCompStockObects[Lcr.Code] = Lcr.Objects;
+			end;
+			ResetLoop(Posr);
+			
+			
 			RECORDNEW(PUr);
 			PUr.VECode = VECode;
 			PUVc_PasteVECode(PUr);
@@ -1207,19 +1222,27 @@ begin
 			logtext(0,"PU SerNr - " & PUr.SerNr);
 			rwcnt = MatRowCnt(SD1r);
 			logtext(0,"count items - " & rwcnt);
+			while(LoopMain(Lcr,1,true)) begin
+				if(nonblank(Lcr.ConsigStockCode)) then begin
+					SDCompConsigStocks[Lcr.ConsigStockCode] = true;
+				end;
+			end;
 			for (i=0;i<rwcnt;i=i+1) begin
 				MatRowGet(SD1r,i,SDrw);
 				SetCompany(oldComp,false);
-				Lcr.Code = "";
-				TrHs1 = true;
 				consItem = false;
-				while(LoopMain(Lcr,1,TrHs1)) begin//!!!!!!!!!!!!!!!!!!!!!! ПЕРЕПИСАТЬ!! На одну строку каждый раз все склады пролистывать??????
-					if(nonblank(SDrw.Location) and Lcr.ConsigStockCode==SDrw.Location) then begin
-						consItem = true;
-						TrHs1 = false;
-					end;
+				if (nonblank(SDrw.Location) and SDCompConsigStocks[SDrw.Location]) then begin
+					consItem = true;
 				end;
-				ResetLoop(Lcr);
+				// Lcr.Code = "";
+				// TrHs1 = true;
+				// while(LoopMain(Lcr,1,TrHs1)) begin//!!!!!!!!!!!!!!!!!!!!!! ПЕРЕПИСАТЬ!! На одну строку каждый раз все склады пролистывать??????
+					// if(nonblank(SDrw.Location) and Lcr.ConsigStockCode==SDrw.Location) then begin
+						// consItem = true;
+						// TrHs1 = false;
+					// end;
+				// end;
+				// ResetLoop(Lcr);
 				INr.Code = SDrw.ArtCode;
 				if(ReadFirstMain(INr,1,true)) then begin end;
 				SetCompany(18,false);
@@ -1235,38 +1258,33 @@ begin
 				MatRowGet(PUr,i,PUrw);
 				BBr.Code = CIr.BrandCode;
 				if(ReadFirstMain(BBr,1,true)) then begin end;
-				Posr.Code = BBr.CWHCode;
-				if(ReadFirstMain(Posr,1,true)) then begin end;//ПЕРЕПИСАТЬ!! Выгрузите все места в вектор в начале процедуры!!!!!!!!
+				// Posr.Code = BBr.CWHCode;
+				// if(ReadFirstMain(Posr,1,true)) then begin end;//ПЕРЕПИСАТЬ!! Выгрузите все места в вектор в начале процедуры!!!!!!!!
 				if(!consItem) then begin
-					PUrw.Location = Posr.Location;
+					PUrw.Location = IDGrPosLocs[BBr.CWHCode];
 					PUrw.ToPosCode = BBr.CWHCode;
 				end else begin
-					Lcr.Code = Posr.Location;
-					if(ReadFirstMain(Lcr,1,true)) then begin//!!!!!!!!!!!!!!!!!!!!!! ПЕРЕПИСАТЬ!! На одну строку каждый раз все склады пролистывать??????
-						if(nonblank(Lcr.ConsigStockCode)) then begin
-							PUrw.Location = Lcr.ConsigStockCode;
-							switch(BBr.CWHCode) begin
-								case "CWH10": PUrw.ToPosCode = "CWHJCSG10";
-								case "CWH11": PUrw.ToPosCode = "CWHJCSG11";
-								case "CWH12": PUrw.ToPosCode = "CWHJCSG12";
-								case "CWH7": PUrw.ToPosCode = "CWHJCSG7";
-								case "CWH8": PUrw.ToPosCode = "CWHJCSG8";
-								case "CWH9": PUrw.ToPosCode = "CWHJCSG9";
-							end;
-						end;
+					PUrw.Location = IDGCompStockConsigStockCodes[IDGrPosLocs[BBr.CWHCode]];
+					switch(BBr.CWHCode) begin
+						case "CWH10": PUrw.ToPosCode = "CWHJCSG10";
+						case "CWH11": PUrw.ToPosCode = "CWHJCSG11";
+						case "CWH12": PUrw.ToPosCode = "CWHJCSG12";
+						case "CWH7": PUrw.ToPosCode = "CWHJCSG7";
+						case "CWH8": PUrw.ToPosCode = "CWHJCSG8";
+						case "CWH9": PUrw.ToPosCode = "CWHJCSG9";
 					end;
 				end;
 				MatRowPut(PUr,i,PUrw);
 				PUVc_PasteLocation(PUr,i);
 				MatRowGet(PUr,i,PUrw);
-				Locr.Code = Posr.Location;
+				// Locr.Code = Posr.Location;
 				PUrw.Objects = "";
-				If(ReadFirstMain(Locr,1,true)) then begin end;//ПЕРЕПИСАТЬ!!!! Зачем еще раз запрос в БД?
-				if(nonblank(Locr.Objects)) then begin
+				// If(ReadFirstMain(Locr,1,true)) then begin end;//ПЕРЕПИСАТЬ!!!! Зачем еще раз запрос в БД?
+				if(nonblank(IDGCompStockObects[Posr.Location])) then begin
 					if (NonBlank(PUrw.Objects)) then begin
-						PUrw.Objects = PUrw.Objects & "," & Locr.Objects;
+						PUrw.Objects = PUrw.Objects & "," & IDGCompStockObects[Posr.Location];
 					end else begin
-						PUrw.Objects = Locr.Objects;
+						PUrw.Objects = IDGCompStockObects[Posr.Location];
 					end;
 				end;	
 				if (NonBlank(PUrw.Objects)) then begin
@@ -1320,6 +1338,7 @@ begin
 					ExtractObj(SDr.Objects,pos,Obj);
 				end;
 				if(nonblank(POr.ItemFromOtherSTockObj) and nonblank(storeObj)) then begin
+					fobObj = POr.ItemFromOtherSTockObj;
 					SetCompany(18,false);
 					BlockLoad(OType);
 					for (i=0;i<matrowcnt(OType);i=i+1) begin
@@ -1360,7 +1379,9 @@ begin
 										TrHs = false;
 										POr.SerNr = POSerNr;
 										if (ReadFirstMain(POr,1,true)) then begin
-											ORFromPOCons(POr,PUSerNr);
+											if (POr.ItemFromOtherSTockObj==fobObj)  then begin
+												ORFromPOCons(POr,PUSerNr);
+											end;
 										end;
 									end;
 								end;
