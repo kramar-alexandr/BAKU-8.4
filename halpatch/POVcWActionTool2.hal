@@ -1281,8 +1281,8 @@ begin
   Integer i,rwcnt;
   row POVc POrw;
   val price,reb,t;
-  string 255 descstr,vatcode,purchacc,taxtemplatecode,tstr,artcode,brCur,oldcur;
-  Boolean nomoreremotecalls,infound;
+  string 255 descstr,vatcode,purchacc,taxtemplatecode,tstr,artcode,brCur,oldcur,origcode;
+  Boolean nomoreremotecalls,infound,foundf;
   record POSettingBlock POset;
   record TaxMatrixVc TMr;
 	record BPIBrandVc Brandr;
@@ -1291,6 +1291,8 @@ begin
 	boolean TrHs, testf;
 
   MatRowGet(POp,rownr,POrw);
+	origcode = POrw.ArtCode;
+	lstartPOVc_PasteArtCode:;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 25 09 2020 y. at 10:37:17 AM
 	
 	INr.Code = POrw.ArtCode;
 	if (ReadFIrstMain(INr,1,true)) then begin
@@ -1351,7 +1353,42 @@ begin
 			if(ReadFirstMain(Brandr,1,true))then begin
 				CUr.Code = Brandr.Name;
 				CUr.VEType = 1;
-				if(ReadFirstKey("VEActCode",CUr,2,true))then begin brCur = CUr.VECurncyCode; end;
+				if(ReadFirstKey("VEActCode",CUr,2,true))then begin brCur = CUr.VECurncyCode; end else begin
+					CUr.Code = Brandr.Vendor;
+					CUr.VEType = 1;
+					if(ReadFirstKey("VEActCode",CUr,2,true))then begin brCur = CUr.VECurncyCode; end;
+				end;
+				if(currentcompany==18 and currentuser=="SA1")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 25 09 2020 y. at 10:37:24 AM
+					if(Left(POp.VECode,3)!="FOB")then begin
+						if(CUr.Code!=POp.VECode)then begin
+							resetloop(INr);
+							INr.AlternativeCode = origcode;
+							TrHs = true;
+							foundf = false;
+							while(loopkey("AlternativeCode",INr,1,TrHs))begin
+								if(INr.AlternativeCode!=origcode)then begin TrHs = false; end;
+								
+								if(TrHs)then begin
+									if(INr.Code!=POrw.ArtCode)then begin
+										if(nonblank(INr.BPIBrand))then begin
+											Brandr.Code = INr.BPIBrand;
+											if(ReadFirstMain(Brandr,1,true))then begin
+												if(setinset(POp.VECode,Brandr.Vendor))then begin
+													POrw.ArtCode = INr.Code;
+													matrowput(POp,rownr,POrw);
+													goto lstartPOVc_PasteArtCode;
+												end;
+											end;
+										end;
+									end;
+								end;
+							end;
+							POrw.ArtCode = "notfound";
+							matrowput(POp,rownr,POrw);
+							goto lstartPOVc_PasteArtCode;
+						end;
+					end;
+				end;
 			end;
 		end;
 		oldcur = POp.CurncyCode;
