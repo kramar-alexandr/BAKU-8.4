@@ -1,3 +1,6 @@
+external procedure ExtractObj(string,var Integer,var string);
+external function LongInt INVcRecordRemoveTest(var record INVc,record INVc,LongInt,LongInt);
+
 global webpublic updating procedure WebFixConsItemsDupl()
 begin
 	record ConsItemVc CIr,oldCIr;
@@ -5,20 +8,32 @@ begin
 	vector string 100 vItems;
 	array string 100 atag;
 	longint i;
+	record ItemHistVc IHr;
+	integer pos;
+	string 100 tstr;
+	record INVc INr;
+	boolean delflaf;
 	
 	setcompany(18,false);
 	
 	CIr.LocCode = "";
 	while(loopkey("LocCodeBrand",CIr,1,true))begin
-		if(CIr.LocCode==oldCIr.LocCode)then begin
-			aDupCode[CIr.LocCode & "_" & CIr.BrandCode] = aDupCode[CIr.LocCode & "_" & CIr.BrandCode] + 1;
-			if(!setinset(oldCIr.Code,vItems[CIr.LocCode & "_" & CIr.BrandCode]))then begin
-				vItems[CIr.LocCode & "_" & CIr.BrandCode] = vItems[CIr.LocCode & "_" & CIr.BrandCode] & CIr.Code & "," & oldCIr.Code;
-			end else begin
-				vItems[CIr.LocCode & "_" & CIr.BrandCode] = vItems[CIr.LocCode & "_" & CIr.BrandCode] & "," & CIr.Code;
+		INr.Code = CIr.Code;
+		if(readfirstmain(INr,1,true))then begin
+			if(CIr.LocCode==oldCIr.LocCode and CIr.BrandCode==oldCIr.BrandCode)then begin
+				aDupCode[CIr.LocCode & "_" & CIr.BrandCode] = aDupCode[CIr.LocCode & "_" & CIr.BrandCode] + 1;
+				if(!setinset(oldCIr.Code,vItems[CIr.LocCode & "_" & CIr.BrandCode]))then begin
+					vItems[CIr.LocCode & "_" & CIr.BrandCode] = vItems[CIr.LocCode & "_" & CIr.BrandCode] & CIr.Code & "," & oldCIr.Code;
+				end else begin
+					vItems[CIr.LocCode & "_" & CIr.BrandCode] = vItems[CIr.LocCode & "_" & CIr.BrandCode] & "," & CIr.Code;
+				end;
 			end;
+			recordcopy(oldCIr,CIr);
+		end else begin
+			logtext(0,"ItemNotExists " & CIr.Code);
+			recorddelete(CIr);
+			stepback(CIr);
 		end;
-		recordcopy(oldCIr,CIr);
 	end;
 	
 	resetloop(CIr);
@@ -26,7 +41,31 @@ begin
 	getvectortags(aDupCode,atag);
 	for(i=0;i<atag.length;i=i+1)begin
 		if(aDupCode[atag[i]]>0)then begin
-			logtext(0,vItems[atag[i]]);
+			pos = 0;
+			ExtractObj(vItems[atag[i]],pos,tstr);
+			logtext(0,"______________________________");
+			while(nonblank(tstr))begin
+				INr.Code = tstr;
+				readfirstmain(INr,1,true);
+				IHr.ArtCode = INr.Code;
+				delflaf = false;
+				if(!readfirstkey("ArtCode",IHr,1,true))then begin
+					if(INVcRecordRemoveTest(INr,INr,0,0)==1) then begin
+						delflaf = true;
+					end;	
+				end;
+				if(delflaf==false)then begin
+					logtext(0,INr.Code & " " & INr.Name & " " & INr.BPIBrand & " " & INr.AlternativeCode);
+				end else begin
+					logtext(0,INr.Code & " " & INr.Name & " " & INr.BPIBrand & " " & INr.AlternativeCode & "-------------- t delete!");
+					recorddelete(INr);
+					CIr.Code = INr.Code;
+					if(readfirstmain(CIr,1,true))then begin
+						recorddelete(CIr);
+					end;
+				end;
+				ExtractObj(vItems[atag[i]],pos,tstr);
+			end;
 		end;
 	end;
 	
