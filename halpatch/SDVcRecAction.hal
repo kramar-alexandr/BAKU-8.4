@@ -1506,7 +1506,68 @@ begin
 END;
 
 
-
+updating procedure UnokExchPOInCompSender (record SDVc SDr)
+begin
+	record POVc POr, oldPOr;
+	record SDVc SD1r;
+	record INVc INr;
+	record RLinkVc RLr;
+	record OTypeAddControlBlock OType;
+	row OTypeAddControlBlock OTyperw;
+	boolean consItem;
+	longint POSerNr, PUSerNr;
+	vector boolean SDCompConsigStocks;
+	vector string 255 IDGrPosLocs, IDGCompStockConsigStockCodes, IDGCompStockObects;
+	record ObjVc OBJr;
+	boolean TrHs,TrHs1;
+	string 255 VECode,warning,inwarn,Obj,storeObj,subdiObj, fobObj;
+	integer oldComp,i,rwcnt,k,m,curcnt,pos;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record LocationVc Locr;
+	
+	BlockLoad(Compb);
+	OldComp = CurrentCompany;
+	
+	if(ReadRecordLink(SDr,1,POr,RLr))then begin
+		POSerNr = POr.SerNr;
+		FobObj = POr.ItemFromOtherSTockObj;
+		pos = 0;
+		ExtractObj(POr.Objects,pos,Obj);
+		while (nonblank(Obj)) begin 
+			OBJr.Code = Obj;
+			if (ReadFirstMain(OBJr,1,true)) then begin
+				if (OBJr.OTCode=="STORE") then begin
+					storeObj = OBJr.Code;
+				end;
+			end;
+			ExtractObj(POr.Objects,pos,Obj);
+		end;
+		if (nonblank(storeObj)) then begin
+			for (i=0;i<matrowcnt(Compb);i=i+1) begin
+				SetCompany(i+1,false);
+				Locr.Code = "";
+				TrHs = true;
+				while (LoopMain(Locr,1,TrHs)) begin
+					if (storeObj==Locr.Objects) then begin
+						TrHs = false;
+						POr.SerNr = POSerNr;
+						if (ReadFirstMain(POr,1,true)) then begin
+							if (POr.ItemFromOtherSTockObj==FobObj)  then begin
+								recordCopy(oldPOr,POr);
+								POr.OKFlag = 0;
+								RecordUpdate(oldPOr,POr,true);
+							end;
+						end;
+					end;
+				end;
+				ResetLoop(Locr);
+			end;
+			SetCompany(OldComp,false);
+		end;
+	end;
+	return;
+end;
 
 
 global
@@ -1514,6 +1575,8 @@ updating function LongInt SDVcRecordRemove(var record SDVc SDr,record SDVc SD2r,
 begin
   LongInt res;
   record SDVc NilSDr;
+	record RLinkVc RLr;
+
   
 
   if (SDr.IntORNo!=-1) then begin
