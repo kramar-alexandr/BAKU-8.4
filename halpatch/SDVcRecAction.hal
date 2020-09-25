@@ -78,9 +78,38 @@ external procedure PUVc_PasteLocation(var record PUVc,Integer);
 external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
 remote procedure CreateINConsItem(string, string, integer);
 remote updating procedure ExchCurrInTr41AccRow(string,longint);
-remote inner updating procedure updateResQtyFromSD (record SDVc,boolean);
 external procedure ExtractObj(string,var Integer,var string);
 remote updating procedure ORFromPOCons(record POVc,LongInt);
+
+
+
+
+
+global updating procedure updateResQtyFromSD (record SDVc SDr,boolean Resf)
+begin
+	row SDVc SDrw;
+	longint i,rwcnt;
+	string 20 theloc;
+	val t, t2;
+	
+	
+	for (i=0;i<matrowcnt(SDr);i=i+1) begin
+		theloc = SDr.Location;
+		matrowget(SDr,i,SDrw);
+		if (nonblank(SDrw.Location)) then begin	theloc = SDrw.Location; end;
+		if (Resf) then begin
+			t2 = SDrw.Qty;
+		end else begin
+			t2 = -SDrw.Qty;
+		end;
+		UpdateInstock("SDVc",SDr.SerNr,SDrw.ArtCode,theloc,CurrentDate,t,t,t2,t,t,t,t,t,t);
+	end;
+	
+	return;
+end;
+
+
+
 
 
 updating procedure SDCreateTBIV(record SDVc SDp,Integer rownr,Boolean setinvd,Integer UseDiscount,Boolean negf)
@@ -1463,9 +1492,73 @@ begin
     end;
   end;
 	if (SDr.Reservf!=0 and SDr.OKFlag==0) then begin
-		saveResQtyFromSD(SDr);
+		updateResQtyFromSD(SDr,true);
 	end;
 	
   SDVcRecordSaveAfter = res;
   RETURN;
 END;
+
+
+
+
+
+global
+updating function LongInt SDVcRecordRemove(var record SDVc SDr,record SDVc SD2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+  record SDVc NilSDr;
+  
+
+  if (SDr.IntORNo!=-1) then begin
+    NilSDr.CostAcc = "NIL";
+    UpdateIntOrderFromSD(NilSDr,SDr,false);
+  end;  
+	if (SDr.Reservf==1) then begin
+		updateResQtyFromSD(SDr,false);
+	end;
+  SDVcRecordRemove = res;
+  RETURN;
+END;
+
+global
+function LongInt SDVcRecordRemoveTest(var record SDVc SDr,record SDVc SD2r,LongInt long3,LongInt long4)
+begin
+  record DBLockBlock DBLockRec;
+  LongInt res;
+  record IVCashVc IVCashr;
+  Integer actnr;
+  record ActVc Actr;
+  record RLinkVc RLr;
+
+  res = 1;
+  BlockLoad(DBLockRec);
+  if (SDr.TransDate<=DBLockRec.DeleteBeforeDate) then begin
+    res = 1;
+    goto LSDVcRecordRemoveTest;
+  end;
+  if (SDr.OKFlag!=0) then begin
+    if (long3>0) then begin MessageBox(1560,"") end;
+    res = 0;
+  end;
+  if (res!=0) then begin
+    IVCashr.SDNr = SDr.SerNr;
+    if (ReadFirstKey("SDNr",IVCashr,1,true)) then begin
+      if (long3>0) then begin MessageBox(1560,"") end;
+      res = 0;
+    end;
+  end;
+  actnr = 1;
+  while (ReadRecordLink(SDr,actnr,Actr,RLr)) begin
+    if (Actr.TodoFlag==kTodoFlagApproval) then begin
+      if (long3>0) then begin MessageBox(22408,""); end;
+      res = 0;
+      goto LSDVcRecordRemoveTest;
+    end;
+    actnr = actnr + 1;
+  end;
+LSDVcRecordRemoveTest:;
+  SDVcRecordRemoveTest = res;
+  RETURN;
+END;
+
