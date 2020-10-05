@@ -904,10 +904,10 @@ begin
 	vector boolean Stockf, StockOrdNo;
 	vector date Ordate;
 	vector integer vItQty, AccumulatedItemsMinus;
-	vector string 255 vOrType;
+	vector string 255 vOrType, VendorBrandmngr, VendorPurchaser;
 	record ItemStatusVc ISr;
 	record CUVc CUr;
-	string 255 CompName, locORrClient,ORrOFFser,POSerNr, POComp, TrackSet, IDlocORserNr, ClientName;
+	string 255 CompName, locORrClient,ORrOFFser,POSerNr, POComp, TrackSet, IDlocORserNr, ClientName, VendCode;
 	record ORVc ORr, locORr;
 	record RLinkVc RLr;
 	date locORrDate, blnkDate, RecDate;
@@ -922,6 +922,9 @@ begin
 	row PUVc PUrw;
 	longint lastPUSerNr;
 	record OPPVc OPPr;
+	record BPIBrandVc Brandr;
+
+	
 	
 	curcomp = currentcompany;
 	
@@ -940,30 +943,30 @@ begin
 		outstring(10,0,"Invoice date",false);
 		outstring(11,0,"Order status",false);
 		outstring(12,0,"Update Ord. Status Date",false);
-		outstring(13,0,"Order status margin",false);
+		outstring(13,0,"Order status margin",false);// -
 		outstring(14,0,"Payment terms",false);
 		outstring(15,0,"Currency code",false);
 		outstring(16,0,"Order amount",false);
 		// outstring(17,0,"Estimated date of payment",false);
-		outstring(18,0,"Payment date",false);
+		outstring(18,0,"Payment date",false); // последний платеж по заказу
 		outstring(19,0,"Payment amount",false);
 		// outstring(20,0,"Payment margin",false);
 		// outstring(21,0,"Payment deadline",false);
 		
-		outstring(22,0,"Days for balance payment",false);
-		outstring(35,0,"Prepayment",false);
+		outstring(22,0,"Days for balance payment",false); //-
+		outstring(35,0,"Prepayment",false);// 1
 		outstring(37,0,"Prepayment deadline",false);
-		outstring(39,0,"Prepayment margin",false);
-		outstring(36,0,"Payment before shipment",false);
+		outstring(39,0,"Prepayment margin",false);// -
+		outstring(36,0,"Payment before shipment",false); //2
 		outstring(41,0,"Estimated date of payment Before shipment",false);
 		outstring(38,0,"Payment before shipment deadline",false);
-		outstring(40,0,"Payment before shipment margin",false);
-		outstring(24,0,"Balance payment amount",false);
+		outstring(40,0,"Payment before shipment margin",false);// -
+		outstring(24,0,"Balance payment amount",false);// 3
 		outstring(42,0,"Estimated date of Balance payment",false);
 		outstring(23,0,"Balance payment deadline",false);
-		outstring(33,0,"Old balance payment",false);
+		outstring(33,0,"Old balance payment",false);// 4
 		outstring(43,0,"Old balance payment deadline",false);
-		outstring(25,0,"Margin for balance payment",false);
+		outstring(25,0,"Margin for balance payment",false);// -
 		outstring(26,0,"Reception date",false);
 		outstring(27,0,"Freight",false);
 		outstring(28,0,"Truck number",false);
@@ -971,9 +974,38 @@ begin
 		outstring(30,0,"Weight",false);
 		outstring(31,0,"Freight sum, AZN",false);
 		outstring(32,0,"Customs sum, AZN",false);
+		outstring(46,0,"Brand.costs, AZN",false);
+		outstring(47,0,"Brand.costs bal",false);
 		outstring(44,0,"Approximately deliver date",false);
 		outstring(45,0,"Delivery date",false);
 	endformat;
+	
+	
+	
+	while (LoopMain(Brandr,1,true)) begin
+		if (nonblank(Brandr.Vendor)) then begin
+			if (nonblank(Brandr.BrndMngr)) then begin
+				pos = 0;
+				ExtractObjWithSeparator(",",Brandr.Vendor,true,pos,VendCode);
+				while (nonblank(VendCode)) begin
+					if (nonblank(VendorBrandmngr[VendCode])) then begin VendorBrandmngr[VendCode] = VendorBrandmngr[VendCode] & ","; end;
+					VendorBrandmngr[VendCode] = VendorBrandmngr[VendCode] & Brandr.BrndMngr;
+					ExtractObjWithSeparator(",",Brandr.Vendor,true,pos,VendCode);
+				end;
+			end;
+			if (nonblank(Brandr.Puchaser)) then begin
+				pos = 0;
+				ExtractObjWithSeparator(",",Brandr.Vendor,true,pos,VendCode);
+				while (nonblank(VendCode)) begin
+					if (nonblank(VendorPurchaser[VendCode])) then begin VendorPurchaser[VendCode] = VendorPurchaser[VendCode] & ","; end;
+					VendorPurchaser[VendCode] = VendorPurchaser[VendCode] & Brandr.BrndMngr;
+					ExtractObjWithSeparator(",",Brandr.Vendor,true,pos,VendCode);
+				end;
+			end;
+		end;
+	end;
+	Resetloop(Brandr);
+	
 	
 	TrHs = true;
 	POr.TransDate = RepSpec.sStartDate;
@@ -984,8 +1016,10 @@ begin
 			// matrowget(POr,i,POrw);
 			// if(POrw.Shipd2 < POrw.Quant)then begin testf = true; end;
 		// end;
-		if(nonblank(RepSpec.f1) and POr.SalesMan!=RepSpec.f1)then begin testf = false; end;
+		if(nonblank(RepSpec.f1) and !SetInSet(RepSpec.f1,VendorBrandmngr[POr.VECode]))then begin testf = false; end;
+		if(nonblank(RepSpec.f3) and !SetInSet(RepSpec.f3,VendorPurchaser[POr.VECode]))then begin testf = false; end;
 		if(nonblank(RepSpec.f2) and POr.IDStatus!=RepSpec.f2)then begin testf = false; end;
+		// if(nonblank(RepSpec.f4) and POr.PayDeal!=RepSpec.f4)then begin testf = false; end;
 		if(RepSpec.sStartDate > POr.TransDate)then begin testf = false; TrHs = false; end;  
 		if(RepSpec.sEndDate < POr.TransDate)then begin testf = false; TrHs = false; end;
 		locf = false;
@@ -1436,6 +1470,8 @@ begin
 					outstring(31,0,POr.ShipCost,false);
 					outstring(32,0,POr.CustomsCost,false);
 				end;
+				outstring(46,0,"Brand.costs, AZN",false);
+				outstring(47,0,"Brand.costs bal",false);
 				if(nonblankdate(POr.IDMfrFinDate))then begin
 					if(POr.IDFreight=="Air Freight")then begin
 						outstring(44,0,  addday(POr.IDMfrFinDate,10),false);
