@@ -438,7 +438,7 @@ begin
 end;
 
 global
-updating function LongInt POChekItemStockInCompSenderDo(record POVc POp,string Location,integer OldComp)
+updating function LongInt POChekItemStockInCompSenderDo(record POVc POp,string Location,integer OldComp,var boolean OtherCurrf)
 begin
 	row POVc POrw;
   record LocationVc Lcr;
@@ -447,10 +447,12 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	LongInt i, compcnt, rwcnt, j, OldCompany, res;
-	boolean TrHs;
+	boolean TrHs, testf;
 	string 255 tstr;
 	record ItemStatusVc ISr,IS1r;
 	vector integer ItemQty;
+	record ItemHistVc IHr;
+	vector val ItmRowRemQty;
 	
 	res = -1;
 	
@@ -461,9 +463,10 @@ begin
 		end;
 	end;
 	
-	
+	OtherCurrf = false;
 	for (i=matrowcnt(POp)-1;i>=0;i=i-1) begin
 		matrowget(POp,i,POrw);
+		ItmRowRemQty[POrw.ArtCode] = ItemQty[POrw.ArtCode];
 		if (ItemQty[POrw.ArtCode]>0) then begin
 			ISr.Code = POrw.ArtCode;
 			ISr.Location = Location;
@@ -485,9 +488,32 @@ begin
 				end;
 			end;
 		end;
+		if (res>-1) then begin
+			goto LPOChekItemStockInCompSenderDo; 
+		end;
+		TrHs = true;
+		IHr.ArtCode = POrw.ArtCode;
+		while (LoopKey("ArtCode",IHr,1,TrHs)) begin
+			testf = true;
+			if (IHr.ArtCode!=POrw.ArtCode) then begin TrHs = false; testf = false; end;
+			if (ItmRowRemQty[POrw.ArtCode]==0) then begin TrHs = false; testf = false; end;
+			if (IHr.StockAffectf==0) then begin testf = false; end;
+			if (IHr.RemQty<1) then begin testf = false; end;
+			if (nonblank(Lcr.ConsigStockCode) and IHr.Location!=Location and IHr.Location!=Lcr.ConsigStockCode) then begin testf = false; end;
+			if (blank(Lcr.ConsigStockCode) and IHr.Location!=Location) then begin testf = false; end;
+			if (testf) then begin
+				if (IHr.CurncyCode!=POp.CurncyCode) then begin 
+					OtherCurrf = true; 
+					res = i;
+					goto LPOChekItemStockInCompSenderDo; 
+				end else begin
+					ItmRowRemQty[POrw.ArtCode] = ItmRowRemQty[POrw.ArtCode] - IHr.RemQty;
+				end;
+			end;
+		end;
+		resetloop(IHr);
 	end;
-	
-	
+	LPOChekItemStockInCompSenderDo:;
 	
 	POChekItemStockInCompSenderDo = res;
   return;
@@ -592,7 +618,7 @@ begin
 end;
 
 global
-updating function LongInt POCheckItemStockInCompSender(record POVc POp)
+updating function LongInt POCheckItemStockInCompSender(record POVc POp, var boolean OtherCurrf)
 begin
   record LocationVc Lcr;
 	record CompaniesBlock Compb;
@@ -612,7 +638,7 @@ begin
 		while (LoopMain(Lcr,1,TrHs)) begin
 			if (POp.ItemFromOtherSTockObj==Lcr.FOBSuplier) then begin
 				TrHs = false;
-				res = POChekItemStockInCompSenderDo(POp,Lcr.Code,OldCompany);
+				res = POChekItemStockInCompSenderDo(POp,Lcr.Code,OldCompany,OtherCurrf);
 			end;
 		end;
 		ResetLoop(Lcr);
@@ -2037,7 +2063,7 @@ begin
 	integer ErrRow;
 	record BPIBrandVc BBr;
 	string 255 vendors;
-	boolean findVendors;
+	boolean findVendors, OtherCurrf;
 	record LocationVc Locr;
 
 	res = 0;
@@ -2493,11 +2519,17 @@ begin
 	if (stat==updatemode) then begin
 		if ((POr.OKFlag!=0) and (PO2r.OKFlag==0)) then begin
 			if (nonblank(POr.ItemFromOtherSTockObj)) then begin
-				ErrRow = POCheckItemStockInCompSender(POr);
+				ErrRow = POCheckItemStockInCompSender(POr,OtherCurrf);
 				if (ErrRow>-1) then begin
-					RecordCheckError(36373,"",ErrRow,"ArtCode");      
-					res = -1;
-					goto LPOVcRecordCheck;
+					if (OtherCurrf) then begin
+						RecordCheckError(36382,"",ErrRow,"ArtCode");      
+						res = -1;
+						goto LPOVcRecordCheck;
+					end else begin
+						RecordCheckError(36373,"",ErrRow,"ArtCode");      
+						res = -1;
+						goto LPOVcRecordCheck;
+					end;
 				end;
 				
 				i = 0;
@@ -2544,12 +2576,19 @@ begin
 	if (stat==insertmode) then begin
 		if (POr.OKFlag!=0) then begin
 			if (nonblank(POr.ItemFromOtherSTockObj)) then begin
-				ErrRow = POCheckItemStockInCompSender(POr);
+				ErrRow = POCheckItemStockInCompSender(POr,OtherCurrf);
 				if (ErrRow>-1) then begin
-					RecordCheckError(36373,"",ErrRow,"ArtCode");      
-					res = -1;
-					goto LPOVcRecordCheck;
+					if (OtherCurrf) then begin
+						RecordCheckError(36382,"",ErrRow,"ArtCode");      
+						res = -1;
+						goto LPOVcRecordCheck;
+					end else begin
+						RecordCheckError(36373,"",ErrRow,"ArtCode");      
+						res = -1;
+						goto LPOVcRecordCheck;
+					end;
 				end;
+				
 				i = 0;
 				set = "";
 				ExtractObj(POr.Objects,i,obj);
