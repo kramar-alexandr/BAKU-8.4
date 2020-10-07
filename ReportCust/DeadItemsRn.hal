@@ -1,101 +1,183 @@
+external procedure RecompileHALMn();
+
 //server-only
 global procedure DeadItemsRn(record RcVc RepSpec)
 begin
 	record ItemHistVc IHr;
-	record INVc INr;
+	record INVc INr,kkINr;
 	record BPIBrandVc BPIBrandr;
 	record ItemStatusVc ISr;
 	record IVVc IVr;
 	record SHVc SHr;
 	vector val salesbystock,instockbystock;
 	boolean testf,TrHs,testf1;
-	array string 100 salestags,stocktags;
-	integer i;
+	array string 100 salestags,stocktags,adeaditems;
+	integer i,j;
+	record ItemDuplicatesVc IDr;
+	vector integer vdeaditems;
+	string 30 itemcode;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBrw;
 	
 	startreportnoheaderjob("Dead Stock Report");
+	
+	setcompany(1,false);
+	
+	weboutstring("Brand " & RepSpec.f1);
+	weboutstring("From-to " & RepSpec.sStartDate & "-" & RepSpec.sEndDate);
+	weboutstring("<BR>");
+	
 	
 	if(nonblank(RepSpec.f1))then begin
 		BPIBrandr.Code = RepSpec.f1;
 		if(readfirstmain(BPIBrandr,1,true))then begin
-			while(loopmain(INr,1,true))begin
-				testf = true;
-				if(INr.BPIBrand!=BPIBrandr.Code)then begin testf = false; end;
-				
-				if(testf)then begin
-					ClearVector(salesbystock);
-					ClearVector(instockbystock);
-					ISr.Code = INr.Code;
-					TrHs = true;
-					while(loopmain(ISr,1,TrHs))begin
-						if(ISr.Code!=INr.Code)then begin TrHs = false; end;
-						
-						if(TrHs)then begin
-							instockbystock[ISr.Location] = ISr.Instock;
+			for(j=0;j<matrowcnt(CBb);j=j+1)begin
+				matrowget(CBb,j+1,CBrw);
+				if(CBrw.ActiveStatus==0)then begin
+					SetCompany(i+1,false);
+					INr.Code = "";
+					resetloop(INr);
+					while(loopmain(INr,1,true))begin
+						itemcode = INr.Code;
+						IDr.DupCode = INr.Code;
+						readfirstkey("DupCode",IDr,1,true);
+						if(nonblank(IDr.OrigCode))then begin
+							itemcode = IDr.OrigCode;
 						end;
-					end;
-					resetloop(ISr);
-					IHr.ArtCode = INr.Code;
-					IHr.TransDate = currentdate;
-					TrHs = true;
-					while(loopbackkey("ArtCode",IHr,2,TrHs))begin
-						testf1 = true;
-						if(IHr.TransDate<RepSpec.sStartDate)then begin TrHs = false; testf1 = false; end;
-						if(IHr.ArtCode!=INr.Code)then begin TrHs = false; testf1 = false; end;
-						if(IHr.StockAffectf==0)then begin testf1 = false; end;
+						if(currentcompany==18)then begin
+							kkINr.Code = itemcode;
+							if(readfirstmain(kkINr,1,true))then begin
+								if(nonblank(kkINr.AlternativeCode))then begin
+									itemcode = kkINr.AlternativeCode;
+								end;
+							end;
+						end;
+						testf = true;
+						if(INr.BPIBrand!=BPIBrandr.Code)then begin testf = false; end;
+				
+						if(testf)then begin
+							ClearVector(salesbystock);
+							ClearVector(instockbystock);
+							ISr.Code = INr.Code;
+							TrHs = true;
+							while(loopmain(ISr,1,TrHs))begin
+								if(ISr.Code!=INr.Code)then begin TrHs = false; end;
 						
-						if(testf1)then begin
-							instockbystock[IHr.Location] = instockbystock[IHr.Location] - IHr.Qty;
-							if(dateinrange(IHr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate))then begin
-								if(IHr.FileName=="IVVc")then begin
-									IVr.SerNr = IHr.TransNr;
-									if(readfirstmain(IVr,1,true))then begin
-										if(IVr.Invalid==0)then begin
-											if(left(IVr.CustCode,3)!="FOB")then begin
-												salesbystock[IHr.Location] = salesbystock[IHr.Location] - IHr.Qty;
+								if(TrHs)then begin
+									instockbystock[ISr.Location] = ISr.Instock;
+								end;
+							end;
+							resetloop(ISr);
+							IHr.ArtCode = INr.Code;
+							IHr.TransDate = currentdate;
+							TrHs = true;
+							while(loopbackkey("ArtCode",IHr,2,TrHs))begin
+								testf1 = true;
+								if(IHr.TransDate<RepSpec.sStartDate)then begin TrHs = false; testf1 = false; end;
+								if(IHr.ArtCode!=INr.Code)then begin TrHs = false; testf1 = false; end;
+								if(IHr.StockAffectf==0)then begin testf1 = false; end;
+						
+								if(testf1)then begin
+									instockbystock[IHr.Location] = instockbystock[IHr.Location] - IHr.Qty;
+									if(dateinrange(IHr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate))then begin
+										if(IHr.FileName=="IVVc")then begin
+											IVr.SerNr = IHr.TransNr;
+											if(readfirstmain(IVr,1,true))then begin
+												if(IVr.Invalid==0)then begin
+													if(left(IVr.CustCode,3)!="FOB")then begin
+														salesbystock[IHr.Location] = salesbystock[IHr.Location] - IHr.Qty;
+													end;
+												end;
+											end;
+										end;
+										if(IHr.FileName=="SHVc")then begin
+											SHr.SerNr = IHr.TransNr;
+											if(readfirstmain(SHr,1,true))then begin
+												if(left(SHr.CustCode,3)!="FOB")then begin
+													salesbystock[IHr.Location] = salesbystock[IHr.Location] - IHr.Qty;
+												end;
 											end;
 										end;
 									end;
-								end;
-								if(IHr.FileName=="SHVc")then begin
-									SHr.SerNr = IHr.TransNr;
-									if(readfirstmain(SHr,1,true))then begin
-										if(left(SHr.CustCode,3)!="FOB")then begin
-											salesbystock[IHr.Location] = salesbystock[IHr.Location] - IHr.Qty;
-										end;
-									end;
-								end;
-							end;
 							
-						end;
-					end;
-					resetloop(IHr);
+								end;
+							end;
+							resetloop(IHr);
 					
-					getvectortags(instockbystock,stocktags);
-					getvectortags(salesbystock,salestags);
-					if(stocktags.length>0)then begin
-						for(i=0;i<stocktags.length;i=i+1)begin
-							if(instockbystock[stocktags[i]]!=0)then begin
-								startformat(15);
-									outstring(0,0,INr.Code,false);
-									outstring(80,0,INr.Name,false);
-									outstring(180,0,instockbystock[stocktags[i]],false);
-									outstring(280,0,salesbystock[stocktags[i]],false);
-									if(salesbystock[stocktags[i]]==0)then begin
-										outstring(280,0,"Dead Item",false);
+							getvectortags(instockbystock,stocktags);
+							getvectortags(salesbystock,salestags);
+							if(stocktags.length>0)then begin
+								for(i=0;i<stocktags.length;i=i+1)begin
+									if(instockbystock[stocktags[i]]!=0)then begin
+								
+										if(salesbystock[stocktags[i]]!=0)then begin
+											vdeaditems[itemcode] = 2;									
+										end;
+										if(salesbystock[stocktags[i]]==0)then begin
+											if(vdeaditems[itemcode]!=2)then begin
+												vdeaditems[itemcode] = 1;
+												
+												weboutstring(itemcode & " compnr " & currentcompany);
+												weboutstring("<BR>");
+											end;
+										end;
+										/*startformat(15);
+											outstring(0,0,INr.Code,false);
+											outstring(80,0,INr.Name,false);
+											outstring(180,0,instockbystock[stocktags[i]],false);
+											outstring(280,0,salesbystock[stocktags[i]],false);
+											if(salesbystock[stocktags[i]]==0)then begin
+												outstring(280,0,"Dead Item",false);
+											end;
+										endformat;*/
 									end;
-								endformat;
+								end;
 							end;
 						end;
 					end;
-					
 				end;
-	
 			end;
 		end;
 	end;
-	
+	GetVectorTags(vdeaditems,adeaditems);
+	for(i=0;i<adeaditems.length;i=i+1)begin
+		if(vdeaditems[adeaditems[i]]==1)then begin
+			weboutstring(adeaditems[i]);
+			weboutstring("<BR>");
+		end;
+	end;
 	
 	endjob;
 
-return
+return;
 end;
+
+
+global webpublic procedure WebDeadItemsRn()
+begin
+	string 20 brand,sd,ed;
+	record RcVc RepSpec;
+	
+	
+	brand = WebGetArg("brand");
+	sd = WebGetArg("sd");
+	ed = WebGetArg("ed");
+	
+	RepSpec.f1 = brand;
+	RepSpec.sStartDate = stringtodate(sd);
+	RepSpec.sEndDate = stringtodate(ed);
+	
+	DeadItemsRn(RepSpec);
+	
+return;
+end;
+
+global webpublic procedure WebRecompile()
+begin
+	setcompany(1,false);	
+	
+	RecompileHALMn;
+	
+return;
+end;
+
