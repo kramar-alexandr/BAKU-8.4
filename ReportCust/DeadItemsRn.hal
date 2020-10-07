@@ -2,7 +2,7 @@
 global procedure DeadItemsRn(record RcVc RepSpec)
 begin
 	record ItemHistVc IHr;
-	record INVc INr;
+	record INVc INr,kkINr;
 	record BPIBrandVc BPIBrandr;
 	record ItemStatusVc ISr;
 	record IVVc IVr;
@@ -11,6 +11,9 @@ begin
 	boolean testf,TrHs,testf1;
 	array string 100 salestags,stocktags;
 	integer i;
+	record ItemDuplicatesVc IDr;
+	vector integer vdeaditems;
+	string 30 itemcode;
 	
 	startreportnoheaderjob("Dead Stock Report");
 	
@@ -18,6 +21,20 @@ begin
 		BPIBrandr.Code = RepSpec.f1;
 		if(readfirstmain(BPIBrandr,1,true))then begin
 			while(loopmain(INr,1,true))begin
+				itemcode = INr.Code;
+				IDr.DupCode = INr.Code;
+				readfirstkey("DupCode",IDr,1,true);
+				if(nonblank(IDr.OrigCode))then begin
+					itemcode = IDr.OrigCode;
+				end;
+				if(currentcompany==18)then begin
+					kkINr.Code = itemcode;
+					if(readfirstmain(kkINr,1,true))then begin
+						if(nonblank(kkINr.AlternativeCode))then begin
+							itemcode = kkINr.AlternativeCode;
+						end;
+					end;
+				end;
 				testf = true;
 				if(INr.BPIBrand!=BPIBrandr.Code)then begin testf = false; end;
 				
@@ -75,6 +92,15 @@ begin
 					if(stocktags.length>0)then begin
 						for(i=0;i<stocktags.length;i=i+1)begin
 							if(instockbystock[stocktags[i]]!=0)then begin
+								
+								if(salesbystock[stocktags[i]]!=0)then begin
+									vdeaditems[itemcode] = 2;									
+								end;
+								if(salesbystock[stocktags[i]]==0)then begin
+									if(vdeaditems[itemcode]!=2)then begin
+										vdeaditems[itemcode] = 1;
+									end;
+								end;
 								startformat(15);
 									outstring(0,0,INr.Code,false);
 									outstring(80,0,INr.Name,false);
