@@ -42,13 +42,7 @@ begin
 					INr.Code = "";
 					resetloop(INr);
 					INTrHs = true;
-					if(nonblank(RepSpec.f2))then begin
-						INr.Code = RepSpec.f2;
-					end;
 					while(loopmain(INr,1,INTrHs))begin
-						if(nonblank(RepSpec.f2) and INr.Code!=RepSpec.f2)then begin
-							INTrHs = false;
-						end;
 						itemcode = INr.Code;
 						IDr.DupCode = INr.Code;
 						readfirstkey("DupCode",IDr,1,true);
@@ -62,10 +56,19 @@ begin
 									itemcode = kkINr.AlternativeCode;
 								end;
 							end;
+							
+							if(left(itemcode,3)=="IN_")then begin
+								CIr.Code = itemcode;
+								if(readfirstmain(CIr,1,true))then begin
+									itemcode = CIr.LocCode;
+								end;
+							end;
+							
 						end;
 						testf = true;
 						if(INr.BPIBrand!=BPIBrandr.Code)then begin testf = false; end;
 						if(INr.ConsgType!=0 and INr.ConsgType!=1)then begin testf = false; end;
+						if(itemcode!=RepSpec.f2 and nonblank(RepSpec.f2))then begin testf = false; end;
 						
 						
 						if(testf)then begin
@@ -78,7 +81,7 @@ begin
 								if(ISr.Code!=INr.Code)then begin TrHs = false; end;
 								if(TrHs and ISr.Location!=";;;")then begin
 									instockbystock[ISr.Location] = ISr.Instock;
-									lastday[IHr.Location] = ISr.Instock;
+									lastday[ISr.Location] = ISr.Instock;
 								end;
 							end;
 							resetloop(ISr);
@@ -133,12 +136,16 @@ begin
 								for(i=0;i<stocktags.length;i=i+1)begin
 									if(instockbystock[stocktags[i]]!=0)then begin
 										if(salesbystock[stocktags[i]]!=0)then begin
-											vdeaditems[itemcode] = 2;									
+											vdeaditems[itemcode] = 2;	
+											vdeaditemsstock[itemcode & ":" & currentcompany] = vdeaditemsstock[itemcode & ":" & currentcompany] + lastday[stocktags[i]];								
 										end;
 										if(salesbystock[stocktags[i]]==0)then begin
 											if(vdeaditems[itemcode]!=2)then begin
 												vdeaditems[itemcode] = 1;
 												vdeaditemsstock[itemcode & ":" & currentcompany] = vdeaditemsstock[itemcode & ":" & currentcompany] + lastday[stocktags[i]];
+												if(nonblank(RepSpec.f2))then begin
+													logtext(0,"vdeaditemsstock " & itemcode & ":" & currentcompany & " + " & lastday[stocktags[i]]);
+												end;
 											end;
 										end;
 									end;
@@ -184,11 +191,20 @@ begin
 								if(firstout==false)then begin
 									SetCompany(j+1,false);
 									INr.Code = adeaditems[i];
+									if(currentcompany==18)then begin
+										CIr.LocCode = adeaditems[i];
+										CIr.BrandCode = BPIBrandr.Code;
+										if(readfirstkey("LocCodeBrand",CIr,2,true))then begin
+											INr.Code = CIr.Code;
+										end;
+									end;
+									
 									if(readfirstmain(INr,1,true))then begin
-										weboutstring("<td>" & INr.Code & "</td>");
+										weboutstring("<td>" & adeaditems[i] & "</td>");
 										weboutstring("<td>" & INr.Name & "</td>");
 										weboutstring("<td>" & BPIBrandr.Name & "</td>");
 									end else begin
+										
 										weboutstring("<td>" & adeaditems[i] & "</td>");
 										weboutstring("<td></td>");
 										weboutstring("<td></td>");
