@@ -1,5 +1,5 @@
 external procedure RecompileHALMn();
-
+external procedure MySortStringArray(var array string,integer);
 //server-only
 global procedure DeadItemsRn(record RcVc RepSpec)
 begin
@@ -9,15 +9,17 @@ begin
 	record ItemStatusVc ISr;
 	record IVVc IVr;
 	record SHVc SHr;
-	vector val salesbystock,instockbystock;
-	boolean testf,TrHs,testf1,INTrHs;
+	vector val salesbystock,instockbystock,lastday;
+	boolean testf,TrHs,testf1,INTrHs,firstout;
 	array string 100 salestags,stocktags,adeaditems;
-	integer i,j;
+	integer i,j,acnt;
 	record ItemDuplicatesVc IDr;
-	vector integer vdeaditems;
+	vector integer vdeaditems,vdeaditemsstock;
 	string 30 itemcode;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
+	record ConsItemVc CIr;
+	record LocationVc Locr;
 	
 	startreportnoheaderjob("Dead Stock Report");
 	
@@ -62,16 +64,20 @@ begin
 						end;
 						testf = true;
 						if(INr.BPIBrand!=BPIBrandr.Code)then begin testf = false; end;
-				
+						if(INr.ConsgType!=0 and INr.ConsgType!=1)then begin testf = false; end;
+						
+						
 						if(testf)then begin
 							ClearVector(salesbystock);
 							ClearVector(instockbystock);
+							ClearVector(lastday);
 							ISr.Code = INr.Code;
 							TrHs = true;
 							while(loopmain(ISr,1,TrHs))begin
 								if(ISr.Code!=INr.Code)then begin TrHs = false; end;
 								if(TrHs and ISr.Location!=";;;")then begin
 									instockbystock[ISr.Location] = ISr.Instock;
+									lastday[IHr.Location] = ISr.Instock;
 								end;
 							end;
 							resetloop(ISr);
@@ -88,6 +94,9 @@ begin
 								if(testf1)then begin
 									//logtext(0,"instockbystock " & instockbystock[IHr.Location] & " location " & IHr.Location & " -Qty " & IHr.Qty & " for artcode " & IHr.ArtCode & " to date " & IHr.TransDate);
 									instockbystock[IHr.Location] = instockbystock[IHr.Location] - IHr.Qty;
+									if(IHr.TransDate>RepSpec.sEndDate)then begin
+										lastday[IHr.Location] = lastday[IHr.Location] - IHr.Qty;
+									end;
 									if(dateinrange(IHr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate))then begin
 										if(IHr.FileName=="IVVc")then begin
 											IVr.SerNr = IHr.TransNr;
@@ -125,9 +134,10 @@ begin
 										if(salesbystock[stocktags[i]]==0)then begin
 											if(vdeaditems[itemcode]!=2)then begin
 												vdeaditems[itemcode] = 1;
+												vdeaditemsstock[itemcode & ":" & currentcompany] = vdeaditemsstock[itemcode & ":" & currentcompany] + lastday[stocktags[i]];
 												
-												weboutstring(itemcode & " compnr " & currentcompany & stocktags[i]);
-												weboutstring("<BR>");
+												//weboutstring(itemcode & " compnr " & currentcompany & stocktags[i]);
+												//weboutstring("<BR>");
 											end;
 										end;
 										/*startformat(15);
@@ -146,15 +156,64 @@ begin
 					end;
 				end;
 			end;
+			
+			
+			GetVectorTags(vdeaditems,adeaditems);
+			acnt = adeaditems.length;
+			MySortStringArray(adeaditems,acnt);
+			
+			firstout = false;
+					
+			for(i=0;i<acnt;i=i+1)begin
+				if(vdeaditems[adeaditems[i]]==1)then begin
+					weboutstring(adeaditems[i]);
+					weboutstring("<BR>");
+					for(j=0;j<matrowcnt(CBb);j=j+1)begin
+						matrowget(CBb,j+1,CBrw);
+						if(CBrw.ActiveStatus==0)then begin
+							weboutstring("&nbsp");
+							weboutstring(CBrw.CompName);
+							weboutstring("&nbsp");
+							weboutstring(vdeaditemsstock[adeaditems[i] & ":" & j+1]);
+							weboutstring("<BR>");
+						end;
+					end;					
+				end;
+			end;
+			
+			/*for(j=0;j<matrowcnt(CBb);j=j+1)begin
+				matrowget(CBb,j+1,CBrw);
+				if(CBrw.ActiveStatus==0)then begin
+					SetCompany(j+1,false);
+					firstout = false;
+					
+					for(i=0;i<acnt;i=i+1)begin
+						if(vdeaditems[adeaditems[i]]==1)then begin
+							
+							
+							
+							//DIr.OrigCode = adeaditems[i];
+							//if(readfirst)then begin
+							
+							//end;
+							INr.Code = adeaditems[i];
+							if(readfirstmain(INr,1,true))then begin
+								if(firstout==false)then begin
+									weboutstring(CBrw.CompName);
+									weboutstring("<BR>");
+									firstout = true;
+								end;
+								weboutstring(adeaditems[i]);
+								weboutstring("<BR>");
+							end;
+						end;
+					end;
+				end;
+			end;*/
+			
 		end;
 	end;
-	GetVectorTags(vdeaditems,adeaditems);
-	for(i=0;i<adeaditems.length;i=i+1)begin
-		if(vdeaditems[adeaditems[i]]==1)then begin
-			weboutstring(adeaditems[i]);
-			weboutstring("<BR>");
-		end;
-	end;
+	
 	
 	endjob;
 
