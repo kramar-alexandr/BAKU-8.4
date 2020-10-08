@@ -15,7 +15,7 @@ begin
 	integer i,j,acnt;
 	record ItemDuplicatesVc IDr;
 	vector integer vdeaditems,vdeaditemsstock;
-	vector boolean exitemincomp;
+	vector boolean exitemincomp,compexists;
 	string 30 itemcode;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
@@ -136,6 +136,7 @@ begin
 											if(vdeaditems[itemcode]!=2)then begin
 												vdeaditems[itemcode] = 1;
 												vdeaditemsstock[itemcode & ":" & currentcompany] = vdeaditemsstock[itemcode & ":" & currentcompany] + lastday[stocktags[i]];
+												compexists[currentcompany] = true;
 											end;
 										end;
 									end;
@@ -151,27 +152,64 @@ begin
 			acnt = adeaditems.length;
 			MySortStringArray(adeaditems,acnt);
 			
-			firstout = false;
-					
+			
+			weboutstring("<table>");
+			weboutstring("<tr>");
+			weboutstring("<td>Item Code</td>");
+			weboutstring("<td>Name</td>");
+			weboutstring("<td>Brand</td>");
+			for(j=0;j<matrowcnt(CBb);j=j+1)begin
+						matrowget(CBb,j,CBrw);
+						if(CBrw.ActiveStatus==0)then begin
+							if(compexists[j+1])then begin
+								weboutstring("<td>" & CBrw.CompName & "</td>");
+							end;
+						end;
+			end;
+			weboutstring("</tr>");
+			
 			for(i=0;i<acnt;i=i+1)begin
 				if(vdeaditems[adeaditems[i]]==1)then begin
-					weboutstring(adeaditems[i]);
-					weboutstring("<BR>");
+					//weboutstring(adeaditems[i]);
+					//weboutstring("<BR>");
+					firstout = false;
+					weboutstring("<tr>");
 					for(j=0;j<matrowcnt(CBb);j=j+1)begin
 						matrowget(CBb,j,CBrw);
 						if(CBrw.ActiveStatus==0)then begin
 							if(exitemincomp[adeaditems[i] & ":" & j+1])then begin
-								weboutstring("&nbsp");
-								weboutstring(CBrw.CompName);
-								weboutstring("&nbsp");
-								weboutstring(vdeaditemsstock[adeaditems[i] & ":" & j+1]);
-								weboutstring("<BR>");
+								
+								if(firstout==false)then begin
+									SetCompany(j+1,false);
+									INr.Code = adeaditems[i];
+									if(readfirstmain(INr,1,true))then begin
+										weboutstring("<td>" & INr.Code & "</td>");
+										weboutstring("<td>" & INr.Name & "</td>");
+										weboutstring("<td>" & BPIBrandr.Name & "</td>");
+									end else begin
+										weboutstring("<td>" & adeaditems[i] & "</td>");
+										weboutstring("<td></td>");
+										weboutstring("<td></td>");
+									end;
+									firstout = true;
+								end;
+							end;
+						end;
+					end;	
+					for(j=0;j<matrowcnt(CBb);j=j+1)begin
+						matrowget(CBb,j,CBrw);
+						if(CBrw.ActiveStatus==0 and compexists[j+1])then begin
+							if(exitemincomp[adeaditems[i] & ":" & j+1])then begin
+								weboutstring("<td>" & vdeaditemsstock[adeaditems[i] & ":" & j+1] & "</td>");
+							end else begin
+								weboutstring("<td></td>");
 							end;
 						end;
 					end;					
+					weboutstring("</tr>");				
 				end;
 			end;
-			
+			weboutstring("</table>");
 			/*for(j=0;j<matrowcnt(CBb);j=j+1)begin
 				matrowget(CBb,j+1,CBrw);
 				if(CBrw.ActiveStatus==0)then begin
