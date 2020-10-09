@@ -1,5 +1,8 @@
 external procedure RecompileHALMn();
 external procedure MySortStringArray(var array string,integer);
+external  function string 100 BPICodeToName(string);
+
+
 //server-only
 global procedure DeadItemsRn(record RcVc RepSpec)
 begin
@@ -21,10 +24,18 @@ begin
 	row CompaniesBlock CBrw;
 	record ConsItemVc CIr;
 	record LocationVc Locr;
+	integer curcom;
 	
 	startreportnoheaderjob("Dead Stock Report");
 	
+	curcom = currentcompany;
+	
 	setcompany(1,false);
+	
+	StartFormat(15);
+		outstring(0,0,"Brand " & RepSpec.f1,false);
+		outstring(100,0,"From-to " & RepSpec.sStartDate & "-" & RepSpec.sEndDate,false);
+	endformat;
 	
 	weboutstring("Brand " & RepSpec.f1);
 	weboutstring("From-to " & RepSpec.sStartDate & "-" & RepSpec.sEndDate);
@@ -36,7 +47,7 @@ begin
 		if(readfirstmain(BPIBrandr,1,true))then begin
 			for(j=0;j<matrowcnt(CBb);j=j+1)begin
 				matrowget(CBb,j,CBrw);
-				if(CBrw.ActiveStatus==0)then begin
+				if(CBrw.ActiveStatus==0 and CBrw.CompName!="Outlet")then begin
 					SetCompany(j+1,false);
 					//logtext(0,"DeadItemsRn SetCompany " & j+1);
 					INr.Code = "";
@@ -104,7 +115,7 @@ begin
 										lastday[IHr.Location] = lastday[IHr.Location] - IHr.Qty;
 									end;
 									if(dateinrange(IHr.TransDate,RepSpec.sStartDate,RepSpec.sEndDate))then begin
-										if(IHr.FileName=="IVVc")then begin
+										if(IHr.FileName=="IVVc" and IHr.Qty<0)then begin
 											IVr.SerNr = IHr.TransNr;
 											if(readfirstmain(IVr,1,true))then begin
 												if(IVr.Invalid==0)then begin
@@ -134,7 +145,7 @@ begin
 								exitemincomp[itemcode & ":" & currentcompany] = true;
 								compexists[currentcompany] = true;
 								for(i=0;i<stocktags.length;i=i+1)begin
-									if(instockbystock[stocktags[i]]!=0)then begin
+									if(instockbystock[stocktags[i]]!=0 and lastday[stocktags[i]]!=0)then begin
 										if(salesbystock[stocktags[i]]!=0)then begin
 											vdeaditems[itemcode] = 2;	
 											vdeaditemsstock[itemcode & ":" & currentcompany] = vdeaditemsstock[itemcode & ":" & currentcompany] + lastday[stocktags[i]];								
@@ -161,21 +172,66 @@ begin
 			acnt = adeaditems.length;
 			MySortStringArray(adeaditems,acnt);
 			
+			StartFormat(15);
+				outstring(0,0,"Item Code",false);
+				outstring(0,0,"Name",false);
+				outstring(0,0,"Brand",false);
+				outstring(0,0,"Group",false);
+				outstring(0,0,"SubGr.",false);
+				outstring(0,0,"Categ.",false);
+				outstring(0,0,"Mat.",false);
+				outstring(0,0,"Col.",false);
+				outstring(0,0,"Shape",false);
+				outstring(0,0,"Size",false);
+				outstring(0,0,"Use",false);
+				outstring(0,0,"Sex",false);
+				outstring(0,0,"Plat.",false);
+				outstring(0,0,"Clar.",false);
+				outstring(0,0,"Wght",false);
+				outstring(0,0,"Cut",false);
+				outstring(0,0,"Stone",false);
+				outstring(0,0,"Strap",false);
+				outstring(0,0,"Odour",false);
+				outstring(0,0,"CC Collection",false);
+				outstring(0,0,"Product Group",false);
 			
 			weboutstring("<table>");
 			weboutstring("<tr>");
 			weboutstring("<td>Item Code</td>");
 			weboutstring("<td>Name</td>");
 			weboutstring("<td>Brand</td>");
+			
+			weboutstring("<td>Group</td>");
+			weboutstring("<td>SubGr.</td>");
+			weboutstring("<td>Categ.</td>");
+			weboutstring("<td>Mat.</td>");
+			weboutstring("<td>Col.</td>");
+			weboutstring("<td>Shape</td>");
+			weboutstring("<td>Size</td>");
+			weboutstring("<td>Use</td>");
+			weboutstring("<td>Sex</td>");
+			weboutstring("<td>Plat.</td>");
+			weboutstring("<td>Clar.</td>");
+			weboutstring("<td>Wght</td>");
+			weboutstring("<td>Cut</td>");
+			weboutstring("<td>Stone</td>");
+			weboutstring("<td>Strap</td>");
+			weboutstring("<td>Odour</td>");
+			weboutstring("<td>CC Collection</td>");
+			weboutstring("<td>Product Group</td>");
+			
+			
 			for(j=0;j<matrowcnt(CBb);j=j+1)begin
 						matrowget(CBb,j,CBrw);
-						if(CBrw.ActiveStatus==0)then begin
+						if(CBrw.ActiveStatus==0 and CBrw.CompName!="Outlet")then begin
 							if(compexists[j+1])then begin
 								weboutstring("<td>" & CBrw.CompName & "</td>");
+								outstring(0,0,CBrw.CompName,false);
 							end;
 						end;
 			end;
 			weboutstring("</tr>");
+			endformat;
 			
 			for(i=0;i<acnt;i=i+1)begin
 				if(vdeaditems[adeaditems[i]]==1)then begin
@@ -183,9 +239,10 @@ begin
 					//weboutstring("<BR>");
 					firstout = false;
 					weboutstring("<tr>");
+					startformat(15);
 					for(j=0;j<matrowcnt(CBb);j=j+1)begin
 						matrowget(CBb,j,CBrw);
-						if(CBrw.ActiveStatus==0)then begin
+						if(CBrw.ActiveStatus==0 and CBrw.CompName!="Outlet")then begin
 							if(exitemincomp[adeaditems[i] & ":" & j+1])then begin
 								
 								if(firstout==false)then begin
@@ -201,9 +258,51 @@ begin
 									
 									if(readfirstmain(INr,1,true))then begin
 										firstout = true;
+										
+										outstring(0,0,adeaditems[i],false);
+										outstring(0,0,INr.Name,false);
+										outstring(0,0,BPIBrandr.Name,false);										
+										outstring(0,0,BPICodeToName(INr.BPIGroup),false);
+										outstring(0,0,BPICodeToName(INr.BPISubGroup),false);
+										outstring(0,0,BPICodeToName(INr.BPICategory),false);
+										outstring(0,0,BPICodeToName(INr.BPIMaterial),false);
+										outstring(0,0,BPICodeToName(INr.BPIColor),false);
+										outstring(0,0,BPICodeToName(INr.BPIShape),false);
+										outstring(0,0,BPICodeToName(INr.BPISize),false);
+										outstring(0,0,BPICodeToName(INr.BPIUse),false);
+										outstring(0,0,BPICodeToName(INr.BPISex),false);
+										outstring(0,0,BPICodeToName(INr.BPIPlating),false);
+										outstring(0,0,BPICodeToName(INr.BPIClarity),false);
+										outstring(0,0,BPICodeToName(INr.BPIWeight),false);
+										outstring(0,0,BPICodeToName(INr.BPICut),false);
+										outstring(0,0,BPICodeToName(INr.BPIStone),false);
+										outstring(0,0,BPICodeToName(INr.BPIStrap),false);
+										outstring(0,0,BPICodeToName(INr.BPIOdour),false);
+										outstring(0,0,INr.MainDisp,false);
+										outstring(0,0,INr.SNOne,false);
+										
 										weboutstring("<td>" & adeaditems[i] & "</td>");
 										weboutstring("<td>" & INr.Name & "</td>");
-										weboutstring("<td>" & BPIBrandr.Name & "</td>");
+										weboutstring("<td>" & BPIBrandr.Name & "</td>");										
+										weboutstring("<td>" & BPICodeToName(INr.BPIGroup) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPISubGroup) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPICategory) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIMaterial) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIColor) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIShape) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPISize) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIUse) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPISex) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIPlating) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIClarity) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIWeight) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPICut) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIStone) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIStrap) & "</td>");
+										weboutstring("<td>" & BPICodeToName(INr.BPIOdour) & "</td>");
+										weboutstring("<td>" & INr.MainDisp & "</td>");
+										weboutstring("<td>" & INr.SNOne & "</td>");
+										
 									end;
 								end;
 							end;
@@ -214,57 +313,35 @@ begin
 						weboutstring("<td>" & adeaditems[i] & "</td>");
 						weboutstring("<td></td>");
 						weboutstring("<td></td>");
+						outstring(0,0,adeaditems[i],false);
+						outstring(0,0,"",false);
+						outstring(0,0,"",false);
 					end;		
 					
 					for(j=0;j<matrowcnt(CBb);j=j+1)begin
 						matrowget(CBb,j,CBrw);
-						if(CBrw.ActiveStatus==0 and compexists[j+1])then begin
+						if(CBrw.ActiveStatus==0 and compexists[j+1] and CBrw.CompName!="Outlet")then begin
 							if(exitemincomp[adeaditems[i] & ":" & j+1])then begin
 								weboutstring("<td>" & vdeaditemsstock[adeaditems[i] & ":" & j+1] & "</td>");
+								outstring(0,0,vdeaditemsstock[adeaditems[i] & ":" & j+1],false);
 							end else begin
 								weboutstring("<td></td>");
+								outstring(0,0,"",false);
 							end;
 						end;
-					end;					
+					end;			
+					endformat;		
 					weboutstring("</tr>");				
 				end;
 			end;
-			weboutstring("</table>");
-			/*for(j=0;j<matrowcnt(CBb);j=j+1)begin
-				matrowget(CBb,j+1,CBrw);
-				if(CBrw.ActiveStatus==0)then begin
-					SetCompany(j+1,false);
-					firstout = false;
-					
-					for(i=0;i<acnt;i=i+1)begin
-						if(vdeaditems[adeaditems[i]]==1)then begin
-							
-							
-							
-							//DIr.OrigCode = adeaditems[i];
-							//if(readfirst)then begin
-							
-							//end;
-							INr.Code = adeaditems[i];
-							if(readfirstmain(INr,1,true))then begin
-								if(firstout==false)then begin
-									weboutstring(CBrw.CompName);
-									weboutstring("<BR>");
-									firstout = true;
-								end;
-								weboutstring(adeaditems[i]);
-								weboutstring("<BR>");
-							end;
-						end;
-					end;
-				end;
-			end;*/
-			
+			weboutstring("</table>");			
 		end;
 	end;
 	
 	
 	endjob;
+	
+	setcompany(curcom,false);
 
 return;
 end;
