@@ -39,7 +39,7 @@ external procedure NextCode(string,var string);
 external procedure CheckFlush(var Integer,Integer);
 external procedure FillClassInM4Text(var record GlobalItemVc, string, string, string, string, 
 																																			string, string, string, area);
-external updating procedure CreateChiccoGlobalItem(string, string, string, string);
+external updating procedure CreateChiccoGlobalItem(string, string, string, string, boolean);
 external updating procedure Instock0(string);
 external function boolean NewIN2DClassProductNameCodeEFAfter(integer,integer,integer,var record NewINVc);
 external function boolean NewIN2DClassSubGroupClEFAfter(integer,integer,integer,var record NewINVc);
@@ -13936,7 +13936,7 @@ record CompaniesBlock Compb;
 row CompaniesBlock Comprw;
 vector boolean Errf, Classf;
 array string 255 ItemCode,ItemName,ItemBrand,ItemPrice;
-boolean INrf, ExtPrItemf;
+boolean INrf, ExtPrItemf, namef;
 vector string 255 classCode;
 string 255 filename, FinRow;
 LongInt rcnt, r, okend ;
@@ -13993,13 +13993,22 @@ boolean TrHs
 			end;
 		end;
 		if (NextImportLine(true)) then begin end;
+		tstr = ImportField;
+		tstr = ImportField;
+		if (tstr=="name") then begin
+			namef = true;
+			logtext(0,namef & " NAMEFLAG");
+		end;
+		logtext(0,namef & " NAMEFLAG");
 		if (NextImportLine(true)) then begin end;
 		i=0;
 		while (TestEOF()==false) begin
 			tstr = trim(ImportField);
 			ItemCode[i] = tstr;
-			tstr = trim(ImportField);
-			ItemName[i] = tstr;
+			if (namef) then begin
+				tstr = trim(ImportField);
+				ItemName[i] = tstr;
+			end;
 			tstr = trim(ImportField);
 			ItemBrand[i] = tstr;
 			tstr = trim(ImportField);
@@ -14026,7 +14035,7 @@ boolean TrHs
 		
 		for (i=0;i<cnt;i=i+1) begin
 			if(nonblank(ItemCode[i])) then begin 
-				queued.CreateChiccoGlobalItem(ItemCode[i],ItemBrand[i],ItemPrice[i],ItemName[i]);
+				queued.CreateChiccoGlobalItem(ItemCode[i],ItemBrand[i],ItemPrice[i],ItemName[i],namef);
 				MilliSleep(50);
 				CodeInstf["CHIC" & ItemCode[i]] = true;
 			end;
@@ -14043,6 +14052,153 @@ boolean TrHs
 	end;
 	return;
 end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+global procedure ImportAddExtVendItemsFromFolderQueuedIn()  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:50 13.10.2020
+begin
+record INVc INr,oldINr;
+integer i,flushcnt,curcomp,cnt,j,k,CompQty,ErrCnt1,ErrCnt2,mtrw,INComp,StatAllRows,StatOkRows,StatFailItemRows,StatFailClassRows,ErrClasscnt,ErrCnt3,slipcont;
+record GlobalItemVc GIr, ExtPrGIr;
+string 100 artcode,brand,newBrand,code,glCode,tstr,bltstr,cntstr,origartcode;
+record BPIBrandVc BPIBrandr;
+record BPIBrandVc BPIBrand1r;
+area ErrAr1, ErrAr2, reply;
+array string 255 abrand,anewbrand,ErrArr,ErrAr3;
+array string 100 headers,params;
+record CompaniesBlock Compb;
+row CompaniesBlock Comprw;
+vector boolean Errf, Classf;
+array string 255 ItemCode,ItemName,ItemBrand,ItemPrice;
+boolean INrf, ExtPrItemf, namef;
+vector string 255 classCode;
+string 255 filename, FinRow, PrefCode;
+LongInt rcnt, r, okend ;
+vector string 255 vparams, vartcode, vbrand, vorigartcode,vJSONParENG,vJSONParRUS,vJSONParAZE;
+record JSONClassNamesVc JCNr;
+vector boolean vJSONClassf;
+vector boolean CodeInstf;
+boolean TrHs;
+record ExpProvItemRegVc EPIRr;
+		
+	BlockLoad(Compb);
+	
+	CompQty = matrowcnt(Compb);
+	curcomp = currentcompany;	
+	// SetImportCodePage("CP1251");
+	SetCompany(1,false);
+	okend = 0;
+	// for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN");i=i+1) begin
+		// if (right(GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i),4) == ".txt") then begin 
+			// filename = GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i);
+			// i = CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN"); 
+		// end;
+	// end;
+	// if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/ExtItemIN/" & filename))then begin
+		// if (fileexists("/mnt/database/Ecommerce/ExtItemOUT/" & filename)) then begin
+			// delete_file("/mnt/database/Ecommerce/ExtItemOUT/" & filename);
+		// end;
+		// logtext(0,"start ImportAddExtVendItemsFromFolderQueuedIn");
+		// SetImportCodePage("UTF-8");
+		// openfile("/mnt/database/Ecommerce/ExtItemIN/" & filename);
+	// _______________________________________________________________________
+	for (i=0;i<CountFilesInDir("ChiccoIN");i=i+1) begin
+		if (right(GetFileNameInDir("ChiccoIN",i),4) == ".txt") then begin 
+			filename = GetFileNameInDir("ChiccoIN",i);
+			i = CountFilesInDir("ChiccoIN"); 
+		end;
+	end;
+	if(nonblank(filename) and fileexists("ChiccoIN/" & filename))then begin
+		if (fileexists("ChiccoOUT/" & filename)) then begin
+			delete_file("ChiccoOUT/" & filename);
+		end;
+		logtext(0,"start ImportAddExtVendItemsFromFolderQueuedIn");
+		SetImportCodePage("UTF-8");
+		openfile("ChiccoIN/" & filename);
+		// _______________________________________________________________________
+		tstr = importfield;
+		tstr = right(tstr,(len(tstr)-1));
+		logtext(0,tstr);
+		logtext(0,USetStr(36229));
+		if(tstr!=USetStr(36229))then begin
+			logtext(0,"ImportAddClassIn codepage error");
+			AddTextToArea	(USetStr(36351) & chr(09),ErrAr1);
+			while (TestEOF()==false) begin
+				if (NextImportLine(true)) then begin end;
+			end;
+		end;
+		if (NextImportLine(true)) then begin end;
+			tstr = importfield; 
+			EPIRr.PrefCode = tstr;
+			if (readfirstKey("PrefCode",EPIRr,1,true)) then begin
+				
+			end;
+		if (NextImportLine(true)) then begin end;
+		i=0;
+		while (TestEOF()==false) begin
+			tstr = trim(ImportField);
+			ItemCode[i] = tstr;
+			tstr = trim(ImportField);
+			ItemName[i] = tstr;
+			tstr = trim(ImportField);
+			ItemBrand[i] = tstr;
+			tstr = trim(ImportField);
+			// ItemPrice[i] = tstr;
+			for (j=0;j<len(tstr);j=j+1) begin
+				if(Mid(tstr,j,1)==",") then begin
+					ItemPrice[i] = ItemPrice[i] & ".";
+				end else begin
+					ItemPrice[i] = ItemPrice[i] & Mid(tstr,j,1);
+				end;
+			end;
+			if (NextImportLine(true)) then begin end;
+			i=i+1;
+		end;
+		cnt = i;
+		CloseFile;
+		// MoveFile(filename,"/mnt/database/Ecommerce/ExtItemIN","/mnt/database/Ecommerce/ChiccoOUT");
+		// delete_file("/mnt/database/Ecommerce/ExtItemIN/" & filename);
+		// runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
+		// _________________________________________________________________
+		MoveFile(filename,"ChiccoIN","ChiccoOUT");
+		delete_file("ChiccoIN/" & filename);
+		runprogram("chmod","-R a+rw Ecommerce");
+		
+		for (i=0;i<cnt;i=i+1) begin
+			if(nonblank(ItemCode[i])) then begin 
+				queued.CreateChiccoGlobalItem(ItemCode[i],ItemBrand[i],ItemPrice[i],ItemName[i], namef);
+				MilliSleep(50);
+				CodeInstf["CHIC" & ItemCode[i]] = true;
+			end;
+		end;
+		GIr.Code = "CHIC";
+		TrHs = true;
+		while (loopMain(GIr,1,TrHs)) begin
+			if (left(GIr.Code,4)!="CHIC") then begin TrHs = false; end;
+			if (TrHs and !CodeInstf[GIr.Code]) then begin
+				queued.Instock0(GIr.Code);
+				MilliSleep(50);
+			end;
+		end;
+	end;
+	return;
+end;
+
+
+
+
+
+
 
 
 
