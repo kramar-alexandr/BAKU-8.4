@@ -5286,7 +5286,7 @@ begin
 	TrHs = true;
 	i = 0;
 	while (loopMain(GIr,1,TrHs)) begin
-		if (left(GIr.Code,3) == "CP_") then  begin
+		if (left(GIr.Code,4) == "ZMAZ") then  begin
 			aTPCodes[i] = GIr.Code;
 			i = i + 1;
 		end;
@@ -5766,6 +5766,140 @@ end;
 
 
 
+global updating procedure CreateZOOMagGlobalItem(string code, string  brand, string price, string name, val qty)
+begin
+	record GlobalItemVc GIr;
+	row GlobalItemVc GIrw;
+	record BTRxBrandVc BtrxBrndr, oldBrandr;
+	boolean ExtPrBrandf, TrHs;
+	string 255 OldCode, ExistBRNdCode;
+	longint i;
+	ExistBRNdCode = "";
+	logtext(0,"CreateGlobalItem ZOO")
+	GIr.Code = "ZMAZ" & code;
+	if(ReadFirstMain(GIr,1,true)) then begin
+		Logtext(0,GIr.Code & " found");
+		if(GIr.Price != StringToVal(price,M4Val)) then begin
+			GIr.Price = StringToVal(price,M4Val);
+			RecordStore(GIr,true);
+		end;
+		// if(gethour(currenttime)>=7 and getminute(currenttime)<=8/* and fileexists("demoserver")*/)then begin
+			if (matrowcnt(GIr)<1) then begin
+				GIrw.Location = "MAIN";
+				GIrw.Instock = qty;
+				matrowput (GIr,0,GIrw);
+			end;
+			for (i=0;i<matrowcnt(GIr);i=i+1) begin
+				matrowget (GIr,i,GIrw);
+				GIrw.Instock = qty;
+				matrowput (GIr,i,GIrw);
+			end;
+			RecordStore(GIr,true);
+		// end;
+		if (blank(GIr.BPIBrand) and nonblank(brand)) then begin
+			ExtPrBrandf = false;
+			BtrxBrndr.Name = brand;
+			TrHs = true;
+			while (loopkey("Name",BtrxBrndr,1,TrHs)) begin
+				if (BtrxBrndr.Name != brand) then begin TrHs = false; end;
+				if (TrHs) then begin
+					if (left(BtrxBrndr.Code,4)=="ZOBR") then begin
+						ExtPrBrandf = true;
+						ExistBRNdCode = BtrxBrndr.Code;
+					end;
+				end;
+			end;
+			if (!ExtPrBrandf) then begin
+				oldBrandr.Code = "ZOBR9999";
+				TrHs = true;
+				while (LoopBackKey("Code",oldBrandr,1,TrHs)) begin
+					if (left(oldBrandr.Code,4)!="ZOBR") then begin TrHs = false; end;
+					if (TrHs) then begin
+						OldCode = oldBrandr.Code;
+						TrHs = false;
+					end;
+				end;
+				ResetLoop(oldBrandr);
+				if(blank(OldCode))then begin OldCode = "ZOBR0000"; end;
+				recordnew(BtrxBrndr);
+				NextCode(OldCode,BtrxBrndr.Code);
+				BtrxBrndr.Name = brand;
+				RecordStore (BtrxBrndr,true);
+				ExistBRNdCode = BtrxBrndr.Code;
+			end;
+			GIr.BPIBrand = ExistBRNdCode;
+			GIr.HansaName = name;
+
+			if (RecordStore(GIr,true)) then begin
+				logtext(0,"ZOO Global Item updated: " & GIr.Code);
+			end;
+		end;
+	end else begin
+		if (nonblank(brand)) then begin
+			ExtPrBrandf = false;
+			BtrxBrndr.Name = brand;
+			TrHs = true;
+			while (loopkey("Name",BtrxBrndr,1,TrHs)) begin
+				if (BtrxBrndr.Name != brand) then begin TrHs = false; end;
+				if (TrHs) then begin
+					if (left(BtrxBrndr.Code,4)=="ZOBR") then begin
+						ExtPrBrandf = true;
+						ExistBRNdCode = BtrxBrndr.Code;
+					end;
+				end;
+			end;
+			if (!ExtPrBrandf) then begin
+				oldBrandr.Code = "ZOBR9999";
+				TrHs = true;
+				while (LoopBackKey("Code",oldBrandr,1,TrHs)) begin
+					if (left(oldBrandr.Code,4)!="ZOBR") then begin TrHs = false; end;
+					if (TrHs) then begin
+						OldCode = oldBrandr.Code;
+						TrHs = false;
+					end;
+				end;
+				ResetLoop(oldBrandr);
+				if(blank(OldCode))then begin OldCode = "ZOBR0000"; end;
+				recordnew(BtrxBrndr);
+				NextCode(OldCode,BtrxBrndr.Code);
+				BtrxBrndr.Name = brand;
+				RecordStore (BtrxBrndr,true);
+				ExistBRNdCode = BtrxBrndr.Code;
+			end;
+		end;
+		recordNew(GIr);
+		GIr.Code = "ZMAZ" & code;
+		Logtext(0,GIr.Code & " not found");
+		GIr.HansaCode = "ZMAZ" & code;
+		GIr.ExtProwItRegulations = 2;
+		GIr.Brand = brand;
+		GIr.BPIBrand = ExistBRNdCode;
+		GIr.Price =  StringToVal(price,M4Val);
+		GIr.Name = name;
+		GIr.HansaName = name;
+		if (matrowcnt(GIr)<1) then begin
+			GIrw.Location = "MAIN";
+			GIrw.Instock = qty;
+			matrowput (GIr,0,GIrw);
+		end;
+		for (i=0;i<matrowcnt(GIr);i=i+1) begin
+			matrowget (GIr,i,GIrw);
+			GIrw.Instock = qty;
+			matrowput (GIr,i,GIrw);
+		end;
+		if (RecordStore(GIr,true)) then begin
+			logtext(0,"ZOO Global Item created: " & GIr.Code);
+		end else begin
+			logtext(0,"ZOO Global Item not created: " & GIr.Code);
+		end;
+	end;
+return;
+end;
+
+
+
+
+
 global updating procedure CreateChiccoGlobalItem(string code, string  brand, string price, string name, boolean namef)
 begin
 	record GlobalItemVc GIr;
@@ -6014,7 +6148,7 @@ end;
 
 
 
-global webpublic procedure WEBCollectXMLZOOMagItems()
+global procedure CollectXMLZOOMagItems()
 begin
 	record ORVc ORr;
 	area text,replyPr;
@@ -6024,6 +6158,7 @@ begin
 	boolean codeCheck, TrHs;
 	vector boolean CodeInstf;
 	record GlobalItemVc GIr;
+	val quant;
 	
 	SendWebRequest("zoomagazin.az",443,-1,true,"GET","/index.php?route=product/xml","text/xml","",false,text,replyPr,10);
 	// SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
@@ -6035,14 +6170,15 @@ begin
 	// cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
 	logtext(0,cnt);
 	for(i=0;i<cnt;i=i+1) begin
-		brand = XmlGetAttribute(xmlreply,"company/products/product[" & i & "]/brand[" & 0 &"]","name");
-		brand = ConvertStringFromCodePage("WINDOWS-1251",brand);
+		// brand = XmlGetAttribute(xmlreply,"company/products/product[" & i & "]/brand[" & 0 &"]","name");
+		// brand = ConvertStringFromCodePage("CP-1251",brand); 
+		brand = XmlGet(xmlreply,"company/products/product[" & i & "]/manufacturer");
 		price = XmlGet(xmlreply,"company/products/product[" & i & "]/SalePrice");
 		name =  XmlGet(xmlreply,"company/products/product[" & i & "]/name");
 		code = XmlGet(xmlreply,"company/products/product[" & i & "]/sku");
 		qty = XmlGet(xmlreply,"company/products/product[" & i & "]/quantity");
 		if(nonblank(code)) then begin 
-			// queued.CreateZOOMagGlobalItem(code,brand,price,name,qty);
+			queued.CreateZOOMagGlobalItem(code,brand,price,name,StringToVal(qty,M4Val));
 			logtext(0,brand & " brand");
 			logtext(0,price & " price");
 			logtext(0,name & " name");
@@ -6054,7 +6190,7 @@ begin
 			end;
 		end;
 	end;
-	GIr.Code = "ECMXA00000000001";
+	GIr.Code = "ZMAZ00000000001";
 	TrHs = true;
 	while (loopMain(Gir,1,TrHs)) begin
 		if (left(GIr.Code,5)!="ZMAZ") then begin TrHs = false; end;
