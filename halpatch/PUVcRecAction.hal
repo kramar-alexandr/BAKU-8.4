@@ -3693,14 +3693,14 @@ begin
  row BigPUVc BPUrw;
  integer i;
  val total;
- val FInBase,startcustcost,calccost,sumcost;
+ val FInBase,startcustcost,calccost,sumcost,calcqtycost;
  record ConsCompBlock CCBb;
  record INVc INr;
  
  
- startcustcost = BPUr.CustomsCost;
- sumcost = blankval;
- for(i=0;i<matrowcnt(BPUr);i=i+1) begin
+	startcustcost = BPUr.CustomsCost;
+	sumcost = blankval;
+	for(i=0;i<matrowcnt(BPUr);i=i+1) begin
 		MatRowGet(BPUr,i,BPUrw);
 		INr.Code = BPUrw.ArtCode;
 		if(ReadFirstMain(INr,1,true)) then begin end;
@@ -3723,8 +3723,9 @@ begin
 		if(ReadFirstMain(INr,1,true)) then begin end;
 		if(INr.ConsgType!=1) then begin
 			calccost = blankval;
-			calccost = round(FInBase * round(BPUrw.UPrice/total,SetRoundModeD(3)),SetRoundModeD(5));
-			sumcost = sumcost + calccost;
+			calccost = round(round(FInBase * BPUrw.UPrice/total,SetRoundModeD(3)),SetRoundModeD(5));
+			calcqtycost = round(round(FInBase * (BPUrw.UPrice*BPUrw.Quant)/total,SetRoundModeD(3)),SetRoundModeD(5));
+			sumcost = sumcost + calcqtycost;
 			BPUrw.CustomsCost = calccost;
 			//BPUr.CustomsCost = BPUr.CustomsCost + BPUrw.Quant * BPUrw.CustomsCost;
 		end;	
@@ -3877,12 +3878,18 @@ begin
 			MatRowGet(BPUr,i,BPUrw);
 			total = total + round(BPUrw.Quant * BPUrw.UPrice,SetRoundModeD(3));
 		end;
-		if(nonblank(BPUr.CurrencyF)) then begin
+		if(nonblank(BPUr.CurrencyF) and BPUr.CurrencyF!="AZN") then begin
 			FInBase = MulRateToBase1(BPUr.CurrencyF,BPUr.ShipCost,BPUr.FrRateF,BPUr.ToRateF,BPUr.ToRateF,BPUr.FrRateF,BPUr.ToRateF,SetROundModeD(5));
 		end else begin 	FInBase = BPUr.ShipCost; end;
 		for(i=0;i<matrowcnt(BPUr);i=i+1) begin
 			MatRowGet(BPUr,i,BPUrw);
-			BPUrw.ShipCost = FInBase * round((BPUrw.UPrice/total),SetRoundModeD(3));
+			BPUrw.ShipCost = round(FInBase*(BPUrw.UPrice/total),SetRoundModeD(3));
+			if (i==4 or i==5) then begin
+				logtext(0,FInBase & " FInBase");
+				logtext(0,BPUrw.UPrice & " UPrice");
+				logtext(0,total & " total");
+				logtext(0,BPUrw.ShipCost & " ShipCost");
+			end;
 			MatRowPut(BPUr,i,BPUrw);
 		end;
 		BigPUSumUp(BPUr);	
