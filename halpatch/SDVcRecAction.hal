@@ -83,7 +83,7 @@ remote updating procedure ORFromPOCons(record POVc,LongInt);
 remote function Boolean SDVc_PasteArtCode(var record SDVc,Integer,Integer,var string,var string);
 
 
-
+SetLangMode(LangRussian,"RUS",0);
 
 
 global updating procedure updateResQtyFromSD (record SDVc SDr,boolean Resf)
@@ -1658,10 +1658,13 @@ begin
 				logtext(0,"Succes created");
 				CreateRecordLink(SDr,oldComp,PUr,currentcompany);
 				CreateRecordLink(PUr,currentcompany,SDr,oldComp);
+				CreateRecordLink(ConsSDr,currentcompany,PUr,currentcompany);
+				CreateRecordLink(PUr,currentcompany,ConsSDr,currentcompany);
 			end;	
 			ResetCompany(oldComp);
 			if(ReadRecordLink(SDr,1,POr,RLr))then begin
 				pos = 0;
+				toconsLocCode = "";
 				storeObj = "";
 				ExtractObj(SDr.Objects,pos,Obj);
 				while (nonblank(Obj)) begin 
@@ -1710,17 +1713,18 @@ begin
 						if (nonblank(storeObj)) then begin
 							for (i=0;i<matrowcnt(Compb);i=i+1) begin
 								SetCompany(i+1,false);
-								Lcr.Code = "";
-								TrHs = true;
-								while (LoopMain(Lcr,1,TrHs)) begin
-									if (storeObj==Lcr.Objects and nonblank(Lcr.FOBSuplier)) then begin
-										TrHs = false;
-										POr.SerNr = POSerNr;
-										if (ReadFirstMain(POr,1,true)) then begin
-											if (POr.ItemFromOtherSTockObj==fobObj)  then begin
+								POr.SerNr = POSerNr;
+								if (ReadFirstMain(POr,1,true)) then begin
+									if (POr.ItemFromOtherSTockObj==fobObj and setInSet(storeObj,POr.Objects))  then begin
+										Lcr.Code = "";
+										TrHs = true;
+										while (LoopMain(Lcr,1,TrHs)) begin
+											if (storeObj==Lcr.Objects and nonblank(Lcr.FOBSuplier) and blank(toconsLocCode)) then begin
+												POr.SerNr = POSerNr;
 												tocompNo = CurrentCompany;
 												tolocCode = Lcr.Code;
 												toconsLocCode =  Lcr.ConsigStockCode;
+												if (nonblank(toconsLocCode)) then begin TrHs = false; end;
 												POObjects = POr.Objects;
 												for (t=0;t<matrowcnt(POr);t=t+1) begin
 													matrowget(POr,t,POrw);
@@ -1728,9 +1732,9 @@ begin
 												end;
 											end;
 										end;
+										ResetLoop(Lcr);
 									end;
 								end;
-								ResetLoop(Lcr);
 							end;
 							SetCompany(18,false);
 						end;
@@ -1742,6 +1746,9 @@ begin
 	
 	if (SetCompany(18,false) and tocompNo>0) then begin
 		recordCopy(OldConsSdr,ConsSDr);
+		ConsSDr.CostAcc = "99999";
+		if (nonblank(ConsSDr.Objects)) then begin ConsSDr.Objects = ConsSDr.Objects & ","; end;
+		ConsSDr.Objects = ConsSDr.Objects & "CENTRAL_RETURN";
 		ConsSDr.OKFlag = 1;
 		if (RecordUpdate(OldConsSdr,ConsSDr,true)==0) then begin
 			Lcr.Code = "";
@@ -1828,7 +1835,7 @@ begin
 					PUVc_PasteCostPrice(PUr,i);
 					MatRowGet(PUr,i,PUrw);
 					PUrw.Extra = blankval;
-					PUrw.CredAcc = "99999";
+					PUrw.CredAcc = "41/06";
 					MatRowPut(PUr,i,PUrw);
 				end;
 				PUr.Objects = POObjects;
