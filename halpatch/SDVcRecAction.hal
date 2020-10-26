@@ -80,9 +80,10 @@ remote procedure CreateINConsItem(string, string, integer);
 remote updating procedure ExchCurrInTr41AccRow(string,longint);
 external procedure ExtractObj(string,var Integer,var string);
 remote updating procedure ORFromPOCons(record POVc,LongInt);
+remote function Boolean SDVc_PasteArtCode(var record SDVc,Integer,Integer,var string,var string);
 
 
-
+SetLangMode(LangRussian,"RUS",0);
 
 
 global updating procedure updateResQtyFromSD (record SDVc SDr,boolean Resf)
@@ -1441,6 +1442,438 @@ end;
 
 
 
+
+
+
+
+global
+updating procedure SDVcCreateTransferOfGoods(var record SDVc SDr)
+begin
+	record SDVc NilSDr, ConsSDr, OldConsSdr;
+  record UserVc Userr;
+  record ORVc ORr;
+	record POVc POr, OldPOr;
+	row POVc POrw;
+	LongInt res, sdcr;
+	record PUVc PUr, OldPUr, TCPUr, UUPUr;
+	row PUVc PUrw, TCPUrw;
+	integer oldComp,i,rwcnt,k,m,curcnt,pos, j, t;
+	string 255 VECode,warning,inwarn,Obj,storeObj,subdiObj, fobObj, tstr, tolocCode, toconsLocCode, POObjects;
+	record LocationVc Locr,Loc1r,Lcr;
+	row SDVc SDrw, consSDrw;
+	record ConsItemVc CIr;
+	record BPIBrandVc BBr;
+	array record SDVc curSD, curconsSD;
+	array string 255 currs, locArtCodes;
+	record BaseCurBlock BCb,targetBCb;
+	string 5 curcode,sourcecurcode;
+	val fr,to1,to2,br1,br2,s; 
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record PosVc Posr;
+	record SDVc SD1r;
+	record INVc INr;
+	record RLinkVc RLr;
+	record ObjVc OBJr;
+	boolean TrHs,TrHs1;
+	record OTypeAddControlBlock OType;
+	row OTypeAddControlBlock OTyperw;
+	boolean consItem;
+	longint POSerNr, PUSerNr, tocompNo;
+	vector boolean SDCompConsigStocks, ConsItemsStocks;
+	vector string 255 IDGrPosLocs, IDGCompStockConsigStockCodes, IDGCompStockObects, vConsItemCodes, vConsItemQty, ArtCodeObjcts;
+	array longint PUSNr;
+	
+	
+	oldComp = CurrentCompany;
+	
+	BlockLoad(Compb);
+	BlockLoad(targetBCb);
+	matrowget(Compb,oldComp-1,Comprw);
+	logtext(0,"Create PU From SD - " & SDr.SerNr);
+	
+	if(SDr.OKFlag!=0 and SDr.CostAcc=="41/06" and SetInSet("CENTRAL_RETURN",SDr.Objects)) then begin
+		Lcr.Code = "";
+		while(LoopMain(Lcr,1,true)) begin
+			if(nonblank(Lcr.ConsigStockCode)) then begin
+				SDCompConsigStocks[Lcr.ConsigStockCode] = true;
+			end;
+		end;
+		ResetLoop(Lcr);
+
+		SplitSDrByCurrency(curSD,SDr,currs,curcnt);
+		
+		if (SetCompany(18,false)) then begin
+			Recordnew(ConsSDr);
+			ConsSDr.TransDate = SDr.TransDate;
+			ConsSDr.SerNr = NextSerNr("SDVc",ConsSDr.TransDate,-1,false,"");
+			ConsSDr.CostAcc = "41/06";
+			ConsSDr.Comment = "ñÖçíêÄãúçõâ ÇéáÇêÄí - ÔÂÂ·ÓÒÍ‡";
+			RecordStore(ConsSDr,true);
+			resetCompany(oldComp);
+			sdcr = 0;
+		end;
+		
+		if(curcnt==0) then begin curcnt=1; curSD[0] = SDr; end;
+  	for (m=0;m<curcnt;m=m+1) begin
+			SD1r = curSD[m];
+			Loc1r.Code = SD1r.Location;
+			if(ReadFirstMain(Loc1r,1,true)) then begin
+				if(nonblank(Loc1r.FOBSuplier)) then begin
+					VECode = Loc1r.FOBSuplier;
+				end;	
+			end;	
+			SetCompany(18,false);
+			Posr.Code = "";
+			while (LoopMain(Posr,1,true)) begin 
+				IDGrPosLocs[Posr.Code] = Posr.Location;
+			end;
+			ResetLoop(Posr);
+			
+			Lcr.Code = "";
+			while (LoopMain(Lcr,1,true)) begin 
+				IDGCompStockConsigStockCodes[Lcr.Code] = Lcr.ConsigStockCode;
+				IDGCompStockObects[Lcr.Code] = Lcr.Objects;
+			end;
+			ResetLoop(Lcr);
+			
+			
+			RECORDNEW(PUr);
+			PUr.VECode = VECode;
+			PUVc_PasteVECode(PUr);
+			PUr.TransDate = SD1r.TransDate;
+			if (currs[m]!=targetBCb.BaseCur1) then begin
+				curcode = currs[m];
+				fr = blankval;
+				to1 = blankval;
+				to2 = blankval;
+				br1 = blankval;
+				br2 = blankval;
+				GetFullCurncyRate(curcode,PUr.TransDate,fr,to1,to2,br1,br2);
+				if (curcode!=currs[m]) then begin
+					logtext(0,"No currency " & currs[m] & " in target company " & Comprw.ShortName);
+				end;
+				PUr.CurncyCode = curcode;
+				PUr.FrRate = fr;
+				PUr.ToRateB1 = to1; 
+				PUr.ToRateB2 = to2;
+				PUr.BaseRate1 = br1;
+				PUr.BaseRate2 = br2;
+			end;
+			PUr.VEName = "#Stock Depreciation# " & SDr.SerNr & " from company " & Comprw.ShortName;
+			if (PUr.SerNr<=0) then begin
+				PUr.SerNr = NextSerNr("PUVc",PUr.TransDate,-1,false,"");
+			end;	
+			logtext(0,"PU SerNr - " & PUr.SerNr);
+			rwcnt = MatRowCnt(SD1r);
+			logtext(0,"count items - " & rwcnt);
+			clearArray (locArtCodes);
+			for (i=0;i<rwcnt;i=i+1) begin
+				MatRowGet(SD1r,i,SDrw);
+				SetCompany(oldComp,false);
+				consItem = false;
+				if ((nonblank(SDrw.Location) and SDCompConsigStocks[SDrw.Location]) or SDCompConsigStocks[SDr.Location]) then begin
+					consItem = true;
+				end;
+				INr.Code = SDrw.ArtCode;
+				if(ReadFirstMain(INr,1,true)) then begin end;
+				SetCompany(18,false);
+				ClearRow(PUr,PUrw,1);
+				CreateINConsItem(SDrw.ArtCode, INr.BPIBrand, oldComp);
+				CIr.LocCode = SDrw.ArtCode;
+				CIr.BrandCode = INr.BPIBrand;
+				if(ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin end;
+				PUrw.ArtCode = CIr.Code;
+				locArtCodes[PUrw.ArtCode] = CIr.LocCode;
+				PUrw.VIReconComment = SDrw.ArtCode;
+				MatRowPut(PUr,i,PUrw);
+				PUVc_PasteArtCode(PUr,i,warning,inwarn);
+				MatRowGet(PUr,i,PUrw);
+				BBr.Code = CIr.BrandCode;
+				if(ReadFirstMain(BBr,1,true)) then begin end;
+				if(!consItem) then begin
+					PUrw.Location = IDGrPosLocs[BBr.CWHCode];
+					PUrw.ToPosCode = BBr.CWHCode;
+				end else begin
+					PUrw.Location = IDGCompStockConsigStockCodes[IDGrPosLocs[BBr.CWHCode]];
+					switch(BBr.CWHCode) begin
+						case "CWH10": PUrw.ToPosCode = "CWHJCSG10";
+						case "CWH11": PUrw.ToPosCode = "CWHJCSG11";
+						case "CWH12": PUrw.ToPosCode = "CWHJCSG12";
+						case "CWH7": PUrw.ToPosCode = "CWHJCSG7";
+						case "CWH8": PUrw.ToPosCode = "CWHJCSG8";
+						case "CWH9": PUrw.ToPosCode = "CWHJCSG9";
+					end;
+					ConsItemsStocks[SDrw.ArtCode] = true;
+				end;
+				MatRowPut(PUr,i,PUrw);
+				PUVc_PasteLocation(PUr,i);
+				MatRowGet(PUr,i,PUrw);
+				PUrw.Objects = "";
+				if(nonblank(IDGCompStockObects[Posr.Location])) then begin
+					if (NonBlank(PUrw.Objects)) then begin
+						PUrw.Objects = PUrw.Objects & "," & IDGCompStockObects[Posr.Location];
+					end else begin
+						PUrw.Objects = IDGCompStockObects[Posr.Location];
+					end;
+				end;	
+				if (NonBlank(PUrw.Objects)) then begin
+					PUrw.Objects =  PUrw.Objects & "," & SDrw.Objects;
+				end else begin
+					PUrw.Objects = SDrw.Objects;
+				end;
+				MatRowPut(PUr,i,PUrw);
+				MatRowGet(PUr,i,PUrw);
+				PUrw.Quant = SDrw.Qty;
+				MatRowPut(PUr,i,PUrw);
+				MatRowGet(PUr,i,PUrw);
+				PUrw.UPrice = SDrw.FIFORowVal;
+				PUrw.SerialNr = SDrw.SerialNr;
+				PUrw.CostPrice = SDrw.FIFO;
+				MatRowPut(PUr,i,PUrw);
+				PUVc_PasteCostPrice(PUr,i);
+				MatRowGet(PUr,i,PUrw);
+				PUrw.Extra = blankval;
+				PUrw.CredAcc = "99999";
+				MatRowPut(PUr,i,PUrw);
+				
+				consSDrw.ArtCode = PUrw.ArtCode;
+				consSDrw.Qty = PUrw.Quant;
+				consSDrw.Location = PUrw.Location;
+				consSDrw.PosCode = PUrw.ToPosCode;
+				MatRowPut(ConsSDr,sdcr,consSDrw);
+				SDVc_PasteArtCode(ConsSDr,sdcr,1,tstr,tstr);
+				matrowget(ConsSDr,sdcr,consSDrw);
+				if (nonblank(consSDrw.Objects)) then begin consSDrw.Objects = consSDrw.Objects & ","; end;
+				consSDrw.Objects = consSDrw.Objects & IDGCompStockObects[PUrw.Location];
+				MatRowPut(ConsSDr,sdcr,consSDrw);
+				sdcr = sdcr + 1;
+			end;
+			if (RecordStore(ConsSDr,true)) then begin
+				CreateRecordLink(SDr,oldComp,ConsSDr,currentcompany);
+				CreateRecordLink(ConsSDr,currentcompany,SDr,oldComp);
+			end;
+			PUSumUp(PUr);
+			if (RECORDSTORE(PUr,false)) then begin
+				logtext(0,"Succes created");
+				CreateRecordLink(SDr,oldComp,PUr,currentcompany);
+				CreateRecordLink(PUr,currentcompany,SDr,oldComp);
+				CreateRecordLink(ConsSDr,currentcompany,PUr,currentcompany);
+				CreateRecordLink(PUr,currentcompany,ConsSDr,currentcompany);
+			end;	
+			ResetCompany(oldComp);
+			if(ReadRecordLink(SDr,1,POr,RLr))then begin
+				pos = 0;
+				storeObj = "";
+				ExtractObj(SDr.Objects,pos,Obj);
+				while (nonblank(Obj)) begin 
+					OBJr.Code = Obj;
+					if (ReadFirstMain(OBJr,1,true)) then begin
+						if (OBJr.OTCode=="STORE") then begin
+							storeObj = OBJr.Code;
+						end;
+					end;
+					ExtractObj(SDr.Objects,pos,Obj);
+				end;
+				if(nonblank(POr.ItemFromOtherSTockObj) and nonblank(storeObj)) then begin
+					fobObj = POr.ItemFromOtherSTockObj;
+					SetCompany(18,false);
+					BlockLoad(OType);
+					for (i=0;i<matrowcnt(OType);i=i+1) begin
+						matrowget(OType,i,OTyperw);
+						if (nonblank(OTyperw.STORE)) then begin
+							if (OTyperw.STORE==storeObj) then begin
+								subdiObj = OTyperw.SUBDI;
+							end;
+						end else begin
+							i = matrowcnt(OType);
+						end;
+					end;
+					RecordCopy(OldPUr,PUr);
+					PUr.OKFlag = 1;
+					PUr.Objects = PUr.Objects & "," & subdiObj;
+					ConsSDr.Objects = PUr.Objects;
+					recordStore(ConsSDr,true);
+					POSerNr = POr.SerNr;
+					if (RecordUpdate(OldPUr,PUr,true)==0)then begin
+						PUSerNr = PUr.SerNr;
+						pos = 0;
+						storeObj = "";
+						ExtractObj(POr.Objects,pos,Obj);
+						while (nonblank(Obj)) begin 
+							OBJr.Code = Obj;
+							if (ReadFirstMain(OBJr,1,true)) then begin
+								if (OBJr.OTCode=="STORE") then begin
+									storeObj = OBJr.Code;
+								end;
+							end;
+							ExtractObj(POr.Objects,pos,Obj);
+						end;
+						if (nonblank(storeObj)) then begin
+							for (i=0;i<matrowcnt(Compb);i=i+1) begin
+								SetCompany(i+1,false);
+								Lcr.Code = "";
+								TrHs = true;
+								while (LoopMain(Lcr,1,TrHs)) begin
+									if (storeObj==Lcr.Objects and nonblank(Lcr.FOBSuplier)) then begin
+										TrHs = false;
+										POr.SerNr = POSerNr;
+										if (ReadFirstMain(POr,1,true)) then begin
+											if (POr.ItemFromOtherSTockObj==fobObj)  then begin
+												tocompNo = CurrentCompany;
+												tolocCode = Lcr.Code;
+												toconsLocCode =  Lcr.ConsigStockCode;
+												POObjects = POr.Objects;
+												for (t=0;t<matrowcnt(POr);t=t+1) begin
+													matrowget(POr,t,POrw);
+													ArtCodeObjcts[POrw.ArtCode] = POrw.Objects;
+												end;
+											end;
+										end;
+									end;
+								end;
+								ResetLoop(Lcr);
+							end;
+							SetCompany(18,false);
+						end;
+					end;
+				end;
+			end;
+		end;	
+	end;	
+	
+	if (SetCompany(18,false) and tocompNo>0) then begin
+		recordCopy(OldConsSdr,ConsSDr);
+		ConsSDr.CostAcc = "99999";
+		ConsSDr.OKFlag = 1;
+		if (RecordUpdate(OldConsSdr,ConsSDr,true)==0) then begin
+			Lcr.Code = "";
+			while(LoopMain(Lcr,1,true)) begin
+				if(nonblank(Lcr.ConsigStockCode)) then begin
+					SDCompConsigStocks[Lcr.ConsigStockCode] = true;
+				end;
+			end;
+			ResetLoop(Lcr);
+			ClearArray(currs);
+			curcnt = 0;
+			SplitSDrByCurrency(curconsSD,ConsSDr,currs,curcnt);
+			if(curcnt==0) then begin curcnt=1; curconsSD[0] = ConsSDr; end;
+			for (m=0;m<curcnt;m=m+1) begin
+				SD1r = curconsSD[m];
+				VECode = "FOB_SKLAD";
+				SetCompany(tocompNo,false);
+				Posr.Code = "";
+				RECORDNEW(PUr);
+				PUr.VECode = VECode;
+				PUVc_PasteVECode(PUr);
+				PUr.TransDate = SD1r.TransDate;
+				if (currs[m]!=targetBCb.BaseCur1) then begin
+					curcode = currs[m];
+					fr = blankval;
+					to1 = blankval;
+					to2 = blankval;
+					br1 = blankval;
+					br2 = blankval;
+					GetFullCurncyRate(curcode,PUr.TransDate,fr,to1,to2,br1,br2);
+					if (curcode!=currs[m]) then begin
+						logtext(0,"No currency " & currs[m] & " in target company " & Comprw.ShortName);
+					end;
+					PUr.CurncyCode = curcode;
+					PUr.FrRate = fr;
+					PUr.ToRateB1 = to1; 
+					PUr.ToRateB2 = to2;
+					PUr.BaseRate1 = br1;
+					PUr.BaseRate2 = br2;
+				end;
+				if (PUr.SerNr<=0) then begin
+					PUr.SerNr = NextSerNr("PUVc",PUr.TransDate,-1,false,"");
+				end;	
+				rwcnt = MatRowCnt(SD1r);
+				clearArray (locArtCodes);
+				for (i=0;i<rwcnt;i=i+1) begin
+					MatRowGet(SD1r,i,SDrw);
+					SetCompany(18,false);
+					consItem = false;
+					if (nonblank(SDrw.Location) and SDCompConsigStocks[SDrw.Location]) then begin
+						consItem = true;
+					end;
+					INr.Code = SDrw.ArtCode;
+					if(ReadFirstMain(INr,1,true)) then begin end;
+					SetCompany(tocompNo,false);
+					ClearRow(PUr,PUrw,1);
+					SetCompany(18,false);
+					CIr.Code = SDrw.ArtCode;
+					if(ReadFirstMain(CIr,1,true)) then begin end;
+					SetCompany(tocompNo,false);
+					PUrw.ArtCode = CIr.LocCode;
+					PUrw.VIReconComment = SDrw.ArtCode;
+					MatRowPut(PUr,i,PUrw);
+					PUVc_PasteArtCode(PUr,i,warning,inwarn);
+					MatRowGet(PUr,i,PUrw);
+					if(!consItem) then begin
+						PUrw.Location = tolocCode;
+					end else begin
+						PUrw.Location = toconslocCode;
+					end;
+					MatRowPut(PUr,i,PUrw);
+					PUVc_PasteLocation(PUr,i);
+					MatRowGet(PUr,i,PUrw);
+					PUrw.Objects = ArtCodeObjcts[PUrw.ArtCode];
+					MatRowPut(PUr,i,PUrw);
+					MatRowGet(PUr,i,PUrw);
+					PUrw.Quant = SDrw.Qty;
+					MatRowPut(PUr,i,PUrw);
+					MatRowGet(PUr,i,PUrw);
+					PUrw.UPrice = SDrw.FIFORowVal;
+					PUrw.SerialNr = SDrw.SerialNr;
+					PUrw.CostPrice = SDrw.FIFO;
+					MatRowPut(PUr,i,PUrw);
+					PUVc_PasteCostPrice(PUr,i);
+					MatRowGet(PUr,i,PUrw);
+					PUrw.Extra = blankval;
+					PUrw.CredAcc = "41/06";
+					MatRowPut(PUr,i,PUrw);
+				end;
+				PUr.Objects = POObjects;
+				PUSumUp(PUr);
+				if (RECORDSTORE(PUr,false)) then begin
+					logtext(0,"Succes created " & CurrentCompany);
+					CreateRecordLink(ConsSDr,18,PUr,currentcompany);
+					CreateRecordLink(PUr,currentcompany,ConsSDr,18);
+					recordCopy(OldPUr,PUr);
+					PUr.OKFlag = 1;
+					recordUpdate(OldPUr,PUr,true);
+					POr.SerNr = POSerNr;
+					if (readFirstMain(POr,1,true)) then begin
+						if (POr.Closed!=1) then begin
+							recordCopy(OldPOr,POr);
+							POr.Closed = 1;
+							recordUpdate(OldPOr,POr,true);
+						end;
+						CreateRecordLink(POr,currentcompany,PUr,currentcompany);
+						CreateRecordLink(PUr,currentcompany,POr,currentcompany);
+					end;
+					
+				end;
+			end;
+			resetCompany(18);
+		end;
+	end;
+	
+	ResetCompany(oldComp);
+return;
+end;
+
+
+
+
+
+
+
+
+
+
+
 global updating procedure saveResQtyFromSD (record SDVc SDr)
 begin
 	row SDVc SDrw;
@@ -1484,7 +1917,11 @@ begin
     SDOK(SDr,false);
     AutomatedSalesOrderly("HasIntegratedNL");
 		ExchCurrInTr41AccRow("SDVc",SDr.SerNr);
-		SDVcCreatePUINConsComp(SDr);
+		if (SDr.Reservf==1) then begin
+			SDVcCreateTransferOfGoods(SDr);
+		end else begin
+			SDVcCreatePUINConsComp(SDr);
+		end;
   end;  
   if (SDr.IntORNo!=-1) then begin
     NilSDr.CostAcc = "NIL";

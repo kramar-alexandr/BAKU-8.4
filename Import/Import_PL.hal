@@ -39,7 +39,8 @@ external procedure NextCode(string,var string);
 external procedure CheckFlush(var Integer,Integer);
 external procedure FillClassInM4Text(var record GlobalItemVc, string, string, string, string, 
 																																			string, string, string, area);
-external updating procedure CreateChiccoGlobalItem(string, string, string, string, boolean);
+external updating procedure CreateChiccoGlobalItem(string, string, string, string, boolean);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:22 16.10.2020
+external updating procedure CreateExtProvGlobalItem(string, string, string, string, boolean, longint);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:22 16.10.2020
 external updating procedure Instock0(string);
 external function boolean NewIN2DClassProductNameCodeEFAfter(integer,integer,integer,var record NewINVc);
 external function boolean NewIN2DClassSubGroupClEFAfter(integer,integer,integer,var record NewINVc);
@@ -14098,33 +14099,19 @@ record ExpProvItemRegVc EPIRr;
 	// SetImportCodePage("CP1251");
 	SetCompany(1,false);
 	okend = 0;
-	// for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN");i=i+1) begin
-		// if (right(GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i),4) == ".txt") then begin 
-			// filename = GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i);
-			// i = CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN"); 
-		// end;
-	// end;
-	// if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/ExtItemIN/" & filename))then begin
-		// if (fileexists("/mnt/database/Ecommerce/ExtItemOUT/" & filename)) then begin
-			// delete_file("/mnt/database/Ecommerce/ExtItemOUT/" & filename);
-		// end;
-		// logtext(0,"start ImportAddExtVendItemsFromFolderQueuedIn");
-		// SetImportCodePage("UTF-8");
-		// openfile("/mnt/database/Ecommerce/ExtItemIN/" & filename);
-	// _______________________________________________________________________
-	for (i=0;i<CountFilesInDir("ChiccoIN");i=i+1) begin
-		if (right(GetFileNameInDir("ChiccoIN",i),4) == ".txt") then begin 
-			filename = GetFileNameInDir("ChiccoIN",i);
-			i = CountFilesInDir("ChiccoIN"); 
+	for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN");i=i+1) begin
+		if (right(GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i),4) == ".txt") then begin 
+			filename = GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i);
+			i = CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN"); 
 		end;
 	end;
-	if(nonblank(filename) and fileexists("ChiccoIN/" & filename))then begin
-		if (fileexists("ChiccoOUT/" & filename)) then begin
-			delete_file("ChiccoOUT/" & filename);
+	if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/ExtItemIN/" & filename))then begin
+		if (fileexists("/mnt/database/Ecommerce/ExtItemOUT/" & filename)) then begin
+			delete_file("/mnt/database/Ecommerce/ExtItemOUT/" & filename);
 		end;
 		logtext(0,"start ImportAddExtVendItemsFromFolderQueuedIn");
 		SetImportCodePage("UTF-8");
-		openfile("ChiccoIN/" & filename);
+		openfile("/mnt/database/Ecommerce/ExtItemIN/" & filename);
 		// _______________________________________________________________________
 		tstr = importfield;
 		tstr = right(tstr,(len(tstr)-1));
@@ -14138,11 +14125,15 @@ record ExpProvItemRegVc EPIRr;
 			end;
 		end;
 		if (NextImportLine(true)) then begin end;
-			tstr = importfield; 
-			EPIRr.PrefCode = tstr;
-			if (readfirstKey("PrefCode",EPIRr,1,true)) then begin
-				
-			end;
+		tstr = importfield; 
+		logtext(0,tstr & " PrefCode");
+		SetCompany(29,false);
+		EPIRr.PrefCode = tstr;
+		if (readfirstKey("PrefCode",EPIRr,1,true)) then begin
+			PrefCode = EPIRr.PrefCode;
+			logtext(0,namef & " PrefCode");
+		end;
+		ResetCompany(1);
 		if (NextImportLine(true)) then begin end;
 		tstr = ImportField;
 		tstr = ImportField;
@@ -14176,28 +14167,25 @@ record ExpProvItemRegVc EPIRr;
 		end;
 		cnt = i;
 		CloseFile;
-		// MoveFile(filename,"/mnt/database/Ecommerce/ExtItemIN","/mnt/database/Ecommerce/ChiccoOUT");
-		// delete_file("/mnt/database/Ecommerce/ExtItemIN/" & filename);
-		// runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
-		// _________________________________________________________________
-		MoveFile(filename,"ChiccoIN","ChiccoOUT");
-		delete_file("ChiccoIN/" & filename);
+		MoveFile(filename,"/mnt/database/Ecommerce/ExtItemIN","/mnt/database/Ecommerce/ExtItemOUT");
+		delete_file("/mnt/database/Ecommerce/ExtItemIN/" & filename);
 		runprogram("chmod","-R a+rw Ecommerce");
-		
-		for (i=0;i<cnt;i=i+1) begin
-			if(nonblank(ItemCode[i])) then begin 
-				queued.CreateChiccoGlobalItem(ItemCode[i],ItemBrand[i],ItemPrice[i],ItemName[i], namef);
-				MilliSleep(50);
-				CodeInstf["CHIC" & ItemCode[i]] = true;
+		if (nonblank(PrefCode)) then begin
+			for (i=0;i<cnt;i=i+1) begin
+				if(nonblank(ItemCode[i])) then begin 
+					queued.CreateExtProvGlobalItem(PrefCode & ItemCode[i],ItemBrand[i],ItemPrice[i],ItemName[i], namef, EPIRr.SerNr);
+					MilliSleep(50);
+					CodeInstf[PrefCode & ItemCode[i]] = true;
+				end;
 			end;
-		end;
-		GIr.Code = "CHIC";
-		TrHs = true;
-		while (loopMain(GIr,1,TrHs)) begin
-			if (left(GIr.Code,4)!="CHIC") then begin TrHs = false; end;
-			if (TrHs and !CodeInstf[GIr.Code]) then begin
-				queued.Instock0(GIr.Code);
-				MilliSleep(50);
+			GIr.Code = PrefCode & PrefCode;
+			TrHs = true;
+			while (loopMain(GIr,1,TrHs)) begin
+				if (left(GIr.Code,len(PrefCode))!=PrefCode) then begin TrHs = false; end;
+				if (TrHs and !CodeInstf[GIr.Code]) then begin
+					queued.Instock0(GIr.Code);
+					MilliSleep(50);
+				end;
 			end;
 		end;
 	end;

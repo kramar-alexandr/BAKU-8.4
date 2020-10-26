@@ -9,7 +9,11 @@ external function Boolean GetItemPriceDiscount3(string,val,var record INVc,strin
                                                 string,Boolean,var Boolean,string,var string,var val,string,string,var string);
 external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
 external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val);
- remote function boolean CompanyIsJWLikeCompany(Integer);
+external function boolean CompanyIsJWLikeCompany(Integer);
+external procedure GetCurrentCompanyCode(var string);
+external function LongInt CountWorkingDays(Date,Date,string,string);
+external function longint DateDiff(date,date);
+
  
 global
 procedure NextOfficialSerNr(string filename,LongInt sernr,Date td,string langcode,var string offserno)
@@ -116,11 +120,20 @@ end;
 global
 function Boolean DateLocked(Date dp,string fnr)
 BEGIN
-  Boolean res;
+  Boolean res,newres;
   record DBLockBlock DBLockRec;
   Boolean otherf;
   record UserVc USr;
   date d2019;// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 4 February 2019 09:26:32
+  record AddClosPerSetBlock ACPSb;// Edit ************************** BPI Ukraine - KramarAlexandr - 02, 20 10 2020 y. at 2:50:20 PM
+  row AddClosPerSetBlock ACPSrw;// Edit ************************** BPI Ukraine - KramarAlexandr - 02, 20 10 2020 y. at 2:50:59 PM
+  integer i,rwcnt;// Edit ************************** BPI Ukraine - KramarAlexandr - 02, 20 10 2020 y. at 3:07:32 PM
+  date fmdate,sdate;// Edit ************************** BPI Ukraine - KramarAlexandr - 02, 20 10 2020 y. at 3:07:30 PM
+  record GlobalUserVc GUSr;
+  row GlobalUserVc GUSrw;
+  string 100 curcomcod,uslogin,usaccess;
+  integer offwhile;
+  
     
   BlockLoad(DBLockRec);
   if (fnr=="IVVc") then begin
@@ -243,14 +256,155 @@ BEGIN
   	res = false;// Edit ************************** Wednesday, 13 May 2015 17:01:43
   end;
   
-  USr.Code = currentuser;// Edit ************************** BPI Ukraine - KramarAlexandr - 07, 09 06 2019 y. at 9:41:08 AM
-  readfirstmain(USr,1,true);// Edit ************************** BPI Ukraine - KramarAlexandr - 07, 09 06 2019 y. at 9:41:10 AM
   
+ 	USr.Code = currentuser;// Edit ************************** BPI Ukraine - KramarAlexandr - 07, 09 06 2019 y. at 9:41:08 AM
+	readfirstmain(USr,1,true);
+  
+  GUSr.Code = currentuser;
+  if(readfirstmain(GUSr,1,true))then begin
+  	uslogin = GUSr.Code;
+  	usaccess = GUSr.AccessGroup;
+  	rwcnt = matrowcnt(GUSr);
+  	
+  	GetCurrentCompanyCode(curcomcod);
+  	
+  	for(i=0;i<rwcnt;i=i+1)begin
+  		matrowget(GUSr,i,GUSrw);
+  		if(curcomcod==GUSrw.CompCode)then begin
+  			usaccess = GUSrw.AccessGroup;
+  		end;
+  	end;
+  end else begin
+    USr.Code = currentuser;// Edit ************************** BPI Ukraine - KramarAlexandr - 07, 09 06 2019 y. at 9:41:08 AM
+  	readfirstmain(USr,1,true);
+  	uslogin = USr.Code;
+  	usaccess = USr.AccessGroup;
+  end;
+  
+  blockload(ACPSb);
+  rwcnt = matrowcnt(ACPSb);
+  if(rwcnt>0)then begin
+		for(i=0;i<rwcnt;i=i+1)begin
+			matrowget(ACPSb,i,ACPSrw);
+			if(nonblank(ACPSrw.User) and ACPSrw.User==uslogin)then begin
+				if(nonblankdate(ACPSrw.ToDate))then begin
+					if(dp>=ACPSrw.ToDate)then begin
+						newres = true;
+					end;
+				end;
+				if(ACPSrw.Days==-1)then begin
+					newres = true;
+				end;
+				if(ACPSrw.Days>0)then begin
+					switch(ACPSrw.DaysType)begin
+						case 0:	if(dp>=addday(currentdate,-ACPSrw.Days))then begin newres = true; end;
+					
+						case 1:	sdate = addday(currentdate,-ACPSrw.Days);
+										while(CountWorkingDays(sdate,currentdate,"","AZ")<ACPSrw.Days and offwhile<5000)begin
+											sdate = addday(sdate,-1);
+											offwhile = offwhile + 1;
+										end;
+										if(dp>=sdate)then begin newres = true; end;
+								
+						case 2:	fmdate = currentdate;
+										fmdate.day = 1;
+										if(dp.month==fmdate.month and dp.year==fmdate.year)then begin
+											newres = true;
+										end;
+										if(datediff(currentdate,fmdate)<=ACPSrw.Days)then begin
+											sdate = addmonth(currentdate,-1);
+											if(dp.month==sdate.month and dp.year==sdate.year)then begin
+												newres = true;
+											end;
+										end;
+										//if(dp>=addday(fmdate,-ACPSrw.Days))then begin newres = true; end;
+					
+						case 3:	fmdate = currentdate;
+										fmdate.day = 1;
+										if(dp.month==fmdate.month)then begin
+											newres = true;
+										end;
+										//sdate = addday(fmdate,-ACPSrw.Days);
+										if(CountWorkingDays(fmdate,currentdate,"","AZ")<=ACPSrw.Days)then begin
+											sdate = addmonth(currentdate,-1);
+											if(dp.month==sdate.month and dp.year==sdate.year)then begin
+												newres = true;
+											end;
+										end;
+										
+										/*while(CountWorkingDays(sdate,fmdate,"","AZ")<ACPSrw.Days  and offwhile<5000)begin
+											sdate = addday(sdate,-1);
+											offwhile = offwhile + 1;
+										end;
+										if(dp>=sdate)then begin newres = true; end;*/
+					end;
+				end;
+				i = rwcnt;
+			end;
+		
+			if(nonblank(ACPSrw.AccessGroup) and nonblank(usaccess) and setinset(ACPSrw.AccessGroup,usaccess))then begin
+				if(nonblankdate(ACPSrw.ToDate))then begin
+					if(dp>=ACPSrw.ToDate)then begin
+						newres = true;
+					end;
+				end;
+				if(ACPSrw.Days==-1)then begin
+					newres = true;
+				end;
+				switch(ACPSrw.DaysType)begin
+					case 0:	if(dp>=addday(currentdate,-ACPSrw.Days))then begin newres = true; end;
+				
+					case 1:	sdate = addday(currentdate,-ACPSrw.Days);
+									while(CountWorkingDays(sdate,currentdate,"","AZ")<ACPSrw.Days)begin
+										sdate = addday(sdate,-1);
+									end;
+									if(dp>=sdate)then begin newres = true; end;
+							
+					case 2:	fmdate = currentdate;
+									fmdate.day = 1;
+									if(dp.month==fmdate.month and dp.year==fmdate.year)then begin
+										newres = true;
+									end;
+									if(datediff(currentdate,fmdate)<=ACPSrw.Days)then begin
+										sdate = addmonth(currentdate,-1);
+										if(dp.month==sdate.month and dp.year==sdate.year)then begin
+											newres = true;
+										end;
+									end;
+									//if(dp>=addday(fmdate,-ACPSrw.Days))then begin newres = true; end;
+				
+					case 3:	fmdate = currentdate;
+									fmdate.day = 1;
+									sdate = addmonth(currentdate,-1);
+									if(dp.month==fmdate.month)then begin
+										newres = true;
+									end;
+									if(CountWorkingDays(fmdate,currentdate,"","AZ")<=ACPSrw.Days)then begin
+										if(dp.month==sdate.month and dp.year==sdate.year)then begin
+											newres = true;
+										end;
+									end;
+									//sdate = addday(fmdate,-ACPSrw.Days);
+									//while(CountWorkingDays(sdate,fmdate,"","AZ")<ACPSrw.Days)begin
+								//		sdate = addday(sdate,-1);
+								//	end;
+								//	if(dp>=sdate)then begin newres = true; end;
+				end;
+			end;
+		
+		end;
+  end;
+
   if(nonblankdate(USr.OpenClosePerDate))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Thursday, 30 May 2019 15:37:47
 		if(USr.OpenClosePerDate<=dp)then begin
 			res = false;
 		end;
 	end;
+	
+	if(newres)then begin
+		res = false;
+	end;
+	
   DateLocked = res;
   RETURN;
 END;
