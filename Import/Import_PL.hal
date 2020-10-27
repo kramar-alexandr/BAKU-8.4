@@ -15003,6 +15003,99 @@ end;
 
 
 
+global updating procedure ImportBTrxClassifSettings(record RcVc RepSpec)
+begin
+	record BTRxClassSetVc BCSr;
+	row BTRxClassSetVc BCSrw;
+	string 255 tstr, artcode, brand, prodname, filename;
+	array string 100 headers,CTypesNames;
+	LongInt i, currentrow;
+	record BtrxProductNameVc BtrxProductNamer;
+	array string 255 aBrands;
+	boolean testf, foundf;
+	vector LongInt BrandNewINSerNr;
+	record CTypeVc CTr;
+	
+	SetCompany(18,false);
+	
+	
+	tstr = importfield;
+	// tstr = right(tstr,(len(tstr)-1));
+	logtext(0,tstr);
+	logtext(0,USetStr(36229));
+	if(tstr!=USetStr(36229))then begin
+		logtext(0,"ImportAddClassIn codepage error");
+		while (TestEOF()==false) begin
+			if (NextImportLine(true)) then begin end;
+		end;
+		goto lImportBTrxClassifSettings;
+	end;
+
+	if (NextImportLine(true)) then begin end;
+	tstr = importfield;
+	while(nonblank(tstr))begin
+		tstr = importfield;
+		if(nonblank(tstr))then begin
+			StripEndingSpaces(tstr);
+			headers[headers.length] = tstr;
+		end;
+	end;
+	
+	if (NextImportLine(true)) then begin end;
+	tstr = importfield;
+	while(nonblank(tstr))begin
+		tstr = importfield;
+		if(nonblank(tstr))then begin
+			StripEndingSpaces(tstr);
+			CTypesNames[CTypesNames.length] = tstr;
+		end;
+	end;
+	
+	if (NextImportLine(true)) then begin end;
+	while (TestEOF()==false) begin
+		prodname = importfield;
+		BCSr.TypeName = prodname;
+		BtrxProductNamer.Name = prodname;
+		if (readfirstKey("Name",BtrxProductNamer,1,true)) then begin
+			BCSr.Type = BtrxProductNamer.Code;
+			if (!ReadFirstMain(BCSr,1,true)) then begin
+				RecordNew(BCSr);
+				BCSr.Type = BtrxProductNamer.Code;
+				BCSr.TypeName = BtrxProductNamer.Name;
+				if (RecordStore(BCSr,true)) then begin
+					for (i=0;i<headers.length;i=I+1) begin
+						tstr = "";
+						tstr = importfield;
+						if (tstr=="1") then begin
+							BCSrw.CType = headers[i];
+							CTr.Code = BCSrw.CType;
+							if(!readfirstmain(CTr,1,true)) then begin
+								RecordNew(CTr);
+								CTr.Code = BCSrw.CType;
+								CTr.Comment = CTypesNames[i];
+								if (RecordStore(CTr,true)) then begin
+									BCSrw.CTypeName = CTr.Comment;
+								end;
+							end else begin
+								BCSrw.CTypeName = CTr.Comment;
+							end;
+							matrowput(BCSr,matrowcnt(BCSr),BCSrw);
+						end;
+					end;
+				end;
+				if (RecordStore(BCSr,true)) then begin
+					logtext(0,BCSr.TypeName & " Created new BTRx class setting!");
+				end;
+			end;
+		end;
+		
+		if (NextImportLine(true)) then begin end;
+	end;
+	lImportBTrxClassifSettings:;
+	return;
+end;
+
+
 
 
 
