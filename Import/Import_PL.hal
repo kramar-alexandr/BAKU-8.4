@@ -14239,7 +14239,7 @@ string 255 filename, FinRow;
 LongInt rcnt, r, okend ;
 vector string 255 vparams, vartcode, vbrand, vorigartcode,vJSONParENG,vJSONParRUS,vJSONParAZE;
 record JSONClassNamesVc JCNr;
-vector boolean vJSONClassf, vRepeatArtCode;
+vector boolean vJSONClassf, vOldArtCode;
 area ImportedFile;
 		
 	BlockLoad(Compb);
@@ -14356,9 +14356,9 @@ area ImportedFile;
 			end;
 			cnt = cnt + 1;
 			artcode = importfield;
-			StripEndingSpaces(artcode);
-			if (!vRepeatArtCode[artcode]) then begin
-				vRepeatArtCode[artcode] = true;
+			if (!vOldArtCode[artcode]) then begin
+				vOldArtCode[artcode] = true;
+				StripEndingSpaces(artcode);
 				vartcode[r] = artcode;
 				origartcode = artcode;
 				vorigartcode[r] = origartcode;
@@ -14628,72 +14628,68 @@ area ImportedFile;
 	StatFailItemRows = 0;
 	StatFailClassRows = 0;
 	ErrClasscnt = 0;
-	Clearvector(vRepeatArtCode);
 	rcnt = r;
 	for (r=0;r<rcnt;r=r+1) begin
-		if (!vRepeatArtCode[vartcode[r]]) then begin
-			vRepeatArtCode[vartcode[r]] = true;
-			FinRow = "";
-			if (r == okend) then begin
-				FinRow = filename;
-			end;
-			StatAllRows = StatAllRows + 1;
-			for(i=0;i<headers.length;i=i+1)begin
-				params[i] = "";
-			end;
-			cnt = cnt + 1;
-			artcode = vartcode[r];
-			origartcode = vorigartcode[r];
-			brand = vbrand[r];
-			params[0] = vparams[r & "_0"];
-			for(i=1;i<headers.length;i=i+1)begin
-				tstr = vparams[r & "_" & i];
-				params[i] = tstr;
-			end;
-			ExtPrItemf = false;
-			ExtPrGIr.Code = artcode;
-			if (ReadFirstMain(ExtPrGIr,1,true)) then begin
-				// if (ExtPrGIr.ExtProwItRegulations>0) then begin
-					ExtPrItemf = true;
-				// end;
-			end;
-			if (!ExtPrItemf) then begin
-				BPIBrandr.Name = brand;
-				if(readfirstkey("Name",BPIBrandr,1,true))then begin
+		FinRow = "";
+		if (r == okend) then begin
+			FinRow = filename;
+		end;
+		StatAllRows = StatAllRows + 1;
+		for(i=0;i<headers.length;i=i+1)begin
+			params[i] = "";
+		end;
+		cnt = cnt + 1;
+		artcode = vartcode[r];
+		origartcode = vorigartcode[r];
+		brand = vbrand[r];
+		params[0] = vparams[r & "_0"];
+		for(i=1;i<headers.length;i=i+1)begin
+			tstr = vparams[r & "_" & i];
+			params[i] = tstr;
+		end;
+		ExtPrItemf = false;
+		ExtPrGIr.Code = artcode;
+		if (ReadFirstMain(ExtPrGIr,1,true)) then begin
+			// if (ExtPrGIr.ExtProwItRegulations>0) then begin
+				ExtPrItemf = true;
+			// end;
+		end;
+		if (!ExtPrItemf) then begin
+			BPIBrandr.Name = brand;
+			if(readfirstkey("Name",BPIBrandr,1,true))then begin
+				artcode = BPIBrandr.Code & "_" & artcode;
+				GIr.Code = artcode;
+				if(readfirstmain(GIr,1,true))then begin
+					queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
+					slipcont = slipcont + 1;
+					if(slipcont>10)then begin
+						millisleep(20);
+						slipcont = 0;
+					end;
+				end;
+			end else begin
+				BPIBrandr.Code = brand;
+				if(readfirstkey("Code",BPIBrandr,1,true))then begin
 					artcode = BPIBrandr.Code & "_" & artcode;
 					GIr.Code = artcode;
 					if(readfirstmain(GIr,1,true))then begin
 						queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
-						slipcont = slipcont + 1;
+						slipcont = slipcont + 1;					
 						if(slipcont>10)then begin
-							millisleep(60);
+							millisleep(30);
 							slipcont = 0;
 						end;
 					end;
-				end else begin
-					BPIBrandr.Code = brand;
-					if(readfirstkey("Code",BPIBrandr,1,true))then begin
-						artcode = BPIBrandr.Code & "_" & artcode;
-						GIr.Code = artcode;
-						if(readfirstmain(GIr,1,true))then begin
-							queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
-							slipcont = slipcont + 1;					
-							if(slipcont>10)then begin
-								millisleep(60);
-								slipcont = 0;
-							end;
-						end;
-					end;
 				end;
-			end else begin
-				GIr.Code = artcode;
-				if(readfirstmain(GIr,1,true))then begin
-					queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
-					slipcont = slipcont + 1;					
-					if(slipcont>10)then begin
-						millisleep(60);
-						slipcont = 0;
-					end;
+			end;
+		end else begin
+			GIr.Code = artcode;
+			if(readfirstmain(GIr,1,true))then begin
+				queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
+				slipcont = slipcont + 1;					
+				if(slipcont>10)then begin
+					millisleep(30);
+					slipcont = 0;
 				end;
 			end;
 		end;
