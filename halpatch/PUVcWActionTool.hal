@@ -56,6 +56,11 @@ remote function Boolean VIVc_PasteVECode(var record VIVc,Integer,Boolean,Boolean
 remote procedure AddPrepaymentPORows(var record VIVc,LongInt);	//Edit----------------------Dima  11.03.2015
 external function string 255 NormalizeSetString(string);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 3 April 2018 12:00:28
 external function string 60 UserDefined(string,string); //Edit----------------------ABR  10.09.2019
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external procedure NextM4Number(string,var string);
+remote procedure BigPUSumUp(var record BigPUVc);
+
+
 
 SetLangMode(LangRussian,"RUS",0);
 global
@@ -1140,6 +1145,244 @@ begin
   end;
   RETURN;
 END;
+
+
+
+
+
+
+global updating procedure CreateNoterToDelBigPUDsm() // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:19 10.11.2020
+begin
+	integer wn,i,mtrw,rwcnt,j;
+	record BigPUVc BPUr;
+	record NotepadVc Noter,newNoter;
+	integer notenr;
+	record SerBalVc SBr;
+	string 100 tstr;
+	boolean serialfoundf,TrHs,testf;
+  record RLinkVc RLr;
+  boolean notercreate,skip;
+	
+	wn = curwindow;
+	getwindowrecord(wn,BPUr);
+	logtext(0,"Error store note");
+	recordnew(newNoter);
+	newNoter.SerNr = NextSerNr("NotepadVc",CurrentDate,-1,false,"");
+	newNoter.Classification = "DEL";
+	if (RecordStore(newNoter,false)) then begin
+		CreateRecordLink(BPUr,CurrentCompany,newNoter,CurrentCompany); 
+		CreateRecordLink(newNoter,CurrentCompany,BPUr,CurrentCompany);   
+		notenr = 1;
+		while (ReadRecordLink(BPUr,notenr,newNoter,RLr)) begin
+			notenr = notenr + 1;
+		end;
+		if (ReadRecordLink(BPUr,notenr-1,newNoter,RLr)) then begin
+			RLr.Comment = "Delete List";
+			if (RecordStore(RLr,true)) then begin  end;
+		end;
+		OpenWindow("NotepadDClass",1,wn,"","",newNoter);
+	end else begin
+		messagebox(0,"Error store note");
+	end;
+
+return;
+end;
+
+
+
+
+
+
+
+global updating procedure DeleteItemsFromBigPUDsm() //EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:25 05.07.2018
+begin
+	integer wn,i,mtrw,rwcnt,j;
+	record BigPUVc PUr;
+	row BigPUVc PUrw;
+	record NotepadVc Noter,newNoter;
+	integer notenr, pos;
+	record SerBalVc SBr;
+	string 100 tstr,qtstr,ponrstr;
+	boolean serialfoundf,TrHs,testf;
+  record RLinkVc RLr;
+  boolean notercreate,skip;
+  vector boolean vartcode;
+	vector Integer vquant;
+	vector string 255 vponr;
+	
+	recordnew(newNoter);
+	
+	notercreate = false;
+	
+	wn = curwindow;
+	if(windowstate(wn)==0)then begin
+		getwindowrecord(wn,PUr);
+		if(PUr.OKFlag==0)then begin
+			mtrw = matrowcnt(PUr);
+			notenr = 1;
+			while (ReadRecordLink(PUr,notenr,Noter,RLr)) begin
+				if ("DEL"==Noter.Classification) then begin
+					rwcnt = LineTextCnt(Noter);
+					for (i=0;i<rwcnt;i=i+1) begin
+						pos = 0;
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,tstr);
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,qtstr);
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,ponrstr);
+						if(nonblank(tstr))then begin
+							vartcode[tstr] = true;
+							vquant[tstr] = StringToInt(qtstr);
+							vponr[tstr] = StringToLongInt(ponrstr);
+						end;
+					end;  
+				end;
+				notenr = notenr + 1;
+			end;
+	
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(PUr,i,PUrw);
+				if(vquant[PUrw.ArtCode]==PUrw.Quant and vponr[PUrw.ArtCode]==PUrw.FromOrdNr)then begin
+					if(vartcode[PUrw.ArtCode]==true)then begin
+						matrowdelete(PUr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
+					end;
+				end else begin
+					if(vquant[PUrw.ArtCode]>0 and vponr[PUrw.ArtCode]==PUrw.FromOrdNr)then begin
+						PUrw.Sum = PUrw.Sum / PUrw.Quant;
+						PUrw.Quant = PUrw.Quant - vquant[PUrw.ArtCode];
+						PUrw.Sum = PUrw.Sum * PUrw.Quant;
+						matrowput(PUr,i,PUrw);
+					end;
+				end;
+				if(vquant[PUrw.VEItemCode]==PUrw.Quant and vponr[PUrw.VEItemCode]==PUrw.FromOrdNr)then begin
+					if(vartcode[PUrw.VEItemCode]==true)then begin
+						matrowdelete(PUr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
+					end;
+				end else begin
+					if(vquant[PUrw.VEItemCode]>0 and vponr[PUrw.VEItemCode]==PUrw.FromOrdNr)then begin
+						PUrw.Sum = PUrw.Sum / PUrw.Quant;
+						PUrw.Quant = PUrw.Quant - vquant[PUrw.VEItemCode];
+						PUrw.Sum = PUrw.Sum * PUrw.Quant;
+						matrowput(PUr,i,PUrw);
+					end;
+				end;
+			end; 
+			putwindowrecord(wn,PUr);
+			BigPUSumUp(PUr);
+			putwindowrecord(wn,PUr);
+			MessageBox(0,"Были удалены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне поступления");
+		end else begin
+			messagebox(0,"Запись должна быть разокеена");
+		end;
+	end else begin
+		messagebox(0,"Сначала сохраните запись");
+	end;
+	
+return;
+end;
+
+
+
+
+
+
+
+
+
+global updating procedure SaveItemsFromBigPUDsm()//EDIT_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-Anton 10:25 05.07.2018
+begin
+	integer wn,i,mtrw,rwcnt,j;
+	record BigPUVc PUr;
+	row BigPUVc PUrw;
+	record NotepadVc Noter,newNoter;
+	integer notenr, pos;
+	record SerBalVc SBr;
+	string 100 tstr,qtstr,ponr;
+	boolean serialfoundf,TrHs,testf;
+  record RLinkVc RLr;
+  boolean notercreate,skip;
+  vector boolean vartcode;
+	vector Integer vquant;
+	vector string 255 vponr;
+	
+	recordnew(newNoter);
+	
+	notercreate = false;
+	
+	wn = curwindow;
+	if(windowstate(wn)==0)then begin
+		getwindowrecord(wn,PUr);
+		if(PUr.OKFlag==0)then begin
+			mtrw = matrowcnt(PUr);
+			notenr = 1;
+			while (ReadRecordLink(PUr,notenr,Noter,RLr)) begin
+				if ("DEL"==Noter.Classification) then begin
+			
+					rwcnt = LineTextCnt(Noter);
+					for (i=0;i<rwcnt;i=i+1) begin
+						pos = 0;
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,tstr);
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,qtstr);
+						ExtractObjWithSeparator(Chr(9),LineTextGet(Noter,i),true,pos,ponr);
+						if(nonblank(tstr))then begin
+							vartcode[tstr] = true;
+							vquant[tstr] = StringToInt(qtstr);
+							vponr[tstr] = StringToLongInt(ponr);
+						end;
+					end;  
+				end;
+				notenr = notenr + 1;
+			end;
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(PUr,i,PUrw);
+
+				if(vartcode[PUrw.ArtCode]==true and vponr[PUrw.ArtCode]==PUrw.FromOrdNr)then begin
+					if(vquant[PUrw.ArtCode]!=PUrw.Quant and nonblank(vquant[PUrw.ArtCode]) and vquant[PUrw.ArtCode]!=0)then begin
+						PUrw.Sum = PUrw.Sum / PUrw.Quant;
+						PUrw.Quant = vquant[PUrw.ArtCode];
+						PUrw.Sum = PUrw.Sum * PUrw.Quant;
+						matrowput(PUr,i,PUrw);
+					end;
+				end;
+				if(vartcode[PUrw.VEItemCode]==true and vponr[PUrw.ArtCode]==PUrw.FromOrdNr)then begin
+					if(vquant[PUrw.VEItemCode]!=PUrw.Quant and nonblank(vquant[PUrw.VEItemCode]) and vquant[PUrw.VEItemCode]!=0)then begin
+						PUrw.Sum = PUrw.Sum / PUrw.Quant;
+						PUrw.Quant = vquant[PUrw.VEItemCode];
+						PUrw.Sum = PUrw.Sum * PUrw.Quant;
+						matrowput(PUr,i,PUrw);
+					end;
+				end;
+				if(vartcode[PUrw.VEItemCode]!=true and vartcode[PUrw.ArtCode]!=true)then begin
+					matrowdelete(PUr,i);
+					i=i-1;
+					mtrw = mtrw - 1;
+				end else begin
+					if (vponr[PUrw.ArtCode]!=PUrw.FromOrdNr and vponr[PUrw.VEItemCode]!=PUrw.FromOrdNr) then begin
+						matrowdelete(PUr,i);
+						i=i-1;
+						mtrw = mtrw - 1;
+					end;
+				end;
+			end; 
+			putwindowrecord(wn,PUr);
+			BigPUSumUp(PUr);
+			putwindowrecord(wn,PUr);
+			MessageBox(0,"Были сохранены все строки согласно списка, для отмены действия нажмите кнопку \"Отмена\" в окне поступления");
+		end else begin
+			messagebox(0,"Запись должна быть разокеена");
+		end;
+	end else begin
+		messagebox(0,"Сначала сохраните запись");
+	end;
+	
+return;
+end;
+
+
+
+
 
 global
 updating function LongInt PastePUInVI(record PUVc PUp,var record VIVc VIp,var string errmsg,
