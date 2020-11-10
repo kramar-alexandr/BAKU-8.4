@@ -1112,6 +1112,56 @@ end;
 
 
 
+global
+updating procedure VIFromPUDafterBigPU(LongInt PONr, LongInt PUNr)
+begin
+  Integer nwn, mwn;
+  record RcVc RepSpec;
+  record POSettingBlock POSb;
+  record VIVc VIr;
+  Integer r;
+	record PUVc PUr;
+
+  // if (UserCanAction("POToVI",true)) then begin
+    BlockLoad(POSb);
+    ReportDefaults(RepSpec,"VIFromPOVClass");
+    RepSpec.repname = "";
+    RepSpec.FirstVer = PONr;
+		RepSpec.BaseWidth = PUNr;
+    RepSpec.flags[0] = 1;
+		mwn = CurWindow;
+		getwindowrecord(mwn,PUr);
+		RepSpec.f1 = PUr.VECode;
+		RepSpec.flags[0] = 1;
+		RepSpec.flags[1] = 0;
+		RepSpec.flags[2] = 0;
+		RepSpec.flags[3] = 0;
+		RepSpec.flags[4] = 0;
+		RepSpec.flags[5] = 0;
+		RepSpec.flags[6] = 0;
+		RepSpec.flags[7] = 0;
+		r = IDCreateVIFromPU(RepSpec.FirstVer,RepSpec,VIr,PUNr);
+		if (r!=0) begin
+			if (r>0) then begin
+				MessageBox(r,"");
+			end else begin
+				Beep;
+			end;
+		end else begin
+			nwn = OpenWindow("VIDClass",1,0,"","",VIr);
+			VIOpenPrepExists(VIr.VECode);        
+			UpdateBrowses("POVc");    
+			if (DateWarned(VIr.TransDate,"VIVc")) then begin
+				MessageBox(1045,"");
+			end;
+		end;      
+  return;
+end;
+
+
+
+
+
 
 global
 updating procedure IDFCVIFromPUDsm()
@@ -1159,16 +1209,27 @@ BEGIN
   Integer wn,nwn;
   string 255 errmsg;
 	record POVc POr;
+	record RLinkVc RLr;
+	boolean BPuf;
+	record BigPUVc BPUr;
+	
   
   wn = CurWindow;
   if (WindowState(wn)==Rs_normal) then begin
     GetWindowRecord(wn,PUr);
+		if (ReadRecordLink(PUr,1,BPUr,RLr)) then begin
+			BPuf = true;
+		end;
 		POr.SerNr = PUr.PONr;
 		if(ReadFIrstMain(POr,1,true))then begin end;
-		if(POr.ExtraCostInPU==1)then begin
+		if(POr.ExtraCostInPU==1 and !BPuf)then begin
 			VIFromPUDExecute(PUr.PONr, PUr.SerNr);
 		end else begin
-			IDFCVIFromPUDsm;
+			if (!BPuf) then begin
+				IDFCVIFromPUDsm;
+			end else begin
+				VIFromPUDafterBigPU(PUr.PONr, PUr.SerNr);
+			end;
 		end;
   end else begin
     Beep;
