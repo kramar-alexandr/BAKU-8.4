@@ -3895,7 +3895,7 @@ end;
 global
 updating procedure ProceedSendTaxNPTSOClass()
 begin
-  Integer wn,mwn,rownr,mtrw,i;
+  Integer wn,mwn,rownr,mtrw,i,j;
   record RcVc RepSpec;
   record IVVc IVr;
   record UserVc Userr;
@@ -3908,7 +3908,10 @@ begin
   json jsresponse;
   val cash, terminal, discount,loyalty;
   record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:39:37 PM
-
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	
+	
   wn = CurWindow;
   mwn = motherwindow(wn);
   GetWindowRecord(wn,RepSpec);
@@ -3916,6 +3919,8 @@ begin
   IVr.SerNr = RepSpec.long1;
 
   ReadFirstMain(IVr,1,true);
+  
+  blockload(PMb);
   
   host = "10.10.11.21"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
@@ -3947,44 +3952,73 @@ begin
 												if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment)then begin
 													loyalty = loyalty + IVrw.Sum;
 												end;
-												
-												//MessageBox(0, IVrw.PayMode);
-												//bonus karti CB
-												if(IVr.Sum4-terminal-cash>0) then begin
-													if(nonblank(IVrw.PayMode) and IVrw.PayMode!="CB") then begin
-														if(IVrw.PayMode=="T1" or 
-														IVrw.PayMode=="T2" or 
-														IVrw.PayMode=="T3" or 
-														IVrw.PayMode=="T4" or 
-														IVrw.PayMode=="T5" or 
-														IVrw.PayMode=="T6" or 
-														IVrw.PayMode=="T7" or 
-														IVrw.PayMode=="T8" or 
-														IVrw.PayMode=="T9" or 
-														IVrw.PayMode=="B5" or 
-														IVrw.PayMode=="B" or 
-														IVrw.PayMode=="BB" or 
-														IVrw.PayMode=="B1" or 
-														IVrw.PayMode=="B2" or 
-														IVrw.PayMode=="B3" or 
-														IVrw.PayMode=="B7" or 
-														IVrw.PayMode=="B9" or 
-														IVrw.PayMode=="T7") then begin 
-															if(IVrw.CurncyCode!="AZN") then begin
-																terminal=terminal+IVr.Sum4-terminal-cash;
+												if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
+													loyalty = loyalty + IVrw.Sum;
+												end;
+											end;
+											
+											For(i=0;i<mtrw;i=i+1) begin
+												matrowget(IVr,i,IVrw);
+												if(IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
+													for(j=0;j<matrowcnt(PMb);j=j+1)begin
+														matrowget(PMb,j,PMrw);
+														if(PMrw.Code==IVrw.PayMode)then begin
+															if(PMrw.AccNr=="51")then begin
+																terminal = terminal + IVrw.Sum;
 															end else begin
-																terminal=terminal+IVrw.Sum;
-															end;
-														end else begin 
-															if(IVrw.CurncyCode!="AZN") then begin
-																cash=cash+IVr.Sum4-cash-terminal;
-															end else begin
-																cash=cash+IVrw.Sum;
+																loyalty = loyalty + IVrw.Sum;
 															end;
 														end;
-														//MessageBox(0, IVrw.PayMode&" : "&IVrw.Sum&" cash: "&cash&" terminal: "&terminal);
 													end;
 												end;
+												
+											end;
+												//MessageBox(0, IVrw.PayMode);
+												//bonus karti CB
+											
+											//Все что не банк и не лояльность - кэш
+											
+											cash = IVr.Sum4 - terminal - loyalty;
+												
+											For(i=0;i<mtrw;i=i+1) begin
+												matrowget(IVr,i,IVrw);	
+												
+												/*if(IVrw.stp==kInvoiceRowTypeCashPayment or IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
+													if(IVr.Sum4-terminal-cash>0) then begin
+														if(nonblank(IVrw.PayMode) and IVrw.PayMode!="CB") then begin
+															if(IVrw.PayMode=="T1" or 
+																IVrw.PayMode=="T2" or 
+																IVrw.PayMode=="T3" or 
+																IVrw.PayMode=="T4" or 
+																IVrw.PayMode=="T5" or 
+																IVrw.PayMode=="T6" or 
+																IVrw.PayMode=="T7" or 
+																IVrw.PayMode=="T8" or 
+																IVrw.PayMode=="T9" or 
+																IVrw.PayMode=="B5" or 
+																IVrw.PayMode=="B" or 
+																IVrw.PayMode=="BB" or 
+																IVrw.PayMode=="B1" or 
+																IVrw.PayMode=="B2" or 
+																IVrw.PayMode=="B3" or 
+																IVrw.PayMode=="B7" or 
+																IVrw.PayMode=="B9" or 
+																IVrw.PayMode=="T7") then begin 
+																if(IVrw.CurncyCode!="AZN") then begin
+																	terminal=terminal+IVr.Sum4-terminal-cash;
+																end else begin
+																	terminal=terminal+IVrw.Sum;
+																end;
+															end else begin 
+																if(IVrw.CurncyCode!="AZN") then begin
+																	cash=cash+IVr.Sum4-cash-terminal;
+																end else begin
+																	cash=cash+IVrw.Sum;
+																end;
+															end;
+														end;
+													end;
+												end;*/
 												
 												
 												
