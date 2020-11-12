@@ -17,6 +17,7 @@ external function val FindAwerageCost(string,string,string,date,string);
 external procedure FindAwerageCostCurProc(string, string,string,date,string,string,var val,var val);
 external function val ItemQtyPerDate(string,date,string,string,var val,var integer,var vector val,var vector val,var array string,string);
 external procedure LogProcTime(string,longint);
+external function val ItemQtyPerDateGlobCons (string, date,string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -90,7 +91,9 @@ begin
 	row IVVc IVrw;
 	record PUVc PUr;
 	row PUVc PUrw;
-	
+	record LocationVc Locr;
+	vector string 255 vConsStockCode, vDefStockCode;
+	vector boolean vConsStockCodef;
 
 	startformat(15);
 		outstring(0,0,"1",false);
@@ -101,6 +104,17 @@ begin
 		outstring(0,0,"",false);
 		outstring(0,0,"Собственный товар",false);
 	endformat;
+	
+	Locr.Code = "";
+	while (LoopMain(Locr,1,true))begin
+		if (nonblank(Locr.ConsigStockCode)) then begin
+			vConsStockCode[Locr.Code] = Locr.ConsigStockCode;
+			vConsStockCodef[Locr.ConsigStockCode] = true;
+		end;
+		if (nonblank(Locr.DefectStockCode)) then begin
+			vDefStockCode[Locr.Code] = Locr.DefectStockCode;
+		end;
+	end;
 	
 	For(i=0;i<brandscnt;i=i+1) begin
 		aBrandsBalEUR[i] = 0;
@@ -285,7 +299,7 @@ begin
 							end;
 							
 							if(foundf)then begin
-								if(INr.ConsgType==0)then begin
+								if(INr.ConsgType==0 and !vConsStockCodef[ISr.Location])then begin
 									//if(INr.BPIBrand=="BRND0020")then begin
 									// if(setinset("BRND0020",INr.DispGroups))then begin
 										// startformat(15);
@@ -306,7 +320,16 @@ begin
 										case"":		aBrandsBalAZN[br] = aBrandsBalAZN[br] + (curcost*itqty*sign); 
 									end;
 								end else begin
-									if(INr.ConsgType==1)then begin
+									if(INr.ConsgType==1 or vConsStockCodef[ISr.Location])then begin
+										curcost = 0;
+										curcost2 = 0;
+										FindAwerageCostCurProc(INr.Code,vConsStockCode[ISr.Location],INr.LastPurchCurncyCode,ed,incurncy,"",curcost,curcost2);
+										itqty = ItemQtyPerDateGlobCons(INr.Code,addday(ed,1),vConsStockCode[ISr.Location]);
+										if(itqty<0)then begin
+											sign = -1;
+										end else begin
+											sign = 1;
+										end;
 										switch(INr.LastPurchCurncyCode)begin
 											case"EUR":aBrandsBalEURcons[br] = aBrandsBalEURcons[br] + (curcost*itqty*sign);
 											case"CHF":aBrandsBalCHFcons[br] = aBrandsBalCHFcons[br] + (curcost*itqty*sign);
@@ -379,7 +402,7 @@ begin
 								end;
 								
 								if(foundf)then begin
-									if(INr.ConsgType==0)then begin
+									if(INr.ConsgType==0 and !vConsStockCodef[ISr.Location])then begin
 										//if(INr.BPIBrand=="BRND0020")then begin
 										// if(setinset("BRND0020",INr.DispGroups))then begin
 											// startformat(15);
@@ -400,7 +423,20 @@ begin
 											case"":		aBrandsBalAZN[br] = aBrandsBalAZN[br] + (curcost*itqty*sign); 
 										end;
 									end else begin
-										if(INr.ConsgType==1)then begin
+										if(INr.ConsgType==1 or vConsStockCodef[ISr.Location])then begin
+											curcost = 0;
+											curcost2 = 0;
+											FindAwerageCostCurProc(INr.Code,location,INr.LastPurchCurncyCode,ed,incurncy,"",curcost,curcost2);
+											if(itqty==0)then begin
+												itqty = ISr.Instock;	
+											end;
+											
+										
+											if(itqty<0)then begin
+												sign = -1;
+											end else begin
+												sign = 1;
+											end;
 											switch(INr.LastPurchCurncyCode)begin
 												case"EUR":aBrandsBalEURcons[br] = aBrandsBalEURcons[br] + (curcost*itqty*sign);
 												case"CHF":aBrandsBalCHFcons[br] = aBrandsBalCHFcons[br] + (curcost*itqty*sign);
@@ -678,7 +714,7 @@ begin
 	record PUVc PUr;
 	record LocationVc Locr;
 	vector string 255 vConsStockCode, vDefStockCode;
-
+	vector boolean vConsStockCodef;
 	
 		startformat(15);
 			outstring(0,0,"2",false);
@@ -689,15 +725,14 @@ begin
 			outstring(0,0,"Собственный товар",false);
 		endformat;
 		
-		if (nonblank(location)) then begin
-			Locr.Code = location;
-			if (ReadFirstMain(Locr,1,true)) then begin
-				if (nonblank(Locr.ConsigStockCode)) then begin
-					vConsStockCode[Locr.Code] = Locr.ConsigStockCode;
-				end;
-				if (nonblank(Locr.DefectStockCode)) then begin
-					vDefStockCode[Locr.Code] = Locr.DefectStockCode;
-				end;
+		Locr.Code = "";
+		while (loopmain(Locr,1,true)) begin
+			if (nonblank(Locr.ConsigStockCode)) then begin
+				vConsStockCode[Locr.Code] = Locr.ConsigStockCode;
+				vConsStockCodef[Locr.ConsigStockCode] = true;
+			end;
+			if (nonblank(Locr.DefectStockCode)) then begin
+				vDefStockCode[Locr.Code] = Locr.DefectStockCode;
 			end;
 		end;
 		
@@ -767,7 +802,7 @@ begin
 						if(testf2)then begin
 							switch(IHr.ConsigStock)begin
 								case 0:
-								if(INr.ConsgType==0)then begin
+								if(INr.ConsgType==0 and !vConsStockCodef[IHr.Location])then begin
 									switch(IHr.CurncyCode)begin
 										case"EUR":aBrandsPUEUR[br] = aBrandsPUEUR[br] + IHr.TotCostPriceCurncy * sign;
 										case"CHF":aBrandsPUCHF[br] = aBrandsPUCHF[br] + IHr.TotCostPriceCurncy * sign;
@@ -775,7 +810,7 @@ begin
 										case"GBP":aBrandsPUGBP[br] = aBrandsPUGBP[br] + IHr.TotCostPriceCurncy * sign;
 									end;
 								end else begin
-									if(INr.ConsgType==1)then begin
+									if(INr.ConsgType==1 or vConsStockCodef[IHr.Location])then begin
 										switch(IHr.CurncyCode)begin
 										case"EUR":aBrandsPUEURcons[br] = aBrandsPUEURcons[br] + IHr.TotCostPriceCurncy * sign;
 										case"CHF":aBrandsPUCHFcons[br] = aBrandsPUCHFcons[br] + IHr.TotCostPriceCurncy * sign;
@@ -2929,6 +2964,19 @@ begin
 	vector string 255 vConsStockCode, vDefStockCode;
 
 	
+	
+	
+	Locr.Code = "";
+	while (LoopMain(Locr,1,true)) begin
+		if (nonblank(Locr.ConsigStockCode)) then begin
+			vConsStockCode[Locr.Code] = Locr.ConsigStockCode;
+		end;
+		if (nonblank(Locr.DefectStockCode)) then begin
+			vDefStockCode[Locr.Code] = Locr.DefectStockCode;
+		end;
+	end;
+	
+	
 	For(i=0;i<brandscnt;i=i+1) begin
 		aBrandsRetEUR[i]= 0;
 		aBrandsRetCHF[i]= 0;
@@ -2959,10 +3007,10 @@ begin
 			end;
 		end; 
 		
-		consig = false;
-		if(INr.ConsgType==1)then begin
-			consig = true;
-		end;
+		// consig = false;
+		// if(INr.ConsgType==1)then begin
+			// consig = true;
+		// end;
 		if(setinset("30",INr.DispGroups))then begin foundf = false; end;
 		if(setinset("31",INr.DispGroups))then begin foundf = false; end;
 		if(setinset("32",INr.DispGroups))then begin foundf = false; end;
@@ -3010,6 +3058,11 @@ begin
 			end;
 			
 			if(testf)then begin
+				consig = false;
+				if(vDefStockCode[location]!=IHr.Location or INr.ConsgType==1)then begin
+					consig = true;
+				end;
+				
 				sign = 1;		
 				if(IHr.Invalid>0)then begin
 					if(IHr.Qty<=0)then begin
