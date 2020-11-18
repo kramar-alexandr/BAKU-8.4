@@ -91,9 +91,6 @@ begin
 	row IVVc IVrw;
 	record PUVc PUr;
 	row PUVc PUrw;
-	record LocationVc Locr;
-	vector string 255 vConsStockCode, vDefStockCode;
-	vector boolean vConsStockCodef;
 	
 
 	startformat(15);
@@ -105,17 +102,6 @@ begin
 		outstring(0,0,"",false);
 		outstring(0,0,"Собственный товар",false);
 	endformat;
-	
-	Locr.Code = "";
-	while (LoopMain(Locr,1,true)) begin
-		if (nonblank(Locr.ConsigStockCode)) then begin
-			vConsStockCode[Locr.Code] = Locr.ConsigStockCode;
-			vConsStockCodef[Locr.ConsigStockCode] = true;
-		end;
-		if (nonblank(Locr.DefectStockCode)) then begin
-			vDefStockCode[Locr.Code] = Locr.DefectStockCode;
-		end;
-	end;
 	
 	For(i=0;i<brandscnt;i=i+1) begin
 		aBrandsBalEUR[i] = 0;
@@ -435,143 +421,8 @@ begin
 				end;
 			end;
 		end;
-		ResetLoop(ISr);
-		if (nonblank(vConsStockCode[location])) then begin
-			ClearVector(cqty);
-			ClearVector(ccost);
-			ISr.Code = INr.Code;
-			realcur = INr.LastPurchCurncyCode;
-			TrHs2 = true;
-			ResetLoop(ISr);
-			while(loopmain(ISr,1,TrHs2)) begin
-				testf2 = true;
-				if(ISr.Code!=INr.Code)then begin testf2 = false; TrHs2 = false; end;
-				//logtext(0,INr.Code & "_" & ISr.Code);
-				if(ISr.Location==";;;")then begin testf2 = false; end;
-				if(ISr.Location!=vConsStockCode[location])then begin testf2 = false; end;
 				
-				if(testf2)then begin
-					SBr.CostPrice = 0;
-					ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,"",SBr.CostPrice,acnt,cqty,ccost,acur,brandcur);
-				end;
-				if(ISr.Instock<=0)then begin testf2 = false; end;
-				
-				if(testf2)then begin
-					if(INr.SerNrf==0)then begin
-						For(i=0;i<acnt;i=i+1) begin
-							if(INr.LastPurchCurncyCode==acur[i] and nonblank(INr.LastPurchCurncyCode))then begin
-								cqty[INr.LastPurchCurncyCode] = cqty[INr.LastPurchCurncyCode] + cqty[""];
-								ccost[INr.LastPurchCurncyCode] = ccost[INr.LastPurchCurncyCode] + ccost[""];
-								cqty[""] = blankval;
-								ccost[""] = blankval;
-							end;
-						end; 
-						
-						
-						For(i=0;i<acnt;i=i+1) begin
-							if(cqty[acur[i]]!=0)then begin
-								INr.LastPurchCurncyCode = acur[i];
-								ISr.Instock = cqty[acur[i]];
-								curcost = 0;
-								curcost2 = 0;
-								FindAwerageCostCurProc(INr.Code,vConsStockCode[location],INr.LastPurchCurncyCode,ed,incurncy,"",curcost,curcost2);
-								itqty = ItemQtyPerDateGlob(INr.Code,addday(ed,1),vConsStockCode[location]);
-								if(itqty<0)then begin
-									sign = -1;
-								end else begin
-									sign = 1;
-								end;
-								
-								if(foundf)then begin
-									switch(INr.LastPurchCurncyCode)begin
-										case"EUR":aBrandsBalEURcons[br] = aBrandsBalEURcons[br] + (curcost*itqty*sign);
-										case"CHF":aBrandsBalCHFcons[br] = aBrandsBalCHFcons[br] + (curcost*itqty*sign);
-										case"USD":aBrandsBalUSDcons[br] = aBrandsBalUSDcons[br] + (curcost*itqty*sign);
-										case"GBP":aBrandsBalGBPcons[br] = aBrandsBalGBPcons[br] + (curcost*itqty*sign);
-										case"AZN":aBrandsBalAZNcons[br] = aBrandsBalAZNcons[br] + (curcost*itqty*sign);
-										case"":		aBrandsBalAZNcons[br] = aBrandsBalAZNcons[br] + (curcost*itqty*sign);
-									end;
-								end;
-							end;
-						end;
-						
-					end else begin
-						SBr.Item = INr.Code;
-						SBr.Location = ISr.Location;
-						while(loopmain(SBr,2,(SBr.Item==INr.Code and SBr.Location==ISr.Location))) begin
-							if(SBr.Item==INr.Code and SBr.Location==ISr.Location)then begin
-								ISr.Instock = ItemQtyPerDate(ISr.Code,todate,ISr.Location,SBr.Serial,SBr.CostPrice,acnt,cqty,ccost,acur,brandcur);
-								itqty = SBr.Quant;
-								if(ISr.Instock>0)then begin
-									curcost = 0;
-									curcost2 = 0;
-									FindAwerageCostCurProc(INr.Code,vConsStockCode[location],INr.LastPurchCurncyCode,ed,incurncy,"",curcost,curcost2);
-									
-									// if(INr.Code=="3203136233")then begin
-										// logtext(0,INr.Code & Chr(9) & ISr.Location & Chr(9) & INr.LastPurchCurncyCode & Chr(9) & Chr(9) & brandcur & Chr(9) & curcost & Chr(9) & curcost2);
-									// end;
-									
-									if(true)then begin
-										//awercost = costprice;
-										IHr.ArtCode = INr.Code;
-										IHr.SerialNr = SBr.Serial;
-										IHr.FileName = "PUVc";
-										if(readlastkey("ArtCodeSerialNr",IHr,3,true))then begin
-											PUr.SerNr = IHr.TransNr;
-											readfirstmain(PUr,1,true);
-											matrowget(PUr,IHr.Row,PUrw);
-											curcost = PUrw.UPrice;
-										end else begin
-											IHr.ArtCode = INr.Code;
-											IHr.SerialNr = SBr.Serial;
-											IHr.FileName = "IVVc";
-											readfirstkey("ArtCodeSerialNr",IHr,3,true);
-											IVr.SerNr = IHr.TransNr;
-											readfirstmain(IVr,1,true);
-											matrowget(IVr,IHr.Row,IVrw);
-											curcost = IVrw.Sum;
-										end;
-									end;
-									
-									
-									// if(INr.Code=="3203136233")then begin
-										// logtext(0,INr.Code & Chr(9) & ISr.Location & Chr(9) & INr.LastPurchCurncyCode & Chr(9) & Chr(9) & brandcur & Chr(9) & curcost & Chr(9) & curcost2);
-										// logtext(0,itqty);
-										// logtext(0,ISr.Instock);
-									// end;
-									
-									if(itqty==0)then begin
-										itqty = ISr.Instock;	
-									end;
-									
-								
-								//ISr.Instock = ItemQtyPerDateGlob(INr.Code,addday(ed,1),location);
-									if(itqty<0)then begin
-										sign = -1;
-									end else begin
-										sign = 1;
-									end;
-									
-									if(foundf)then begin
-										if(INr.ConsgType==1)then begin
-											switch(INr.LastPurchCurncyCode)begin
-												case"EUR":aBrandsBalEURcons[br] = aBrandsBalEURcons[br] + (curcost*itqty*sign);
-												case"CHF":aBrandsBalCHFcons[br] = aBrandsBalCHFcons[br] + (curcost*itqty*sign);
-												case"USD":aBrandsBalUSDcons[br] = aBrandsBalUSDcons[br] + (curcost*itqty*sign);
-												case"GBP":aBrandsBalGBPcons[br] = aBrandsBalGBPcons[br] + (curcost*itqty*sign);
-												case"AZN":aBrandsBalAZNcons[br] = aBrandsBalAZNcons[br] + (curcost*itqty*sign);
-												case"":		aBrandsBalAZNcons[br] = aBrandsBalAZNcons[br] + (curcost*itqty*sign);
-											end;
-										end;
-									end;
-								end;
-							end;
-						end;
-						resetloop(SBr);
-					end;
-				end;
-			end;
-		end;
+		
 		
 		
 		
