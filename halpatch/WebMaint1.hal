@@ -2,6 +2,7 @@ external procedure ExtractObj(string,var Integer,var string);
 external function LongInt INVcRecordRemoveTest(var record INVc,record INVc,LongInt,LongInt);
 external function Boolean IntORchrsum(record IntORVc,Integer);// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 19 11 2020 y. at 9:51:56 AM
 external procedure SumupIntOR(var record IntORVc,var val);// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 19 11 2020 y. at 9:52:00 AM
+external function boolean CompanyIsJWLikeCompany(Integer); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 16:04 20.11.2020
 
 global webpublic updating procedure WebFixConsItemsDupl()
 begin
@@ -78,34 +79,90 @@ end;
 
 
 
-global webpublic procedure WebGetCCCollectAndCCModel()
+global webpublic updating procedure WebGetCCCollectAndCCModel()
 begin
 
-	record INVc INr;
+	record INVc INr, ConsINr;
 	boolean TrHs;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
-	longint i;
+	longint i, CompNr;
+	string 255 comp;
+	boolean testf, ColDIf, ModDIf, ConsItemf;
+	record OldDIVc OldDIr;
+	record ConsItemVc CIr;
+
+	logtext (0,"start WebGetCCCollectAndCCModel");
 
 	setcompany(1,false);
 
 	blockload(Compb);
+	comp = WebGetArg("company");
+	if (nonblank(comp)) then begin
+		CompNr = StringToInt(comp);
+	end else begin
+		CompNr = 0;
+	end;
 	
 	for(i=0;i<matrowcnt(Compb);i=i+1)begin
-		matrowget(Compb,i,Comprw);
-		if(Comprw.ActiveStatus==0 and i+1!=28 and i+1!=29)then begin
-			setcompany(i+1,false);
-			INr.Code = "";
-			TrHs = true;
-			while(loopmain(INr,1,TrHs))begin
-				if (nonblank(INr.MainDisp) or nonblank(INr.SNOne)) then begin
-					WebOutString("CCCollection<=>" & INr.MainDisp & "<=>CCModel<=>" & INr.SNOne & "<=>Company<=>" & CurrentCompany);
-					weboutstring("<BR>");
+		testf = true;
+		if (CompNr>0 and i+1!=CompNr) then begin testf = false; end;
+		if (testf) then begin
+			matrowget(Compb,i,Comprw);
+			if(Comprw.ActiveStatus==0 and i+1!=28 and i+1!=29 and (!CompanyIsJWLikeCompany(i+1) or i+1==3)) then begin
+				setcompany(i+1,false);
+				logtext(0,i+1 & " Company");
+				INr.Code = "";
+				TrHs = true;
+				while(loopmain(INr,1,TrHs))begin
+					// logtext(0,INr.Code & " INr.Code");
+					ColDIf = false;
+					ModDIf = false;
+					ConsItemf = false;
+					if (nonblank(INr.MainDisp) or nonblank(INr.SNOne)) then begin
+						if (nonblank(INr.MainDisp)) then begin 
+							OldDIr.Code = INr.MainDisp;
+							if (ReadFirstMain(OldDIr,1,true)) then begin
+								INr.CCCollectName = OldDIr.Name;
+								ColDIf = true;
+							end else begin
+								INr.CCCollectName = INr.MainDisp;
+							end;
+						end;
+						if (nonblank(INr.SNOne)) then begin
+							OldDIr.Code = INr.SNOne;
+							if (ReadFirstMain(OldDIr,1,true)) then begin
+								INr.CCModelName = OldDIr.Name;
+								ModDIf = true;
+							end else begin
+								INr.CCModelName = INr.SNOne;
+							end;
+						end;
+						if (nonblank(INr.MainDisp) or nonblank(INr.SNOne)) then begin
+							RecordStore(INr,true);
+						end;
+						setcompany(18,false);
+						CIr.LocCode = INr.Code;
+						CIr.BrandCode = INr.BPIBrand;
+						if (ReadFirstKey("LocCodeBrand",CIr,1,true)) then begin
+							ConsItemf = true;
+							ConsINr.Code = CIr.Code;
+							if (ReadFirstMain(ConsINr,1,true)) then begin
+								ConsINr.CCCollectName = INr.CCCollectName;
+								ConsINr.CCModelName = INr.CCModelName;
+								RecordStore(ConsINr,true);
+							end;
+						end;
+						Resetcompany(i+1);
+						WebOutString("CCCollection<=>" & INr.MainDisp & "<=>" & ColDIf & "<=>CCModel<=>" & INr.SNOne & "<=>" & ModDIf & "<=>Company<=>" & CurrentCompany & "<=>" & ConsItemf);
+						weboutstring("<BR>");
+					end;
 				end;
+				Resetloop(INr);
 			end;
-			Resetloop(INr);
 		end;
 	end;
+	logtext (0,"finish WebGetCCCollectAndCCModel");
 return;
 end;
 
