@@ -88,6 +88,7 @@ remote procedure IVVc_PastePrice(var record IVVc,record IVVc,Integer,var string)
 external function roundmode SetRoundModeD(Integer);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 13 February 2018 11:38:01
 remote procedure WriteCustomLogOnServer(area,string);
 remote function string 255 NormalizeStrToJson (string);
+remote procedure ProceedSendTaxNPTSOClass_Remote(var area, var record IVVc);// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 30 11 2020 y. at 12:02:12 PM
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -3940,171 +3941,174 @@ begin
 	terminal = 0.0;
 	discount = 0.0;
 	loyalty = 0;
-
-	addtexttoarea("{" & chr(13) & chr(10),req);
-			addtexttoarea("\"requestData\":{" & chr(13) & chr(10),req);
-					addtexttoarea("\"tokenData\":{" & chr(13) & chr(10),req);
-							addtexttoarea("\"parameters\":{" & chr(13) & chr(10),req);
-									addtexttoarea("\"doc_type\":\"sale\"," & chr(13) & chr(10),req);
-									addtexttoarea("\"data\":{" & chr(13) & chr(10),req);
-											addtexttoarea("\"cashier\":\"" & IVr.SalesMan & "\"," & chr(13) & chr(10),req);
-											addtexttoarea("\"currency\":\"AZN\"," & chr(13) & chr(10),req);
-											addtexttoarea("\"items\":[" & chr(13) & chr(10),req);
-											mtrw = matrowcnt(IVr);
-											For(i=0;i<mtrw;i=i+1) begin
-												matrowget(IVr,i,IVrw);
+	
+	if(left(currentuser,2)!="SA")then begin
+		addtexttoarea("{" & chr(13) & chr(10),req);
+				addtexttoarea("\"requestData\":{" & chr(13) & chr(10),req);
+						addtexttoarea("\"tokenData\":{" & chr(13) & chr(10),req);
+								addtexttoarea("\"parameters\":{" & chr(13) & chr(10),req);
+										addtexttoarea("\"doc_type\":\"sale\"," & chr(13) & chr(10),req);
+										addtexttoarea("\"data\":{" & chr(13) & chr(10),req);
+												addtexttoarea("\"cashier\":\"" & IVr.SalesMan & "\"," & chr(13) & chr(10),req);
+												addtexttoarea("\"currency\":\"AZN\"," & chr(13) & chr(10),req);
+												addtexttoarea("\"items\":[" & chr(13) & chr(10),req);
+												mtrw = matrowcnt(IVr);
+												For(i=0;i<mtrw;i=i+1) begin
+													matrowget(IVr,i,IVrw);
 												
-												if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment or IVrw.stp==kInvoiceRowTypePrepayment)then begin
-													loyalty = loyalty + IVrw.Sum;
+													if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment or IVrw.stp==kInvoiceRowTypePrepayment)then begin
+														loyalty = loyalty + IVrw.Sum;
+													end;
+													if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
+														bonus = bonus + IVrw.Sum;
+													end;
 												end;
-												if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
-													bonus = bonus + IVrw.Sum;
-												end;
-											end;
 											
-											For(i=0;i<mtrw;i=i+1) begin
-												matrowget(IVr,i,IVrw);
-												if(IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
-													for(j=0;j<matrowcnt(PMb);j=j+1)begin
-														matrowget(PMb,j,PMrw);
-														if(PMrw.Code==IVrw.PayMode)then begin
-															if(PMrw.AccNr=="51")then begin
-																terminal = terminal + IVrw.Sum;
-															end else begin
-																loyalty = loyalty + IVrw.Sum;
+												For(i=0;i<mtrw;i=i+1) begin
+													matrowget(IVr,i,IVrw);
+													if(IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
+														for(j=0;j<matrowcnt(PMb);j=j+1)begin
+															matrowget(PMb,j,PMrw);
+															if(PMrw.Code==IVrw.PayMode)then begin
+																if(PMrw.AccNr=="51")then begin
+																	terminal = terminal + IVrw.Sum;
+																end else begin
+																	loyalty = loyalty + IVrw.Sum;
+																end;
 															end;
 														end;
 													end;
+												
 												end;
-												
-											end;
-												//MessageBox(0, IVrw.PayMode);
-												//bonus karti CB
+													//MessageBox(0, IVrw.PayMode);
+													//bonus karti CB
 											
-											//Все что не банк и не лояльность - кэш
+												//Все что не банк и не лояльность - кэш
 											
-											cash = IVr.Sum4 - terminal - loyalty - bonus;
+												cash = IVr.Sum4 - terminal - loyalty - bonus;
 												
-											For(i=0;i<mtrw;i=i+1) begin
-												matrowget(IVr,i,IVrw);	
+												For(i=0;i<mtrw;i=i+1) begin
+													matrowget(IVr,i,IVrw);	
 												
-												if(IVrw.stp==1 and nonblank(IVrw.ArtCode) and IVrw.Quant>0) then begin
-													if(i>0) then begin
-														addtexttoarea(",",req);
+													if(IVrw.stp==1 and nonblank(IVrw.ArtCode) and IVrw.Quant>0) then begin
+														if(i>0) then begin
+															addtexttoarea(",",req);
+														end;
+														addtexttoarea("{",req);
+														addtexttoarea("\"itemName\":" & "\"" & NormalizeStrToJson(IVrw.Spec) & "\",",req);
+														addtexttoarea("\"itemCodeType\":3,",req);
+														addtexttoarea("\"itemCode\":" & "\"" & IVrw.ArtCode & "\",",req);
+														addtexttoarea("\"itemQuantityType\":0,",req);
+														tstr = ValToString(IVrw.Quant,M45Val,"",".",0);
+														addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
+														tstr = ValToString(IVrw.Sum/IVrw.Quant,M45Val,"",".",0);
+														addtexttoarea("\"itemPrice\":" & tstr & ",",req);
+														tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
+														addtexttoarea("\"itemSum\":" & tstr & ",",req);
+														addtexttoarea("\"discount\":0.0,",req);
+														addtexttoarea("\"itemVatPercent\":18",req);
+														addtexttoarea("}",req);
+														vatsum = vatsum + IVrw.Sum;
+														vatperc["18.00"] = vatsum;
 													end;
-													addtexttoarea("{",req);
-													addtexttoarea("\"itemName\":" & "\"" & NormalizeStrToJson(IVrw.Spec) & "\",",req);
-													addtexttoarea("\"itemCodeType\":3,",req);
-													addtexttoarea("\"itemCode\":" & "\"" & IVrw.ArtCode & "\",",req);
-													addtexttoarea("\"itemQuantityType\":0,",req);
-													tstr = ValToString(IVrw.Quant,M45Val,"",".",0);
-													addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
-													tstr = ValToString(IVrw.Sum/IVrw.Quant,M45Val,"",".",0);
-													addtexttoarea("\"itemPrice\":" & tstr & ",",req);
-													tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
-													addtexttoarea("\"itemSum\":" & tstr & ",",req);
-													addtexttoarea("\"discount\":0.0,",req);
-													addtexttoarea("\"itemVatPercent\":18",req);
-													addtexttoarea("}",req);
-													vatsum = vatsum + IVrw.Sum;
-													vatperc["18.00"] = vatsum;
-												end;
 												
-												if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
-													if(i>0) then begin
-														addtexttoarea(",",req);
-													end;
-													addtexttoarea("{",req);
-													addtexttoarea("\"itemName\":" & "\"" & "Gift Voucher" & "\",",req);
-													addtexttoarea("\"itemCodeType\":4,",req);
-													addtexttoarea("\"itemCode\":" & "\"" & "GV" & "\",",req);
-													addtexttoarea("\"itemQuantityType\":0,",req);
-													tstr = ValToString(1,M45Val,"",".",0);
-													addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
-													tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
-													addtexttoarea("\"itemPrice\":" & tstr & ",",req);
-													tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
-													addtexttoarea("\"itemSum\":" & tstr & ",",req);
-													addtexttoarea("\"discount\":0.0,",req);
-													addtexttoarea("\"itemVatPercent\":0",req);
-													addtexttoarea("}",req);
-													vatsum = vatsum + IVrw.Sum;
-													vatperc["0.0"] = vatsum;
+													if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
+														if(i>0) then begin
+															addtexttoarea(",",req);
+														end;
+														addtexttoarea("{",req);
+														addtexttoarea("\"itemName\":" & "\"" & "Gift Voucher" & "\",",req);
+														addtexttoarea("\"itemCodeType\":4,",req);
+														addtexttoarea("\"itemCode\":" & "\"" & "GV" & "\",",req);
+														addtexttoarea("\"itemQuantityType\":0,",req);
+														tstr = ValToString(1,M45Val,"",".",0);
+														addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
+														tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
+														addtexttoarea("\"itemPrice\":" & tstr & ",",req);
+														tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
+														addtexttoarea("\"itemSum\":" & tstr & ",",req);
+														addtexttoarea("\"discount\":0.0,",req);
+														addtexttoarea("\"itemVatPercent\":0",req);
+														addtexttoarea("}",req);
+														vatsum = vatsum + IVrw.Sum;
+														vatperc["0.0"] = vatsum;
 													
-												end;
+													end;
 												
 												
-											end; 
-											addtexttoarea("]," & chr(13) & chr(10),req);
-											tstr = ValToString(IVr.Sum4,M45Val,"",".",0);
-											addtexttoarea("\"sum\":" & tstr & "," & chr(13) & chr(10),req);
+												end; 
+												addtexttoarea("]," & chr(13) & chr(10),req);
+												tstr = ValToString(IVr.Sum4,M45Val,"",".",0);
+												addtexttoarea("\"sum\":" & tstr & "," & chr(13) & chr(10),req);
 									
 											
-											if(cash>0) then begin
-												tstr = ValToString(cash,M45Val,"",".",0);
-												addtexttoarea("\"cashSum\":" & tstr & "," & chr(13) & chr(10),req);
-											end else begin
-												addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
-											end;
+												if(cash>0) then begin
+													tstr = ValToString(cash,M45Val,"",".",0);
+													addtexttoarea("\"cashSum\":" & tstr & "," & chr(13) & chr(10),req);
+												end else begin
+													addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
+												end;
 											
-											if(terminal>0) then begin
-												tstr = ValToString(terminal,M45Val,"",".",0);
-												addtexttoarea("\"cashlessSum\":" & tstr & "," & chr(13) & chr(10),req);
-											end else begin
-												addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
-											end;
+												if(terminal>0) then begin
+													tstr = ValToString(terminal,M45Val,"",".",0);
+													addtexttoarea("\"cashlessSum\":" & tstr & "," & chr(13) & chr(10),req);
+												end else begin
+													addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
+												end;
 											
 											
-											if(loyalty>0)then begin
-												addtexttoarea("\"prepaymentSum\":" & loyalty & "," & chr(13) & chr(10),req);
-											end else begin
-												addtexttoarea("\"prepaymentSum\":0.0," & chr(13) & chr(10),req);
-											end;
-											addtexttoarea("\"creditSum\":0.0," & chr(13) & chr(10),req);
-											if(bonus>0)then begin
-												addtexttoarea("\"bonusSum\":" & bonus & "," & chr(13) & chr(10),req);
-											end else begin
-												addtexttoarea("\"bonusSum\":0.0," & chr(13) & chr(10),req);
-											end;
+												if(loyalty>0)then begin
+													addtexttoarea("\"prepaymentSum\":" & loyalty & "," & chr(13) & chr(10),req);
+												end else begin
+													addtexttoarea("\"prepaymentSum\":0.0," & chr(13) & chr(10),req);
+												end;
+												addtexttoarea("\"creditSum\":0.0," & chr(13) & chr(10),req);
+												if(bonus>0)then begin
+													addtexttoarea("\"bonusSum\":" & bonus & "," & chr(13) & chr(10),req);
+												end else begin
+													addtexttoarea("\"bonusSum\":0.0," & chr(13) & chr(10),req);
+												end;
 											
-											getVectorTags(vatperc,vtags);
+												getVectorTags(vatperc,vtags);
 											
-											addtexttoarea("\"vatAmounts\":[" & chr(13) & chr(10),req);
-													for(k=0;k<vtags.length;k=k+1)begin
-														if(k>0)then begin
-															addtexttoarea("," & chr(13) & chr(10),req);
-														end;
+												addtexttoarea("\"vatAmounts\":[" & chr(13) & chr(10),req);
+														for(k=0;k<vtags.length;k=k+1)begin
+															if(k>0)then begin
+																addtexttoarea("," & chr(13) & chr(10),req);
+															end;
 														
-														addtexttoarea("{" & chr(13) & chr(10),req);
-														tstr = ValToString(vatperc[vtags[k]],M45Val,"",".",0);
-														if(vatperc[vtags[k]]!=0)then begin
-															addtexttoarea("\"vatSum\":" & tstr & "",req);
-														end else begin
-															addtexttoarea("\"vatSum\":" & "0" & "",req);
-														end;
-														if(vtags[k]!="0.0")then begin
-															addtexttoarea(",\"vatPercent\":" & vtags[k],req);
-														end;
-														addtexttoarea("}" & chr(13) & chr(10),req);	
+															addtexttoarea("{" & chr(13) & chr(10),req);
+															tstr = ValToString(vatperc[vtags[k]],M45Val,"",".",0);
+															if(vatperc[vtags[k]]!=0)then begin
+																addtexttoarea("\"vatSum\":" & tstr & "",req);
+															end else begin
+																addtexttoarea("\"vatSum\":" & "0" & "",req);
+															end;
+															if(vtags[k]!="0.0")then begin
+																addtexttoarea(",\"vatPercent\":" & vtags[k],req);
+															end;
+															addtexttoarea("}" & chr(13) & chr(10),req);	
 														
-													end;
+														end;
 																									
-													addtexttoarea("]" & chr(13) & chr(10),req);
+														addtexttoarea("]" & chr(13) & chr(10),req);
 											
 											
-									addtexttoarea("}" & chr(13) & chr(10),req);
-							addtexttoarea("}," & chr(13) & chr(10),req);
-							addtexttoarea("\"operationId\":\"createDocument\"," & chr(13) & chr(10),req);
-							addtexttoarea("\"version\":1" & chr(13) & chr(10),req);
-					addtexttoarea("}," & chr(13) & chr(10),req);
-					addtexttoarea("\"checkData\":{" & chr(13) & chr(10),req);
-							addtexttoarea("\"payment_change\":0.0," & chr(13) & chr(10),req);
-							addtexttoarea("\"check_type\":1" & chr(13) & chr(10),req);
-					addtexttoarea("}" & chr(13) & chr(10),req);
-			addtexttoarea("}" & chr(13) & chr(10),req);
-	addtexttoarea("}" & chr(13) & chr(10),req);
+										addtexttoarea("}" & chr(13) & chr(10),req);
+								addtexttoarea("}," & chr(13) & chr(10),req);
+								addtexttoarea("\"operationId\":\"createDocument\"," & chr(13) & chr(10),req);
+								addtexttoarea("\"version\":1" & chr(13) & chr(10),req);
+						addtexttoarea("}," & chr(13) & chr(10),req);
+						addtexttoarea("\"checkData\":{" & chr(13) & chr(10),req);
+								addtexttoarea("\"payment_change\":0.0," & chr(13) & chr(10),req);
+								addtexttoarea("\"check_type\":1" & chr(13) & chr(10),req);
+						addtexttoarea("}" & chr(13) & chr(10),req);
+				addtexttoarea("}" & chr(13) & chr(10),req);
+		addtexttoarea("}" & chr(13) & chr(10),req);
 
-
+	end else begin
+		ProceedSendTaxNPTSOClass_Remote(req,IVr);
+	end;
   writeareatofile(req,"SendTAXRequest.txt",1);
   
   SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
