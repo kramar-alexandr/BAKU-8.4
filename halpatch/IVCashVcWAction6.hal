@@ -4206,7 +4206,7 @@ end;
 global
 updating procedure ProceedReturnTaxNPTSOClass()
 begin
-  Integer wn,mwn,rownr,mtrw,i,loopcount,quant;
+  Integer wn,mwn,rownr,mtrw,i,loopcount,quant,j;
   record RcVc RepSpec;
   record IVVc IVr;
   record UserVc Userr;
@@ -4217,10 +4217,12 @@ begin
   boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   string 255 category, transactionId;
   json jsresponse;
-  val cash, terminal, discount, summary,sum;
+  val cash, terminal, discount,summary,sum,loyalty,bonus,vatsum;
   array string 50 artCode;
 	record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 7:01:40 PM
-	area logarea;
+	area logarea;// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 30 11 2020 y. at 3:40:55 PM
+	record PMBlock PMb;// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 30 11 2020 y. at 3:40:56 PM
+  row PMBlock PMrw;// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 30 11 2020 y. at 3:40:58 PM
 	
   wn = CurWindow;
   mwn = motherwindow(wn);
@@ -4234,7 +4236,7 @@ begin
   if(readfirstkey("TaxTransactionCode",IVTaxTr,1,true))then begin
 		IVr.SerNr = IVTaxTr.SerNr;
 		if(ReadFirstMain(IVr,1,true))then begin
-			if(left(currentuser,2)!="SA")then begin
+			if(false)then begin//disabled// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 30 11 2020 y. at 3:56:27 PM
 				if(IVr.SerNr<0) then begin // IVr.SerNr==-1
 					MessageBox(0, "Fiscal ID not found!  " & RepSpec.f6 & "  invoice No " & IVr.SerNr);
 				end;
@@ -4272,6 +4274,41 @@ begin
 				addtexttoarea("\"refund_short_document_id\":\"" & IVr.TaxTransactionCode & "\"," & chr(13) & chr(10),req);
 				addtexttoarea("\"items\":[" & chr(13) & chr(10),req);
 				mtrw = matrowcnt(IVr);
+				
+				For(i=0;i<mtrw;i=i+1) begin
+					matrowget(IVr,i,IVrw);
+				
+					if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment or IVrw.stp==kInvoiceRowTypePrepayment)then begin
+						loyalty = loyalty + IVrw.Sum;
+					end;
+					if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
+						bonus = bonus + IVrw.Sum;
+					end;
+				end;
+				
+				For(i=0;i<mtrw;i=i+1) begin
+					matrowget(IVr,i,IVrw);
+					if(IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
+						for(j=0;j<matrowcnt(PMb);j=j+1)begin
+							matrowget(PMb,j,PMrw);
+							if(PMrw.Code==IVrw.PayMode)then begin
+								if(PMrw.AccNr=="51")then begin
+									terminal = terminal + IVrw.Sum;
+								end else begin
+									loyalty = loyalty + IVrw.Sum;
+								end;
+							end;
+						end;
+					end;
+				end;
+				
+				cash = IVr.Sum4 - terminal - loyalty - bonus;
+				
+				cash = AbsoluteVal(cash);
+				loyalty = AbsoluteVal(loyalty);
+				bonus = AbsoluteVal(bonus);
+				terminal = AbsoluteVal(terminal);
+				
 				For(i=0;i<mtrw;i=i+1) begin
 					matrowget(IVr,i,IVrw);
 					if(IVrw.ArtCode==RepSpec.f1 or 
@@ -4296,30 +4333,6 @@ begin
 							quant = RepSpec.flags[5];
 						end;
 			
-						if(nonblank(IVrw.PayMode) and IVrw.PayMode!="CB") then begin
-							if(IVrw.PayMode=="T1" or 
-							IVrw.PayMode=="T2" or 
-							IVrw.PayMode=="T3" or 
-							IVrw.PayMode=="T4" or 
-							IVrw.PayMode=="T5" or 
-							IVrw.PayMode=="T6" or 
-							IVrw.PayMode=="T7" or 
-							IVrw.PayMode=="T8" or 
-							IVrw.PayMode=="T9" or 
-							IVrw.PayMode=="B5" or 
-							IVrw.PayMode=="B" or 
-							IVrw.PayMode=="BB" or 
-							IVrw.PayMode=="B1" or 
-							IVrw.PayMode=="B2" or 
-							IVrw.PayMode=="B3" or 
-							IVrw.PayMode=="B7" or 
-							IVrw.PayMode=="B9" or 
-							IVrw.PayMode=="T7") then begin 
-								terminal=terminal+(IVrw.Sum/IVrw.Quant)*quant;
-							end else begin
-								cash=cash+(IVrw.Sum/IVrw.Quant)*quant;
-							end;
-						end;
 						if(IVrw.stp==1 and quant>0) then begin
 							if(loopcount>0) then begin
 								addtexttoarea(",",req);
@@ -4348,18 +4361,33 @@ begin
 				tstr = ValToString(summary,M45Val,"",".",0);
 				addtexttoarea("\"sum\":" & tstr & "," & chr(13) & chr(10),req);
 	
-				if(terminal>0) then begin
+				if(cash>0) then begin
+					tstr = ValToString(cash,M45Val,"",".",0);
+					addtexttoarea("\"cashSum\":" & tstr & "," & chr(13) & chr(10),req);
+				end else begin
 					addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
+				end;
+			
+				if(terminal>0) then begin
+					tstr = ValToString(terminal,M45Val,"",".",0);
 					addtexttoarea("\"cashlessSum\":" & tstr & "," & chr(13) & chr(10),req);
 				end else begin
-					addtexttoarea("\"cashSum\":" & tstr & "," & chr(13) & chr(10),req);
 					addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
 				end;
-													
-													
+			
+			
+				if(loyalty>0)then begin
+					addtexttoarea("\"prepaymentSum\":" & loyalty & "," & chr(13) & chr(10),req);
+				end else begin
+					addtexttoarea("\"prepaymentSum\":0.0," & chr(13) & chr(10),req);
+				end;
 				addtexttoarea("\"creditSum\":0.0," & chr(13) & chr(10),req);
-				addtexttoarea("\"prepaymentSum\":0.0," & chr(13) & chr(10),req);
-				addtexttoarea("\"bonusSum\":0.0," & chr(13) & chr(10),req);
+				if(bonus>0)then begin
+					addtexttoarea("\"bonusSum\":" & bonus & "," & chr(13) & chr(10),req);
+				end else begin
+					addtexttoarea("\"bonusSum\":0.0," & chr(13) & chr(10),req);
+				end;
+																										
 				addtexttoarea("\"vatAmounts\":[" & chr(13) & chr(10),req);
 				addtexttoarea("{" & chr(13) & chr(10),req);
 				addtexttoarea("\"vatSum\":" & summary & ",",req);
