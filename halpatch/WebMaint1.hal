@@ -3,6 +3,8 @@ external function LongInt INVcRecordRemoveTest(var record INVc,record INVc,LongI
 external function Boolean IntORchrsum(record IntORVc,Integer);// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 19 11 2020 y. at 9:51:56 AM
 external procedure SumupIntOR(var record IntORVc,var val);// Edit ************************** BPI Ukraine - KramarAlexandr - 04, 19 11 2020 y. at 9:52:00 AM
 external function boolean CompanyIsJWLikeCompany(Integer); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 16:04 20.11.2020
+external updating procedure RecalculatePricesfromConsComp(record INVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:24 02.12.2020
+
 
 global webpublic updating procedure WebFixConsItemsDupl()
 begin
@@ -585,10 +587,49 @@ end;
 
 
 
-
-
-
-
+global webpublic updating procedure WeFillPricesINItems()
+begin
+	record ItemDuplicatesVc IDr;
+	record INVc INr, IN2r, oldINr;
+	vector date LastPriceDate;
+	
+	setcompany(18,false);
+	
+	IDr.OrigCode = "";
+	while (loopmain(IDr,1,true)) begin
+		INr.Code = IDr.OrigCode;
+		if (ReadFirstMain(INr,1,true)) then begin
+			if (INr.LastPurchPrice==blankval) then begin
+				IN2r.Code = IDr.DupCode;
+				if (ReadFirstMain(IN2r,1,true)) then begin
+					if (IN2r.LastPurchPrice!=blankval) then begin
+						if (blankDate(LastPriceDate[INr.Code]) or IN2r.LastPriceChange>LastPriceDate[INr.Code]) then begin
+							recordCopy(OldINr,INr);
+							LastPriceDate[INr.Code] = IN2r.LastPriceChange;
+							INr.LastPurchPrice = IN2r.LastPurchPrice;
+							INr.LastPurchPrice2 = IN2r.LastPurchPrice2;
+							INr.LastPurchCurncyCode = IN2r.LastPurchCurncyCode;
+							INr.WeighedAvPriceB2 = IN2r.WeighedAvPriceB2;
+							INr.ExtraCost = IN2r.ExtraCost;
+							INr.InPrice = IN2r.InPrice;
+							INr.LastPriceChange = IN2r.LastPriceChange;
+							INr.InPriceB2 = IN2r.InPriceB2;
+							if(recordUpdate(OldINr,INr,true)==0) then begin
+								logtext (0,INr.Code & " Updated");
+								RecalculatePricesfromConsComp(INr);
+							end;
+						end;
+					end;
+				end;
+			end else begin
+				logtext (0,INr.Code & " All Right");
+			end;
+		end;
+	end;
+	
+	
+return;
+end;
 
 
 
