@@ -4049,7 +4049,7 @@ begin
   Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
-  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status,isreturniv; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   string 255 category, transactionId;
   json jsresponse;
   val cash, terminal, discount,summary,sum,loyalty,bonus,vatsum;
@@ -4067,7 +4067,6 @@ begin
   host = "10.10.12.116"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
-  //http://192.168.5.236:8989
   
 	Userr.Code = CurrentUser;
 	if (ReadFirstMain(Userr,1,true)) then begin
@@ -4076,13 +4075,20 @@ begin
   
   
 	getwindowrecord(mwn,retIVr);
+	if(retIVr.Sum4<0)then begin
+		isreturniv = true;
+	end;
   IVr.TaxTransactionCode = RepSpec.f6;
   
   IVTaxTr.TaxTransactionCode = RepSpec.f6;
   if(readfirstkey("TaxTransactionCode",IVTaxTr,1,true))then begin
 		IVr.SerNr = IVTaxTr.SerNr;
 		if(ReadFirstMain(IVr,1,true))then begin
-
+			
+			if(IVr.SerNr!=retIVr.SerNr)then begin
+				RepSpec.ArtMode = 1;//Возврат из оригинальной сч/ф
+			end;
+			
 			ProceedReturnTaxNPTSOClass_Remote(RepSpec,req,retIVr);
 
 			writeareatofile(req,"ReturnTAXRequest.txt",1);
@@ -4093,7 +4099,7 @@ begin
 			jsresponse = ParseJSONArea(reply);
 			
 			setareazerosize(logarea);
-			addtexttoarea(chr(13) & chr(10) & "=========================" & IVr.SerNr &  "=================================RETURN" & chr(13) & chr(10) & "{",logarea);
+			addtexttoarea(chr(13) & chr(10) & "=========================" & retIVr.SerNr &  "=================================RETURN" & chr(13) & chr(10) & "{",logarea);
 			addtexttoarea("\"Date\":" & "\"" & currentdate & "\"," & chr(13) & chr(10),logarea);
 			addtexttoarea("\"Invoice\":" & "\"" & IVr.SerNr & "\"," & chr(13) & chr(10),logarea);
 			addtexttoarea("\"SendData\":" & chr(13) & chr(10),logarea);
@@ -4145,13 +4151,14 @@ begin
 			writeareatofile(logarea,"FiscalPrinter.log",1);
 	
 			WriteCustomLogOnServer(biglogarea,"FiscalPrinterAllLog.log");
-	
-			if(nonblank(JSONGet(jsresponse,"transactionId")))then begin
-				transactionId=JSONGet(jsresponse,"transactionId");
-				IVr.TaxReturnCode = transactionId;
-				IVr.TaxReturnDate = CurrentDate;
-				RecordStore(retIVr,true);
-				putwindowrecord(mwn,retIVr);
+			if(isreturniv)then begin
+				if(nonblank(JSONGet(jsresponse,"transactionId")))then begin
+					transactionId=JSONGet(jsresponse,"transactionId");
+					retIVr.TaxReturnCode = transactionId;
+					retIVr.TaxReturnDate = CurrentDate;
+					RecordStore(retIVr,true);
+					putwindowrecord(mwn,retIVr);
+				end;
 			end;
 		end else begin
 			MessageBox(0, "Fiscal ID not found!  " & RepSpec.f6 & "  invoice No " & IVr.SerNr);
