@@ -201,8 +201,7 @@ begin
 			addtexttoarea("}" & chr(13) & chr(10),req);
 	addtexttoarea("}" & chr(13) & chr(10),req);
 
-
-  //writeareatofile(req,"SendTAXRequest.txt",1);
+  writeareatofile(req,"SendTAXRequestLocal.txt",1);
   
 	
 	
@@ -310,10 +309,12 @@ begin
 			bonus = AbsoluteVal(bonus);
 			terminal = AbsoluteVal(terminal);
 			
-			logtext(0,"cash " & cash);
-			logtext(0,"loyalty" & loyalty);
-			logtext(0,"bonus" & bonus);
-			logtext(0,"terminal" & terminal);
+			if(RepSpec.vals0+RepSpec.vals1+RepSpec.vals2+RepSpec.vals3>0)then begin
+				cash = RepSpec.vals0;
+				terminal = RepSpec.vals1;
+				loyalty = RepSpec.vals2;
+				bonus = RepSpec.vals3;
+			end;
 			
 			mtrw = matrowcnt(IVr);
 			
@@ -363,14 +364,31 @@ begin
 						addtexttoarea("\"discount\":0.0,",req);
 						addtexttoarea("\"itemVatPercent\":18",req);
 						addtexttoarea("}",req);
-						summary = summary+sum;
+						summary = summary + sum;
 					end;
 				end;
 			end;
+			
+			
+			if(summary<cash+terminal+bonus+loyalty)then begin
+				if(RepSpec.ArtMode==1)then begin
+					if(cash>0)then begin
+						cash = summary;
+					end;
+					if(terminal>0)then begin
+						terminal = summary;
+					end;
+				end;
+			end;
+			
 			addtexttoarea("]," & chr(13) & chr(10),req);
 			tstr = ValToString(summary,M45Val,"",".",0);
 			addtexttoarea("\"sum\":" & tstr & "," & chr(13) & chr(10),req);
-	
+		
+			if(summary>cash+terminal+loyalty+bonus)then begin
+				cash = summary - (terminal+loyalty+bonus);
+			end;
+		
 			if(cash>0) then begin
 				tstr = ValToString(cash,M45Val,"",".",0);
 				addtexttoarea("\"cashSum\":" & tstr & "," & chr(13) & chr(10),req);
@@ -416,5 +434,180 @@ begin
 	end else begin
 		MessageBox(0, "Fiscal ID not found!  " & RepSpec.f6 & "  invoice No " & IVr.SerNr);
 	end;
+  return;
+end;
+
+
+global
+updating procedure ProceedReturnTaxAutoNPTSOClass_Remote(var area req, var record IVVc IVr,record IVVc IV2r)//Новая процедура возврата
+begin
+  Integer wn,mwn,rownr,mtrw,i,loopcount,quant,rwcnt,j;
+  record RcVc RepSpec;
+  record UserVc Userr;
+  row IVVc IVrw;
+  Area reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId;
+  json jsresponse;
+  val cash,terminal,discount,summary,loyalty,bonus,vatsum,sum;
+  array string 50 artCode;
+	record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 7:01:40 PM
+	area logarea,tmpar1,tmpar2,biglogarea;
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	string 255 orTaxTransactionCode,orTaxParentDocument;
+	
+
+	blockload(PMb);
+	host = "10.10.11.76"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+	page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+	port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+
+	//http://192.168.5.236:8989
+
+	Userr.Code = CurrentUser;
+	if (ReadFirstMain(Userr,1,true)) then begin
+			host = Userr.KassaIPAddr;
+	end;
+
+	cash = 0.0;
+	terminal = 0.0;
+	discount = 0.0;
+	summary = 0.0;
+	loopcount = 0;
+	quant=0;
+	sum=0;
+	terminal = 0.0;
+	discount = 0.0;
+	loyalty = 0;
+	
+	orTaxTransactionCode = IV2r.TaxTransactionCode;
+	orTaxParentDocument = IV2r.TaxParentDocument;
+	
+	addtexttoarea("{" & chr(13) & chr(10),req);
+	addtexttoarea("\"requestData\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"tokenData\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"operationId\":\"createDocument\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"parameters\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"doc_type\":\"money_back\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"data\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"cashier\":\"" & IVr.SalesMan & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"currency\":\"AZN\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"firstOperationAtUtc\":\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"lastOperationAtUtc\":\"\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"parentDocument\":\"" & orTaxParentDocument & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"refund_document_number\":\"1\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"refund_short_document_id\":\"" & orTaxTransactionCode & "\"," & chr(13) & chr(10),req);
+	addtexttoarea("\"items\":[" & chr(13) & chr(10),req);
+	mtrw = matrowcnt(IVr);	
+	logtext(0,"ProceedReturnTaxAutoNPTSOClass_Remote mtrw " & mtrw);
+	For(i=0;i<mtrw;i=i+1) begin
+		matrowget(IVr,i,IVrw);
+		if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment or IVrw.stp==kInvoiceRowTypePrepayment)then begin
+			loyalty = loyalty + IVrw.Sum;
+		end;
+		if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
+			bonus = bonus + IVrw.Sum;
+		end;
+	end;
+	
+	For(i=0;i<mtrw;i=i+1) begin
+		matrowget(IVr,i,IVrw);
+		if(IVrw.stp==kInvoiceRowTypeCreditCardPayment)then begin
+			for(j=0;j<matrowcnt(PMb);j=j+1)begin
+				matrowget(PMb,j,PMrw);
+				if(PMrw.Code==IVrw.PayMode)then begin
+					if(PMrw.AccNr=="51")then begin
+						terminal = terminal + IVrw.Sum;
+					end else begin
+						loyalty = loyalty + IVrw.Sum;
+					end;
+				end;
+			end;
+		end;
+	end;
+
+	cash = AbsoluteVal(IVr.Sum4) - AbsoluteVal(terminal) - AbsoluteVal(loyalty) - AbsoluteVal(bonus);	
+	cash = AbsoluteVal(cash);
+	terminal = AbsoluteVal(terminal);	
+	loyalty = AbsoluteVal(loyalty);
+	bonus = AbsoluteVal(bonus);	
+	
+	For(i=0;i<mtrw;i=i+1) begin
+		matrowget(IVr,i,IVrw);
+		if(IVrw.stp==kInvoiceRowTypeNormal and IVrw.Quant<0) then begin
+			if(loopcount>0) then begin
+				addtexttoarea(",",req);
+			end;
+			loopcount = loopcount+1;
+			sum = -IVrw.Sum;
+			addtexttoarea("{",req);
+			addtexttoarea("\"itemName\":" & "\"" & NormalizeStrToJson(IVrw.Spec) & "\",",req);
+			addtexttoarea("\"itemCodeType\":0,",req);
+			addtexttoarea("\"itemCode\":" & "\"" & IVrw.ArtCode & "\",",req);
+			addtexttoarea("\"itemQuantityType\":0,",req);
+			tstr = ValToString(-IVrw.Quant,M45Val,"",".",0);
+			addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
+			tstr = ValToString(IVrw.Sum/IVrw.Quant,M45Val,"",".",0);
+			addtexttoarea("\"itemPrice\":" & tstr & ",",req);
+			tstr = ValToString(sum,M45Val,"",".",0);
+			addtexttoarea("\"itemSum\":" & tstr & ",",req);
+			addtexttoarea("\"discount\":0.0,",req);
+			addtexttoarea("\"itemVatPercent\":18",req);
+			addtexttoarea("}",req);
+			summary = summary + sum;
+		end;
+	end;
+	addtexttoarea("]," & chr(13) & chr(10),req);
+	tstr = ValToString(summary,M45Val,"",".",0);
+	addtexttoarea("\"sum\":" & tstr & "," & chr(13) & chr(10),req);
+
+	if(cash>0) then begin
+		tstr = ValToString(cash,M45Val,"",".",0);
+		addtexttoarea("\"cashSum\":" & tstr & "," & chr(13) & chr(10),req);
+	end else begin
+		addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
+	end;
+	
+	if(terminal>0) then begin
+		tstr = ValToString(terminal,M45Val,"",".",0);
+		addtexttoarea("\"cashlessSum\":" & tstr & "," & chr(13) & chr(10),req);
+	end else begin
+		addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
+	end;
+	
+	
+	if(loyalty>0)then begin
+		addtexttoarea("\"prepaymentSum\":" & loyalty & "," & chr(13) & chr(10),req);
+	end else begin
+		addtexttoarea("\"prepaymentSum\":0.0," & chr(13) & chr(10),req);
+	end;
+	addtexttoarea("\"creditSum\":0.0," & chr(13) & chr(10),req);
+	if(bonus>0)then begin
+		addtexttoarea("\"bonusSum\":" & bonus & "," & chr(13) & chr(10),req);
+	end else begin
+		addtexttoarea("\"bonusSum\":0.0," & chr(13) & chr(10),req);
+	end;			
+											
+											
+	addtexttoarea("\"creditSum\":0.0," & chr(13) & chr(10),req);
+	addtexttoarea("\"vatAmounts\":[" & chr(13) & chr(10),req);
+	addtexttoarea("{" & chr(13) & chr(10),req);
+	addtexttoarea("\"vatSum\":" & summary & ",",req);
+	addtexttoarea("\"vatPercent\":18.0",req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("]" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("}," & chr(13) & chr(10),req);
+	addtexttoarea("\"version\":1" & chr(13) & chr(10),req);
+	addtexttoarea("}," & chr(13) & chr(10),req);
+	addtexttoarea("\"checkData\":{" & chr(13) & chr(10),req);
+	addtexttoarea("\"check_type\":100" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);			
+		
   return;
 end;
