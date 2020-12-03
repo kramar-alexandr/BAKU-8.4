@@ -6,6 +6,8 @@ remote procedure NextM4SerialNumber(string,var string);//9:51 02.10.2018
 external procedure ExtractObj(string,var Integer,var string);
 remote function boolean CompanyIsJWLikeCompany(Integer);
 remote updating procedure CreateINConsItem(string, string, integer);
+remote updating procedure RecalculatePricesfromConsComp(record INVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:24 02.12.2020
+remote updating procedure RecalculatePricesfromConsCompfromDupItem(record INVc);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -338,6 +340,128 @@ begin
 	CheckDuplicesInAllCompanies = res;
 return;
 end;
+
+
+
+
+
+
+
+global updating procedure CheckLastPurchPriceForOrigItems (record ItemDuplicatesVc IDr)
+begin
+	integer CurComp;
+	record ItemDuplicatesVc newIDr, thisIDr;
+	record ConsItemVc CIr;
+	record INVc INr, oldINr;
+	record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+	string 255 OrigBrand, DubBrand, ConsOrigCode, ConsDupCode, OtherCompOrigBrand, OtherCompDubBrand, thisOrigCode, thisDupCode, ECOrigCode, ECDupCode, OldINCode, NewINCode;
+	boolean TrHs;
+	record GlobalItemVc DupGIr, OrigGIr, OldDupGIr, OldOrigGIr;
+	row GlobalItemVc DupGIrw, OrigGIrw;
+	string 255 OrigCode, DupCode;
+	boolean INSorcesf, LocAddDupInstf;
+	vector boolean AddLocf;
+	date blnkDate;
+	record ItemDuplicatesVc ID2r, tempIDr;
+	record INVc IN2r;
+	vector date LastPriceDate;
+
+	CurComp = CurrentCompany;
+
+	logtext(0,"CheckLastPurchPriceForOrigItems start");
+
+	if (CurComp!=18) then begin
+		SetCompany(18,false);
+		RecordCopy(tempIDr,IDr);
+		CIr.LocCode = tempIDr.OrigCode;
+		CIr.BrandCode = tempIDr.OrigBrandCode;
+		if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
+			IDr.OrigCode = CIr.Code;
+			CIr.LocCode = tempIDr.DupCode;
+			CIr.BrandCode = tempIDr.DupBrandCode;
+			if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
+				IDr.DupCode = CIr.Code;
+			end;
+		end else begin
+			resetCompany(CurComp);
+		end;
+	end;
+
+
+	if (currentcompany==18) then begin 
+		INr.Code = IDr.OrigCode;
+		if (ReadFirstMain(INr,1,true)) then begin
+			if (INr.LastPurchPrice==blankval or INr.LastPurchPrice==0) then begin
+				IN2r.Code = IDr.DupCode;
+				if (ReadFirstMain(IN2r,1,true)) then begin
+					if (IN2r.LastPurchPrice!=blankval and IN2r.LastPurchPrice!=0) then begin
+						recordCopy(OldINr,INr);
+						INr.LastPurchPrice = IN2r.LastPurchPrice;
+						INr.LastPurchPrice2 = IN2r.LastPurchPrice2;
+						INr.LastPurchCurncyCode = IN2r.LastPurchCurncyCode;
+						INr.WeighedAvPriceB2 = IN2r.WeighedAvPriceB2;
+						INr.ExtraCost = IN2r.ExtraCost;
+						INr.InPrice = IN2r.InPrice;
+						INr.LastPriceChange = blnkDate;
+						INr.InPriceB2 = IN2r.InPriceB2;
+						INr.WeighedAvPrice = INr.WeighedAvPrice;
+						if(recordUpdate(OldINr,INr,true)==0) then begin
+							logtext (0,INr.Code & " Updated");
+							RecalculatePricesfromConsCompfromDupItem(INr);
+							INr.LastPriceChange = blnkDate;
+							RecordStore(INr,true);
+						end;
+					end;
+				end;
+			end else begin
+				if (INr.LastPriceChange==blnkDate) then begin
+					ID2r.OrigCode = IDr.OrigCode;
+					TrHs = true;
+					while(loopMain(ID2r,1,TrHs))begin
+						if (ID2r.OrigCode!=IDr.OrigCode) then begin TrHs = false; end;
+						if (TrHs) then begin
+							IN2r.Code = ID2r.DupCode;
+							if (ReadFirstMain(IN2r,1,true)) then begin
+								if (IN2r.LastPurchPrice!=blankval and IN2r.LastPurchPrice!=0) then begin
+									if (blankDate(LastPriceDate[IN2r.Code]) or IN2r.LastPriceChange>LastPriceDate[IN2r.Code]) then begin
+										recordCopy(OldINr,INr);
+										LastPriceDate[IN2r.Code] = IN2r.LastPriceChange;
+										INr.LastPurchPrice = IN2r.LastPurchPrice;
+										INr.LastPurchPrice2 = IN2r.LastPurchPrice2;
+										INr.LastPurchCurncyCode = IN2r.LastPurchCurncyCode;
+										INr.WeighedAvPriceB2 = IN2r.WeighedAvPriceB2;
+										INr.ExtraCost = IN2r.ExtraCost;
+										INr.InPrice = IN2r.InPrice;
+										INr.LastPriceChange = blnkDate;
+										INr.InPriceB2 = IN2r.InPriceB2;
+										INr.WeighedAvPrice = INr.WeighedAvPrice;
+										if(recordUpdate(OldINr,INr,true)==0) then begin
+											logtext (0,INr.Code & " Updated");
+											RecalculatePricesfromConsCompfromDupItem(INr);
+											INr.LastPriceChange = blnkDate;
+											RecordStore(INr,true);
+										end;
+									end;
+								end;
+							end;
+						end;
+					end;
+				end else begin
+					logtext (0,INr.Code & " All Right");
+				end;
+			end;
+		end;
+	end;
+	
+	resetCompany(CurComp);
+	logtext(0,"CheckLastPurchPriceForOrigItems end");
+
+	return;
+end;
+
+
+
 
 
 
@@ -3227,7 +3351,7 @@ begin
 	res = 0;
 
 	CreateDuplicesInAllCompanies (IDr);
-
+	CheckLastPurchPriceForOrigItems (IDr);
 		
 	ItemDuplicatesVcRecordSaveAfter = res; 
 return;
@@ -3241,7 +3365,7 @@ begin
 	res = 0;
 
 	CreateDuplicesInAllCompanies (IDr);
-
+	CheckLastPurchPriceForOrigItems (IDr);
 		
 	ItemDuplicatesVcRecordUpdateAfter = res; 
 return;
