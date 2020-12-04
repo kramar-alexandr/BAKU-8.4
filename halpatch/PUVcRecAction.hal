@@ -93,6 +93,7 @@ remote procedure BigPUSumUp(var record BigPUVc);
 external function roundmode SetRoundModeD(Integer);
 remote procedure PUDClassWeightRow(var record BigPUVc,integer);
 remote procedure PUDClassCaratRow(var record BigPUVc,integer);
+external function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
 
 SetLangMode(LangRussian,"RUS",0);
  
@@ -707,6 +708,11 @@ begin
   val bc1v, PartTotal;
 	vector val PPUItemQty;
 	record INVc INr;
+	integer orcnt,k;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 04 12 2020 y. at 12:19:46 PM
+	record ORVc ORr;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 04 12 2020 y. at 12:20:11 PM
+	row ORVc ORrw;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 04 12 2020 y. at 12:20:08 PM
+	record ClientItemStatusVc CISr;
+	string 255 warning;
 	
 	LOGTEXT(0,currentcompany & "PUVcRecordUpdateAfter");	
   ihf = ItemHistExists("PUVc",PUr.SerNr);
@@ -719,8 +725,6 @@ begin
       PurUpdateSerialNr(PUr,false,false);//before ItemHist to get consigment stock right
       if (ihf==false) then begin
         PurUpdateCostPrice(PUr,false);
-					LOGTEXT(0,currentcompany & "PUVcRecordUpdateAfter");	
-
         PurUpdateItemHist(PUr);
       end;
     end;
@@ -759,8 +763,6 @@ begin
   if ((PU2r.Invalid==0) and (PUr.Invalid!=0)) then begin
     if (PU2r.OKFlag!=0) then begin
       UpdatePurchase(PUr,PU2r,false);//not stocked items suport only atm
-//      InvalidateTR(PUYc,PUr.SerNr);
-//      InvalidatePU(PUr);
     end;
   end;  
   if ((PUr.Invalid==0) and (PU2r.Invalid==0)) then begin
@@ -803,6 +805,36 @@ begin
 				POr.PartDelSum4 = POr.PartDelSum4 + PartTotal;
 				
 				RecordStore (POr,true);
+				
+				if(currentcompany==18)then begin//Ћбновление клиентских резервов// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 04 12 2020 y. at 12:19:36 PM
+					if(ORr.SerNr>-1)then begin
+						ORr.SerNr = POr.OrdNr;
+						if(readfirstmain(ORr,1,true))then begin
+							if(ORr.OrderClass=="CLIEN") then begin
+								for(i=0;i<matrowcnt(PUr);i=i+1) begin
+									matrowget(PUr,i,PUrw);
+									CISr.ItemCode = PUrw.ArtCode;
+									CISr.OrderNr = POr.OrdNr;
+									if(readfirstmain(CISr,2,true))then begin
+										CISr.Quant = CISr.Quant + PUrw.Quant;
+										RecordStore(CISr,true);
+									end;
+								end;
+								
+								orcnt = matrowcnt(ORr);
+								for (k=0;k<orcnt;k=k+1)begin
+									matrowget(ORr,k,ORrw);
+									ORVc_PasteArtCode(ORr,k,warning,warning,false);							
+									matrowget(ORr,k,ORrw);
+									matrowput(ORr,k,ORrw);
+								end;
+								RecordStore(ORr,true);
+							end;	
+						end;	
+					end;
+				end;
+				
+				
 			end;
 		end;
   end;  
