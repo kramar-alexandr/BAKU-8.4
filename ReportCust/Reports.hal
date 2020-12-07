@@ -5193,14 +5193,14 @@ begin
 	record BPIShapeVc BPIShaper;
 	record BPICategoryVc BPICategoryr;
 	record INVc INr;
-	boolean TrHs, INrf;
+	boolean TrHs, INrf, testf, Instf;
 	area BodyAr;
 	longint i;
 	string 255 LocCodes, FileName;
 	val LocInstock;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
-	vector boolean Girf;
+	vector boolean Girf, Instockf;
 	
 	
 	FileName = "GlobalItemReport_" & DateToString(CurrentDate,"DD.MM.YYYY") & ".txt";
@@ -5241,70 +5241,146 @@ begin
 			if (ReadFirstMain(BTRxSizer,1,true)) then begin  end;
 			LocCodes = "";
 			LocInstock = 0;
+			ClearVector(Instockf);
+			Instf = false;
 			for (i=0;i<matrowcnt(GIr);i=i+1) begin
 				matrowget(GIr,i,GIrw);
-				if (!(Girf[GIr.Code] and GIrw.Instock==0)) then begin
-					Girf[GIr.Code] = true;
-					LocCodes = GIrw.Location;
-					LocInstock = GIrw.Instock;
-					INrf = false;
-					for (i=0;i<matrowcnt(Compb);i=i+1)begin
-						matrowget(Compb,i,Comprw);
-						if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(i+1) or i+1==3))then begin
-							SetCompany(i+1,false);
-							INr.Code = GIr.HansaCode;
-							if (ReadFirstMain(INr,1,true)) then begin
-								i = matrowcnt(Compb);
-								INrf = true;
-								BPIGroupr.Code = INr.BPIGroup;
-								if (ReadFirstMain(BPIGroupr,1,true)) then begin  end;
-								BPISubGroupr.Code = INr.BPISubGroup;
-								if (ReadFirstMain(BPISubGroupr,1,true)) then begin  end;
-								BPICategoryr.Code = INr.BPICategory;
-								if (ReadFirstMain(BPICategoryr,1,true)) then begin  end;
-								BPIShaper.Code = INr.BPIShape;
-								if (ReadFirstMain(BPIShaper,1,true)) then begin  end;
+				if (GIrw.Instock>0) then begin
+					Instockf[GIrw.Location] = true;
+					Instf = true;
+				end;
+			end;	
+			
+			
+			if (Instf) then begin
+				for (i=0;i<matrowcnt(GIr);i=i+1) begin
+					testf = true;
+					matrowget(GIr,i,GIrw);
+					if (Instockf[GIrw.Location]) then begin testf = false; end;
+					if (testf) then begin
+						Girf[GIr.Code] = true;
+						LocCodes = GIrw.Location;
+						LocInstock = GIrw.Instock;
+						INrf = false;
+						for (i=0;i<matrowcnt(Compb);i=i+1)begin
+							matrowget(Compb,i,Comprw);
+							if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(i+1) or i+1==3))then begin
+								SetCompany(i+1,false);
+								INr.Code = GIr.HansaCode;
+								if (ReadFirstMain(INr,1,true)) then begin
+									i = matrowcnt(Compb);
+									INrf = true;
+									BPIGroupr.Code = INr.BPIGroup;
+									if (ReadFirstMain(BPIGroupr,1,true)) then begin  end;
+									BPISubGroupr.Code = INr.BPISubGroup;
+									if (ReadFirstMain(BPISubGroupr,1,true)) then begin  end;
+									BPICategoryr.Code = INr.BPICategory;
+									if (ReadFirstMain(BPICategoryr,1,true)) then begin  end;
+									BPIShaper.Code = INr.BPIShape;
+									if (ReadFirstMain(BPIShaper,1,true)) then begin  end;
+								end;
 							end;
 						end;
+						ResetCompany(1);
+						if (INrf) then begin
+							AddTextToArea	(GIr.Code & chr(09) 						//1
+													& GIr.HansaCode & chr(09) 				//2
+													& GIr.Name & chr(09) 							//3
+													& GIr.NameAZ & chr(09) 						//5
+													& GIr.NameRUS & chr(09) 					//6
+													& BTRxBrandr.Name & chr(09) 			//7
+													& BtrxCollectionr.Name & chr(09) 	//8
+													& BPIGroupr.Name & chr(09) 				//9
+													& BPISubGroupr.Name & chr(09) 		//10
+													& BPICategoryr.Name & chr(09) 		//11
+													& BTRxMaterialr.Name & chr(09) 		//12
+													& BTRxColorr.Name & chr(09) 			//13
+													& BPIShaper.Name & chr(09) 				//14
+													& BTRxSizer.Name & chr(09) 				//15
+													& LocCodes & chr(09) 							//16
+													& LocInstock & chr(09) 						//17
+													&	chr(13),BodyAr);
+						end else begin
+							AddTextToArea	(GIr.Code & chr(09) 						//1
+													& GIr.HansaCode & chr(09) 				//2
+													& GIr.Name & chr(09) 							//3
+													& GIr.NameAZ & chr(09) 						//5
+													& GIr.NameRUS & chr(09) 					//6
+													& BTRxBrandr.Name & chr(09) 			//7
+													& BtrxCollectionr.Name & chr(09) 	//8
+													& "" & chr(09) 										//9
+													& "" & chr(09) 										//10
+													& "" & chr(09) 										//11
+													& BTRxMaterialr.Name & chr(09) 		//12
+													& BTRxColorr.Name & chr(09) 			//13
+													& "" & chr(09) 										//14
+													& BTRxSizer.Name & chr(09) 				//15
+													& LocCodes & chr(09) 							//16
+													& LocInstock & chr(09) 						//17
+													&	chr(13),BodyAr);
+						end;
 					end;
-					ResetCompany(1);
-					if (INrf) then begin
-						AddTextToArea	(GIr.Code & chr(09) 						//1
-												& GIr.HansaCode & chr(09) 				//2
-												& GIr.Name & chr(09) 							//3
-												& GIr.NameAZ & chr(09) 						//5
-												& GIr.NameRUS & chr(09) 					//6
-												& BTRxBrandr.Name & chr(09) 			//7
-												& BtrxCollectionr.Name & chr(09) 	//8
-												& BPIGroupr.Name & chr(09) 				//9
-												& BPISubGroupr.Name & chr(09) 		//10
-												& BPICategoryr.Name & chr(09) 		//11
-												& BTRxMaterialr.Name & chr(09) 		//12
-												& BTRxColorr.Name & chr(09) 			//13
-												& BPIShaper.Name & chr(09) 				//14
-												& BTRxSizer.Name & chr(09) 				//15
-												& LocCodes & chr(09) 							//16
-												& LocInstock & chr(09) 						//17
-												&	chr(13),BodyAr);
-					end else begin
-						AddTextToArea	(GIr.Code & chr(09) 						//1
-												& GIr.HansaCode & chr(09) 				//2
-												& GIr.Name & chr(09) 							//3
-												& GIr.NameAZ & chr(09) 						//5
-												& GIr.NameRUS & chr(09) 					//6
-												& BTRxBrandr.Name & chr(09) 			//7
-												& BtrxCollectionr.Name & chr(09) 	//8
-												& "" & chr(09) 										//9
-												& "" & chr(09) 										//10
-												& "" & chr(09) 										//11
-												& BTRxMaterialr.Name & chr(09) 		//12
-												& BTRxColorr.Name & chr(09) 			//13
-												& "" & chr(09) 										//14
-												& BTRxSizer.Name & chr(09) 				//15
-												& LocCodes & chr(09) 							//16
-												& LocInstock & chr(09) 						//17
-												&	chr(13),BodyAr);
+				end;
+			end else begin
+				LocCodes = "";
+				LocInstock = 0;
+				INrf = false;
+				for (i=0;i<matrowcnt(Compb);i=i+1)begin
+					matrowget(Compb,i,Comprw);
+					if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(i+1) or i+1==3))then begin
+						SetCompany(i+1,false);
+						INr.Code = GIr.HansaCode;
+						if (ReadFirstMain(INr,1,true)) then begin
+							i = matrowcnt(Compb);
+							INrf = true;
+							BPIGroupr.Code = INr.BPIGroup;
+							if (ReadFirstMain(BPIGroupr,1,true)) then begin  end;
+							BPISubGroupr.Code = INr.BPISubGroup;
+							if (ReadFirstMain(BPISubGroupr,1,true)) then begin  end;
+							BPICategoryr.Code = INr.BPICategory;
+							if (ReadFirstMain(BPICategoryr,1,true)) then begin  end;
+							BPIShaper.Code = INr.BPIShape;
+							if (ReadFirstMain(BPIShaper,1,true)) then begin  end;
+						end;
 					end;
+				end;
+				ResetCompany(1);
+				if (INrf) then begin
+					AddTextToArea	(GIr.Code & chr(09) 						//1
+											& GIr.HansaCode & chr(09) 				//2
+											& GIr.Name & chr(09) 							//3
+											& GIr.NameAZ & chr(09) 						//5
+											& GIr.NameRUS & chr(09) 					//6
+											& BTRxBrandr.Name & chr(09) 			//7
+											& BtrxCollectionr.Name & chr(09) 	//8
+											& BPIGroupr.Name & chr(09) 				//9
+											& BPISubGroupr.Name & chr(09) 		//10
+											& BPICategoryr.Name & chr(09) 		//11
+											& BTRxMaterialr.Name & chr(09) 		//12
+											& BTRxColorr.Name & chr(09) 			//13
+											& BPIShaper.Name & chr(09) 				//14
+											& BTRxSizer.Name & chr(09) 				//15
+											& LocCodes & chr(09) 							//16
+											& LocInstock & chr(09) 						//17
+											&	chr(13),BodyAr);
+				end else begin
+					AddTextToArea	(GIr.Code & chr(09) 						//1
+											& GIr.HansaCode & chr(09) 				//2
+											& GIr.Name & chr(09) 							//3
+											& GIr.NameAZ & chr(09) 						//5
+											& GIr.NameRUS & chr(09) 					//6
+											& BTRxBrandr.Name & chr(09) 			//7
+											& BtrxCollectionr.Name & chr(09) 	//8
+											& "" & chr(09) 										//9
+											& "" & chr(09) 										//10
+											& "" & chr(09) 										//11
+											& BTRxMaterialr.Name & chr(09) 		//12
+											& BTRxColorr.Name & chr(09) 			//13
+											& "" & chr(09) 										//14
+											& BTRxSizer.Name & chr(09) 				//15
+											& LocCodes & chr(09) 							//16
+											& LocInstock & chr(09) 						//17
+											&	chr(13),BodyAr);
 				end;
 			end;
 		end;
