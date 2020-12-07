@@ -5,6 +5,7 @@ external procedure SumupIntOR(var record IntORVc,var val);// Edit **************
 external function boolean CompanyIsJWLikeCompany(Integer); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 16:04 20.11.2020
 external updating procedure RecalculatePricesfromConsComp(record INVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:24 02.12.2020
 
+SetLangMode(LangRussian,"RUS",0);
 
 global webpublic updating procedure WebFixConsItemsDupl()
 begin
@@ -1459,11 +1460,27 @@ end;
 global webpublic procedure WebFixClientReservesID()
 begin
 	record ORVc ORr,locORr;
-	integer targcom,isclosed;
+	row ORVc ORrw;
+	integer targcom,isclosed,i,rwcnt;
+	record INVc INr;
 	longint ponr;
 	record POVc POr;
+	vector integer vbrand;
+	array string 30 atags;
+	record BPIBrandVc BPIBrandr;
+	string 255 brands;
 	
 	setcompany(18,false);
+	
+	weboutstring("Счет клиента в КК||||||");
+	weboutstring("Дата||||||");
+	weboutstring("Бренд||||||");
+	weboutstring("Из компании||||||");
+	weboutstring("Заказ поста. в бутике||||||");
+	weboutstring("Сч.кл. в бутике||||||");
+	weboutstring("Закр.||||||");
+	weboutstring("<BR>");
+	
 	while(loopmain(ORr,1,true))begin
 		if(ORr.OrderClass=="CLIEN")then begin
 			if(ORr.ShipMark==0)then begin
@@ -1472,6 +1489,28 @@ begin
 				if(nonblank(ORr.OfficialSerNr))then begin
 					targcom = stringtoint(lastinrange(ORr.OfficialSerNr,20));
 					ponr = stringtolongint(firstinrange(ORr.OfficialSerNr,20));
+				end;
+				
+				brands = "";
+				clearVector(vbrand);
+				clearArray(atags);
+				rwcnt = matrowcnt(ORr);
+				for(i=0;i<rwcnt;i=i+1)begin
+					matrowget(ORr,i,ORrw);
+					if(nonblank(ORrw.ArtCode))then begin
+						INr.Code = ORrw.ArtCode;
+						if(readfirstmain(INr,1,true))then begin
+							vbrand[INr.BPIBrand] = 1;
+						end;
+					end;
+				end;
+				
+				getvectortags(vbrand,atags);
+				
+				for(i=0;i<atags.length;i=i+1)begin
+					BPIBrandr.Code = atags[i];
+					readfirstmain(BPIBrandr,1,true);
+					brands = brands & "," & BPIBrandr.Name;
 				end;
 				
 				isclosed = 0;
@@ -1496,20 +1535,23 @@ begin
 					setcompany(18,false);
 				end;
 				
-				weboutstring("FixClientReservesID");
-				weboutstring("&nbsp Order ");
+				
 				weboutstring(ORr.SerNr);
-				weboutstring("&nbsp Date ");
+				weboutstring("||||||");
 				weboutstring(ORr.OrdDate);
-				weboutstring("&nbsp inCompany ");
+				weboutstring("||||||");
+				weboutstring(brands);
+				weboutstring("||||||");
 				weboutstring(targcom);
-				weboutstring("&nbsp PONr ");
+				weboutstring("||||||");
 				weboutstring(ponr);
-				weboutstring("&nbsp OrderNr");
-				weboutstring(POr.OrdNr);
-				weboutstring("&nbsp isclosed ");
+				weboutstring("||||||");
+				weboutstring(locORr.SerNr);
+				weboutstring("||||||");
 				weboutstring(isclosed);
+				weboutstring("||||||");
 				weboutstring("<BR>");
+				
 			end;
 		end;
 	end;
