@@ -26,14 +26,14 @@ SetLangMode(LangRussian,"RUS",0);
 global
 procedure ECSldItRn(record RcVc RepSpec) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 15:20 17.10.2019
 begin
-  Integer i,rwcnt;
+  Integer i,rwcnt,j,pos;
 	record SHVc SHr;
   row SHVc SHrw;
 	record RetVc Retr;
 	row RetVc Retrw;
 	record ORVc ORr;
 	row ORVc ORrw;
-  Boolean testf, TrHs;
+  Boolean testf, TrHs, OrdInf;
   string 20 frit,toit;
   string 20 frin,toin;
   record INVc INr;
@@ -43,32 +43,54 @@ begin
 	vector boolean vInPerReturns;
 	val SaleTotal, Total, TotQty;
 	record ARVc ARr;
-	date SHDate;
-	val ORSum, RetSum, PaySum;
+	date SHDate, firstORDate;
+	val ORSum, RetSum, PaySum, SHFRV, SHSHIP;
 	record IPVc IPr;
 	row IPVc IPrw;
 	vector string 255 IVPayDeal, PMComments;
 	record PMBlock PMb;
 	row PMBlock PMrw;
-	string 255 IVPM, stocks;
+	string 255 IVPM, stocks, PDComment, ORSerNr;
 	record IVVc IVr, CredIVr;
 	Boolean TrHs2, testf2, SHFlag;
+	record PDVc PDr;
 
 	
 	BlockLoad(PMb);
 
 	StartReportnoheaderjob("Отчет по продажам Е-Коммерс");
-	startformat(15);
-		outstring(0,0,"Отгр. №",false);
-		outstring(70,0,"Дата",false);
-		outstring(220,0,"№ сч.Btrx",false);
-		outstring(300,0,"Код. кл",false);
-		outstring(340,0,"Наименование",false);
-		outstring(340,0,"Оплачен",false);
-		outstring(340,0,"Способ оплаты",false);
-		outstring(340,0,"Бутик",false);
-		outstring(340,0,"Всего",false);
-	endformat;
+	// startformat(15);
+		// outstring(0,0,"Отгр. №",false);
+		// outstring(70,0,"Дата",false);
+		// outstring(220,0,"№ сч.Btrx",false);
+		// outstring(300,0,"Код. кл",false);
+		// outstring(340,0,"Наименование",false);
+		// outstring(340,0,"Оплачен",false);
+		// outstring(340,0,"Способ оплаты",false);
+		// outstring(340,0,"Бутик",false);
+		// outstring(340,0,"Всего",false);
+	// endformat;
+	
+	
+	if (blankdate(RepSpec.sStartDate) and nonblank(RepSpec.f1)) then begin
+		pos = 0;
+		ExtractObjWithSeparator(",",RepSpec.f1,true,pos,ORSerNr);
+		while (nonblank(ORSerNr)) begin
+			ORr.SerNr = StringToLongInt(ORSerNr);
+			if (ReadFirstMain(ORr,1,true)) then begin
+				if (blank(firstORDate)) then begin 
+					firstORDate = ORr.OrdDate; 
+				end else begin 
+					if (firstORDate>ORr.OrdDate) then begin 
+						firstORDate = ORr.OrdDate;
+					end;
+				end;	
+			end;
+			ExtractObjWithSeparator(",",RepSpec.f1,true,pos,ORSerNr);
+		end;
+		if(nonblankdate(firstORDate)) then begin RepSpec.sStartDate = firstORDate; end;
+		if(nonblankdate(RepSpec.sStartDate)) then begin RepSpec.sEndDate = CurrentDate; end;
+	end;
 	
 	
 	for (i=0;i<matrowcnt(PMb);i=i+1) begin
@@ -98,6 +120,7 @@ begin
 		testf = true;
 		if(SHr.ShipDate>RepSpec.sEndDate)then begin TrHs = false; testf = false; end;
 		if(SHr.OKFlag==0)then begin testf = false; end;
+		if(nonblank(RepSpec.f1) and !SetInSet(SHr.OrderNr,RepSpec.f1)) then begin testf = false; end;
 		if(testf)then begin
 			Retr.SHNr = SHr.SerNr;
 			SaleTotal = 0;
@@ -112,7 +135,12 @@ begin
 			end;
 			TotQty = 0;
 			ORr.SerNr = SHr.OrderNr;
+			PDComment = "";
 			if(ReadFirstMain(ORr,1,true))then begin
+				PDr.Code = ORr.PayDeal;
+				if (ReadFirstMain(PDr,1,true)) then begin
+					PDComment = PDr.pdComment;
+				end;
 				for (i=0;i<matrowcnt(ORr);i=i+1) begin
 					matrowget(ORr,i,ORrw);
 					if(vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]==blankval)then begin
@@ -160,47 +188,96 @@ begin
 			end;
 			if (TotQty>0) then begin
 				Total = Total + SaleTotal;
-				startformat(15);
-					outstring(0,0,SHr.SerNr,false);
-					outstring(70,0,SHr.ShipDate,false);
-					ORr.SerNr = SHr.OrderNr;
-					if(ReadFirstMain(ORr,1,true))then begin
-						outstring(220,0,ORr.SerNr,false);
-					end else begin
-						outstring(220,0,"",false);
-					end;
-					outstring(300,0,SHr.CustCode,false);
-					outstring(340,0,SHr.Addr0,false);
-					outstring(340,0,PaySum - RetSum,false);
-					outstring(340,0,IVPM,false);
-					outstring(340,0,stocks,false);
-					outstring(340,0,SaleTotal,false);
-				endformat;
+				// startformat(15);
+					// outstring(70,0,SHr.ShipDate,false);
+					// ORr.SerNr = SHr.OrderNr;
+					// if(ReadFirstMain(ORr,1,true))then begin
+						// outstring(220,0,ORr.SerNr,false);
+					// end else begin
+						// outstring(220,0,"",false);
+					// end;
+					// outstring(300,0,SHr.CustCode,false);
+					// outstring(340,0,SHr.Addr0,false);
+					// outstring(340,0,PaySum - RetSum,false);
+					// outstring(340,0,IVPM,false);
+					// outstring(340,0,stocks,false);
+					// outstring(340,0,SaleTotal,false);
+				// endformat;
 				
-				startformat(15);
-					outstring(0,0,"Товар",false);
-					outstring(70,0,"Наимен.",false);
-					outstring(220,0,"Сер.№",false);
-					outstring(300,0,"Кол.",false);
-					outstring(340,0,"Цена",false);
-					outstring(340,0,"Арт.К.И.",false);
-					outstring(340,0,"Скидка",false);
-					outstring(340,0,"Сумма",false);
-				endformat;
+				// startformat(15);
+					// outstring(0,0,"Товар",false);
+					// outstring(70,0,"Наимен.",false);
+					// outstring(220,0,"Сер.№",false);
+					// outstring(300,0,"Кол.",false);
+					// outstring(340,0,"Цена",false);
+					// outstring(340,0,"Арт.К.И.",false);
+					// outstring(340,0,"Скидка",false);
+					// outstring(340,0,"Сумма",false);
+				// endformat;
+
 				ORr.SerNr = SHr.OrderNr;
 				if(ReadFirstMain(ORr,1,true))then begin
+					startformat(15);
+						outstring(70,0," ",false);
+					endformat;
+					startformat(15);
+						outstring(70,0,"Дата продажи",false);
+						outstring(220,0,"Номер заказа Битрикс",false);
+						outstring(220,0,"Дата заказа Битрикс",false);
+						outstring(300,0,"Артикулы товаров",false);
+						outstring(340,0,"Название товара",false);
+						outstring(340,0,"Бутик",false);
+						outstring(340,0,"Количество",false);
+						outstring(340,0,"Цена товаров",false);
+						outstring(340,0,"Себестоимость товара",false);
+						outstring(340,0,"Условия оплаты",false);
+						outstring(340,0,"Общая сумма заказа",false);
+						outstring(340,0,"Оплачено",false);
+					endformat;
+	
+					OrdInf = true;
 					for (i=0;i<matrowcnt(ORr);i=i+1) begin
 						matrowget(ORr,i,ORrw);
 						if(ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr] > 0)then begin
+							SHFRV = blankval;
+							SHSHIP = blankval;
+							for (j=0;j<matrowcnt(SHr);j=j+1) begin
+								matrowget(SHr,j,SHrw);
+								if (SHrw.OrdRow==i) then begin
+									SHFRV = SHrw.FIFORowVal;
+									SHSHIP = SHrw.Ship;
+								end;
+							end;
 							startformat(15);
+								if (OrdInf) then begin
+									outstring(70,0,SHr.ShipDate,false);
+									ORr.SerNr = SHr.OrderNr;
+									if(ReadFirstMain(ORr,1,true))then begin
+										outstring(220,0,ORr.SerNr,false);
+										outstring(220,0,ORr.OrdDate,false);
+									end else begin
+										outstring(220,0,"",false);
+										outstring(220,0,"",false);
+									end;
+								end else begin
+									outstring(70,0,"",false);
+									outstring(220,0,"",false);
+									outstring(220,0,"",false);
+								end;
 								outstring(0,0,ORrw.ArtCode,false);
 								outstring(70,0,ORrw.Spec,false);
-								outstring(220,0,ORrw.SerialNr,false);
+								outstring(70,0,ORrw.ECReservStock,false);
 								outstring(300,0,ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr],false);
 								outstring(340,0,ORrw.Price,false);
-								outstring(340,0,right(ORrw.GlobalItemArtCode,(len(ORrw.GlobalItemArtCode)-9)),false);
-								outstring(340,0,ORrw.vRebate,false);
+								outstring(340,0,SHFRV/SHSHIP,false);
+								outstring(340,0,PDComment,false);
 								outstring(340,0,ORrw.Sum / ORrw.Quant * (ORrw.Quant - vRetItems [ORrw.ArtCode & "_" & SHr.SerNr]),false);
+								if (OrdInf) then begin
+									OrdInf = false;
+									outstring(340,0,PaySum-RetSum,false);
+								end else begin
+									outstring(340,0,"",false);
+								end;
 							endformat;
 						end;
 					end;
@@ -208,6 +285,7 @@ begin
 			end;
 		end;
 	end;
+	Resetloop(SHr);
 	TrHs = true;
 	
 	
@@ -217,17 +295,17 @@ begin
 	
 	
 	
-	startformat(15);
-		outstring(0,0,"Возвр. №",false);
-		outstring(70,0,"Дата",false);
-		outstring(220,0,"№ сч.Btrx",false);
-		outstring(300,0,"Код. кл",false);
-		outstring(340,0,"Наименование",false);
-		outstring(340,0,"Оплачен",false);
-		outstring(340,0,"Сепособ оплаты",false);
-		outstring(340,0,"Бутик",false);
-		outstring(340,0,"Всего",false);
-	endformat;
+	// startformat(15);
+		// outstring(0,0,"Возвр. №",false);
+		// outstring(70,0,"Дата",false);
+		// outstring(220,0,"№ сч.Btrx",false);
+		// outstring(300,0,"Код. кл",false);
+		// outstring(340,0,"Наименование",false);
+		// outstring(340,0,"Оплачен",false);
+		// outstring(340,0,"Сепособ оплаты",false);
+		// outstring(340,0,"Бутик",false);
+		// outstring(340,0,"Всего",false);
+	// endformat;
 	
 	
 	Retr.TransDate = RepSpec.sStartDate;
@@ -236,6 +314,7 @@ begin
 		if(Retr.TransDate>RepSpec.sEndDate)then begin TrHs = false; testf = false; end;
 		if(vInPerReturns [Retr.SerNr])then begin testf = false; end;
 		if(Retr.OKFlag==0)then begin testf = false; end;
+		if(nonblank(RepSpec.f1) and !SetInSet(Retr.OrdNr,RepSpec.f1)) then begin testf = false; end;
 		if(testf)then begin
 		
 			for (i=0;i<matrowcnt(Retr);i=i+1) begin
@@ -244,6 +323,7 @@ begin
 			end;
 		
 			SaleTotal = 0;
+			OrdInf = true;
 		
 			ORr.SerNr = Retr.OrdNr;
 			if(ReadFirstMain(ORr,1,true))then begin
@@ -251,7 +331,11 @@ begin
 					matrowget(ORr,i,ORrw);
 					SaleTotal = SaleTotal + (ORrw.Sum / ORrw.Quant * vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr]);
 				end;
-				
+				PDComment = "";
+				PDr.Code = ORr.PayDeal;
+				if (ReadFirstMain(PDr,1,true)) then begin
+					PDComment = PDr.pdComment;
+				end;
 				
 				
 				PaySum = 0;
@@ -291,66 +375,124 @@ begin
 					end;
 				end;
 				
-				
-				
-				
-				
-				
-				
-				
-				
 			end;
 			
 			Total = Total - SaleTotal;
 			
-			
 			startformat(15);
-				outstring(0,0,Retr.SerNr,false);
-				outstring(70,0,Retr.TransDate,false);
-				ORr.SerNr = Retr.OrdNr;
-				if(ReadFirstMain(ORr,1,true))then begin
-					outstring(220,0,ORr.SerNr,false);
-				end else begin
-					outstring(220,0,"",false);
-				end;
-				outstring(300,0,Retr.CustCode,false);
-				outstring(340,0,Retr.CustName,false);
-				outstring(340,0,PaySum - RetSum,false);
-				outstring(340,0,IVPM,false);
-				outstring(340,0,stocks,false);
-				outstring(340,0,-SaleTotal,false);
+				outstring(70,0," ",false);
+			endformat;
+			startformat(15);
+				outstring(70,0,"Дата возврата",false);
+				outstring(220,0,"Номер заказа Битрикс",false);
+				outstring(220,0,"Дата заказа Битрикс",false);
+				outstring(300,0,"Артикулы товаров",false);
+				outstring(340,0,"Название товара",false);
+				outstring(340,0,"Бутик",false);
+				outstring(340,0,"Количество",false);
+				outstring(340,0,"Цена товаров",false);
+				outstring(340,0,"Себестоимость товара",false);
+				outstring(340,0,"Условия оплаты",false);
+				outstring(340,0,"Общая сумма возврата",false);
+				outstring(340,0,"Возвращено клиенту",false);
 			endformat;
 			
-			startformat(15);
-				outstring(0,0,"Товар",false);
-				outstring(70,0,"Наимен.",false);
-				outstring(220,0,"Сер.№",false);
-				outstring(300,0,"Кол.",false);
-				outstring(340,0,"Цена",false);
-				outstring(340,0,"Арт.К.И.",false);
-				outstring(340,0,"Скидка",false);
-				outstring(340,0,"Сумма",false);
-			endformat;
+			
+			// startformat(15);
+				// outstring(0,0,Retr.SerNr,false);
+				// outstring(70,0,Retr.TransDate,false);
+				// ORr.SerNr = Retr.OrdNr;
+				// if(ReadFirstMain(ORr,1,true))then begin
+					// outstring(220,0,ORr.SerNr,false);
+				// end else begin
+					// outstring(220,0,"",false);
+				// end;
+				// outstring(300,0,Retr.CustCode,false);
+				// outstring(340,0,Retr.CustName,false);
+				// outstring(340,0,PaySum - RetSum,false);
+				// outstring(340,0,IVPM,false);
+				// outstring(340,0,stocks,false);
+				// outstring(340,0,-SaleTotal,false);
+			// endformat;
+			
+			// startformat(15);
+				// outstring(0,0,"Товар",false);
+				// outstring(70,0,"Наимен.",false);
+				// outstring(220,0,"Сер.№",false);
+				// outstring(300,0,"Кол.",false);
+				// outstring(340,0,"Цена",false);
+				// outstring(340,0,"Арт.К.И.",false);
+				// outstring(340,0,"Скидка",false);
+				// outstring(340,0,"Сумма",false);
+			// endformat;
 			ORr.SerNr = Retr.OrdNr;
 			if(ReadFirstMain(ORr,1,true))then begin
 				for (i=0;i<matrowcnt(ORr);i=i+1) begin
 					matrowget(ORr,i,ORrw);
 					if(vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr] > 0)then begin
+							SHFRV = blankval;
+							SHSHIP = blankval;
+							SHr.OrderNr = ORr.SerNr;
+							TrHs2 = true;
+							while (loopkey("OrderKey",SHr,1,TrHs2)) begin
+								if (SHr.OrderNr==ORr.SerNr) then begin
+									for (j=0;j<matrowcnt(SHr);j=j+1) begin
+										matrowget(SHr,j,SHrw);
+										if (SHrw.OrdRow==i) then begin
+											SHFRV = SHFRV + SHrw.FIFORowVal;
+											SHSHIP = SHSHIP + SHrw.Ship;
+										end;
+									end;
+								end else begin
+									TrHs2 = false;
+								end;
+							end;
+							resetLoop(SHr);
+						// startformat(15);
+							// outstring(0,0,ORrw.ArtCode,false);
+							// outstring(70,0,ORrw.Spec,false);
+							// outstring(220,0,ORrw.SerialNr,false);
+							// outstring(300,0,-vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr],false);
+							// outstring(340,0,ORrw.Price,false);
+							// outstring(340,0,right(ORrw.GlobalItemArtCode,(len(ORrw.GlobalItemArtCode)-9)),false);
+							// outstring(340,0,ORrw.vRebate,false);
+							// outstring(340,0,-(ORrw.Sum / ORrw.Quant * vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr]),false);
+						// endformat;
+						
 						startformat(15);
+							if (OrdInf) then begin
+								outstring(70,0,Retr.TransDate,false);
+								ORr.SerNr = Retr.OrdNr;
+								if(ReadFirstMain(ORr,1,true))then begin
+									outstring(220,0,ORr.SerNr,false);
+									outstring(220,0,ORr.OrdDate,false);
+								end else begin
+									outstring(220,0,"",false);
+									outstring(220,0,"",false);
+								end;
+							end else begin
+								outstring(70,0,"",false);
+								outstring(220,0,"",false);
+								outstring(220,0,"",false);
+							end;
 							outstring(0,0,ORrw.ArtCode,false);
 							outstring(70,0,ORrw.Spec,false);
-							outstring(220,0,ORrw.SerialNr,false);
+							outstring(70,0,ORrw.ECReservStock,false);
 							outstring(300,0,-vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr],false);
 							outstring(340,0,ORrw.Price,false);
-							outstring(340,0,right(ORrw.GlobalItemArtCode,(len(ORrw.GlobalItemArtCode)-9)),false);
-							outstring(340,0,ORrw.vRebate,false);
+							outstring(340,0,SHFRV/SHSHIP,false);
+							outstring(340,0,PDComment,false);
 							outstring(340,0,-(ORrw.Sum / ORrw.Quant * vRetOutItems[ORrw.ArtCode & "_" & Retr.SerNr]),false);
+							if (OrdInf) then begin
+								OrdInf = false;
+								outstring(340,0,RetSum,false);
+							end else begin
+								outstring(340,0,"",false);
+							end;
 						endformat;
 					end;
 				end;
 			end;
-			
-			
 		end;
 	end;
 	
