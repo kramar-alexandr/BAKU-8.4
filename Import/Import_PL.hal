@@ -45,6 +45,7 @@ external updating procedure Instock0(string);
 external function boolean NewIN2DClassProductNameCodeEFAfter(integer,integer,integer,var record NewINVc);
 external function boolean NewIN2DClassSubGroupClEFAfter(integer,integer,integer,var record NewINVc);
 remote procedure CheckItemCC(var record newINVc, integer);
+external updating procedure CreateTPGlobalItem(string, string, array string, vector string);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger
 
 SetLangMode(LangRussian,"RUS",0); 
 
@@ -14145,77 +14146,216 @@ record ExpProvItemRegVc EPIRr;
 		end;
 		if (NextImportLine(true)) then begin end;
 		tstr = importfield; 
-		logtext(0,tstr & " PrefCode");
-		SetCompany(29,false);
-		EPIRr.PrefCode = tstr;
-		if (readfirstKey("PrefCode",EPIRr,1,true)) then begin
-			PrefCode = EPIRr.PrefCode;
-			logtext(0,namef & " PrefCode");
-		end;
-		ResetCompany(1);
-		if (NextImportLine(true)) then begin end;
-		tstr = ImportField;
-		tstr = ImportField;
-		if (tstr=="name") then begin
-			namef = true;
-		end;
-		tstr = ImportField;
-		tstr = ImportField;
-		tstr = ImportField;
-		if (tstr=="dealer_pr") then begin
-			dpf = true;
-		end;
-		if (NextImportLine(true)) then begin end;
-		i=0;
-		while (TestEOF()==false) begin
-			tstr = trim(ImportField);
-			ItemCode[i] = tstr;
-			if (namef) then begin
+		if(tstr!=USetStr(36385))then begin
+			logtext(0,tstr & " PrefCode");
+			SetCompany(29,false);
+			EPIRr.PrefCode = tstr;
+			if (readfirstKey("PrefCode",EPIRr,1,true)) then begin
+				PrefCode = EPIRr.PrefCode;
+				logtext(0,namef & " PrefCode");
+			end;
+			ResetCompany(1);
+			if (NextImportLine(true)) then begin end;
+			tstr = ImportField;
+			tstr = ImportField;
+			if (tstr=="name") then begin
+				namef = true;
+			end;
+			tstr = ImportField;
+			tstr = ImportField;
+			tstr = ImportField;
+			if (tstr=="dealer_pr") then begin
+				dpf = true;
+			end;
+			if (NextImportLine(true)) then begin end;
+			i=0;
+			while (TestEOF()==false) begin
 				tstr = trim(ImportField);
-				ItemName[i] = tstr;
-			end;
-			tstr = trim(ImportField);
-			ItemBrand[i] = tstr;
-			tstr = trim(ImportField);
-			for (j=0;j<len(tstr);j=j+1) begin
-				if(Mid(tstr,j,1)==",") then begin
-					ItemPrice[i] = ItemPrice[i] & ".";
-				end else begin
-					ItemPrice[i] = ItemPrice[i] & Mid(tstr,j,1);
+				ItemCode[i] = tstr;
+				if (namef) then begin
+					tstr = trim(ImportField);
+					ItemName[i] = tstr;
 				end;
-			end;
-			if (dpf) then begin
+				tstr = trim(ImportField);
+				ItemBrand[i] = tstr;
 				tstr = trim(ImportField);
 				for (j=0;j<len(tstr);j=j+1) begin
 					if(Mid(tstr,j,1)==",") then begin
-						DealerPrice[i] = DealerPrice[i] & ".";
+						ItemPrice[i] = ItemPrice[i] & ".";
 					end else begin
-						DealerPrice[i] = DealerPrice[i] & Mid(tstr,j,1);
+						ItemPrice[i] = ItemPrice[i] & Mid(tstr,j,1);
+					end;
+				end;
+				if (dpf) then begin
+					tstr = trim(ImportField);
+					for (j=0;j<len(tstr);j=j+1) begin
+						if(Mid(tstr,j,1)==",") then begin
+							DealerPrice[i] = DealerPrice[i] & ".";
+						end else begin
+							DealerPrice[i] = DealerPrice[i] & Mid(tstr,j,1);
+						end;
+					end;
+				end;
+				if (NextImportLine(true)) then begin end;
+				i=i+1;
+			end;
+			cnt = i;
+			CloseFile;
+			MoveFile(filename,"/mnt/database/Ecommerce/ExtItemIN","/mnt/database/Ecommerce/ExtItemOUT");
+			delete_file("/mnt/database/Ecommerce/ExtItemIN/" & filename);
+			runprogram("chmod","-R a+rw Ecommerce");
+			if (nonblank(PrefCode)) then begin
+				for (i=0;i<cnt;i=i+1) begin
+					if(nonblank(ItemCode[i])) then begin 
+						queued.CreateExtProvGlobalItem(PrefCode & ItemCode[i],ItemBrand[i],ItemPrice[i],ItemName[i], namef, DealerPrice[i], dpf, EPIRr.SerNr);
+						MilliSleep(50);
+						CodeInstf[PrefCode & ItemCode[i]] = true;
+					end;
+				end;
+				GIr.Code = PrefCode & PrefCode;
+				TrHs = true;
+				while (loopMain(GIr,1,TrHs)) begin
+					if (left(GIr.Code,len(PrefCode))!=PrefCode) then begin TrHs = false; end;
+					if (TrHs and !CodeInstf[GIr.Code]) then begin
+						queued.Instock0(GIr.Code);
+						MilliSleep(50);
 					end;
 				end;
 			end;
-			if (NextImportLine(true)) then begin end;
-			i=i+1;
+		end else begin
+			while (TestEOF()==false) begin
+				if (NextImportLine(true)) then begin end;
+			end;
 		end;
-		cnt = i;
-		CloseFile;
-		MoveFile(filename,"/mnt/database/Ecommerce/ExtItemIN","/mnt/database/Ecommerce/ExtItemOUT");
-		delete_file("/mnt/database/Ecommerce/ExtItemIN/" & filename);
-		runprogram("chmod","-R a+rw Ecommerce");
-		if (nonblank(PrefCode)) then begin
-			for (i=0;i<cnt;i=i+1) begin
-				if(nonblank(ItemCode[i])) then begin 
-					queued.CreateExtProvGlobalItem(PrefCode & ItemCode[i],ItemBrand[i],ItemPrice[i],ItemName[i], namef, DealerPrice[i], dpf, EPIRr.SerNr);
-					MilliSleep(50);
-					CodeInstf[PrefCode & ItemCode[i]] = true;
+	end;
+	return;
+end;
+
+
+
+
+
+
+
+global webpublic procedure WebImportAddTPExtVendItemsFromFolderQueuedIn()  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:50 13.10.2020
+begin
+record INVc INr,oldINr;
+integer i,flushcnt,curcomp,cnt,j,k,CompQty,ErrCnt1,ErrCnt2,mtrw,INComp,StatAllRows,StatOkRows,StatFailItemRows,StatFailClassRows,ErrClasscnt,ErrCnt3,slipcont;
+record GlobalItemVc GIr, ExtPrGIr;
+string 100 artcode,brand,newBrand,code,glCode,tstr,bltstr,cntstr,origartcode;
+record BPIBrandVc BPIBrandr;
+record BPIBrandVc BPIBrand1r;
+area ErrAr1, ErrAr2, reply;
+array string 255 abrand,anewbrand,ErrArr,ErrAr3;
+array string 100 headers,params;
+record CompaniesBlock Compb;
+row CompaniesBlock Comprw;
+vector boolean Errf, Classf;
+array string 255 ItemCode,ItemName,ItemBrand,ItemPrice,DealerPrice,TPCode;
+boolean INrf, ExtPrItemf, namef, dpf;
+vector string 255 classCode;
+string 255 filename, FinRow, PrefCode;
+LongInt rcnt, r, okend ;
+vector string 255 vparams, vartcode, vbrand, vorigartcode,vJSONParENG,vJSONParRUS,vJSONParAZE;
+record JSONClassNamesVc JCNr;
+vector boolean vJSONClassf;
+vector boolean CodeInstf;
+boolean TrHs;
+record ExpProvItemRegVc EPIRr;
+		
+	BlockLoad(Compb);
+	
+	CompQty = matrowcnt(Compb);
+	curcomp = currentcompany;	
+	// SetImportCodePage("CP1251");
+	SetCompany(1,false);
+	okend = 0;
+	for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN");i=i+1) begin
+		if (right(GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i),4) == ".txt") then begin 
+			filename = GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i);
+			i = CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN"); 
+		end;
+	end;
+	if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/ExtItemIN/" & filename))then begin
+		if (fileexists("/mnt/database/Ecommerce/ExtItemOUT/" & filename)) then begin
+			delete_file("/mnt/database/Ecommerce/ExtItemOUT/" & filename);
+		end;
+		logtext(0,"start ImportAddExtVendItemsFromFolderQueuedIn");
+		SetImportCodePage("UTF-8");
+		openfile("/mnt/database/Ecommerce/ExtItemIN/" & filename);
+		// _______________________________________________________________________
+		// for (i=0;i<CountFilesInDir("ExtItemIN");i=i+1) begin
+			// if (right(GetFileNameInDir("ExtItemIN",i),4) == ".txt") then begin 
+				// filename = GetFileNameInDir("ExtItemIN",i);
+				// i = CountFilesInDir("ExtItemIN"); 
+			// end;
+		// end;
+		// if(nonblank(filename) and fileexists("ExtItemIN/" & filename))then begin
+			// if (fileexists("ExtItemOUT/" & filename)) then begin
+				// delete_file("ExtItemOUT/" & filename);
+			// end;
+			// logtext(0,"start ImportAddExtVendItemsFromFolderQueuedIn");
+			// SetImportCodePage("UTF-8");
+			// openfile("ExtItemIN/" & filename);
+		// _______________________________________________________________________
+		
+		
+		
+		
+		tstr = importfield;
+		tstr = right(tstr,(len(tstr)-1));
+		logtext(0,tstr);
+		logtext(0,USetStr(36229));
+		if(tstr!=USetStr(36229))then begin
+			logtext(0,"ImportAddClassIn codepage error");
+			AddTextToArea	(USetStr(36351) & chr(09),ErrAr1);
+			while (TestEOF()==false) begin
+				if (NextImportLine(true)) then begin end;
+			end;
+		end;
+		
+		if (NextImportLine(true)) then begin end;
+		tstr = ImportField;
+		if(tstr!=USetStr(36385))then begin
+			logtext(0,"ImportAddClassIn TP error");
+			while (TestEOF()==false) begin
+				if (NextImportLine(true)) then begin end;
+			end;
+		end else begin
+			if (NextImportLine(true)) then begin end;
+			tstr = ImportField;
+			tstr = ImportField;
+			while(nonblank(tstr))begin
+				tstr = importfield;
+				if(nonblank(tstr))then begin
+					StripEndingSpaces(tstr);
+					headers[headers.length] = tstr;
 				end;
 			end;
-			GIr.Code = PrefCode & PrefCode;
-			TrHs = true;
-			while (loopMain(GIr,1,TrHs)) begin
-				if (left(GIr.Code,len(PrefCode))!=PrefCode) then begin TrHs = false; end;
-				if (TrHs and !CodeInstf[GIr.Code]) then begin
-					queued.Instock0(GIr.Code);
+			
+			
+			if (NextImportLine(true)) then begin end;
+			i=0;
+			while (TestEOF()==false) begin
+				tstr = trim(ImportField);
+				ItemCode[i] = tstr;
+				tstr = trim(ImportField);
+				TPCode[i] =  tstr;
+				for(j=0;j<headers.length;j=j+1)begin
+					tstr = importfield;
+					vparams[ItemCode[i] & "_" & TPCode[i] & "_" & headers[j]] = tstr;
+				end;
+				if (NextImportLine(true)) then begin end;
+				i=i+1;
+			end;
+			cnt = i;
+			CloseFile;
+			MoveFile(filename,"/mnt/database/Ecommerce/ExtItemIN","/mnt/database/Ecommerce/ExtItemOUT");
+			delete_file("/mnt/database/Ecommerce/ExtItemIN/" & filename);
+			runprogram("chmod","-R a+rw Ecommerce");
+			for (i=0;i<cnt;i=i+1) begin
+				if(nonblank(ItemCode[i])) then begin 
+					queued.CreateTPGlobalItem(ItemCode[i],TPCode[i],headers,vparams);
 					MilliSleep(50);
 				end;
 			end;
@@ -14223,6 +14363,8 @@ record ExpProvItemRegVc EPIRr;
 	end;
 	return;
 end;
+
+
 
 
 
