@@ -7999,7 +7999,7 @@ end;
 
 
 
-global updating procedure CreateTPGlobalItem(string code, string  TPCode, array string aHeaders, vector string vParams)
+global updating procedure CreateTPGlobalItem(string code, string  TPCode, string  MainName, array string aHeaders, vector string vParams)
 begin
 	record GlobalItemVc GIr, TPGir;
 	row GlobalItemVc GIrw;
@@ -8015,24 +8015,15 @@ begin
 	GIr.Code = code & "_" & TPCode;
 	if(ReadFirstMain(GIr,1,true)) then begin
 		Logtext(0,GIr.Code & " found");
-		if (matrowcnt(GIr)<1) then begin
-			GIrw.Location = "MAIN";
-			GIrw.Instock = 2;
-			matrowput (GIr,0,GIrw);
-		end;
-		for (i=0;i<matrowcnt(GIr);i=i+1) begin
-			matrowget (GIr,i,GIrw);
-			GIrw.Instock = 2;
-			matrowput (GIr,i,GIrw);
-		end;
 		for(i=0;i<aHeaders.length;i=i+1)begin	
-			aParams[i] = vParams[GIr.Code & "_" & aHeaders[i]];
+			aParams[i] = vParams[TPCode & "_" & aHeaders[i]];
 		end;
 		TPSetItemBitrixClass(GIr,aHeaders,aParams,blankArr,blnk,blankArr,blankVctr);
 		RecordStore(GIr,true);
 	end else begin
 		GIr.Code = code;
-		if(ReadFirstMain(GIr,1,true)) then begin
+		TPGir.Code = TPCode;
+		if(ReadFirstMain(GIr,1,true) and !ReadFirstMain(TPGir,1,true)) then begin
 			RecordNew(TPGir);
 			RecordCopy(TPGir,GIr);
 			TPGir.Code =  code & "_" & TPCode;
@@ -8042,21 +8033,44 @@ begin
 			GIr.Code = code & "_" & TPCode;
 			if(ReadFirstMain(GIr,1,true)) then begin
 				Logtext(0,GIr.Code & " Created");
-				if (matrowcnt(GIr)<1) then begin
-					GIrw.Location = "MAIN";
-					GIrw.Instock = 2;
-					matrowput (GIr,0,GIrw);
-				end;
-				for (i=0;i<matrowcnt(GIr);i=i+1) begin
-					matrowget (GIr,i,GIrw);
-					GIrw.Instock = 2;
-					matrowput (GIr,i,GIrw);
-				end;
 				for(i=0;i<aHeaders.length;i=i+1)begin	
-					aParams[i] = vParams[GIr.Code & "_" & aHeaders[i]];
+					aParams[i] = vParams[TPCode & "_" & aHeaders[i]];
 				end;
 				TPSetItemBitrixClass(GIr,aHeaders,aParams,blankArr,blnk,blankArr,blankVctr);
 				RecordStore(GIr,true);
+			end;
+		end else begin
+			TPGir.Code = TPCode;
+			logtext (0," <> " & MainName);
+			if(ReadFirstMain(TPGir,1,true)) then begin
+				for(i=0;i<aHeaders.length;i=i+1)begin	
+					aParams[i] = vParams[TPGir.Code & "_" & aHeaders[i]];
+				end;
+				GIr.Code = code;
+				if (ReadFirstMain(GIr,1,true)) then begin
+					TPGir.MainCode = code;
+					TPSetItemBitrixClass(TPGir,aHeaders,aParams,blankArr,blnk,blankArr,blankVctr);
+					RecordStore(TPGir,true);
+				end else begin
+					logtext (0," <> " & MainName);
+					if (nonblank(MainName)) then begin
+						recordNew(GIr);
+						GIr.Code = code;
+						GIr.HansaCode = code;
+						GIr.Brand = TPGir.Brand;
+						GIr.BPIBrand = TPGir.BPIBrand;
+						GIr.Name = MainName;
+						GIr.HansaName = MainName;
+						if (RecordStore(GIr,true)) then begin
+							logtext(0,"Main Global Item created: " & GIr.Code);
+							TPGir.MainCode = code;
+							TPSetItemBitrixClass(TPGir,aHeaders,aParams,blankArr,blnk,blankArr,blankVctr);
+							RecordStore(TPGir,true);
+						end else begin
+							logtext(0,"Main Global Item not created: " & GIr.Code);
+						end;
+					end;
+				end;
 			end;
 		end;
 	end;

@@ -167,6 +167,215 @@ return;
 end;
 
 
+
+
+
+global procedure FillClassInM4TextWithTP(var record GlobalItemVc GIr, string ClassMachName ,string ClassNameENG, string ClassNameRUS, string ClassNameAZE, 
+																																			string ValENG, string ValRUS, string ValAZE, area ImportedFile, string MainItemCode)
+begin
+	longint tlcnt,i,newtlcnt, l, currentLineInArea, t, ststr, lnstr;
+	string 255 linestr, chunkValENG, chunkValRUS, chunkValAZE, tstr;
+	array string 255 TextLinesArray, oldTextLinesArray, Class;
+	val strCoef;
+	Integer strNatCoef, clarea;
+	string 255 tabInLine;
+	
+	newtlcnt = 0;
+	tlcnt = LineTextCnt(GIr);
+	if (tlcnt > 1) then begin
+		for (i=0;i<tlcnt;i=i+1) begin
+			linestr = LineTextGet	(GIr,i);
+			if (linestr == chr(09) & "\"" & ClassMachName & "\":{") then begin
+				TextLinesArray[newtlcnt - 1] = chr(09) & "}";
+				while (linestr!=chr(09) & "}" and linestr!=chr(09) & "}," and i<tlcnt) begin
+					i = i + 1;
+					linestr = LineTextGet	(GIr,i);
+				end;
+			end else begin
+				TextLinesArray[newtlcnt] = linestr;
+				newtlcnt = newtlcnt + 1;
+			end;
+		end;
+	end;
+	
+	if (newtlcnt<tlcnt) then begin
+		for (i=0;i<tlcnt;i=i+1) begin
+			if (nonblank(TextLinesArray[i])) then begin
+				LineTextPut	(GIr,i,TextLinesArray[i]);
+			end else begin
+				LineTextPut	(GIr,i,"");
+			end;
+		end;
+	end;
+	
+	
+	tlcnt = LineTextCnt(GIr);
+	if (tlcnt > 1) then begin
+		for (i=tlcnt-1;i>=0;i=i-1) begin
+			linestr = LineTextGet	(GIr,i);
+			if (linestr == "}") then begin
+				tlcnt = i - 1;
+				if (LineTextGet	(GIr,i-1)==chr(09) & "}") then begin
+					LineTextPut	(GIr,i-1,chr(09) & "},");
+				end;
+				i=0;
+			end;
+			if (linestr == chr(09) & "}") then begin
+				tlcnt = i;
+				LineTextPut	(GIr,tlcnt,chr(09) & "},");
+				i=0;
+			end;
+		end;
+	end;
+	if (tlcnt==0 or LineTextGet(GIr,0)!="{") then begin
+		LineTextPut	(GIr,tlcnt,"{");
+		tlcnt = 1;
+	end else begin
+		tlcnt = tlcnt + 1;
+	end;
+	if (LineTextGet(GIr,1)=="") then begin
+		tlcnt = 1;
+	end;
+	LineTextPut	(GIr,tlcnt,chr(09) & "\"" & ClassMachName & "\":{");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & "\"Name\":{");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"ENG\":\"" & ClassNameENG & "\"\,");
+	tlcnt = tlcnt + 1;
+	// if (nonblank(ClassNameRUS)) then begin
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"RUS\":\"" & ClassNameRUS & "\"\,");
+		tlcnt = tlcnt + 1;
+	// end;
+	// if (nonblank(ClassNameAZE)) then begin
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"AZE\":\"" & ClassNameAZE & "\"");
+		tlcnt = tlcnt + 1;
+	// end;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & "},");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & "\"Value\":{");
+	tlcnt = tlcnt + 1;
+	if (len(ValENG)<100) then begin
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"ENG\":\"" & ValENG & "\"\,");
+		tlcnt = tlcnt + 1;
+	end else begin
+		clarea = countlinesinarea(ImportedFile);
+		for (l=0;l<clarea;l=l+1) begin
+			tstr = GetTabTextFromArea (l,0,ImportedFile);
+			if (blank(MainItemCode)) then begin
+				if (left(tstr,len(GIr.Code))==GIr.Code) then begin
+					currentLineInArea = l;
+					l = clarea;
+				end;
+			end else begin
+				if (left(tstr,len(GIr.Code))==MainItemCode) then begin
+					currentLineInArea = l;
+					l = clarea;
+				end;
+			end;
+		end;
+		
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"ENG\":\[");
+		tlcnt = tlcnt + 1;
+		t = 0;
+		while (left(chunkValENG,len(ValENG)-1)!=left(ValENG,len(ValENG)-1)) begin
+			chunkValENG = GetTabTextFromArea (currentLineInArea,t,ImportedFile);
+			t = t + 1;
+		end;
+		strCoef = len(chunkValENG)/100;
+		ststr = 0;
+		for (i=0;i<strCoef;i=i+1) begin
+			if (i+1>=strCoef) then begin
+				LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & chr(09) & "\"" & mid(chunkValENG,ststr,100) & "\"");
+			end else begin
+				LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & chr(09) & "\"" & mid(chunkValENG,ststr,100) & "\"\,");
+			end;
+			tlcnt = tlcnt + 1;
+			ststr = ststr + 100;
+		end;
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\]\,");
+		tlcnt = tlcnt + 1;
+	end;
+	if (len(ValRUS)<100) then begin
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"RUS\":\"" & ValRUS & "\"\,");
+		tlcnt = tlcnt + 1;
+	end else begin
+		clarea = countlinesinarea(ImportedFile);
+		for (l=0;l<clarea;l=l+1) begin
+			tstr = GetTabTextFromArea (l,0,ImportedFile);
+			if (left(tstr,len(GIr.Code))==GIr.Code) then begin
+				currentLineInArea = l;
+				l = clarea;
+			end;
+		end;
+		
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"RUS\":\[");
+		tlcnt = tlcnt + 1;
+		t = 0;
+		while (left(chunkValRUS,len(ValRUS)-1)!=left(ValRUS,len(ValRUS)-1)) begin
+			chunkValRUS = GetTabTextFromArea (currentLineInArea,t,ImportedFile);
+			t = t + 1;
+		end;
+		strCoef = len(chunkValRUS)/100;
+		ststr = 0;
+		for (i=0;i<strCoef;i=i+1) begin
+			if (i+1>=strCoef) then begin
+				LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & chr(09) & "\"" & mid(chunkValRUS,ststr,100) & "\"");
+			end else begin
+				LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & chr(09) & "\"" & mid(chunkValRUS,ststr,100) & "\"\,");
+			end;
+			tlcnt = tlcnt + 1;
+			ststr = ststr + 100;
+		end;
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\]\,");
+		tlcnt = tlcnt + 1;
+	end;
+	if (len(ValAZE)<100) then begin
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"AZE\":\"" & ValAZE & "\"");
+		tlcnt = tlcnt + 1;
+	end else begin
+		clarea = countlinesinarea(ImportedFile);
+		for (l=0;l<clarea;l=l+1) begin
+			tstr = GetTabTextFromArea (l,0,ImportedFile);
+			if (left(tstr,len(GIr.Code))==GIr.Code) then begin
+				currentLineInArea = l;
+				l = clarea;
+			end;
+		end;
+		
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\"AZE\":\[");
+		tlcnt = tlcnt + 1;
+		t = 0;
+		while (left(chunkValAZE,len(ValAZE)-1)!=left(ValAZE,len(ValAZE)-1)) begin
+			chunkValAZE = GetTabTextFromArea (currentLineInArea,t,ImportedFile);
+			t = t + 1;
+		end;
+		strCoef = len(chunkValAZE)/100;
+		ststr = 0;
+		for (i=0;i<strCoef;i=i+1) begin
+			if (i+1>=strCoef) then begin
+				LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & chr(09) & "\"" & mid(chunkValAZE,ststr,100) & "\"");
+			end else begin
+				LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & chr(09) & "\"" & mid(chunkValAZE,ststr,100) & "\"\,");
+			end;
+			tlcnt = tlcnt + 1;
+			ststr = ststr + 100;
+		end;
+		LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & chr(09) & "\]");
+		tlcnt = tlcnt + 1;
+	end;
+	LineTextPut	(GIr,tlcnt,chr(09) & chr(09) & "}");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,chr(09) & "}");
+	tlcnt = tlcnt + 1;
+	LineTextPut	(GIr,tlcnt,"}");
+	tlcnt = tlcnt + 1;
+return;
+end;
+
+
+
+
+
 global procedure FillClassInM4Text(var record GlobalItemVc GIr, string ClassMachName ,string ClassNameENG, string ClassNameRUS, string ClassNameAZE, 
 																																			string ValENG, string ValRUS, string ValAZE, area ImportedFile)
 begin
