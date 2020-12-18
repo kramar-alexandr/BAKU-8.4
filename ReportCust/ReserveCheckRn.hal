@@ -195,8 +195,8 @@ begin
   record ORVc ORr;
 	row ORVc ORrw;
 	boolean TrHs,testf;
-	vector string 255 orders,custCode,custName,OrdDate,reservDate,ordersSM,OrdDateSM;
-	vector integer quantShip,rownr,quantShipSM,rownrSM;
+	vector string 255 orders,custCode,custName,OrdDate,reservDate,ordersSM,OrdDateSM,ordersSD,OrdDateSD;
+	vector integer quantShip,rownr,quantShipSM,rownrSM,quantShipSD,rownrSD;
   longint curtick;
 	integer rowcnt,i;
 	array string 255 tags;
@@ -204,6 +204,8 @@ begin
 	string 255 orderNr;
 	record StockMovVc SMr;
 	row StockMovVc SMrw;
+	record SDVc SDr;
+	row SDVc SDrw;
 	
 	ORr.Reserved = 1;
 	TrHs = true;
@@ -269,126 +271,52 @@ begin
 			end;
 		end;
 	end;
-	startreportnoheaderjob("Reserved Report");
-	startformat(15);
-		outstring(0,0,"Заказ",false);
-		outstring(50,0,"Резерв",false);
-		outstring(75,0,"Стр.",false);
-		outstring(100,0,"Клиент",false);
-		outstring(200,0,"Имя клиента",false);
-		outstring(300,0,"Дата заказа",false);
-		outstring(350,0,"Резерв до",false);
-	endformat;
-	getvectortags(orders,tags);
-	Black_Divider(0,1);
-	for(i=0;i<tags.length;i=i+1) begin
-		itemall = 0;
-		pos = 0;
-		ExtractObj(orders[tags[i]],pos,orderNr);
-		startformat(15);
-				outstring(0,"DblINVc", tags[i],false);
-			endformat;
-		while(nonblank(orderNr)) begin
-			itemall = itemall + quantShip[tags[i] & orderNr];
-			startformat(15);
-				outstring(0,"DblORVc",orderNr,false);
-				outstring(50,0,quantShip[tags[i] & orderNr],false);
-				outstring(75,0,rownr[tags[i] & orderNr],false);
-				outstring(100,0,custCode[tags[i] & orderNr],false);
-				outstring(200,0,custName[tags[i] & orderNr],false);
-				outstring(300,0,OrdDate[tags[i] & orderNr],false);
-				outstring(350,0,reservDate[tags[i] & orderNr],false);
-			endformat;
-			ExtractObj(orders[tags[i]],pos,orderNr);
-		end;
-		pos = 0;
-		ExtractObj(ordersSM[tags[i]],pos,orderNr);
-		while(nonblank(orderNr)) begin
-			itemall = itemall + quantShipSM[tags[i] & orderNr];
-			startformat(15);
-				outstring(0,"DblStockMovVc",orderNr,false);
-				outstring(50,0,quantShipSM[tags[i] & orderNr],false);
-				outstring(75,0,rownrSM[tags[i] & orderNr],false);
-				outstring(300,0,OrdDateSM[tags[i] & orderNr],false);
-			endformat;
-			ExtractObj(ordersSM[tags[i]],pos,orderNr);
-		end;
-		startformat(15);
-				outstring(0,0,"Всего",false);
-				outstring(50,0,itemall,false);
-			endformat;
-			Black_Divider(0,1);
-	end;
-  EndJob;
-	LogProcTime("ItemLocationStatusRn",getcurtick() - curtick);
-  return;
-end;
-global
-procedure ReserveRn(record RcVc RepSpec)
-begin
-  record INVc INr;
-  record ORVc ORr;
-	row ORVc ORrw;
-	boolean TrHs,testf;
-	vector string 255 orders,custCode,custName,OrdDate,reservDate,ordersSM,OrdDateSM;
-	vector integer quantShip,rownr,quantShipSM,rownrSM;
-  longint curtick;
-	integer rowcnt,i;
-	array string 255 tags;
-	integer itemall,pos;
-	string 255 orderNr;
-	record StockMovVc SMr;
-	row StockMovVc SMrw;
 	
-	ORr.Reserved = 1;
+	
+	
+	
+	
+	SDr.OKFlag = 0;
 	TrHs = true;
-	while(LoopKey("Reserved",ORr,1,TrHs)) begin
-		if(ORr.Reserved<1) then begin TrHs = false; end;
-		if(TrHs) then begin
-			rowcnt = MatRowCnt(ORr);
+	while(loopkey("OKFlag",SDr,1,TrHs))begin
+		testf = true;
+		if(SDr.Reservf==0)then begin testf = false; end;
+		if(SDr.OKFlag>0)then begin testf = false; TrHs = false; end;
+		if(testf)then begin
+			rowcnt = MatRowCnt(SDr);
 			for(i=0;i<rowcnt;i=i+1) begin
 				testf = true;
-				matrowget(ORr,i,ORrw);
-				if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
-				if(ORrw.Quant>0 and testf and ORrw.Quant>ORrw.Shipd2) then begin
-					if(blank(orders[ORrw.ArtCode])) then begin
-						orders[ORrw.ArtCode] = ORr.SerNr;
-					end else begin
-						orders[ORrw.ArtCode] = orders[ORrw.ArtCode] & "," & ORr.SerNr;
+				matrowget(SDr,i,SDrw);
+				if(nonblank(RepSpec.f1) and RepSpec.f1!=SDrw.ArtCode) then begin testf = false; end;
+				if(nonblank(RepSpec.f2))then begin
+					if(blank(SDrw.Location) and RepSpec.f2!=SDr.Location)then begin
+						testf = false;
 					end;
-					quantShip[ORrw.ArtCode & ORr.SerNr] = ORrw.Quant-ORrw.Shipd2;
-					rownr[ORrw.ArtCode & ORr.SerNr] = i+1;
-					custCode[ORrw.ArtCode & ORr.SerNr] = ORr.CustCode;
-					custName[ORrw.ArtCode & ORr.SerNr] =	ORr.Addr0;
-					OrdDate[ORrw.ArtCode & ORr.SerNr] = ORr.OrdDate;
-					reservDate[ORrw.ArtCode & ORr.SerNr] = ORr.EndReserv;
+					if(nonblank(SDrw.Location) and RepSpec.f2!=SDrw.Location)then begin
+						testf = false;
+					end;
+				end;
+				
+				if(SDrw.Qty>0 and testf) then begin
+					if(blank(ordersSM[SDrw.ArtCode])) then begin
+						ordersSD[SDrw.ArtCode] = SDr.SerNr;
+					end else begin
+						ordersSD[SDrw.ArtCode] = ordersSD[SDrw.ArtCode] & "," & SDr.SerNr;
+					end;
+					quantShipSD[SDrw.ArtCode & SDr.SerNr] = SDrw.Qty;
+					rownrSD[SDrw.ArtCode & SDr.SerNr] = i+1;
+					OrdDateSD[SDrw.ArtCode & SDr.SerNr] = SDr.TransDate;
 				end;
 			end;
 		end;
 	end;
-	SMr.SerNr = 0;
-	while(LoopMain(SMr,1,true)) begin
-		TrHs = true;
-		if(SMr.Reserved<1 or SMr.OKFlag>0) then begin TrHs = false; end;
-		if(TrHs) then begin
-			rowcnt = MatRowCnt(SMr);
-			for(i=0;i<rowcnt;i=i+1) begin
-				testf = true;
-				matrowget(SMr,i,SMrw);
-				if(nonblank(RepSpec.f1) and RepSpec.f1!=SMrw.ArtCode) then begin testf = false; end;
-				if(SMrw.Quant>0 and testf) then begin
-					if(blank(ordersSM[SMrw.ArtCode])) then begin
-						ordersSM[SMrw.ArtCode] = SMr.SerNr;
-					end else begin
-						ordersSM[SMrw.ArtCode] = ordersSM[SMrw.ArtCode] & "," & SMr.SerNr;
-					end;
-					quantShipSM[SMrw.ArtCode & SMr.SerNr] = SMrw.Quant;
-					rownrSM[SMrw.ArtCode & SMr.SerNr] = i+1;
-					OrdDateSM[SMrw.ArtCode & SMr.SerNr] = SMr.OrdTransDate;
-				end;
-			end;
-		end;
-	end;
+	
+	
+	
+	
+	
+	
+	
 	startreportnoheaderjob("Reserved Report");
 	startformat(15);
 		outstring(0,0,"Заказ",false);
@@ -433,6 +361,20 @@ begin
 			endformat;
 			ExtractObj(ordersSM[tags[i]],pos,orderNr);
 		end;
+		
+		pos = 0;
+		ExtractObj(ordersSD[tags[i]],pos,orderNr);
+		while(nonblank(orderNr)) begin
+			itemall = itemall + quantShipSD[tags[i] & orderNr];
+			startformat(15);
+				outstring(0,"DblSDVc",orderNr,false);
+				outstring(50,0,quantShipSD[tags[i] & orderNr],false);
+				outstring(75,0,rownrSD[tags[i] & orderNr],false);
+				outstring(300,0,OrdDateSD[tags[i] & orderNr],false);
+			endformat;
+			ExtractObj(ordersSD[tags[i]],pos,orderNr);
+		end;
+		
 		startformat(15);
 				outstring(0,0,"Всего",false);
 				outstring(50,0,itemall,false);
@@ -443,6 +385,126 @@ begin
 	LogProcTime("ItemLocationStatusRn",getcurtick() - curtick);
   return;
 end;
+// global
+// procedure ReserveRn(record RcVc RepSpec)
+// begin
+  // record INVc INr;
+  // record ORVc ORr;
+	// row ORVc ORrw;
+	// boolean TrHs,testf;
+	// vector string 255 orders,custCode,custName,OrdDate,reservDate,ordersSM,OrdDateSM;
+	// vector integer quantShip,rownr,quantShipSM,rownrSM;
+  // longint curtick;
+	// integer rowcnt,i;
+	// array string 255 tags;
+	// integer itemall,pos;
+	// string 255 orderNr;
+	// record StockMovVc SMr;
+	// row StockMovVc SMrw;
+	
+	// ORr.Reserved = 1;
+	// TrHs = true;
+	// while(LoopKey("Reserved",ORr,1,TrHs)) begin
+		// if(ORr.Reserved<1) then begin TrHs = false; end;
+		// if(TrHs) then begin
+			// rowcnt = MatRowCnt(ORr);
+			// for(i=0;i<rowcnt;i=i+1) begin
+				// testf = true;
+				// matrowget(ORr,i,ORrw);
+				// if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
+				// if(ORrw.Quant>0 and testf and ORrw.Quant>ORrw.Shipd2) then begin
+					// if(blank(orders[ORrw.ArtCode])) then begin
+						// orders[ORrw.ArtCode] = ORr.SerNr;
+					// end else begin
+						// orders[ORrw.ArtCode] = orders[ORrw.ArtCode] & "," & ORr.SerNr;
+					// end;
+					// quantShip[ORrw.ArtCode & ORr.SerNr] = ORrw.Quant-ORrw.Shipd2;
+					// rownr[ORrw.ArtCode & ORr.SerNr] = i+1;
+					// custCode[ORrw.ArtCode & ORr.SerNr] = ORr.CustCode;
+					// custName[ORrw.ArtCode & ORr.SerNr] =	ORr.Addr0;
+					// OrdDate[ORrw.ArtCode & ORr.SerNr] = ORr.OrdDate;
+					// reservDate[ORrw.ArtCode & ORr.SerNr] = ORr.EndReserv;
+				// end;
+			// end;
+		// end;
+	// end;
+	// SMr.SerNr = 0;
+	// while(LoopMain(SMr,1,true)) begin
+		// TrHs = true;
+		// if(SMr.Reserved<1 or SMr.OKFlag>0) then begin TrHs = false; end;
+		// if(TrHs) then begin
+			// rowcnt = MatRowCnt(SMr);
+			// for(i=0;i<rowcnt;i=i+1) begin
+				// testf = true;
+				// matrowget(SMr,i,SMrw);
+				// if(nonblank(RepSpec.f1) and RepSpec.f1!=SMrw.ArtCode) then begin testf = false; end;
+				// if(SMrw.Quant>0 and testf) then begin
+					// if(blank(ordersSM[SMrw.ArtCode])) then begin
+						// ordersSM[SMrw.ArtCode] = SMr.SerNr;
+					// end else begin
+						// ordersSM[SMrw.ArtCode] = ordersSM[SMrw.ArtCode] & "," & SMr.SerNr;
+					// end;
+					// quantShipSM[SMrw.ArtCode & SMr.SerNr] = SMrw.Quant;
+					// rownrSM[SMrw.ArtCode & SMr.SerNr] = i+1;
+					// OrdDateSM[SMrw.ArtCode & SMr.SerNr] = SMr.OrdTransDate;
+				// end;
+			// end;
+		// end;
+	// end;
+	// startreportnoheaderjob("Reserved Report");
+	// startformat(15);
+		// outstring(0,0,"Заказ",false);
+		// outstring(50,0,"Резерв",false);
+		// outstring(75,0,"Стр.",false);
+		// outstring(100,0,"Клиент",false);
+		// outstring(200,0,"Имя клиента",false);
+		// outstring(300,0,"Дата заказа",false);
+		// outstring(350,0,"Резерв до",false);
+	// endformat;
+	// getvectortags(orders,tags);
+	// Black_Divider(0,1);
+	// for(i=0;i<tags.length;i=i+1) begin
+		// itemall = 0;
+		// pos = 0;
+		// ExtractObj(orders[tags[i]],pos,orderNr);
+		// startformat(15);
+				// outstring(0,"DblINVc", tags[i],false);
+			// endformat;
+		// while(nonblank(orderNr)) begin
+			// itemall = itemall + quantShip[tags[i] & orderNr];
+			// startformat(15);
+				// outstring(0,"DblORVc",orderNr,false);
+				// outstring(50,0,quantShip[tags[i] & orderNr],false);
+				// outstring(75,0,rownr[tags[i] & orderNr],false);
+				// outstring(100,0,custCode[tags[i] & orderNr],false);
+				// outstring(200,0,custName[tags[i] & orderNr],false);
+				// outstring(300,0,OrdDate[tags[i] & orderNr],false);
+				// outstring(350,0,reservDate[tags[i] & orderNr],false);
+			// endformat;
+			// ExtractObj(orders[tags[i]],pos,orderNr);
+		// end;
+		// pos = 0;
+		// ExtractObj(ordersSM[tags[i]],pos,orderNr);
+		// while(nonblank(orderNr)) begin
+			// itemall = itemall + quantShipSM[tags[i] & orderNr];
+			// startformat(15);
+				// outstring(0,"DblStockMovVc",orderNr,false);
+				// outstring(50,0,quantShipSM[tags[i] & orderNr],false);
+				// outstring(75,0,rownrSM[tags[i] & orderNr],false);
+				// outstring(300,0,OrdDateSM[tags[i] & orderNr],false);
+			// endformat;
+			// ExtractObj(ordersSM[tags[i]],pos,orderNr);
+		// end;
+		// startformat(15);
+				// outstring(0,0,"Всего",false);
+				// outstring(50,0,itemall,false);
+			// endformat;
+			// Black_Divider(0,1);
+	// end;
+  // EndJob;
+	// LogProcTime("ItemLocationStatusRn",getcurtick() - curtick);
+  // return;
+// end;
 
 global procedure ReserveCheckRn(record RcVc RepSpec)
 begin
