@@ -1,0 +1,65 @@
+external function Boolean PasteCustInOrder(var record ORVc,string,string,var string,var string);		
+external procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
+external function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
+external procedure ORDchsum(var record ORVc,Integer);
+external procedure ORSumup(var record ORVc);
+external function Boolean ORDchrsum(var record ORVc,Integer);
+
+global updating function boolean RE_CreateORFormIV(var record ORVc ORr, record IVVc IVr)
+begin
+	boolean res;
+	integer i,rwcnt,k;
+	row IVVc IVrw;
+	row ORVc ORrw;
+	string 255 inwarn, war;
+	string 255 inwarning,warning;
+	boolean chsum;
+	record ORVc oldORr;
+	
+	ORr.CustCode = IVr.CustCode;
+	PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarn,war);
+	ORr.Location = IVr.Location;
+	
+	rwcnt = matrowcnt(IVr);
+	for(i=0;i<rwcnt;i=i+1)begin
+		matrowget(IVr,i,IVrw);
+		if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+			if(nonblank(IVrw.ArtCode))then begin
+				clearrow(ORr,ORrw,1);
+				ORrw.ArtCode = IVrw.ArtCode;
+				matrowput(ORr,k,ORrw);
+				ORVc_PasteArtCode(ORr,k,inwarning,warning,false);
+				matrowget(ORr,k,ORrw);
+				ORrw.Quant = IVrw.Quant;
+				ORrw.vRebate = IVrw.vRebate;
+				ORrw.Price = IVrw.Price;
+				ORrw.Position = IVrw.PosCode;
+				ORrw.Location = IVrw.Location;
+				matrowput(ORr,k,ORrw);
+				ORVc_PasteQuant(ORr,k,true,chsum);
+				matrowget(ORr,k,ORrw);
+				chsum = ORDchrsum(ORr,k);
+				if (chsum) then begin
+					ORDchsum(ORr,k);
+					ORSumup(ORr);
+				end;    
+				matrowget(ORr,k,ORrw);
+				k = k+1;
+			end;
+		end;
+	end;
+	if(k>0)then begin
+		ORr.SerNr = NextSerNr("ORVc",ORr.OrdDate,-1,false,"");
+		if(recordinsert(ORr,true))then begin
+			recordcopy(oldORr,ORr);
+			ORr.Reserved = 1;
+			recordupdate(oldORr,ORr,true);
+			recorddelete(IVr);
+			res = true;
+		end;
+		
+	end;
+	
+	RE_CreateORFormIV = res;
+return;
+end;
