@@ -682,13 +682,19 @@ begin
 return;
 end;
 
+
+
+
+
+
+
 global
 updating procedure ReserveRecalcMn(record RcVc RepSpec)
 begin
   record INVc INr;
   record ORVc ORr;
 	row ORVc ORrw;
-	boolean TrHs,testf;
+	boolean TrHs,testf,testf1;
 	vector string 255 orders,loc,custName,OrdDate,reservDate;
 	vector val quantShip,rownr;
   longint curtick;
@@ -713,82 +719,100 @@ begin
     matrowget(CBb,j,Comprw);
 		if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3) and j+1!=33)then begin
 			SetCompany(j+1,false);
-			ClearVector(orders);
-			ClearVector(quantShip);
-			ClearVector(loc);
-			ClearVector(quantShipSM);
-			ORr.Reserved = 1;
-			TrHs = true;
-			while(LoopKey("Reserved",ORr,1,TrHs)) begin
-				if(ORr.Reserved<1) then begin TrHs = false; end;
-				if(TrHs) then begin
-					rowcnt = MatRowCnt(ORr);
-					for(i=0;i<rowcnt;i=i+1) begin
-						testf = true;
-						matrowget(ORr,i,ORrw);
-						if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
-						if(ORrw.Quant>0 and testf and ORrw.Quant>ORrw.Shipd2) then begin
-							orders[ORrw.ArtCode] = "true";
-							quantShip[ORrw.ArtCode & ORr.Location] = ORrw.Quant-ORrw.Shipd2;
-							loc[ORr.Location] = "true";
-						end;
-					end;
-				end;
-			end;
-			ResetLoop(ORr);
-			SDr.SerNr = 0;
-			while(LoopMain(SDr,1,true)) begin
+			testf1 = true;
+			if (nonblank(RepSpec.f2) and StringtoInt(RepSpec.f2)!=CurrentCompany) then begin testf1 = false; end;
+			if (testf1) then begin
+				ClearVector(orders);
+				ClearVector(quantShip);
+				ClearVector(loc);
+				ClearVector(quantShipSM);
+				ORr.Reserved = 1;
 				TrHs = true;
-				if(SDr.Reservf<1 or SDr.OKFlag>0) then begin TrHs = false; end;
-				if(TrHs) then begin
-					rowcnt = MatRowCnt(SDr);
-					for(i=0;i<rowcnt;i=i+1) begin
-						testf = true;
-						matrowget(SDr,i,SDrw);
-						if(nonblank(RepSpec.f1) and RepSpec.f1!=SDrw.ArtCode) then begin testf = false; end;
-						if(SDrw.Qty>0 and testf) then begin
-							orders[SDrw.ArtCode] = "true";
-							quantShipSD[SDrw.ArtCode & SDr.Location] = SDrw.Qty;
-							loc[SDr.Location] = "true";
-						end;
-					end;
-				end;
-			end;
-			ResetLoop(SDr);
-			SMr.SerNr = 0;
-			while(LoopMain(SMr,1,true)) begin
-				TrHs = true;
-				if(SMr.Reserved<1 or SMr.OKFlag>0) then begin TrHs = false; end;
-				if(TrHs) then begin
-					rowcnt = MatRowCnt(SMr);
-					for(i=0;i<rowcnt;i=i+1) begin
-						testf = true;
-						matrowget(SMr,i,SMrw);
-						if(nonblank(RepSpec.f1) and RepSpec.f1!=SMrw.ArtCode) then begin testf = false; end;
-						if(SMrw.Quant>0 and testf) then begin
-							orders[SMrw.ArtCode] = "true";
-							quantShipSM[SMrw.ArtCode & SMr.FrLocation] = SMrw.Quant;
-							loc[SMr.FrLocation] = "true";
-						end;
-					end;
-				end;
-			end;
-			ResetLoop(SMr);
-			getvectortags(orders,tags);
-			getvectortags(loc,tags1);
-			for(i=0;i<tags.length;i=i+1) begin				
-				for(c=0;c<tags1.length;c=c+1) begin
-					ISr.Code = tags[i];
-					ISr.Location = tags1[c];
-					if(readfirstmain(ISr,2,true)) then begin
-						if(ISr.RsrvQty!=0 or quantShip[tags[i] & tags1[c]]!=0)then begin
-							if(ISr.RsrvQty!=quantShip[tags[i] & tags1[c]]+quantShipSM[tags[i] & tags1[c]])then begin
-								ISr.RsrvQty = quantShip[tags[i] & tags1[c]] + quantShipSM[tags[i] & tags1[c]];
-								RecordStore(ISr,true);
+				while(LoopKey("Reserved",ORr,1,TrHs)) begin
+					testf = true;
+					if(ORr.Reserved<1) then begin TrHs = false; testf = false; end;
+					if(ORr.Closed==1) then begin testf = false; end;
+					if(testf) then begin
+						rowcnt = MatRowCnt(ORr);
+						for(i=0;i<rowcnt;i=i+1) begin
+							testf = true;
+							matrowget(ORr,i,ORrw);
+							if(nonblank(RepSpec.f1) and RepSpec.f1!=ORrw.ArtCode) then begin testf = false; end;
+							if(ORrw.Quant>0 and testf and ORrw.Quant>ORrw.Shipd2) then begin
+								orders[ORrw.ArtCode] = "true";
+								quantShip[ORrw.ArtCode & ORr.Location] = ORrw.Quant-ORrw.Shipd2;
+								loc[ORr.Location] = "true";
 							end;
 						end;
 					end;
 				end;
+				ResetLoop(ORr);
+				SDr.OKFlag = 0;
+				TrHs = true;
+				while(loopkey("OKFlag",SDr,1,TrHs)) begin
+					testf = true;
+					if(SDr.Reservf<1) then begin testf = false; end;
+					if(SDr.OKFlag>0) then begin testf = false; TrHs = false; end;
+					if(testf) then begin
+						rowcnt = MatRowCnt(SDr);
+						for(i=0;i<rowcnt;i=i+1) begin
+							testf = true;
+							matrowget(SDr,i,SDrw);
+							if(nonblank(RepSpec.f1) and RepSpec.f1!=SDrw.ArtCode) then begin testf = false; end;
+							if(SDrw.Qty>0 and testf) then begin
+								orders[SDrw.ArtCode] = "true";
+								quantShipSD[SDrw.ArtCode & SDr.Location] = SDrw.Qty;
+								loc[SDr.Location] = "true";
+							end;
+						end;
+					end;
+				end;
+				ResetLoop(SDr);
+				SMr.SerNr = 0;
+				while(LoopMain(SMr,1,true)) begin
+					TrHs = true;
+					if(SMr.Reserved<1 or SMr.OKFlag>0) then begin TrHs = false; end;
+					if(TrHs) then begin
+						rowcnt = MatRowCnt(SMr);
+						for(i=0;i<rowcnt;i=i+1) begin
+							testf = true;
+							matrowget(SMr,i,SMrw);
+							if(nonblank(RepSpec.f1) and RepSpec.f1!=SMrw.ArtCode) then begin testf = false; end;
+							if(SMrw.Quant>0 and testf) then begin
+								orders[SMrw.ArtCode] = "true";
+								quantShipSM[SMrw.ArtCode & SMr.FrLocation] = SMrw.Quant;
+								loc[SMr.FrLocation] = "true";
+							end;
+						end;
+					end;
+				end;
+				ResetLoop(SMr);
+				getvectortags(orders,tags);
+				getvectortags(loc,tags1);
+				for(i=0;i<tags.length;i=i+1) begin				
+					for(c=0;c<tags1.length;c=c+1) begin
+						ISr.Code = tags[i];
+						ISr.Location = tags1[c];
+						if(readfirstmain(ISr,2,true)) then begin
+							if(ISr.RsrvQty!=0 or quantShip[tags[i] & tags1[c]]!=0)then begin
+								if(ISr.RsrvQty!=quantShip[tags[i] & tags1[c]] + quantShipSM[tags[i] & tags1[c]])then begin
+									ISr.RsrvQty = quantShip[tags[i] & tags1[c]] + quantShipSM[tags[i] & tags1[c]];
+									RecordStore(ISr,true);
+								end;
+							end;
+						end;
+					end;
+				end;
+				ISr.Code = RepSpec.f1;
+				TrHs = true;
+				while (loopmain(ISr,1,TrHs)) begin
+					if (nonblank(RepSpec.f1) and RepSpec.f1!=ISr.Code) then begin TrHs = false; end;
+					if (quantShip[ISr.Code & ISr.Location]==0 and quantShipSM[SMrw.ArtCode & SMr.FrLocation]==0 and quantShipSD[SMrw.ArtCode & SMr.FrLocation]==0 and TrHs) then begin
+						ISr.RsrvQty = 0;
+						RecordStore(ISr,true);
+					end;
+				end;
+				ResetLoop(ISr);
 			end;
 		end;
 	end;
@@ -796,3 +820,18 @@ begin
 	LogProcTime("ReserveRecalcMn",getcurtick() - curtick);
   return;
 end;
+
+
+
+global
+updating procedure ReserveRecalcAutoMn()
+begin
+record RcVc RepSpec;
+	
+	RepSpec.f1 = "";
+	RepSpec.f2 = "";
+	ReserveRecalcMn(RepSpec);
+	return;
+end;
+
+
