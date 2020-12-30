@@ -5,6 +5,10 @@ external procedure ORDchsum(var record ORVc,Integer);
 external procedure ORSumup(var record ORVc);
 external function Boolean ORDchrsum(var record ORVc,Integer);
 external procedure ORVc_PastePayDeal(var record ORVc);
+external function LongInt ORVcRecordRemoveTest(var record ORVc,record ORVc,LongInt,LongInt);
+external function LongInt ORVcRecordRemove(var record ORVc,record ORVc,LongInt,LongInt);
+
+SetLangMode(LangRussian,"RUS",0);
 
 global updating function boolean RE_CreateORFormIV(var record ORVc ORr, record IVVc IVr)
 begin
@@ -28,7 +32,7 @@ begin
 		ORVc_PastePayDeal(ORr);
 	end;
 	ORr.Objects = trim(IVr.Objects);
-
+	ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
 	
 	rwcnt = matrowcnt(IVr);
 	for(i=0;i<rwcnt;i=i+1)begin
@@ -61,17 +65,61 @@ begin
 	if(k>0)then begin
 		ORr.SerNr = NextSerNr("ORVc",ORr.OrdDate,-1,false,"");
 		if(recordinsert(ORr,true))then begin
+			createrecordlink(IVr,currentcompany,ORr,currentcompany);
+			createrecordlink(ORr,currentcompany,IVr,currentcompany);
 			recordcopy(oldORr,ORr);
 			ORr.Reserved = 1;
 			if(recordupdate(oldORr,ORr,true)!=0)then begin
 				recordcopy(ORr,oldORr);
 			end;
-			recorddelete(IVr);
 			res = true;
-		end;
-		
+		end;		
 	end;
 	
 	RE_CreateORFormIV = res;
+return;
+end;
+
+
+global updating function boolean RE_CreateREORFormIV(record ORVc ORr)
+begin
+	boolean res;
+	integer i,rwcnt,k;
+	row IVVc IVrw;
+	row ORVc ORrw;
+	string 255 inwarn, war;
+	string 255 inwarning,warning;
+	boolean chsum;
+	record ORVc oldORr;
+	longint lon;
+	
+	if(ORr.SerNr>0)then begin
+		if(nonblank(ORr.OfficialSerNr))then begin
+			if(ORr.Reserved==1)then begin
+				recordcopy(oldORr,ORr);
+				ORr.Reserved = 0;
+				if(recordupdate(oldORr,ORr,true)!=0)then begin
+					if(ORVcRecordRemoveTest(ORr,oldORr,lon,lon)==1)then begin
+						ORVcRecordRemove(ORr,oldORr,lon,lon);
+						recorddelete(ORr);
+						res = true;
+					end else begin
+						messagebox(0,"Нельзя удалить счет");
+					end;
+					//recordcopy(ORr,oldORr);
+				end;
+			end else begin
+				if(ORVcRecordRemoveTest(ORr,oldORr,lon,lon)==1)then begin
+					ORVcRecordRemove(ORr,oldORr,lon,lon);
+					recorddelete(ORr);
+					res = true;
+				end else begin
+					messagebox(0,"Нельзя удалить счет");
+				end;
+			end;
+		end;
+	end;
+	
+	RE_CreateREORFormIV = res;
 return;
 end;
