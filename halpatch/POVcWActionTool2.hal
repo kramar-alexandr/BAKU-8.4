@@ -1371,9 +1371,155 @@ begin
     res = true;
     artcode = POrw.ArtCode;
     BlockLoad(POset);
-		logtext(0,orgINr.Code & " 3126546512436543165243541265416542654132");
-		if (nonblank(orgINr.Code)) then begin
-			POrw.ArtCode = orgINr.Code;
+    POrw.ArtCode = orgINr.Code;
+    if(currentcompany==1 and (POp.VECode!="FOB_SKLAD"))then begin// Edit ************************** Wednesday, 5 June 2013 17:11:10
+    	POrw.Price = price;
+    end;// Edit ************************** Wednesday, 5 June 2013 17:11:11
+    POrw.VATCode = vatcode;
+    POrw.vRebate = reb;
+    POrw.CostAcc = purchacc;
+    if (currentcompany==28) then begin
+      POrw.IDAltCode = orgINr.AlternativeCode;
+      POrw.IDProductCode = orgINr.CPSCode;
+			POrw.IDProductCode = orgINr.IDOldINNr; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger12:52 11.12.2018
+    end;
+
+    if (nonblank(POp.VEVATCode)) then begin
+      POrw.VATCode = POp.VEVATCode;
+    end;
+
+//    GetItemTaxTemplateCode(INr.Code,POp.ExportFlag,taxtemplatecode,false);
+    POrw.TaxTemplateCode = FillupTaxMatrix(1,POp.BranchID,POp.VECode,"","",taxtemplatecode,TMr);
+    POrw.PriceFactor = orgINr.PriceFactor;
+    POrw.UnitCode = orgINr.Unittext;
+    POrw.ConsgType = orgINr.ConsgType;// Edit ************************** Tuesday, 22 August 2017 11:10:57    
+		brCur = "";
+		if(nonblank(orgINr.BPIBrand))then begin
+			Brandr.Code = orgINr.BPIBrand;
+			if(ReadFirstMain(Brandr,1,true))then begin
+				CUr.Code = Brandr.Name;
+				CUr.VEType = 1;
+				if(ReadFirstKey("VEActCode",CUr,2,true))then begin brCur = CUr.VECurncyCode; end else begin
+					CUr.Code = Brandr.Vendor;
+					CUr.VEType = 1;
+					if(ReadFirstKey("VEActCode",CUr,2,true))then begin brCur = CUr.VECurncyCode; end;
+				end;
+				/*if(currentcompany==18 and left(currentuser,2)=="SA")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 25 09 2020 y. at 10:37:24 AM
+					
+					if(nonblank(POp.VECode))then begin
+						if(Left(POp.VECode,3)!="FOB")then begin
+							logtext(0,"POp.VECode " & POp.VECode);
+							logtext(0,"Brandr.Vendor " & Brandr.Vendor);
+							logtext(0,"INr.Code " & INr.Code);
+							
+							if(!setinset(POp.VECode,Brandr.Vendor))then begin
+								resetloop(INr);
+								INr.AlternativeCode = origcode;
+								TrHs = true;
+								foundf = false;
+								while(loopkey("AlternativeCode",INr,1,TrHs))begin
+									if(INr.AlternativeCode!=origcode)then begin TrHs = false; end;
+								
+									if(TrHs)then begin
+										if(INr.Code!=POrw.ArtCode)then begin
+											if(nonblank(INr.BPIBrand))then begin
+												Brandr.Code = INr.BPIBrand;
+												if(ReadFirstMain(Brandr,1,true))then begin
+													if(nonblank(Brandr.Vendor))then begin
+														if(setinset(POp.VECode,Brandr.Vendor))then begin
+															POrw.ArtCode = INr.Code;
+															logtext(0,"POVc_PasteArtCode vend item - " & INr.Code & " porw artcode " & POrw.ArtCode);
+															matrowput(POp,rownr,POrw);
+															goto lstartPOVc_PasteArtCode;
+														end;
+													end;
+												end;
+											end;
+										end;
+									end;
+								end;
+								POrw.ArtCode = "BRAND_ERROR";
+								POrw.Spec = USetStr(20862);
+								matrowput(POp,rownr,POrw);
+								goto lstartPOVc_PasteArtCode;
+							end;
+						end;
+					end;
+				end;*/
+			end;
+		end;
+		oldcur = POp.CurncyCode;
+		if(blank(brCur))then begin
+			brCur = orgINr.LastPurchCurncyCode;
+		end;
+		if(POp.CurncyCode!=brCur)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 18 February 2020 15:31:07
+			POp.CurncyCode = brCur;
+			POVc_PasteCurncyCode(POp,oldcur,true);  
+		end;  
+		POrw.BrndCurrCode = brCur;
+		
+    POrw.EAN13Code = orgINr.BarCode;	//Edit by Victor 21.11.14 
+    POrw.xClassification = orgINr.DispGroups;	//Edit by Victor 21.11.14 
+    POrw.Size = orgINr.Size;	//Edit by Victor 21.11.14 
+    POrw.Colour = orgINr.Colour;	//Edit by Victor 04.12.14 
+		POrw.Reference = orgINr.Reference;//Edit-------------------Vitalii 14:45 09.12.2015
+		if(currentCompany==18) then begin
+			POrw.VEArtCode = orgINr.AlternativeCode;
+		end;	
+    if (pifound) then begin
+      POrw.VEArtCode = PIr.VEItemCode;
+      POrw.CustomsCost = PIr.PurchaseCost;
+      POrw.StockType = PIr.DefStockType;
+      if (PIr.ItemCode==POrw.ArtCode and artcode==POrw.ArtCode) then begin 
+        POrw.Spec = PIr.Comment;
+      end else begin
+        if (PIr.Comment==orgINr.Name) then begin
+          POrw.Spec = descstr;
+        end else begin
+          POrw.Spec = PIr.Comment & ", " & descstr;
+        end;
+      end;
+      POrw.VEUnit =  PIr.VEUnit;
+      POrw.PIFactor = PIr.PIFactor;
+    end else begin
+      POrw.Spec = descstr;
+    end;
+    DivPIFactor(POrw.Quant,POrw.PIFactor,t);
+    POrw.VEQuant = t;    
+    POrw.Objects = FindINObjects(orgINr.Objects,orgINr.Group);
+    POrw.PalletNr = CalcPalletsNr(POrw.Quant,POrw.ArtCode);
+    PackRowFieldMatrix(POrw,"TaxMatrix",TMr);
+    MatRowPut(POp,rownr,POrw);
+    if (pifound) then begin
+      if (multilinef==false) then begin
+        rwcnt = MatRowCnt(PIr);    
+        for (i=0;i<rwcnt;i=i+1) begin
+          MatRowGet(PIr,i,PIrw);
+          ClearRow(POp,POrw,1);
+          POrw.Spec = POrw.Spec & PIrw.Text;
+          MatRowPut(POp,rownr+i+1,POrw);
+        end;
+      end;
+    end else begin
+      if (multilinef==false) then begin
+        //POMultiLineText(POp,INr,POp.LangCode,rownr);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 20 February 2018 12:03:15
+      end;
+    end;
+    ICPOItemPriceWarning(POp,rownr);
+		if (PODchrsum(POp,rownr)) then begin
+			POSumup(POp);
+		end;           
+  end else begin
+		POrw.ArtCode = orgIN2r.Code;
+		if  (GetItemPurchasePriceDiscount(POp.VECode,POp.Location,POp.TransDate,POp.CurncyCode,POrw.ArtCode,POrw.Quant,
+                                   POp.LangCode,"","",POp.RebCode,POp.ExportFlag,true,
+                                   POp.FrRate,POp.ToRateB1,POp.ToRateB2,POp.BaseRate1,POp.BaseRate2,
+                                   orgIN2r,PIr,pifound,price,descstr,reb,vatcode,purchacc,nomoreremotecalls,taxtemplatecode) and CurrentCompany==18)
+		then begin
+			res = true;
+			artcode = POrw.ArtCode;
+			BlockLoad(POset);
+			POrw.ArtCode = orgIN2r.Code;
 			if(currentcompany==1 and (POp.VECode!="FOB_SKLAD"))then begin// Edit ************************** Wednesday, 5 June 2013 17:11:10
 				POrw.Price = price;
 			end;// Edit ************************** Wednesday, 5 June 2013 17:11:11
@@ -1510,156 +1656,7 @@ begin
 			ICPOItemPriceWarning(POp,rownr);
 			if (PODchrsum(POp,rownr)) then begin
 				POSumup(POp);
-			end;  
-		end else begin
-			POrw.ArtCode = orgIN2r.Code;
-			if  (GetItemPurchasePriceDiscount(POp.VECode,POp.Location,POp.TransDate,POp.CurncyCode,POrw.ArtCode,POrw.Quant,
-																		 POp.LangCode,"","",POp.RebCode,POp.ExportFlag,true,
-																		 POp.FrRate,POp.ToRateB1,POp.ToRateB2,POp.BaseRate1,POp.BaseRate2,
-																		 orgIN2r,PIr,pifound,price,descstr,reb,vatcode,purchacc,nomoreremotecalls,taxtemplatecode) and CurrentCompany==18)
-			then begin
-				res = true;
-				artcode = POrw.ArtCode;
-				BlockLoad(POset);
-				POrw.ArtCode = orgIN2r.Code;
-				if(currentcompany==1 and (POp.VECode!="FOB_SKLAD"))then begin// Edit ************************** Wednesday, 5 June 2013 17:11:10
-					POrw.Price = price;
-				end;// Edit ************************** Wednesday, 5 June 2013 17:11:11
-				POrw.VATCode = vatcode;
-				POrw.vRebate = reb;
-				POrw.CostAcc = purchacc;
-				if (currentcompany==28) then begin
-					POrw.IDAltCode = orgINr.AlternativeCode;
-					POrw.IDProductCode = orgINr.CPSCode;
-					POrw.IDProductCode = orgINr.IDOldINNr; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger12:52 11.12.2018
-				end;
-
-				if (nonblank(POp.VEVATCode)) then begin
-					POrw.VATCode = POp.VEVATCode;
-				end;
-
-		//    GetItemTaxTemplateCode(INr.Code,POp.ExportFlag,taxtemplatecode,false);
-				POrw.TaxTemplateCode = FillupTaxMatrix(1,POp.BranchID,POp.VECode,"","",taxtemplatecode,TMr);
-				POrw.PriceFactor = orgINr.PriceFactor;
-				POrw.UnitCode = orgINr.Unittext;
-				POrw.ConsgType = orgINr.ConsgType;// Edit ************************** Tuesday, 22 August 2017 11:10:57    
-				brCur = "";
-				if(nonblank(orgINr.BPIBrand))then begin
-					Brandr.Code = orgINr.BPIBrand;
-					if(ReadFirstMain(Brandr,1,true))then begin
-						CUr.Code = Brandr.Name;
-						CUr.VEType = 1;
-						if(ReadFirstKey("VEActCode",CUr,2,true))then begin brCur = CUr.VECurncyCode; end else begin
-							CUr.Code = Brandr.Vendor;
-							CUr.VEType = 1;
-							if(ReadFirstKey("VEActCode",CUr,2,true))then begin brCur = CUr.VECurncyCode; end;
-						end;
-						/*if(currentcompany==18 and left(currentuser,2)=="SA")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 25 09 2020 y. at 10:37:24 AM
-							
-							if(nonblank(POp.VECode))then begin
-								if(Left(POp.VECode,3)!="FOB")then begin
-									logtext(0,"POp.VECode " & POp.VECode);
-									logtext(0,"Brandr.Vendor " & Brandr.Vendor);
-									logtext(0,"INr.Code " & INr.Code);
-									
-									if(!setinset(POp.VECode,Brandr.Vendor))then begin
-										resetloop(INr);
-										INr.AlternativeCode = origcode;
-										TrHs = true;
-										foundf = false;
-										while(loopkey("AlternativeCode",INr,1,TrHs))begin
-											if(INr.AlternativeCode!=origcode)then begin TrHs = false; end;
-										
-											if(TrHs)then begin
-												if(INr.Code!=POrw.ArtCode)then begin
-													if(nonblank(INr.BPIBrand))then begin
-														Brandr.Code = INr.BPIBrand;
-														if(ReadFirstMain(Brandr,1,true))then begin
-															if(nonblank(Brandr.Vendor))then begin
-																if(setinset(POp.VECode,Brandr.Vendor))then begin
-																	POrw.ArtCode = INr.Code;
-																	logtext(0,"POVc_PasteArtCode vend item - " & INr.Code & " porw artcode " & POrw.ArtCode);
-																	matrowput(POp,rownr,POrw);
-																	goto lstartPOVc_PasteArtCode;
-																end;
-															end;
-														end;
-													end;
-												end;
-											end;
-										end;
-										POrw.ArtCode = "BRAND_ERROR";
-										POrw.Spec = USetStr(20862);
-										matrowput(POp,rownr,POrw);
-										goto lstartPOVc_PasteArtCode;
-									end;
-								end;
-							end;
-						end;*/
-					end;
-				end;
-				oldcur = POp.CurncyCode;
-				if(blank(brCur))then begin
-					brCur = orgINr.LastPurchCurncyCode;
-				end;
-				if(POp.CurncyCode!=brCur)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 18 February 2020 15:31:07
-					POp.CurncyCode = brCur;
-					POVc_PasteCurncyCode(POp,oldcur,true);  
-				end;  
-				POrw.BrndCurrCode = brCur;
-				
-				POrw.EAN13Code = orgINr.BarCode;	//Edit by Victor 21.11.14 
-				POrw.xClassification = orgINr.DispGroups;	//Edit by Victor 21.11.14 
-				POrw.Size = orgINr.Size;	//Edit by Victor 21.11.14 
-				POrw.Colour = orgINr.Colour;	//Edit by Victor 04.12.14 
-				POrw.Reference = orgINr.Reference;//Edit-------------------Vitalii 14:45 09.12.2015
-				if(currentCompany==18) then begin
-					POrw.VEArtCode = orgINr.AlternativeCode;
-				end;	
-				if (pifound) then begin
-					POrw.VEArtCode = PIr.VEItemCode;
-					POrw.CustomsCost = PIr.PurchaseCost;
-					POrw.StockType = PIr.DefStockType;
-					if (PIr.ItemCode==POrw.ArtCode and artcode==POrw.ArtCode) then begin 
-						POrw.Spec = PIr.Comment;
-					end else begin
-						if (PIr.Comment==orgINr.Name) then begin
-							POrw.Spec = descstr;
-						end else begin
-							POrw.Spec = PIr.Comment & ", " & descstr;
-						end;
-					end;
-					POrw.VEUnit =  PIr.VEUnit;
-					POrw.PIFactor = PIr.PIFactor;
-				end else begin
-					POrw.Spec = descstr;
-				end;
-				DivPIFactor(POrw.Quant,POrw.PIFactor,t);
-				POrw.VEQuant = t;    
-				POrw.Objects = FindINObjects(orgINr.Objects,orgINr.Group);
-				POrw.PalletNr = CalcPalletsNr(POrw.Quant,POrw.ArtCode);
-				PackRowFieldMatrix(POrw,"TaxMatrix",TMr);
-				MatRowPut(POp,rownr,POrw);
-				if (pifound) then begin
-					if (multilinef==false) then begin
-						rwcnt = MatRowCnt(PIr);    
-						for (i=0;i<rwcnt;i=i+1) begin
-							MatRowGet(PIr,i,PIrw);
-							ClearRow(POp,POrw,1);
-							POrw.Spec = POrw.Spec & PIrw.Text;
-							MatRowPut(POp,rownr+i+1,POrw);
-						end;
-					end;
-				end else begin
-					if (multilinef==false) then begin
-						//POMultiLineText(POp,INr,POp.LangCode,rownr);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 20 February 2018 12:03:15
-					end;
-				end;
-				ICPOItemPriceWarning(POp,rownr);
-				if (PODchrsum(POp,rownr)) then begin
-					POSumup(POp);
-				end;           
-			end;
+			end;           
 		end;
 	end;
   if ((res==true) and (POset.WarnNotDefSup!=0)) then begin
