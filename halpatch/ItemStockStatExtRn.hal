@@ -3009,7 +3009,7 @@ begin
   record PLVc PLr;
   string 100 item,location,findkey,class;
   record INVc INr;
-  boolean TrHs,testf,TrHs1,testf1,TrHs2,testf2;
+  boolean TrHs,testf,TrHs1,testf1,TrHs2,testf2,testf4;
   record DIVc DIr;
   integer findint;
   record UserVc User;
@@ -3035,13 +3035,31 @@ begin
 	record TotalsRepVc Totals;
 	string 10 brandcur;
 	record OldDIVc OldDir;
-	vector boolean userbrand;
+	vector boolean userbrand, vPurchBrandf;
 	boolean userbrandf, checkBrand;
 	record BrandsReportCCBlock Brcb;
 	row BrandsReportCCBlock Brcbw;
 	record ItemDuplicatesVc IDr;
 	record INVc dupINr;
 	boolean dublikateItem;
+	record BPIBrandVc Brandr;
+	
+	
+	
+	
+	
+	Brandr.Code = "";
+	while (loopmain(Brandr,1,true)) begin
+		if (nonblank(RepSpec.f9) and nonblank(Brandr.Puchaser) and SetInSet(Brandr.Puchaser,RepSpec.f9)) then begin
+			vPurchBrandf[Brandr.Code] = true;
+		end;
+		if (blank(RepSpec.f9)) then begin
+			vPurchBrandf[Brandr.Code] = true;
+		end;
+	end;
+	
+	
+	
 	
 	if(RepSpec.flags[8]!=0 and RepSpec.flags[5]==1) then begin
 		SetCompany(RepSpec.flags[8],false);
@@ -3363,7 +3381,7 @@ begin
     		if(RepSpec.flags[3]==1 and INr.ConsgType==2)then begin TrHs = false; end;
     		if(INr.ConsgType>2) then begin TrHs = false; end;
 				if(RepSpec.flags[4]==1 and INr.OutOfOrder==1) then begin TrHs = false; end;
-
+				if(!vPurchBrandf[INr.BPIBrand] and nonblank(RepSpec.f9))then begin TrHs = false; end;
     		if (nonblank(User.Brand) and CheckIfContainForbiddenBrand(User.Brand,INr.DispGroups)) begin TrHs = false; end;	
     		    		
     		if (TrHs) then begin						
@@ -3403,121 +3421,125 @@ begin
 			class = RepSpec.f3;
 			TrHs1 = true;
 			while(loopkey("MyDispGroups",INr,1,TrHs1)) begin
-				dublikateItem = false;
-				IDr.DupCode = INr.Code;
-				if(ReadFirstKey("DupCode",IDr,1,true)) then begin
-					dupINr.Code = IDr.OrigCode;
-					TrHs = true;
-					while(LoopMain(dupINr,1,TrHs)) begin
-						if(dupINr.Code!=IDr.OrigCode) then begin TrHs = false; end;
-						if(dupINr.BPIBrand==INr.BPIBrand and TrHs) then begin
-							testf2 = true;
-							if(RepSpec.flags[1]==1 and dupINr.ConsgType==0)then begin testf2 = false; end;	
-							if(RepSpec.flags[2]==1 and dupINr.ConsgType==1)then begin testf2 = false; end;
-							if(RepSpec.flags[3]==1 and dupINr.ConsgType==2)then begin testf2 = false; end;	
-							if(testf2)then begin
-//								if(currentuser=="SA")then begin
-//									logtext(0,INr.Code & " is dublicate");
-//								end;
-								dublikateItem = true;
+				testf4 = true;
+				if(!vPurchBrandf[INr.BPIBrand] and nonblank(RepSpec.f9)) then begin testf4 = false; end;
+				if (testf4) then begin
+					dublikateItem = false;
+					IDr.DupCode = INr.Code;
+					if(ReadFirstKey("DupCode",IDr,1,true)) then begin
+						dupINr.Code = IDr.OrigCode;
+						TrHs = true;
+						while(LoopMain(dupINr,1,TrHs)) begin
+							if(dupINr.Code!=IDr.OrigCode) then begin TrHs = false; end;
+							if(dupINr.BPIBrand==INr.BPIBrand and TrHs) then begin
+								testf2 = true;
+								if(RepSpec.flags[1]==1 and dupINr.ConsgType==0)then begin testf2 = false; end;	
+								if(RepSpec.flags[2]==1 and dupINr.ConsgType==1)then begin testf2 = false; end;
+								if(RepSpec.flags[3]==1 and dupINr.ConsgType==2)then begin testf2 = false; end;	
+								if(testf2)then begin
+	//								if(currentuser=="SA")then begin
+	//									logtext(0,INr.Code & " is dublicate");
+	//								end;
+									dublikateItem = true;
+								end;
 							end;
 						end;
+						ResetLoop(dupINr);
 					end;
-					ResetLoop(dupINr);
-				end;
-				testf1 = true;
-				if(nonblank(RepSpec.f3))then begin
-					testf1 = SetInSet2(class,INr.DispGroups);
-				end;
-				if(INr.Terminated!=0)then begin testf1 = false; end;
-				
-    		if(RepSpec.flags[1]==1 and INr.ConsgType==0)then begin testf1 = false; end;	//Edit----------------------Dima  27.04.2015
-    		if(RepSpec.flags[2]==1 and INr.ConsgType==1)then begin testf1 = false; end;
-    		if(RepSpec.flags[3]==1 and INr.ConsgType==2)then begin testf1 = false; end;		//Edit----------------------Dima  27.04.2015			
-				if(INr.ConsgType>2)then begin testf1 = false; end;
-				if(RepSpec.flags[4]==1 and INr.OutOfOrder==1) then begin testf1 = false; end;
+					testf1 = true;
+					if(nonblank(RepSpec.f3))then begin
+						testf1 = SetInSet2(class,INr.DispGroups);
+					end;
+					if(INr.Terminated!=0)then begin testf1 = false; end;
+					
+					if(RepSpec.flags[1]==1 and INr.ConsgType==0)then begin testf1 = false; end;	//Edit----------------------Dima  27.04.2015
+					if(RepSpec.flags[2]==1 and INr.ConsgType==1)then begin testf1 = false; end;
+					if(RepSpec.flags[3]==1 and INr.ConsgType==2)then begin testf1 = false; end;		//Edit----------------------Dima  27.04.2015			
+					if(INr.ConsgType>2)then begin testf1 = false; end;
+					if(RepSpec.flags[4]==1 and INr.OutOfOrder==1) then begin testf1 = false; end;
 
-				
-				if(testf1)then begin
-					if(nonblank(RepSpec.f4) or nonblank(RepSpec.f5) or nonblank(RepSpec.f7))then begin
-						brand = "";
-						model = "";
-						group = "";
-						pos = 0;
-						classfind = "";
-						ExtractObj(INr.DispGroups,pos,classfind);
-						while(nonblank(classfind)) begin
-							if(nonblank(classfind))then begin
-								DIr.Code = classfind;
-								readfirstmain(DIr,1,true);
-								if(DIr.CType=="BRAND")then begin
-									brand = DIr.Code;
-								end;
-								if(DIr.CType=="MODEL")then begin
-									model = DIr.Code;
-								end;
-								if(DIr.CType=="GROUP")then begin
-									group = DIr.Code;
-								end;
-							end;
+					
+					if(testf1)then begin
+						if(nonblank(RepSpec.f4) or nonblank(RepSpec.f5) or nonblank(RepSpec.f7))then begin
+							brand = "";
+							model = "";
+							group = "";
+							pos = 0;
+							classfind = "";
 							ExtractObj(INr.DispGroups,pos,classfind);
-						end;
-						if(nonblank(RepSpec.f4) and brand!=RepSpec.f4)then begin
-							testf1 = false;
-						end;
-						if(nonblank(RepSpec.f5) and model!=RepSpec.f5)then begin
-							testf1 = false;
-						end;
-						if(nonblank(RepSpec.f7) and INr.BPIGroup!=RepSpec.f7)then begin
-							testf1 = false;
-						end;
-					end;
-				end;
-				
-				
-				if(userbrandf and testf1)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 06 2019 y. at 4:35:18 PM
-					pos = 0;
-					brand = "";
-					testf1 = false;
-					ExtractObj(INr.DispGroups,pos,brand);
-					while(nonblank(brand)) begin
-						if(userbrand[brand])then begin
-							testf1 = true;
-						end;
-						ExtractObj(INr.DispGroups,pos,brand);
-					end;
-				end;
-
-				if(testf1)then begin	
-						if(companies.length>1)then begin			
-							for (i=0;i<companies.length;i=i+1) begin
-								if (SetCompany(companies[i],false)) then begin
-									if(CurrentCompany!=28)then begin
-										checkBrand = true;
-										if(CurrentCompany==18) then begin
-											checkBrand = false;
-											for(i=0;i<matrowcnt(Brcb);i=i+1) begin
-												matrowget(Brcb,i,Brcbw);
-												if(Brcbw.Brand==INr.BPIBrand) then begin checkBrand = true; end;
-											end;
-										end;
-										if(checkBrand) then begin
-											CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur,!dublikateItem);
-										end;	
-									end else begin
-										IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+							while(nonblank(classfind)) begin
+								if(nonblank(classfind))then begin
+									DIr.Code = classfind;
+									readfirstmain(DIr,1,true);
+									if(DIr.CType=="BRAND")then begin
+										brand = DIr.Code;
+									end;
+									if(DIr.CType=="MODEL")then begin
+										model = DIr.Code;
+									end;
+									if(DIr.CType=="GROUP")then begin
+										group = DIr.Code;
 									end;
 								end;
+								ExtractObj(INr.DispGroups,pos,classfind);
 							end;
-							ResetCompany(oldcompany);	
-						end else begin
-							if(CurrentCompany!=28)then begin
-								CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur,!dublikateItem);
-							end else begin
-								IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+							if(nonblank(RepSpec.f4) and brand!=RepSpec.f4)then begin
+								testf1 = false;
+							end;
+							if(nonblank(RepSpec.f5) and model!=RepSpec.f5)then begin
+								testf1 = false;
+							end;
+							if(nonblank(RepSpec.f7) and INr.BPIGroup!=RepSpec.f7)then begin
+								testf1 = false;
 							end;
 						end;
-						
+					end;
+					
+					
+					if(userbrandf and testf1)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 06 2019 y. at 4:35:18 PM
+						pos = 0;
+						brand = "";
+						testf1 = false;
+						ExtractObj(INr.DispGroups,pos,brand);
+						while(nonblank(brand)) begin
+							if(userbrand[brand])then begin
+								testf1 = true;
+							end;
+							ExtractObj(INr.DispGroups,pos,brand);
+						end;
+					end;
+
+					if(testf1)then begin	
+							if(companies.length>1)then begin			
+								for (i=0;i<companies.length;i=i+1) begin
+									if (SetCompany(companies[i],false)) then begin
+										if(CurrentCompany!=28)then begin
+											checkBrand = true;
+											if(CurrentCompany==18) then begin
+												checkBrand = false;
+												for(i=0;i<matrowcnt(Brcb);i=i+1) begin
+													matrowget(Brcb,i,Brcbw);
+													if(Brcbw.Brand==INr.BPIBrand) then begin checkBrand = true; end;
+												end;
+											end;
+											if(checkBrand) then begin
+												CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur,!dublikateItem);
+											end;	
+										end else begin
+											IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+										end;
+									end;
+								end;
+								ResetCompany(oldcompany);	
+							end else begin
+								if(CurrentCompany!=28)then begin
+									CollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur,!dublikateItem);
+								end else begin
+									IDCollectAndPrintData(RepSpec,INr,Totals,typeval,typecode,typescnt,addclassf,brandcur);
+								end;
+							end;
+							
+					end;
 				end;
 			end;
 			resetloop(INr);
