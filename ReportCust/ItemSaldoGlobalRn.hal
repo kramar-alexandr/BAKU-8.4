@@ -1,0 +1,63 @@
+//server-only
+
+
+SetLangMode(LangRussian,"RUS",0);
+
+
+global procedure ItemSaldoGlobalRn(record RcVc RepSpec)
+begin
+	integer curcomp;
+	record INVc INr;
+	boolean testf,TrHs,TrHs1,testf1;
+	record ItemHistVc IHr;
+	record ItemDuplicatesVc IDr;
+	vector boolean itemHasDupl;
+	
+	curcomp = currentcompany;
+	
+	if(curcomp!=18)then begin
+		setcompany(18,false);
+	end;
+	
+	StartReportNoHeaderJob("Оборотно-сальдовая ведомость по товарам Глобальная");
+		if(blank(RepSpec.f1))then begin
+			startformat(15);
+				outstring(0,0,"В отчете нжно указать бренд",false);
+			endformat;
+		end else begin
+			while(loopmain(INr,1,true))begin//Переделать на ключ BPIBrand
+				testf = true;
+				if(INr.BPIBrand!=RepSpec.f1)then begin testf = false; end;
+				
+				if(testf)then begin
+					IDr.DupCode = INr.Code;
+					TrHs1 = true;
+					while (loopkey("DupCode",IDr,1,TrHs1)) begin
+						testf1 = true;
+						if (IDr.DupCode!=INr.Code) then begin TrHs1 = false; testf1 = false; end;
+						if (IDr.DupBrandCode!=INr.BPIBrand) then begin  testf1 = false; end;
+						if (testf1) then begin
+							itemHasDupl[IDr.OrigCode] = true;
+							testf = false;
+						end;
+					end;
+					resetloop(IDr);
+					
+					if(testf)then begin
+						startformat(15);
+							outstring(0,0,INr.Code,false);
+							outstring(100,0,INr.Name,false);
+						endformat;
+					end;
+				end;
+			end;
+		end;
+	
+	endjob;
+	
+	if(curcomp!=18)then begin
+		setcompany(curcomp,false);
+	end;
+	
+return;
+end;
