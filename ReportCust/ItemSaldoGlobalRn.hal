@@ -4,19 +4,63 @@ external  function string 100 BPICodeToName(string);
 
 SetLangMode(LangRussian,"RUS",0);
 
+procedure CollectDataForOSGlobal(record RcVc RepSpec,record INVc ccINr,var array string aStores,var vector val vStores,vector boolean itemHasDupl,vector string itemDuplicates)
+begin
+	record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  integer i,CompQty,k;
+  record ItemHistVc IHr;
+  record INVc INr;
+  record ConsItemVc CIr;
+  boolean cfnd;
+  
+  blockload(Compb);
+  CIr.Code = ccINr.Code;
+	if(ReadFirstKey("Code",CIr,1,true))then begin
+				
+		CompQty = matrowcnt(Compb);
+		for(i=0;i<CompQty;i=i+1) begin
+			matrowget(Compb,i,Comprw);
+			if(Comprw.ActiveStatus==0) then begin
+				setcompany(i+1,false);
+				INr.Code = CIr.LocCode;
+				if(readfirstmain(INr,1,true))then begin
+					if(INr.BPIBrand==CIr.BrandCode)then begin
+						for(k=0;k<aStores.length;k=k+1)begin
+							if(aStores[k]==Comprw.CompName)then begin
+								cfnd = true;
+							end;
+						end;
+						if(cfnd==false)then begin
+							aStores[aStores.length] = Comprw.CompName;
+						end;
+						vStores[ccINr.Code & ":" & Comprw.CompName] = 999;
+						vStores[ccINr.Code] = vStores[ccINr.Code] + 999;
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	setcompany(18,false);
+	
+return;
+end;
 
 global procedure ItemSaldoGlobalRn(record RcVc RepSpec)
 begin
 	integer curcomp;
 	record INVc INr;
 	boolean testf,TrHs,TrHs1,testf1;
-	record ItemHistVc IHr;
 	record ItemDuplicatesVc IDr;
 	vector boolean itemHasDupl;
 	vector string 255 itemDuplicates;
 	array string 20 ItemCodes;
 	longint k,i;
 	record BPIBrandVc BPIBrandr;
+	integer j,stores;
+	vector val vStores;
+	array string 100 aStores;
 	
 	curcomp = currentcompany;
 	
@@ -59,12 +103,18 @@ begin
 					if(testf)then begin
 						ItemCodes[k] = INr.Code;
 						k=k+1;
-						//collect data
-
 					end;
 				end;
 			end;
 		end;
+		
+		for(i=0;i<k;i=i+1)begin
+			INr.Code = ItemCodes[i];
+			if(readfirstmain(INr,1,true))then begin
+				CollectDataForOSGlobal(RepSpec,INr,aStores,vStores,itemHasDupl,itemDuplicates);
+			end;
+		end;
+		
 		
 		//вывод отчета
 		//шапка
@@ -79,6 +129,8 @@ begin
 				outstring(70,0,BPIBrandr.Name,false);
 			endformat;
 			
+			stores = aStores.length;
+			
 			startformat(15);
 				outstring(20,0,"№",false);
 				outstring(30,0,"Код",false);
@@ -92,7 +144,10 @@ begin
 				outstring(110,0,"Группа",false);
 				outstring(120,0,"Подгруппа",false);
 				outstring(130,0,"Категория",false);
-				outstring(140,0,"",false);
+				outstring(140,0,"Остаток на начало периода",false);
+				for(i=0;i<stores;i=i+1) begin
+					outstring(141,0,"Остаток на начало периода" & aStores[i],false);
+				end;
 				outstring(150,0,"",false);
 				outstring(160,0,"",false);
 				outstring(170,0,"",false);
@@ -128,7 +183,10 @@ begin
 				outstring(110,0,BPICodeToName(INr.BPIGroup),false);
 				outstring(120,0,BPICodeToName(INr.BPISubGroup),false);
 				outstring(130,0,BPICodeToName(INr.BPICategory),false);
-				outstring(140,0,"",false);
+				outstring(140,0,vStores[INr.Code],false);
+				for(j=0;j<stores;j=j+1) begin
+					outstring(141,0,vStores[INr.Code & ":" & aStores[j]],false);
+				end;
 				outstring(150,0,"",false);
 				outstring(160,0,"",false);
 				outstring(170,0,"",false);
