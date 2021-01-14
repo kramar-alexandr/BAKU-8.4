@@ -4,19 +4,85 @@ external  function string 100 BPICodeToName(string);
 
 SetLangMode(LangRussian,"RUS",0);
 
+procedure CollectDataForOSGlobal(record RcVc RepSpec,record INVc ccINr,var array string aStores,var vector val vStores,vector boolean itemHasDupl,vector string itemDuplicates,vector boolean itemHasHist)
+begin
+	record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  integer i,CompQty,k;
+  record ItemHistVc IHr;
+  record INVc INr;
+  record ConsItemVc CIr;
+  boolean cfnd;
+  boolean TrHs,testf;
+  
+  blockload(Compb);
+  CIr.Code = ccINr.Code;
+	if(ReadFirstKey("Code",CIr,1,true))then begin
+				
+		CompQty = matrowcnt(Compb);
+		for(i=0;i<CompQty;i=i+1) begin
+			matrowget(Compb,i,Comprw);
+			if(Comprw.ActiveStatus==0) then begin
+				setcompany(i+1,false);
+				INr.Code = CIr.LocCode;
+				if(readfirstmain(INr,1,true))then begin
+					if(INr.BPIBrand==CIr.BrandCode)then begin
+						for(k=0;k<aStores.length;k=k+1)begin
+							if(aStores[k]==Comprw.CompName)then begin
+								cfnd = true;
+							end;
+						end;
+						if(cfnd==false)then begin
+							aStores[aStores.length] = Comprw.CompName;
+						end;
+						
+						
+						TrHs = true;
+						IHr.ArtCode = INr.Code;
+						IHr.TransDate = stringtodate("1/1/2013");
+						while (loopkey("ArtCode",IHr,2,TrHs)) begin
+							testf = true;
+							if (IHr.ArtCode!=INr.Code) then begin TrHs = false; testf = false; end;
+							if (IHr.StockAffectf==0) then begin testf = false; end;
+							if(testf)then begin
+								itemHasHist[ccINr.Code] = true;
+								if(IHr.TransDate<RepSpec.sStartDate)then begin
+									vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+									vStores["sd:" & ccINr.Code] = vStores["sd:" & ccINr.Code] + IHr.Qty;
+								end else begin
+									vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+									vStores["ed:" & ccINr.Code] = vStores["ed:" & ccINr.Code] + IHr.Qty;
+								end;
+							end;
+						end;
+						resetloop(IHr);
+						
+						
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	setcompany(18,false);
+	
+return;
+end;
 
 global procedure ItemSaldoGlobalRn(record RcVc RepSpec)
 begin
 	integer curcomp;
 	record INVc INr;
 	boolean testf,TrHs,TrHs1,testf1;
-	record ItemHistVc IHr;
 	record ItemDuplicatesVc IDr;
-	vector boolean itemHasDupl;
+	vector boolean itemHasDupl,itemHasHist;
 	vector string 255 itemDuplicates;
 	array string 20 ItemCodes;
 	longint k,i;
 	record BPIBrandVc BPIBrandr;
+	integer j,stores;
+	vector val vStores;
+	array string 100 aStores;
 	
 	curcomp = currentcompany;
 	
@@ -59,12 +125,18 @@ begin
 					if(testf)then begin
 						ItemCodes[k] = INr.Code;
 						k=k+1;
-						//collect data
-
 					end;
 				end;
 			end;
 		end;
+		
+		for(i=0;i<k;i=i+1)begin
+			INr.Code = ItemCodes[i];
+			if(readfirstmain(INr,1,true))then begin
+				CollectDataForOSGlobal(RepSpec,INr,aStores,vStores,itemHasDupl,itemDuplicates,itemHasHist);
+			end;
+		end;
+		
 		
 		//вывод отчета
 		//шапка
@@ -79,6 +151,8 @@ begin
 				outstring(70,0,BPIBrandr.Name,false);
 			endformat;
 			
+			stores = aStores.length;
+			
 			startformat(15);
 				outstring(20,0,"№",false);
 				outstring(30,0,"Код",false);
@@ -92,7 +166,10 @@ begin
 				outstring(110,0,"Группа",false);
 				outstring(120,0,"Подгруппа",false);
 				outstring(130,0,"Категория",false);
-				outstring(140,0,"",false);
+				outstring(140,0,"Остаток на начало периода",false);
+				for(i=0;i<stores;i=i+1) begin
+					outstring(141,0,aStores[i],false);
+				end;
 				outstring(150,0,"",false);
 				outstring(160,0,"",false);
 				outstring(170,0,"",false);
@@ -103,46 +180,56 @@ begin
 				outstring(220,0,"",false);
 				outstring(230,0,"",false);
 				outstring(240,0,"",false);
-				outstring(250,0,"",false);
+				outstring(250,0,"Остаток на конец периода",false);
+				for(i=0;i<stores;i=i+1) begin
+					outstring(251,0,aStores[i],false);
+				end;
 			endformat;
 			
 			
 		//товары
 		for(i=0;i<k;i=i+1)begin
 			INr.Code = ItemCodes[i];
-			if(readfirstmain(INr,1,true))then begin
-				startformat(15);
-				outstring(20,0,i+1,false);
-				outstring(30,0,INr.AlternativeCode,false);
-				outstring(40,0,INr.Code,false);
-				if(itemHasDupl[IDr.OrigCode])then begin
-					outstring(50,0,itemDuplicates[INr.Code],false);
-				end else begin
-					outstring(50,0,"",false);
+			if(itemHasHist[INr.Code])then begin
+				if(readfirstmain(INr,1,true))then begin
+					startformat(15);
+					outstring(20,0,i+1,false);
+					outstring(30,0,INr.AlternativeCode,false);
+					outstring(40,0,INr.Code,false);
+					if(itemHasDupl[IDr.OrigCode])then begin
+						outstring(50,0,itemDuplicates[INr.Code],false);
+					end else begin
+						outstring(50,0,"",false);
+					end;
+					outstring(60,0,INr.Name,false);
+					outstring(70,0,BPICodeToName(INr.BPIBrand),false);
+					outstring(80,0,INr.CCModelName,false);
+					outstring(90,0,INr.CCCollectName,false);
+					outstring(100,0,BPICodeToName(INr.BPICollection),false);
+					outstring(110,0,BPICodeToName(INr.BPIGroup),false);
+					outstring(120,0,BPICodeToName(INr.BPISubGroup),false);
+					outstring(130,0,BPICodeToName(INr.BPICategory),false);
+					outstring(140,0,vStores["sd:" & INr.Code],false);
+					for(j=0;j<stores;j=j+1) begin
+						outstring(141,0,vStores["sd:" & INr.Code & ":" & aStores[j]],false);
+					end;
+					outstring(150,0,"",false);
+					outstring(160,0,"",false);
+					outstring(170,0,"",false);
+					outstring(180,0,"",false);
+					outstring(190,0,"",false);
+					outstring(200,0,"",false);
+					outstring(210,0,"",false);
+					outstring(220,0,"",false);
+					outstring(230,0,"",false);
+					outstring(240,0,"",false);
+					outstring(250,0,vStores["sd:" & INr.Code] + vStores["ed:" & INr.Code],false);
+					for(j=0;j<stores;j=j+1) begin
+						outstring(251,0,vStores["sd:" & INr.Code & ":" & aStores[j]] + vStores["ed:" & INr.Code & ":" & aStores[j]],false);
+					end;
+					endformat;
 				end;
-				outstring(60,0,INr.Name,false);
-				outstring(70,0,BPICodeToName(INr.BPIBrand),false);
-				outstring(80,0,INr.CCModelName,false);
-				outstring(90,0,INr.CCCollectName,false);
-				outstring(100,0,BPICodeToName(INr.BPICollection),false);
-				outstring(110,0,BPICodeToName(INr.BPIGroup),false);
-				outstring(120,0,BPICodeToName(INr.BPISubGroup),false);
-				outstring(130,0,BPICodeToName(INr.BPICategory),false);
-				outstring(140,0,"",false);
-				outstring(150,0,"",false);
-				outstring(160,0,"",false);
-				outstring(170,0,"",false);
-				outstring(180,0,"",false);
-				outstring(190,0,"",false);
-				outstring(200,0,"",false);
-				outstring(210,0,"",false);
-				outstring(220,0,"",false);
-				outstring(230,0,"",false);
-				outstring(240,0,"",false);
-				outstring(250,0,"",false);
-			endformat;
-			
-			end;
+				end;
 		end;
 		
 		
