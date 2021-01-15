@@ -4,6 +4,19 @@ external  function string 100 BPICodeToName(string);
 
 SetLangMode(LangRussian,"RUS",0);
 
+
+procedure FindFIFODataCostForNotUpdStockIV(record INVc ccINr,record INVc INr,record IVVc IVr,record ItemHistVc IHr,vector val vStores,string compname,integer sign)
+begin
+
+	if(IVr.OrderNr>-1)then begin
+	
+	end else begin
+		vStores["sales_cost:" & ccINr.Code & ":" & compname] = vStores["sales_cost:" & ccINr.Code & ":" & compname] - INr.LastPurchPrice2*sign;
+		vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - INr.LastPurchPrice2*sign;
+	end;
+return;
+end;
+
 procedure CollectDataForOSGlobal(record RcVc RepSpec,record INVc ccINr,var array string aStores,var vector val vStores,vector boolean itemHasDupl,vector string itemDuplicates,vector boolean itemHasHist)
 begin
 	record CompaniesBlock Compb;
@@ -59,6 +72,22 @@ begin
 							end;
 							
 							if(testf)then begin
+								//SALES
+								if(IHr.FileName=="IVVc")then begin
+									IVr.SerNr = IHr.TransNr;
+									if(readfirstmain(IVr,1,true))then begin
+										if(left(IVr.CustCode,4)!="FOB_")then begin
+											vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
+											vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty;
+											if(IHr.StockAffectf==1)then begin
+												vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
+												vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
+											end else begin
+												FindFIFODataCostForNotUpdStockIV(ccINr,INr,IVr,IHr,vStores,Comprw.CompName,sign);
+											end;
+										end;
+									end;
+								end;
 								if(IHr.StockAffectf==1)then begin
 									itemHasHist[ccINr.Code] = true;
 									if(IHr.TransDate<RepSpec.sStartDate)then begin
@@ -73,45 +102,6 @@ begin
 										
 										vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
 										vStores["ed_cost:" & ccINr.Code] = vStores["ed_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
-										
-										
-										//SALES
-										if(IHr.FileName=="IVVc")then begin
-											IVr.SerNr = IHr.TransNr;
-											if(readfirstmain(IVr,1,true))then begin
-												if(left(IVr.CustCode,4)!="FOB_")then begin
-													vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
-													vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty;
-													
-													vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
-													vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
-												end;
-											end;
-										end;
-										if(IHr.FileName=="SHVc")then begin
-											SHr.SerNr = IHr.TransNr;
-											if(readfirstmain(SHr,1,true))then begin
-												if(left(SHr.CustCode,4)!="FOB_")then begin
-													vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
-													vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty;
-													
-													vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
-													vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
-												end;
-											end;
-										end;
-										if(IHr.FileName=="RetVc")then begin
-											Retr.SerNr = IHr.TransNr;
-											if(readfirstmain(Retr,1,true))then begin
-												if(left(Retr.CustCode,4)!="FOB_")then begin
-													vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
-													vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty;
-													
-													vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
-													vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
-												end;
-											end;
-										end;
 										
 										
 										if(currentcompany==18)then begin
