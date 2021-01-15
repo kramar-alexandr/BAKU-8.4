@@ -5,7 +5,7 @@ external  function string 100 BPICodeToName(string);
 SetLangMode(LangRussian,"RUS",0);
 
 
-procedure FindFIFODataCostForNotUpdStockIV(record INVc ccINr,record INVc INr,record IVVc IVr,record ItemHistVc IHr,vector val vStores,string compname)
+procedure FindFIFODataCostForNotUpdStockIV(record INVc ccINr,record INVc INr,record IVVc IVr,record ItemHistVc IHr,vector val vStores,string compname,integer sign)
 begin
 	record SHVc SHr;
 	row SHVc SHrw;
@@ -93,22 +93,40 @@ begin
 										IVr.SerNr = IHr.TransNr;
 										if(readfirstmain(IVr,1,true))then begin
 											if(left(IVr.CustCode,4)!="FOB_")then begin
-												vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
-												vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty;
 												
-												matrowget(IVr,IHr.Row,IVrw);
-												rowsum = IVrw.Sum;
-												if(IVr.FrRate!=0)then begin
-													rowsum = rowsum/IVr.FrRate*IVr.ToRateB1;
+												if(sign==-1)then begin
+													vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
+													vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty;
+													matrowget(IVr,IHr.Row,IVrw);
+													rowsum = IVrw.Sum;
+													if(IVr.FrRate!=0)then begin
+														rowsum = rowsum/IVr.FrRate*IVr.ToRateB1;
+													end;
+													vStores["sales_AZN:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_AZN:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty*rowsum/IVrw.Quant;
+													vStores["sales_AZN:" & ccINr.Code] = vStores["sales_AZN" & ccINr.Code] - IHr.Qty*rowsum/IVrw.Quant;
+												end else begin
+													vStores["return_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["return_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
+													vStores["return_qty:" & ccINr.Code] = vStores["return_qty" & ccINr.Code] - IHr.Qty;
+													matrowget(IVr,IHr.Row,IVrw);
+													rowsum = IVrw.Sum;
+													if(IVr.FrRate!=0)then begin
+														rowsum = rowsum/IVr.FrRate*IVr.ToRateB1;
+													end;
+													vStores["return_AZN:" & ccINr.Code & ":" & Comprw.CompName] = vStores["return_AZN:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty*rowsum/IVrw.Quant;
+													vStores["return_AZN:" & ccINr.Code] = vStores["return_AZN" & ccINr.Code] - IHr.Qty*rowsum/IVrw.Quant;
 												end;
-												vStores["sales_AZN:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_AZN:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty*rowsum/IVrw.Quant;
-												vStores["sales_AZN:" & ccINr.Code] = vStores["sales_AZN" & ccINr.Code] - IHr.Qty*rowsum/IVrw.Quant;
+												
 												
 												if(IHr.StockAffectf==1)then begin
-													vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
-													vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
+													if(sign==-1)then begin
+														vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
+														vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
+													end else begin
+														vStores["return_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["return_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
+														vStores["return_cost:" & ccINr.Code] = vStores["return_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
+													end;
 												end else begin
-													FindFIFODataCostForNotUpdStockIV(ccINr,INr,IVr,IHr,vStores,Comprw.CompName);
+													FindFIFODataCostForNotUpdStockIV(ccINr,INr,IVr,IHr,vStores,Comprw.CompName,sign);
 												end;
 											end;
 										end;
@@ -289,7 +307,12 @@ begin
 				for(i=0;i<stores;i=i+1) begin
 					outstring(160,0,"Продано на сумму в АЗН " & aStores[i],false);
 				end;
-				outstring(170,0,"",false);
+				for(i=0;i<stores;i=i+1) begin
+					outstring(170,0,"Возврат шт " & aStores[i],false);
+				end;
+				for(i=0;i<stores;i=i+1) begin
+					outstring(171,0,"Возврат на сумму в АЗН " & aStores[i],false);
+				end;
 				outstring(180,0,"",false);
 				outstring(190,0,"",false);
 				outstring(200,0,"",false);
@@ -341,7 +364,12 @@ begin
 					for(j=0;j<stores;j=j+1) begin
 						outstring(160,0,vStores["sales_AZN:" & INr.Code & ":" & aStores[j]],false);
 					end;
-					outstring(170,0,"",false);
+					for(j=0;j<stores;j=j+1) begin
+						outstring(170,0,vStores["return_qty:" & INr.Code & ":" & aStores[j]],false);
+					end;
+					for(j=0;j<stores;j=j+1) begin
+						outstring(171,0,vStores["return_AZN:" & INr.Code & ":" & aStores[j]],false);
+					end;
 					outstring(180,0,"",false);
 					outstring(190,0,"",false);
 					outstring(200,0,"",false);
