@@ -1,0 +1,349 @@
+//server-only
+external  function string 100 BPICodeToName(string);
+
+
+SetLangMode(LangRussian,"RUS",0);
+
+procedure CollectDataForOSGlobal(record RcVc RepSpec,record INVc ccINr,var array string aStores,var vector val vStores,vector boolean itemHasDupl,vector string itemDuplicates,vector boolean itemHasHist)
+begin
+	record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  integer i,CompQty,k;
+  record ItemHistVc IHr;
+  record INVc INr;
+  record ConsItemVc CIr;
+  boolean cfnd;
+  boolean TrHs,testf;
+  integer sign;
+  record PUVc PUr;
+  record RetPUVc RetPUr;
+  record IVVc IVr;
+  record SHVc SHr;
+  record RetVc Retr;
+  
+  blockload(Compb);
+  CIr.Code = ccINr.Code;
+	if(ReadFirstKey("Code",CIr,1,true))then begin
+				
+		CompQty = matrowcnt(Compb);
+		for(i=0;i<CompQty;i=i+1) begin
+			matrowget(Compb,i,Comprw);
+			if(Comprw.ActiveStatus==0) then begin
+				setcompany(i+1,false);
+				INr.Code = CIr.LocCode;
+				if(currentcompany==18)then begin
+					INr.Code = ccINr.Code;
+				end;
+				if(readfirstmain(INr,1,true))then begin
+					if(INr.BPIBrand==CIr.BrandCode)then begin
+						for(k=0;k<aStores.length;k=k+1)begin
+							if(aStores[k]==Comprw.CompName)then begin
+								cfnd = true;
+							end;
+						end;
+						if(cfnd==false)then begin
+							aStores[aStores.length] = Comprw.CompName;
+						end;
+						
+						
+						TrHs = true;
+						IHr.ArtCode = INr.Code;
+						IHr.TransDate = stringtodate("1/1/2013");
+						while (loopkey("ArtCode",IHr,2,TrHs)) begin
+							testf = true;
+							if (IHr.ArtCode!=INr.Code) then begin TrHs = false; testf = false; end;
+							//if (IHr.StockAffectf==0) then begin testf = false; end;
+							sign = 1;
+							if(IHr.Qty<0)then begin
+								sign = -1;
+							end;
+							
+							if(testf)then begin
+								if(IHr.StockAffectf==1)then begin
+									itemHasHist[ccINr.Code] = true;
+									if(IHr.TransDate<RepSpec.sStartDate)then begin
+										vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+										vStores["sd:" & ccINr.Code] = vStores["sd:" & ccINr.Code] + IHr.Qty;
+										
+										vStores["sd_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+										vStores["sd_cost:" & ccINr.Code] = vStores["sd_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+									end else begin
+										vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+										vStores["ed:" & ccINr.Code] = vStores["ed:" & ccINr.Code] + IHr.Qty;
+										
+										vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+										vStores["ed_cost:" & ccINr.Code] = vStores["ed_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+										
+										
+										//SALES
+										if(IHr.FileName=="IVVc")then begin
+											IVr.SerNr = IHr.TransNr;
+											if(readfirstmain(IVr,1,true))then begin
+												if(left(IVr.CustCode,3)!="FOB")then begin
+													vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+													vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] + IHr.Qty;
+													
+													vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPrice*sign;
+													vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] + IHr.TotCostPrice*sign;
+												end;
+											end;
+										end;
+										if(IHr.FileName=="SHVc")then begin
+											SHr.SerNr = IHr.TransNr;
+											if(readfirstmain(SHr,1,true))then begin
+												if(left(SHr.CustCode,3)!="FOB")then begin
+													vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+													vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] + IHr.Qty;
+													
+													vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPrice*sign;
+													vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] + IHr.TotCostPrice*sign;
+												end;
+											end;
+										end;
+										if(IHr.FileName=="RetVc")then begin
+											Retr.SerNr = IHr.TransNr;
+											if(readfirstmain(Retr,1,true))then begin
+												if(left(Retr.CustCode,3)!="FOB")then begin
+													vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+													vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] + IHr.Qty;
+													
+													vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPrice*sign;
+													vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] + IHr.TotCostPrice*sign;
+												end;
+											end;
+										end;
+										
+										
+										if(currentcompany==18)then begin
+											if(IHr.FileName=="PUVc")then begin
+												PUr.SerNr = IHr.TransNr;
+												if(readfirstmain(PUr,1,true))then begin
+													if(left(PUr.VECode,3)!="FOB")then begin
+														vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+														vStores["PU:" & ccINr.Code] = vStores["PU:" & ccINr.Code] + IHr.Qty;
+													
+														vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+														vStores["PU_cost:" & ccINr.Code] = vStores["PU_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+													end;
+												end;
+											end;
+											if(IHr.FileName=="RetPUVc")then begin
+												RetPUr.SerNr = IHr.TransNr;
+												if(readfirstmain(RetPUr,1,true))then begin
+													if(left(RetPUr.VECode,3)!="FOB")then begin
+														vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+														vStores["PU:" & ccINr.Code] = vStores["PU:" & ccINr.Code] + IHr.Qty;
+													
+														vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+														vStores["PU_cost:" & ccINr.Code] = vStores["PU_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+													end;
+												end;
+											end;
+										end;
+										
+									end;
+								end;
+							end;
+							
+							
+						end;
+						resetloop(IHr);
+						
+						
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	setcompany(18,false);
+	
+return;
+end;
+
+global procedure ItemSaldoGlobalRn(record RcVc RepSpec)
+begin
+	integer curcomp;
+	record INVc INr;
+	boolean testf,TrHs,TrHs1,testf1;
+	record ItemDuplicatesVc IDr;
+	vector boolean itemHasDupl,itemHasHist;
+	vector string 255 itemDuplicates;
+	array string 20 ItemCodes;
+	longint k,i;
+	record BPIBrandVc BPIBrandr;
+	integer j,stores;
+	vector val vStores;
+	array string 100 aStores;
+	
+	curcomp = currentcompany;
+	
+	if(curcomp!=18)then begin
+		setcompany(18,false);
+	end;
+	
+	k = 0;
+	
+	StartReportNoHeaderJob("Оборотно-сальдовая ведомость по товарам Глобальная");
+		if(blank(RepSpec.f1))then begin
+			startformat(15);
+				outstring(0,0,"В отчете нжно указать бренд",false);
+			endformat;
+		end else begin
+		
+			//Калькуляция данных
+			
+			while(loopmain(INr,1,true))begin//Переделать на ключ BPIBrand
+				testf = true;
+				if(INr.BPIBrand!=RepSpec.f1)then begin testf = false; end;
+				
+				if(testf)then begin
+					IDr.DupCode = INr.Code;
+					TrHs1 = true;
+					while (loopkey("DupCode",IDr,1,TrHs1)) begin
+						testf1 = true;
+						if (IDr.DupCode!=INr.Code) then begin TrHs1 = false; testf1 = false; end;
+						if (IDr.DupBrandCode!=INr.BPIBrand) then begin  testf1 = false; end;
+						if (testf1) then begin
+							itemHasDupl[IDr.OrigCode] = true;
+							
+							itemDuplicates[IDr.OrigCode] = itemDuplicates[IDr.OrigCode] & INr.Code & ",";
+							
+							testf = false;
+						end;
+					end;
+					resetloop(IDr);
+					
+					if(testf)then begin
+						ItemCodes[k] = INr.Code;
+						k=k+1;
+					end;
+				end;
+			end;
+		end;
+		
+		for(i=0;i<k;i=i+1)begin
+			INr.Code = ItemCodes[i];
+			if(readfirstmain(INr,1,true))then begin
+				CollectDataForOSGlobal(RepSpec,INr,aStores,vStores,itemHasDupl,itemDuplicates,itemHasHist);
+			end;
+		end;
+		
+		
+		//вывод отчета
+		//шапка
+			startformat(15);
+				outstring(0,0,"Период",false);
+				outstring(70,0,RepSpec.sStartDate & ":" & RepSpec.sEndDate,false);
+			endformat;
+			BPIBrandr.Code = RepSpec.f1;
+			readfirstmain(BPIBrandr,1,true);
+			startformat(15);
+				outstring(0,0,"Бренд",false);
+				outstring(70,0,BPIBrandr.Name,false);
+			endformat;
+			
+			stores = aStores.length;
+			
+			startformat(15);
+				outstring(20,0,"№",false);
+				outstring(30,0,"Код",false);
+				outstring(40,0,"Код КК",false);
+				outstring(50,0,"Дубликаты",false);
+				outstring(60,0,"Наименование",false);
+				outstring(70,0,"Бренд",false);
+				outstring(80,0,"CC Модель",false);
+				outstring(90,0,"CC Колекция",false);
+				outstring(100,0,"Коллекция",false);
+				outstring(110,0,"Группа",false);
+				outstring(120,0,"Подгруппа",false);
+				outstring(130,0,"Категория",false);
+				outstring(141,0,"FOB валюта бренда",false);
+				outstring(142,0,"Поступило на конс/склад от поставщика шт",false);
+				outstring(143,0,"поступило итого валюта бренда",false);
+
+				outstring(148,0,"Остаток на начало периода",false);
+				for(i=0;i<stores;i=i+1) begin
+					outstring(149,0,aStores[i],false);
+				end;
+				outstring(150,0,"Продажа по рознице FOB AZN",false);
+				for(i=0;i<stores;i=i+1) begin
+					outstring(151,0,"Продано шт	" & aStores[i],false);
+				end;
+				outstring(160,0,"",false);
+				outstring(170,0,"",false);
+				outstring(180,0,"",false);
+				outstring(190,0,"",false);
+				outstring(200,0,"",false);
+				outstring(210,0,"",false);
+				outstring(220,0,"",false);
+				outstring(230,0,"",false);
+				outstring(240,0,"",false);
+				outstring(250,0,"Остаток на конец периода",false);
+				for(i=0;i<stores;i=i+1) begin
+					outstring(251,0,aStores[i],false);
+				end;
+			endformat;
+			
+			
+		//товары
+		for(i=0;i<k;i=i+1)begin
+			INr.Code = ItemCodes[i];
+			if(itemHasHist[INr.Code])then begin
+				if(readfirstmain(INr,1,true))then begin
+					startformat(15);
+					outstring(20,0,i+1,false);
+					outstring(30,0,INr.AlternativeCode,false);
+					outstring(40,0,INr.Code,false);
+					if(itemHasDupl[IDr.OrigCode])then begin
+						outstring(50,0,itemDuplicates[INr.Code],false);
+					end else begin
+						outstring(50,0,"",false);
+					end;
+					outstring(60,0,INr.Name,false);
+					outstring(70,0,BPICodeToName(INr.BPIBrand),false);
+					outstring(80,0,INr.CCModelName,false);
+					outstring(90,0,INr.CCCollectName,false);
+					outstring(100,0,BPICodeToName(INr.BPICollection),false);
+					outstring(110,0,BPICodeToName(INr.BPIGroup),false);
+					outstring(120,0,BPICodeToName(INr.BPISubGroup),false);
+					outstring(130,0,BPICodeToName(INr.BPICategory),false);
+					outstring(141,0,INr.LastPurchPrice2,false);
+					outstring(142,0,vStores["PU:" & INr.Code],false);
+					outstring(143,0,vStores["PU_cost:" & INr.Code],false);
+					
+					outstring(148,0,vStores["sd:" & INr.Code],false);
+					for(j=0;j<stores;j=j+1) begin
+						outstring(149,0,vStores["sd:" & INr.Code & ":" & aStores[j]],false);
+					end;
+					outstring(150,0,vStores["sales_cost:" & INr.Code],false);
+					for(j=0;j<stores;j=j+1) begin
+						outstring(151,0,vStores["sales_qty:" & INr.Code & ":" & aStores[j]],false);
+					end;
+					outstring(160,0,"",false);
+					outstring(170,0,"",false);
+					outstring(180,0,"",false);
+					outstring(190,0,"",false);
+					outstring(200,0,"",false);
+					outstring(210,0,"",false);
+					outstring(220,0,"",false);
+					outstring(230,0,"",false);
+					outstring(240,0,"",false);
+					outstring(250,0,vStores["sd:" & INr.Code] + vStores["ed:" & INr.Code],false);
+					for(j=0;j<stores;j=j+1) begin
+						outstring(251,0,vStores["sd:" & INr.Code & ":" & aStores[j]] + vStores["ed:" & INr.Code & ":" & aStores[j]],false);
+					end;
+					endformat;
+				end;
+				end;
+		end;
+		
+		
+	endjob;
+	
+	if(curcomp!=18)then begin
+		setcompany(curcomp,false);
+	end;
+	
+return;
+end;

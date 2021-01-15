@@ -1156,7 +1156,7 @@ begin
 end;
 
 procedure INrsRnRun(record RcVc RepSpec,record MainStockBlock MSb,record CostAccBlock CAb,
-                    var val SumQFwd,var val SumQIn,var val SumQOut,var val SumCPFwd,var val SumCPIn,var val SumCPOut,var val SumQ2)
+                    var val SumQFwd,var val SumQIn,var val SumQOut,var val SumCPFwd,var val SumCPIn,var val SumCPOut,var val SumQ2,array string allitems)
 begin
   string 20 frin,toin;
   string 20 frloc,toloc,tstr;
@@ -1176,10 +1176,20 @@ begin
   array string 100 alistitems;
   integer acnt,ccnt;
   
-  logtext(0,"INrsRnRun start");
-  logtext(0,RepSpec.f1);
-
-  if(nonblank(RepSpec.f1))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 08 2020 y. at 4:04:38 PM
+  //logtext(0,"INrsRnRun start");
+  //logtext(0,RepSpec.f1);
+	
+	if(allitems.length>1)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 15 01 2021 y. at 10:42:10 AM
+		islistin = true;
+		acnt = allitems.length;
+		logtext(0,"allitems.length " & allitems.length);
+	end;
+	
+  /*if(nonblank(RepSpec.f1))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 08 2020 y. at 4:04:38 PM
+  	
+  	if(allitems.length>0)then begin
+  		islistin = true;
+  	end;
   	if(FindStringInString(RepSpec.f1,","))then begin
 			pos = 0;
 			ExtractObjWithSeparator(",",RepSpec.f1,true,pos,tstr);
@@ -1196,7 +1206,7 @@ begin
 				islistin = true;
 			end;
   	end;
-  end;
+  end;*/
   
   
   
@@ -1206,11 +1216,13 @@ begin
   
 lListItems:;// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 08 2020 y. at 4:14:49 PM
   if(islistin)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 08 2020 y. at 4:14:51 PM
-  	frin = alistitems[ccnt];
+  	frin = allitems[ccnt];
   	toin = frin;
   	ccnt = ccnt + 1;
   	resetloop(INr);
   end;
+  
+  
   if(blank(frin)) then begin 
 		frin = RepSpec.f1;
 		toin = frin;
@@ -1230,7 +1242,7 @@ lListItems:;// Edit ************************** BPI Ukraine - KramarAlexandr - 03
   foundIN = true;
   
   
-  logtext(0,INr.Code);
+  //logtext(0,INr.Code);
   while (LoopKey(ckey,INr,keys,foundIN)) begin
     if (foundIN) then begin
       if (nonblank(toin)) then  begin
@@ -1581,6 +1593,9 @@ begin
 	record ItemDuplicatesVc IDr,ID2r;
 	record INVc dupINr,INr;
 	boolean orItem;
+	array string 20 allitems;
+	vector boolean vallitems;
+	integer kk;
 	
   frloc = FirstInRange(RepSpec.f6,20);
   toloc = LastInRange(RepSpec.f6,20);
@@ -1595,12 +1610,14 @@ begin
 					
 					if(TrHs)then begin
 						resf1 = resf1 & CIr.Code & ",";
+						vallitems[CIr.Code] = true;
+						kk = kk+1;
 					end;
 				end;
 				if(nonblank(resf1))then begin
-				codes = left(resf1,len(resf1)-1);
-				NormalizeObjstr(codes)
-					RepSpec.f1 = codes;
+					codes = left(resf1,len(resf1)-1);
+					NormalizeObjstr(codes)
+					//RepSpec.f1 = codes;
 				end;
 			end;
 		end else begin
@@ -1608,6 +1625,8 @@ begin
 			IDr.OrigCode = RepSpec.f1;
 			TrHs1 = true;
 			codes = RepSpec.f1;
+			vallitems[RepSpec.f1] = true;
+			kk = kk+1;
 			INr.Code = RepSpec.f1;
 			ReadFirstMain(INr,1,true);
 			while(LoopKey("OrigCode",IDr,1,TrHs1)) begin
@@ -1619,6 +1638,8 @@ begin
 						if(dupINr.Code!=IDr.DupCode) then begin TrHs=false; end;
 						if(IDr.DupBrandCode==dupINr.BPIBrand and TrHs) then begin
 							codes = codes & "," & dupINr.Code;
+							vallitems[dupINr.Code] = true;
+							kk = kk+1;
 							orItem = true;
 						end;
 					end;
@@ -1631,6 +1652,8 @@ begin
 			if(!orItem) then begin
 				IDr.DupCode = RepSpec.f1;
 				codes = RepSpec.f1;
+				vallitems[RepSpec.f1] = true;
+				kk = kk+1;
 				INr.Code = RepSpec.f1;
 				ReadFirstMain(INr,1,true);
 				TrHs2 = true;
@@ -1650,6 +1673,8 @@ begin
 									if(dupINr.Code!=ID2r.DupCode) then begin TrHs = false; end;
 									if(dupINr.BPIBrand==ID2r.DupBrandCode and TrHs) then begin
 										codes = codes & "," &  dupINr.Code;
+										vallitems[dupINr.Code] = true;
+										kk = kk+1;
 									end;
 								end;
 								ResetLoop(dupINr);
@@ -1662,10 +1687,12 @@ begin
 			end;
 			logtext(0,"INrsRn codes2 " & codes);
 			NormalizeObjstr(codes);
-			RepSpec.f1 = codes;
+			//RepSpec.f1 = codes;
 		end;
   end;// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 08 2020 y. at 3:59:35 PM
   logtext(0,"resf1 " & resf1);
+  
+  getvectortags(vallitems,allitems);
   
   BlockLoad(MSb);
   BlockLoad(CAb);
@@ -1682,7 +1709,7 @@ begin
         goto LINrsRn;
       end;
       RepSpec.TransStr = frloc;
-      INrsRnRun(RepSpec,MSb,CAb,SumQFwd,SumQIn,SumQOut,SumCPFwd,SumCPIn,SumCPOut,SumQ2);
+      INrsRnRun(RepSpec,MSb,CAb,SumQFwd,SumQIn,SumQOut,SumCPFwd,SumCPIn,SumCPOut,SumQ2,allitems);// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 15 01 2021 y. at 10:38:23 AM
       PrintReportTotals(RepSpec,SumQFwd,SumQIn,SumQOut,SumCPFwd,SumCPIn,SumCPOut,SumQ2);
     case 1:
       found = true;
@@ -1706,7 +1733,7 @@ begin
           SetSumBlankVals(LocSumQFwd,LocSumCPFwd,LocSumQIn,LocSumQOut,LocSumCPIn,LocSumCPOut,LocSumQ2);
           PrintLocation(Locr);
           RepSpec.TransStr = Locr.Code;          
-          INrsRnRun(RepSpec,MSb,CAb,LocSumQFwd,LocSumQIn,LocSumQOut,LocSumCPFwd,LocSumCPIn,LocSumCPOut,LocSumQ2);
+          INrsRnRun(RepSpec,MSb,CAb,LocSumQFwd,LocSumQIn,LocSumQOut,LocSumCPFwd,LocSumCPIn,LocSumCPOut,LocSumQ2,allitems);
           PrintLocationTotals(RepSpec,Locr.Code,LocSumQFwd,LocSumCPFwd,LocSumQIn,LocSumQOut,LocSumCPIn,LocSumCPOut,LocSumQ2);
           SumTotals(LocSumQFwd,LocSumCPFwd,LocSumQIn,LocSumQOut,LocSumCPIn,LocSumCPOut,LocSumQ2,SumQFwd,SumCPFwd,SumQIn,SumQOut,SumCPIn,SumCPOut,SumQ2);
         end;

@@ -1295,14 +1295,13 @@ begin
 	
 	StartReportnoheaderjob("Отчет по статусам заказов поставщикам");
 	startformat(15);
-		outstring(1,0,"Local order #",false);
+		outstring(1,0,"Client order #",false);
 		outstring(2,0,"Client Order date",false);
 		outstring(3,0,"Client number",false);
 		outstring(4,0,"Promised date",false);
 		outstring(5,0,"Po number",false);
 		outstring(6,0,"Manufacturer name",false);
 		outstring(7,0,"Po date",false);
-		outstring(20,0,"Comment",false);   // by Ira
 		outstring(34,0,"Project code",false);
 		outstring(8,0,"Mfr finish date",false);
 		outstring(9,0,"Invoice number",false);
@@ -1343,6 +1342,8 @@ begin
 		outstring(47,0,"Brand.costs bal",false);
 		outstring(44,0,"Approximately deliver date",false);
 		outstring(45,0,"Delivery date",false);
+		outstring(48,0,"Local Order #",false);   
+		outstring(49,0,"Comment",false);   
 	endformat;
 	
 	
@@ -1844,7 +1845,11 @@ begin
 			startformat(15);
 				if(locf)then begin
 					if(currentcompany!=28)then begin
-						outstring(1,0,locORserNr,false); // Client order #
+						if (POr.POClass=="CLIEN") then begin
+							outstring(1,0,locORserNr,false); // Client order #
+						end else begin
+							outstring(1,0,"",false); // Client order #
+						end;
 					end else begin
 						outstring(1,0,IDlocORserNr,false);
 					end;
@@ -1863,7 +1868,6 @@ begin
 				end;
 				outstring(6,0,POr.Addr0,false);//Manufacturer name
 				outstring(7,0,POr.TransDate,false);//Po date
-				outstring(20,0,POr.Comment,false); // by Ira
 				outstring(34,0,POr.IDPrjNum,false);//Project code
 				outdate(8,0,POr.IDMfrFinDate,false);//Mfr finish date
 				outstring(9,0,POr.IDProfInvNum,false);//Invoice number
@@ -1957,6 +1961,12 @@ begin
 						end else begin outstring(45,0,  "",false); end;
 					end;
 				end else begin outstring(45,0,  "",false); end;
+				if (locORserNr>0) then begin
+					outstring(48,0,locORserNr,false); // Client order #
+				end else begin
+					outstring(48,0,"",false); // Client order #
+				end;
+				outstring(49,0,POr.Comment,false); // by Ira
 			endformat;
 		end;
 	end;
@@ -1991,7 +2001,21 @@ begin
 	record RetPUVc RPUr;
 	row RetPUVc RPUrw;
 	vector val retQty;
-	vector boolean vRetSerNrs;
+	vector boolean vRetSerNrs, vPurchBrandf;
+	
+	
+	
+	Brndr.Code = "";
+	while (loopmain(Brndr,1,true)) begin
+		if (nonblank(RepSpec.f2) and nonblank(Brndr.Puchaser) and SetInSet(Brndr.Puchaser,RepSpec.f2)) then begin
+			vPurchBrandf[Brndr.Code] = true;
+		end;
+		if (blank(RepSpec.f2)) then begin
+			vPurchBrandf[Brndr.Code] = true;
+		end;
+	end;
+	
+	resetLoop (Brndr);
 	
 	StartReportnoheaderjob("Товары в пути");
 	startformat(15);
@@ -2050,6 +2074,7 @@ begin
 					filter = true;
 					
 					if(nonblank(RepSpec.f1) and RepSpec.f1!=INr.BPIBrand)then begin filter = false; end;
+					if(!vPurchBrandf[INr.BPIBrand] and nonblank(RepSpec.f2)) then begin filter = false; end;
 					
 					if(filter)then begin
 					
@@ -2101,6 +2126,7 @@ begin
 					filter = true;
 					
 					if(nonblank(RepSpec.f1) and RepSpec.f1!=INr.BPIBrand)then begin filter = false; end;
+					if(!vPurchBrandf[INr.BPIBrand] and nonblank(RepSpec.f2)) then begin filter = false; end;
 					
 					if(filter)then begin
 					
