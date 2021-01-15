@@ -46,6 +46,8 @@ begin
   record IVVc IVr;
   record SHVc SHr;
   record RetVc Retr;
+  row IVVc IVrw;
+  val rowsum;
   
   blockload(Compb);
   CIr.Code = ccINr.Code;
@@ -93,6 +95,15 @@ begin
 											if(left(IVr.CustCode,4)!="FOB_")then begin
 												vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
 												vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty;
+												
+												matrowget(IVr,IHr.Row,IVrw);
+												rowsum = IVrw.Sum;
+												if(IVr.FrRate!=0)then begin
+													rowsum = rowsum/IVr.FrRate*IVr.ToRateB1;
+												end;
+												vStores["sales_AZN:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty*rowsum/IVrw.Quant;
+												vStores["sales_AZN:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty*rowsum/IVrw.Quant;
+												
 												if(IHr.StockAffectf==1)then begin
 													vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
 													vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
@@ -273,9 +284,11 @@ begin
 				end;
 				outstring(150,0,"Продажа по рознице FOB AZN",false);
 				for(i=0;i<stores;i=i+1) begin
-					outstring(151,0,"Продано шт	" & aStores[i],false);
+					outstring(151,0,"Продано шт " & aStores[i],false);
 				end;
-				outstring(160,0,"",false);
+				for(i=0;i<stores;i=i+1) begin
+					outstring(160,0,"Продано на сумму в АЗН " & aStores[i],false);
+				end;
 				outstring(170,0,"",false);
 				outstring(180,0,"",false);
 				outstring(190,0,"",false);
@@ -325,7 +338,9 @@ begin
 					for(j=0;j<stores;j=j+1) begin
 						outstring(151,0,vStores["sales_qty:" & INr.Code & ":" & aStores[j]],false);
 					end;
-					outstring(160,0,"",false);
+					for(i=0;i<stores;i=i+1) begin
+						outstring(160,0,vStores["sales_AZN:" & INr.Code & ":" & aStores[j]],false);
+					end;
 					outstring(170,0,"",false);
 					outstring(180,0,"",false);
 					outstring(190,0,"",false);
