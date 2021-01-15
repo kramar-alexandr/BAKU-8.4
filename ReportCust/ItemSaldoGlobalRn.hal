@@ -14,6 +14,9 @@ begin
   record ConsItemVc CIr;
   boolean cfnd;
   boolean TrHs,testf;
+  integer sign;
+  record PUVc PUr;
+  record RetPUVc RetPUr;
   
   blockload(Compb);
   CIr.Code = ccINr.Code;
@@ -43,17 +46,48 @@ begin
 						while (loopkey("ArtCode",IHr,2,TrHs)) begin
 							testf = true;
 							if (IHr.ArtCode!=INr.Code) then begin TrHs = false; testf = false; end;
-							if (IHr.StockAffectf==0) then begin testf = false; end;
+							//if (IHr.StockAffectf==0) then begin testf = false; end;
+							sign = 1;
+							if(IHr.Qty<0)then begin
+								sign = -1;
+							end;
+							
 							if(testf)then begin
-								itemHasHist[ccINr.Code] = true;
-								if(IHr.TransDate<RepSpec.sStartDate)then begin
-									vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
-									vStores["sd:" & ccINr.Code] = vStores["sd:" & ccINr.Code] + IHr.Qty;
-								end else begin
-									vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
-									vStores["ed:" & ccINr.Code] = vStores["ed:" & ccINr.Code] + IHr.Qty;
+								if(IHr.StockAffectf==1)then begin
+									itemHasHist[ccINr.Code] = true;
+									if(IHr.TransDate<RepSpec.sStartDate)then begin
+										vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+										vStores["sd:" & ccINr.Code] = vStores["sd:" & ccINr.Code] + IHr.Qty;
+										
+										vStores["sd_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+										vStores["sd_cost:" & ccINr.Code] = vStores["sd_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+									end else begin
+										vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+										vStores["ed:" & ccINr.Code] = vStores["ed:" & ccINr.Code] + IHr.Qty;
+										
+										vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+										vStores["ed_cost:" & ccINr.Code] = vStores["ed_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+										
+										if(currentcompany==18)then begin
+											if(IHr.FileName=="PUVc")then begin
+												PUr.SerNr = IHr.TransNr;
+												if(readfirstmain(PUr,1,true))then begin
+													if(left(PUr.VECode,3)!="FOB")then begin
+														vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+														vStores["PU:" & ccINr.Code] = vStores["PU:" & ccINr.Code] + IHr.Qty;
+													
+														vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+														vStores["PU_cost:" & ccINr.Code] = vStores["PU:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+													end;
+												end;
+											end;
+										end;
+										
+									end;
 								end;
 							end;
+							
+							
 						end;
 						resetloop(IHr);
 						
@@ -166,9 +200,13 @@ begin
 				outstring(110,0,"Группа",false);
 				outstring(120,0,"Подгруппа",false);
 				outstring(130,0,"Категория",false);
-				outstring(140,0,"Остаток на начало периода",false);
+				outstring(141,0,"FOB валюта бренда",false);
+				outstring(142,0,"Поступило на конс/склад от поставщика шт",false);
+				outstring(143,0,"поступило итого валюта бренда",false);
+
+				outstring(148,0,"Остаток на начало периода",false);
 				for(i=0;i<stores;i=i+1) begin
-					outstring(141,0,aStores[i],false);
+					outstring(149,0,aStores[i],false);
 				end;
 				outstring(150,0,"",false);
 				outstring(160,0,"",false);
@@ -209,9 +247,13 @@ begin
 					outstring(110,0,BPICodeToName(INr.BPIGroup),false);
 					outstring(120,0,BPICodeToName(INr.BPISubGroup),false);
 					outstring(130,0,BPICodeToName(INr.BPICategory),false);
-					outstring(140,0,vStores["sd:" & INr.Code],false);
+					outstring(141,0,INr.LastPurchPrice2,false);
+					outstring(142,0,vStores["PU:" & INr.Code],false);
+					outstring(143,0,vStores["PU_cost:" & INr.Code],false);
+					
+					outstring(148,0,vStores["sd:" & INr.Code],false);
 					for(j=0;j<stores;j=j+1) begin
-						outstring(141,0,vStores["sd:" & INr.Code & ":" & aStores[j]],false);
+						outstring(149,0,vStores["sd:" & INr.Code & ":" & aStores[j]],false);
 					end;
 					outstring(150,0,"",false);
 					outstring(160,0,"",false);
