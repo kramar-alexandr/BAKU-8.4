@@ -6,7 +6,7 @@ SetLangMode(LangRussian,"RUS",0);
 
 global procedure ProceedSendTaxNPTSOClass_Remote(var area req, var record IVVc IVr)
 begin
-	Integer wn,mwn,rownr,mtrw,i,j,k;
+	Integer wn,mwn,rownr,mtrw,i,j,k,ii;
   record RcVc RepSpec;
   record UserVc Userr;
   row IVVc IVrw;
@@ -45,9 +45,17 @@ begin
 											For(i=0;i<mtrw;i=i+1) begin
 												matrowget(IVr,i,IVrw);
 												
-												if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment or IVrw.stp==kInvoiceRowTypePrepayment)then begin
+												if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment)then begin
 													loyalty = loyalty + IVrw.Sum;
 												end;
+												if(IVrw.stp==kInvoiceRowTypePrepayment)then begin
+													if(IVr.CurncyCode=="AZN")then begin
+														loyalty = loyalty + IVrw.Sum;
+													end else begin
+														loyalty = loyalty + MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+													end;
+												end;
+												
 												if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
 													bonus = bonus + IVrw.Sum;
 												end;
@@ -98,9 +106,10 @@ begin
 													end;
 												
 												
-													if(i>0) then begin
+													if(ii>0) then begin
 														addtexttoarea(",",req);
 													end;
+													ii = ii + 1;
 													addtexttoarea("{",req);
 													addtexttoarea("\"itemName\":" & "\"" & NormalizeStrToJson(IVrw.Spec) & "\",",req);
 													addtexttoarea("\"itemCodeType\":3,",req);
@@ -120,9 +129,10 @@ begin
 												end;
 												
 												if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
-													if(i>0) then begin
+													if(ii>0) then begin
 														addtexttoarea(",",req);
 													end;
+													ii = ii + 1;
 													addtexttoarea("{",req);
 													addtexttoarea("\"itemName\":" & "\"" & "Gift Voucher" & "\",",req);
 													addtexttoarea("\"itemCodeType\":4,",req);
@@ -145,7 +155,7 @@ begin
 												
 											end; 
 											addtexttoarea("]," & chr(13) & chr(10),req);
-											tstr = ValToString(IVr.BaseSum4,M45Val,"",".",0);
+											tstr = ValToString(vatsum,M45Val,"",".",0);
 											addtexttoarea("\"sum\":" & tstr & "," & chr(13) & chr(10),req);
 									
 											
@@ -839,5 +849,120 @@ begin
 	addtexttoarea("}" & chr(13) & chr(10),req);
 	addtexttoarea("}" & chr(13) & chr(10),req);
 	
+return;
+end;
+
+
+global procedure RA_ProceedFiscalAvance(record RcVc RepSpec, var area req)
+begin
+	Integer wn,mwn,rownr,mtrw,i,j,k;
+  record UserVc Userr;
+  row IVVc IVrw;
+  Area reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId, parentDocument;
+  json jsresponse;
+  val cash, terminal, discount,loyalty,bonus,vatsum,credit;
+  record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:39:37 PM
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	area logarea,biglogarea,tmpar1,tmpar2;
+	vector val vatperc;
+	array string 50 vtags;
+	
+	cash = 0.0;
+	terminal = 0.0;
+	logtext(0,"RA_ProceedFiscalAvance");
+	
+	addtexttoarea("{" & chr(13) & chr(10),req);
+			addtexttoarea("\"requestData\":{" & chr(13) & chr(10),req);
+					addtexttoarea("\"tokenData\":{" & chr(13) & chr(10),req);
+							addtexttoarea("\"parameters\":{" & chr(13) & chr(10),req);
+									addtexttoarea("\"doc_type\":\"sale\"," & chr(13) & chr(10),req);
+									addtexttoarea("\"data\":{" & chr(13) & chr(10),req);
+											addtexttoarea("\"cashier\":\"" & CurrentUser & "\"," & chr(13) & chr(10),req);
+											addtexttoarea("\"currency\":\"AZN\"," & chr(13) & chr(10),req);
+											addtexttoarea("\"items\":[" & chr(13) & chr(10),req);
+											
+				
+											terminal = RepSpec.vals1;
+											cash = RepSpec.vals0;
+											cash = AbsoluteVal(cash);
+											terminal = AbsoluteVal(terminal);
+
+											addtexttoarea("{",req);
+											addtexttoarea("\"itemName\":" & "\"" & "Advance Payment" & "\",",req);
+											addtexttoarea("\"itemCodeType\":4,",req);
+											addtexttoarea("\"itemCode\":" & "\"" & "AP" & "\",",req);
+											addtexttoarea("\"itemQuantityType\":0,",req);
+											tstr = ValToString(1,M45Val,"",".",0);
+											addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
+											tstr = ValToString(cash+terminal,M45Val,"",".",0);
+											addtexttoarea("\"itemPrice\":" & tstr & ",",req);
+											tstr = ValToString(cash+terminal,M45Val,"",".",0);
+											addtexttoarea("\"itemSum\":" & tstr & ",",req);
+											addtexttoarea("\"discount\":0.0,",req);
+											addtexttoarea("\"itemVatPercent\":0",req);
+											addtexttoarea("}",req);
+											vatsum = vatsum + cash+terminal;
+											vatperc["0.0"] = vatsum;												
+												
+											addtexttoarea("]," & chr(13) & chr(10),req);
+											tstr = ValToString(cash+terminal,M45Val,"",".",0);
+											addtexttoarea("\"sum\":" & tstr & "," & chr(13) & chr(10),req);
+									
+											
+											if(cash>0) then begin
+												tstr = ValToString(cash,M45Val,"",".",0);
+												addtexttoarea("\"cashSum\":" & tstr & "," & chr(13) & chr(10),req);
+											end else begin
+												addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
+											end;
+											
+											if(terminal>0) then begin
+												tstr = ValToString(terminal,M45Val,"",".",0);
+												addtexttoarea("\"cashlessSum\":" & tstr & "," & chr(13) & chr(10),req);
+											end else begin
+												addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
+											end;
+																						
+											getVectorTags(vatperc,vtags);
+											
+											addtexttoarea("\"vatAmounts\":[" & chr(13) & chr(10),req);
+											for(k=0;k<vtags.length;k=k+1)begin
+												if(k>0)then begin
+													addtexttoarea("," & chr(13) & chr(10),req);
+												end;
+												addtexttoarea("{" & chr(13) & chr(10),req);
+												tstr = ValToString(vatperc[vtags[k]],M45Val,"",".",0);
+												if(vatperc[vtags[k]]!=0)then begin
+													addtexttoarea("\"vatSum\":" & tstr & "",req);
+												end else begin
+													addtexttoarea("\"vatSum\":" & "0" & "",req);
+												end;
+												if(vtags[k]!="0.0")then begin
+													addtexttoarea(",\"vatPercent\":" & vtags[k],req);
+												end;
+												addtexttoarea("}" & chr(13) & chr(10),req);	
+											end;
+											addtexttoarea("]" & chr(13) & chr(10),req);
+											
+											
+									addtexttoarea("}" & chr(13) & chr(10),req);
+							addtexttoarea("}," & chr(13) & chr(10),req);
+							addtexttoarea("\"operationId\":\"createDocument\"," & chr(13) & chr(10),req);
+							addtexttoarea("\"version\":1" & chr(13) & chr(10),req);
+					addtexttoarea("}," & chr(13) & chr(10),req);
+					addtexttoarea("\"checkData\":{" & chr(13) & chr(10),req);
+							addtexttoarea("\"payment_change\":0.0," & chr(13) & chr(10),req);
+							addtexttoarea("\"check_type\":1" & chr(13) & chr(10),req);
+					addtexttoarea("}" & chr(13) & chr(10),req);
+			addtexttoarea("}" & chr(13) & chr(10),req);
+	addtexttoarea("}" & chr(13) & chr(10),req);
+
+  writeareatofile(req,"SendRA_ProceedFiscalAvance.txt",1);
+
 return;
 end;

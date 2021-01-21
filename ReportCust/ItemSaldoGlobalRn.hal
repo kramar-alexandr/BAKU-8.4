@@ -34,7 +34,7 @@ procedure CollectDataForOSGlobal(record RcVc RepSpec,record INVc ccINr,var array
 begin
 	record CompaniesBlock Compb;
   row CompaniesBlock Comprw;
-  integer i,CompQty,k;
+  integer i,CompQty,k,j;
   record ItemHistVc IHr;
   record INVc INr;
   record ConsItemVc CIr;
@@ -48,6 +48,9 @@ begin
   record RetVc Retr;
   row IVVc IVrw;
   val rowsum;
+  record OSGlobalSettBlock OSGSr;
+  row OSGlobalSettBlock OSGSrw;
+  vector boolean vLocFlag;
   
   blockload(Compb);
   CIr.Code = ccINr.Code;
@@ -56,144 +59,150 @@ begin
 		CompQty = matrowcnt(Compb);
 		for(i=0;i<CompQty;i=i+1) begin
 			matrowget(Compb,i,Comprw);
+			
 			if(Comprw.ActiveStatus==0) then begin
 				setcompany(i+1,false);
-				INr.Code = CIr.LocCode;
-				if(currentcompany==18)then begin
-					INr.Code = ccINr.Code;
+				blockload(OSGSr);
+				clearvector(vLocFlag);
+				for(j=0;j<matrowcnt(OSGSr);j=j+1)begin
+					matrowget(OSGSr,j,OSGSrw);
+					vLocFlag[OSGSrw.Location] = true;
 				end;
-				if(readfirstmain(INr,1,true))then begin
-					if(INr.BPIBrand==CIr.BrandCode)then begin
-						for(k=0;k<aStores.length;k=k+1)begin
-							if(aStores[k]==Comprw.CompName)then begin
-								cfnd = true;
-							end;
-						end;
-						if(cfnd==false)then begin
-							aStores[aStores.length] = Comprw.CompName;
-						end;
-						
-						
-						TrHs = true;
-						IHr.ArtCode = INr.Code;
-						IHr.TransDate = stringtodate("1/1/2013");
-						while (loopkey("ArtCode",IHr,2,TrHs)) begin
-							testf = true;
-							if (IHr.ArtCode!=INr.Code) then begin TrHs = false; testf = false; end;
-							//if (IHr.StockAffectf==0) then begin testf = false; end;
-							sign = 1;
-							if(IHr.Qty<0)then begin
-								sign = -1;
-							end;
-							
-							if(testf)then begin
-								//SALES
-								if(IHr.TransDate>=RepSpec.sStartDate and IHr.TransDate<=RepSpec.sEndDate)then begin
-									if(IHr.FileName=="IVVc")then begin
-										IVr.SerNr = IHr.TransNr;
-										if(readfirstmain(IVr,1,true))then begin
-											if(left(IVr.CustCode,4)!="FOB_")then begin
-												
-												if(sign==-1)then begin
-													vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
-													vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty;
-													matrowget(IVr,IHr.Row,IVrw);
-													rowsum = IVrw.Sum;
-													if(IVr.FrRate!=0)then begin
-														rowsum = rowsum/IVr.FrRate*IVr.ToRateB1;
-													end;
-													vStores["sales_AZN:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_AZN:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty*rowsum/IVrw.Quant;
-													vStores["sales_AZN:" & ccINr.Code] = vStores["sales_AZN" & ccINr.Code] - IHr.Qty*rowsum/IVrw.Quant;
-													
-													
-													vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] = vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty*IVrw.vRebate;
-													vStores["midrebate:" & ccINr.Code] = vStores["midrebate" & ccINr.Code] - IHr.Qty*IVrw.vRebate;
-												end else begin
-													vStores["return_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["return_qty:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
-													vStores["return_qty:" & ccINr.Code] = vStores["return_qty" & ccINr.Code] + IHr.Qty;
-													matrowget(IVr,IHr.Row,IVrw);
-													rowsum = IVrw.Sum;
-													if(IVr.FrRate!=0)then begin
-														rowsum = rowsum/IVr.FrRate*IVr.ToRateB1;
-													end;
-													vStores["return_AZN:" & ccINr.Code & ":" & Comprw.CompName] = vStores["return_AZN:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty*rowsum/IVrw.Quant;
-													vStores["return_AZN:" & ccINr.Code] = vStores["return_AZN" & ccINr.Code] + IHr.Qty*rowsum/IVrw.Quant;
-													
-													vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] = vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty*IVrw.vRebate;
-													vStores["midrebate:" & ccINr.Code] = vStores["midrebate" & ccINr.Code] + IHr.Qty*IVrw.vRebate;
-												end;
-												
-												
-												if(IHr.StockAffectf==1)then begin
-													if(sign==-1)then begin
-														vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
-														vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
-													end else begin
-														vStores["return_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["return_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPrice*sign;
-														vStores["return_cost:" & ccINr.Code] = vStores["return_cost:" & ccINr.Code] + IHr.TotCostPrice*sign;
-													end;
-												end else begin
-													FindFIFODataCostForNotUpdStockIV(ccINr,INr,IVr,IHr,vStores,Comprw.CompName,sign);
-												end;
-											end;
-										end;
-									end;
-								end;
-								if(IHr.StockAffectf==1)then begin
-									itemHasHist[ccINr.Code] = true;
-									if(IHr.TransDate<RepSpec.sStartDate)then begin
-										vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
-										vStores["sd:" & ccINr.Code] = vStores["sd:" & ccINr.Code] + IHr.Qty;
-										
-										vStores["sd_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
-										vStores["sd_cost:" & ccINr.Code] = vStores["sd_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
-									end else begin
-										vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
-										vStores["ed:" & ccINr.Code] = vStores["ed:" & ccINr.Code] + IHr.Qty;
-										
-										vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
-										vStores["ed_cost:" & ccINr.Code] = vStores["ed_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
-										
-										
-										if(currentcompany==18)then begin
-											if(IHr.FileName=="PUVc")then begin
-												PUr.SerNr = IHr.TransNr;
-												if(readfirstmain(PUr,1,true))then begin
-													if(left(PUr.VECode,4)!="FOB_")then begin
-														vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
-														vStores["PU:" & ccINr.Code] = vStores["PU:" & ccINr.Code] + IHr.Qty;
-													
-														vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
-														vStores["PU_cost:" & ccINr.Code] = vStores["PU_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
-													end;
-												end;
-											end;
-											if(IHr.FileName=="RetPUVc")then begin
-												RetPUr.SerNr = IHr.TransNr;
-												if(readfirstmain(RetPUr,1,true))then begin
-													if(left(RetPUr.VECode,4)!="FOB_")then begin
-														vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
-														vStores["PU:" & ccINr.Code] = vStores["PU:" & ccINr.Code] + IHr.Qty;
-													
-														vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
-														vStores["PU_cost:" & ccINr.Code] = vStores["PU_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
-													end;
-												end;
-											end;
-										end;
-										
-									end;
-								end;
-							end;
-						end;
-						resetloop(IHr);
+				if(matrowcnt(OSGSr)>0)then begin
+					INr.Code = CIr.LocCode;
+					if(currentcompany==18)then begin
+						INr.Code = ccINr.Code;
 					end;
-				end;				
-				vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] = vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] / (vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - vStores["return_qty:" & ccINr.Code & ":" & Comprw.CompName]);								
+					if(readfirstmain(INr,1,true))then begin
+						if(INr.BPIBrand==CIr.BrandCode)then begin
+							for(k=0;k<aStores.length;k=k+1)begin
+								if(aStores[k]==Comprw.CompName)then begin
+									cfnd = true;
+								end;
+							end;
+							if(cfnd==false)then begin
+								aStores[aStores.length] = Comprw.CompName;
+							end;
+						
+						
+							TrHs = true;
+							IHr.ArtCode = INr.Code;
+							IHr.TransDate = stringtodate("1/1/2013");
+							while (loopkey("ArtCode",IHr,2,TrHs)) begin
+								testf = true;
+								if (IHr.ArtCode!=INr.Code) then begin TrHs = false; testf = false; end;
+								if (vLocFlag[IHr.Location]==false) then begin testf = false; end;
+								//if (IHr.StockAffectf==0) then begin testf = false; end;
+								sign = 1;
+								if(IHr.Qty<0)then begin
+									sign = -1;
+								end;
+							
+								if(testf)then begin
+									//SALES
+									if(IHr.TransDate>=RepSpec.sStartDate and IHr.TransDate<=RepSpec.sEndDate)then begin
+										if(IHr.FileName=="IVVc")then begin
+											IVr.SerNr = IHr.TransNr;
+											if(readfirstmain(IVr,1,true))then begin
+												if(left(IVr.CustCode,4)!="FOB_")then begin
+												
+													if(sign==-1)then begin
+														vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty;
+														vStores["sales_qty:" & ccINr.Code] = vStores["sales_qty" & ccINr.Code] - IHr.Qty;
+														matrowget(IVr,IHr.Row,IVrw);
+														rowsum = IVrw.Sum;
+														if(IVr.FrRate!=0)then begin
+															rowsum = rowsum/IVr.FrRate*IVr.ToRateB1;
+														end;
+														vStores["sales_AZN:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_AZN:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty*rowsum/IVrw.Quant;
+														vStores["sales_AZN:" & ccINr.Code] = vStores["sales_AZN" & ccINr.Code] - IHr.Qty*rowsum/IVrw.Quant;
+													
+													
+														vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] = vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] - IHr.Qty*IVrw.vRebate;
+													end else begin
+														vStores["return_qty:" & ccINr.Code & ":" & Comprw.CompName] = vStores["return_qty:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+														vStores["return_qty:" & ccINr.Code] = vStores["return_qty" & ccINr.Code] + IHr.Qty;
+														matrowget(IVr,IHr.Row,IVrw);
+														rowsum = IVrw.Sum;
+														if(IVr.FrRate!=0)then begin
+															rowsum = rowsum/IVr.FrRate*IVr.ToRateB1;
+														end;
+														vStores["return_AZN:" & ccINr.Code & ":" & Comprw.CompName] = vStores["return_AZN:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty*rowsum/IVrw.Quant;
+														vStores["return_AZN:" & ccINr.Code] = vStores["return_AZN" & ccINr.Code] + IHr.Qty*rowsum/IVrw.Quant;
+													
+														//vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] = vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty*IVrw.vRebate;
+													end;
+												
+												
+													if(IHr.StockAffectf==1)then begin
+														if(sign==-1)then begin
+															vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sales_cost:" & ccINr.Code & ":" & Comprw.CompName] - IHr.TotCostPrice*sign;
+															vStores["sales_cost:" & ccINr.Code] = vStores["sales_cost:" & ccINr.Code] - IHr.TotCostPrice*sign;
+														end else begin
+															vStores["return_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["return_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPrice*sign;
+															vStores["return_cost:" & ccINr.Code] = vStores["return_cost:" & ccINr.Code] + IHr.TotCostPrice*sign;
+														end;
+													end else begin
+														FindFIFODataCostForNotUpdStockIV(ccINr,INr,IVr,IHr,vStores,Comprw.CompName,sign);
+													end;
+												end;
+											end;
+										end;
+									end;
+									if(IHr.StockAffectf==1)then begin
+										itemHasHist[ccINr.Code] = true;
+										if(IHr.TransDate<RepSpec.sStartDate)then begin
+											vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+											vStores["sd:" & ccINr.Code] = vStores["sd:" & ccINr.Code] + IHr.Qty;
+										
+											vStores["sd_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["sd_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+											vStores["sd_cost:" & ccINr.Code] = vStores["sd_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+										end else begin
+											vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+											vStores["ed:" & ccINr.Code] = vStores["ed:" & ccINr.Code] + IHr.Qty;
+										
+											vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["ed_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+											vStores["ed_cost:" & ccINr.Code] = vStores["ed_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+										
+										
+											if(currentcompany==18)then begin
+												if(IHr.FileName=="PUVc")then begin
+													PUr.SerNr = IHr.TransNr;
+													if(readfirstmain(PUr,1,true))then begin
+														if(left(PUr.VECode,4)!="FOB_")then begin
+															vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+															vStores["PU:" & ccINr.Code] = vStores["PU:" & ccINr.Code] + IHr.Qty;
+													
+															vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+															vStores["PU_cost:" & ccINr.Code] = vStores["PU_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+														end;
+													end;
+												end;
+												if(IHr.FileName=="RetPUVc")then begin
+													RetPUr.SerNr = IHr.TransNr;
+													if(readfirstmain(RetPUr,1,true))then begin
+														if(left(RetPUr.VECode,4)!="FOB_")then begin
+															vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU:" & ccINr.Code & ":" & Comprw.CompName] + IHr.Qty;
+															vStores["PU:" & ccINr.Code] = vStores["PU:" & ccINr.Code] + IHr.Qty;
+													
+															vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] = vStores["PU_cost:" & ccINr.Code & ":" & Comprw.CompName] + IHr.TotCostPriceCurncy*sign;
+															vStores["PU_cost:" & ccINr.Code] = vStores["PU_cost:" & ccINr.Code] + IHr.TotCostPriceCurncy*sign;
+														end;
+													end;
+												end;
+											end;
+										
+										end;
+									end;
+								end;
+							end;
+							resetloop(IHr);
+						end;
+					end;		
+					vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] = vStores["midrebate:" & ccINr.Code & ":" & Comprw.CompName] / (vStores["sales_qty:" & ccINr.Code & ":" & Comprw.CompName]/* - vStores["return_qty:" & ccINr.Code & ":" & Comprw.CompName]*/);								
+				end;		
 			end;
-		end;
-		vStores["midrebate:" & ccINr.Code] = vStores["midrebate" & ccINr.Code] / (vStores["sales_qty" & ccINr.Code]-vStores["return_qty" & ccINr.Code]);
-		
+		end;		
 	end;
 	
 	setcompany(18,false);
@@ -320,9 +329,9 @@ begin
 					outs
 					tring(171,0,"Возврат на сумму в АЗН " & aStores[i],false);
 				end;*/
-				outstring(240,0,"Средняя скидка",false);
+				//outstring(240,0,"Средняя скидка",false);
 				for(i=0;i<stores;i=i+1) begin
-					outstring(241,0,aStores[i],false);
+					outstring(241,0,"Средняя скидка " & aStores[i],false);
 				end;
 				outstring(250,0,"Остаток на конец периода",false);
 				for(i=0;i<stores;i=i+1) begin
@@ -375,7 +384,7 @@ begin
 					for(j=0;j<stores;j=j+1) begin
 						outstring(171,0,vStores["return_AZN:" & INr.Code & ":" & aStores[j]],false);
 					end;*/
-					outstring(250,0,vStores["midrebate:" & INr.Code] + vStores["ed:" & INr.Code],false);
+					//outstring(250,0,vStores["midrebate:" & INr.Code] + vStores["ed:" & INr.Code],false);
 					for(j=0;j<stores;j=j+1) begin
 						outstring(251,0,vStores["midrebate:" & INr.Code & ":" & aStores[j]],false);
 					end;
