@@ -8041,6 +8041,193 @@ end;
 
 
 
+global updating procedure CreateECAZGlobalItem(string code, string  brand, string price, string name, val qty, boolean namef, string dealer_pr, boolean dealpf, string rebate, boolean rebf, longint ExtProvRegCode)
+begin
+	record GlobalItemVc GIr;
+	row GlobalItemVc GIrw;
+	record BTRxBrandVc BtrxBrndr, oldBrandr;
+	boolean ExtPrBrandf, TrHs;
+	string 255 OldCode, ExistBRNdCode;
+	longint i;
+	ExistBRNdCode = "";
+	logtext(0,"CreateGlobalItem Ext. Pr")
+	GIr.Code =  code;
+	if(ReadFirstMain(GIr,1,true)) then begin
+		Logtext(0,GIr.Code & " found");
+		if(GIr.Price != StringToVal(price,M4Val)) then begin
+			GIr.Price = StringToVal(price,M4Val);
+			RecordStore(GIr,true);
+		end;
+		if(GIr.DealPrice != StringToVal(dealer_pr,M4Val) and dealpf) then begin
+			GIr.DealPrice = StringToVal(dealer_pr,M4Val);
+			RecordStore(GIr,true);
+		end;
+		if(GIr.Rebate != StringToVal(rebate,M4Val) and rebf) then begin
+			GIr.Rebate = StringToVal(rebate,M4Val);
+			RecordStore(GIr,true);
+		end;
+		ExtPrBrandf = false;
+		BtrxBrndr.Name = brand;
+		TrHs = true;
+		while (loopkey("Name",BtrxBrndr,1,TrHs)) begin
+			if (BtrxBrndr.Name != brand) then begin TrHs = false; end;
+			if (TrHs) then begin
+				if (left(BtrxBrndr.Code,4)=="MXBR") then begin
+					ExtPrBrandf = true;
+					ExistBRNdCode = BtrxBrndr.Code;
+				end;
+			end;
+		end;
+		if (!ExtPrBrandf) then begin
+			oldBrandr.Code = "MXBR9999";
+			TrHs = true;
+			while (LoopBackKey("Code",oldBrandr,1,TrHs)) begin
+				if (left(oldBrandr.Code,4)!="MXBR") then begin TrHs = false; end;
+				if (TrHs) then begin
+					OldCode = oldBrandr.Code;
+					TrHs = false;
+				end;
+			end;
+			ResetLoop(oldBrandr);
+			if(blank(OldCode))then begin OldCode = "MXBR0000"; end;
+			recordnew(BtrxBrndr);
+			NextCode(OldCode,BtrxBrndr.Code);
+			BtrxBrndr.Name = brand;
+			RecordStore (BtrxBrndr,true);
+			ExistBRNdCode = BtrxBrndr.Code;
+		end;
+		if(GIr.BPIBrand!=ExistBRNdCode) then begin
+			GIr.BPIBrand = ExistBRNdCode;
+			RecordStore(GIr,true);
+		end;
+		// if(gethour(currenttime)>=7 and getminute(currenttime)<=8/* and fileexists("demoserver")*/)then begin
+			if (matrowcnt(GIr)<1) then begin
+				GIrw.Location = "MAIN";
+				GIrw.Instock = qty;
+				matrowput (GIr,0,GIrw);
+			end;
+			for (i=0;i<matrowcnt(GIr);i=i+1) begin
+				matrowget (GIr,i,GIrw);
+				GIrw.Instock = qty;
+				matrowput (GIr,i,GIrw);
+			end;
+			GIr.ExtProwItRegulations = ExtProvRegCode;
+			RecordStore(GIr,true);
+		// end;
+		if (blank(GIr.BPIBrand) and nonblank(brand)) then begin
+			ExtPrBrandf = false;
+			BtrxBrndr.Name = brand;
+			TrHs = true;
+			while (loopkey("Name",BtrxBrndr,1,TrHs)) begin
+				if (BtrxBrndr.Name != brand) then begin TrHs = false; end;
+				if (TrHs) then begin
+					if (left(BtrxBrndr.Code,4)=="MXBR") then begin
+						ExtPrBrandf = true;
+						ExistBRNdCode = BtrxBrndr.Code;
+					end;
+				end;
+			end;
+			if (!ExtPrBrandf) then begin
+				oldBrandr.Code = "MXBR9999";
+				TrHs = true;
+				while (LoopBackKey("Code",oldBrandr,1,TrHs)) begin
+					if (left(oldBrandr.Code,4)!="MXBR") then begin TrHs = false; end;
+					if (TrHs) then begin
+						OldCode = oldBrandr.Code;
+						TrHs = false;
+					end;
+				end;
+				ResetLoop(oldBrandr);
+				if(blank(OldCode))then begin OldCode = "MXBR0000"; end;
+				recordnew(BtrxBrndr);
+				NextCode(OldCode,BtrxBrndr.Code);
+				BtrxBrndr.Name = brand;
+				RecordStore (BtrxBrndr,true);
+				ExistBRNdCode = BtrxBrndr.Code;
+			end;
+			GIr.BPIBrand = ExistBRNdCode;
+			if (namef) then begin
+				GIr.HansaName = name;
+			end;
+
+			if (RecordStore(GIr,true)) then begin
+				logtext(0,"Chicco Global Item updated: " & GIr.Code);
+			end;
+		end;
+	end else begin
+		if (namef) then begin
+			if (nonblank(brand)) then begin
+				ExtPrBrandf = false;
+				BtrxBrndr.Name = brand;
+				TrHs = true;
+				while (loopkey("Name",BtrxBrndr,1,TrHs)) begin
+					if (BtrxBrndr.Name != brand) then begin TrHs = false; end;
+					if (TrHs) then begin
+						if (left(BtrxBrndr.Code,4)=="MXBR") then begin
+							ExtPrBrandf = true;
+							ExistBRNdCode = BtrxBrndr.Code;
+						end;
+					end;
+				end;
+				if (!ExtPrBrandf) then begin
+					oldBrandr.Code = "MXBR9999";
+					TrHs = true;
+					while (LoopBackKey("Code",oldBrandr,1,TrHs)) begin
+						if (left(oldBrandr.Code,4)!="MXBR") then begin TrHs = false; end;
+						if (TrHs) then begin
+							OldCode = oldBrandr.Code;
+							TrHs = false;
+						end;
+					end;
+					ResetLoop(oldBrandr);
+					if(blank(OldCode))then begin OldCode = "MXBR0000"; end;
+					recordnew(BtrxBrndr);
+					NextCode(OldCode,BtrxBrndr.Code);
+					BtrxBrndr.Name = brand;
+					RecordStore (BtrxBrndr,true);
+					ExistBRNdCode = BtrxBrndr.Code;
+				end;
+			end;
+			recordNew(GIr);
+			GIr.Code = code;
+			Logtext(0,GIr.Code & " not found");
+			GIr.HansaCode = code;
+			GIr.ExtProwItRegulations = ExtProvRegCode;
+			GIr.Brand = brand;
+			GIr.BPIBrand = ExistBRNdCode;
+			GIr.Price =  StringToVal(price,M4Val);
+			if(dealpf) then begin
+				GIr.DealPrice = StringToVal(dealer_pr,M4Val);
+				RecordStore(GIr,true);
+			end;
+			if(rebf) then begin
+				GIr.Rebate = StringToVal(rebate,M4Val);
+				RecordStore(GIr,true);
+			end;
+			GIr.Name = name;
+			GIr.HansaName = name;
+			if (matrowcnt(GIr)<1) then begin
+				GIrw.Location = "MAIN";
+				GIrw.Instock = qty;
+				matrowput (GIr,0,GIrw);
+			end;
+			for (i=0;i<matrowcnt(GIr);i=i+1) begin
+				matrowget (GIr,i,GIrw);
+				GIrw.Instock = qty;
+				matrowput (GIr,i,GIrw);
+			end;
+			if (RecordStore(GIr,true)) then begin
+				logtext(0,"Ext. Pr Global Item created: " & GIr.Code);
+			end else begin
+				logtext(0,"Ext. Pr Global Item not created: " & GIr.Code);
+			end;
+		end;
+	end;
+return;
+end;
+
+
+
 
 global updating procedure CreateTPGlobalItem(string code, string  TPCode, string  MainName, array string aHeaders, vector string vParams)
 begin
@@ -8349,8 +8536,8 @@ begin
 		name = JSONGet(jsresponse,"data[0]/["  & i & "]/type_ru");
 		code = JSONGet(jsresponse,"data[0]/["  & i & "]/code");
 		qty = JSONGet(jsresponse,"data[0]/["  & i & "]/stock");
-		if(nonblank(code)) then begin 
-			queued.CreateExtProvGlobalItem("ECAZ" & code,brand,price,name,1,"",0,"",0,16);
+		if(nonblank(code) and  StringToVal(qty,M4Val) > 0) then begin 
+			queued.CreateECAZGlobalItem("ECAZ" & code,brand,price,name,StringToVal(qty,M4Val),1,"",0,"",0,16);
 			MilliSleep(50);
 			if (StringToVal(qty,M4Val)>0) then begin
 				CodeInstf["ECAZ" & code] = true;
