@@ -8313,6 +8313,73 @@ end;
 
 
 
+
+global webpublic procedure WebCollectXMLECAZMagItems()
+begin
+	record ORVc ORr;
+	area text,replyPr;
+	string 255 tstr,code,brand,price,name,paramName,parseString,coding,qty,normalprice;
+	integer i,posa,cnt,paramCnt,j,countstr,s;
+	boolean codeCheck, TrHs;
+	vector boolean CodeInstf;
+	record GlobalItemVc GIr;
+	json jsresponse;
+	val quant;
+	
+	SendWebRequest("api.ecaz.az",443,-1,true,"GET","/services/product/list/","","",false,text,replyPr,5000);
+	logtext(0,"start");
+	logtext(0,GetAreaLength	(replyPr));
+
+	jsresponse = ParseJSONArea(replyPr);
+	posa = 0;
+	cnt = JSONCountChildren(jsresponse,"data");
+	// cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
+	logtext(0,cnt);
+	for(i=0;i<cnt;i=i+1) begin
+		normalprice = "";
+		brand = JSONGet(jsresponse,"data[0]/["  & i & "]/model_name");
+		price = JSONGet(jsresponse,"data[0]/["  & i & "]/price");
+		for (j=0;j<len(price);j=j+1) begin
+			if(Mid(price,j,1)==",") then begin
+				normalprice = normalprice & ".";
+			end else begin
+				normalprice = normalprice & Mid(price,j,1);
+			end;
+		end;
+		price = normalprice;
+		name = JSONGet(jsresponse,"data[0]/["  & i & "]/type_ru");
+		code = JSONGet(jsresponse,"data[0]/["  & i & "]/code");
+		qty = JSONGet(jsresponse,"data[0]/["  & i & "]/stock");
+		if(nonblank(code)) then begin 
+			queued.CreateExtProvGlobalItem("ECAZ" & code,brand,price,name,1,"",0,"",0,16);
+			MilliSleep(50);
+			if (StringToVal(qty,M4Val)>0) then begin
+				CodeInstf["ECAZ" & code] = true;
+			end;
+		end;
+	end;
+	GIr.Code = "ECAZ00000000001";
+	TrHs = true;
+	while (loopMain(Gir,1,TrHs)) begin
+		if (left(GIr.Code,4)!="ECAZ") then begin TrHs = false; end;
+		if (TrHs and !CodeInstf[GIr.Code]) then begin
+			queued.Instock0(GIr.Code);
+			MilliSleep(50);
+		end;
+	end;
+	logtext(0,"end");
+	writeareatofile(text,"areafromrequest.txt",0);
+
+return;
+end;
+
+
+
+
+
+
+
+
 global webpublic procedure WebGetOfferIDAndArtCodeFromXML()
 begin
 	record ORVc ORr;
