@@ -34,7 +34,7 @@ procedure CollectDataForOSGlobal(record RcVc RepSpec,record INVc ccINr,var array
 begin
 	record CompaniesBlock Compb;
   row CompaniesBlock Comprw;
-  integer i,CompQty,k;
+  integer i,CompQty,k,j;
   record ItemHistVc IHr;
   record INVc INr;
   record ConsItemVc CIr;
@@ -48,6 +48,9 @@ begin
   record RetVc Retr;
   row IVVc IVrw;
   val rowsum;
+  record OSGlobalSettBlock OSGSr;
+  row OSGlobalSettBlock OSGSrw;
+  vector boolean vLocFlag;
   
   blockload(Compb);
   CIr.Code = ccINr.Code;
@@ -56,7 +59,13 @@ begin
 		CompQty = matrowcnt(Compb);
 		for(i=0;i<CompQty;i=i+1) begin
 			matrowget(Compb,i,Comprw);
-			if(Comprw.ActiveStatus==0) then begin
+			blockload(OSGSr);
+			clearvector(vLocFlag);
+			for(j=0;j<matrowcnt(OSGSr);j=j+1)begin
+				matrowget(OSGSr,j,OSGSrw);
+				vLocFlag[OSGSrw.Location] = true;
+			end;
+			if(Comprw.ActiveStatus==0 and matrowcnt(OSGSr)>0) then begin
 				setcompany(i+1,false);
 				INr.Code = CIr.LocCode;
 				if(currentcompany==18)then begin
@@ -80,6 +89,7 @@ begin
 						while (loopkey("ArtCode",IHr,2,TrHs)) begin
 							testf = true;
 							if (IHr.ArtCode!=INr.Code) then begin TrHs = false; testf = false; end;
+							if (vLocFlag[IHr.Location]==false) then begin testf = false; end;
 							//if (IHr.StockAffectf==0) then begin testf = false; end;
 							sign = 1;
 							if(IHr.Qty<0)then begin
