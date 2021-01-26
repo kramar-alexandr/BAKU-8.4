@@ -1101,7 +1101,7 @@ begin
 	array string 255 ArtCodes, ItemBrands;
 	string 255 strlc,HansaArtCode,Store,strlc2, rowkey, inwarn, war, ExtPrFullName;
 	integer pos, pos2, p, maxp, qtyItpos, rownr, allitemqty, sbrqty, extPrCnt;
-	boolean testf,TrHs,Insertf,warf,chsum,ECStItf;
+	boolean testf,TrHs,Insertf,warf,chsum,ECStItf,LoyCardValidNrf;
 	record INVc INr;
 	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock, PriorityStock, vPrefExt;
 	record GlobalItemVc GIr, GI2r, GI3r;
@@ -1406,6 +1406,8 @@ begin
 		end;
 	end;
 	
+	LoyCardValidNrf = false;
+	
 	BlockLoad(Compb);
 	rwcnt = MatRowCnt(Compb);
 	for (c=1;c<=rwcnt;c=c+1)begin
@@ -1429,11 +1431,13 @@ begin
 				if (nonblank(ORr.ECLoyaltyCard)) then begin
 					LoyCardr.CustCode = ORr.ECLoyaltyCard;
 					if (ReadFirstKey("CustCode",LoyCardr,1,true)) then begin
+						LoyCardValidNrf = true;
 						LocORr.CustCode = LoyCardr.CustCode;
 						warf = PasteCustInOrder(LocORr,LocORr.CustCode,LocORr.CustCode,inwarn,war);
 					end else begin
 						LoyCardr.SerNr = ORr.ECLoyaltyCard;
 						if (ReadFirstMain(LoyCardr,1,true)) then begin
+							LoyCardValidNrf = true;
 							LocORr.CustCode = LoyCardr.CustCode;
 							warf = PasteCustInOrder(LocORr,LocORr.CustCode,LocORr.CustCode,inwarn,war);
 						end else begin
@@ -1553,7 +1557,11 @@ begin
 				allitemqty = allitemqty + 1;
 				ORrw.Spec = LocORrw.Spec;
 				// ORrw.Price = LocORrw.Price;
-				ORrw.vRebate = LocORrw.vRebate;
+				if (LoyCardValidNrf) then begin
+					ORrw.vRebate = LocORrw.vRebate;
+				end else begin
+					ORrw.vRebate = 0;
+				end;
 				// ORrw.Sum = LocORrw.Sum;
 				ORrw.GlobalItemArtCode = LocORrw.GlobalItemArtCode;
 				for (lc=0;lc<=prcnt;lc=lc+1)begin
@@ -1574,7 +1582,7 @@ begin
 				ORrw.PlanShipRow = LocORrw.PlanShipRow;
 				// ORrw.Sum = ORrw.Price * ((100 - ORrw.vRebate) * 0.01);
 				// ORrw.Sum = Round(LocORrw.Sum / LocORrw.Quant * ORrw.Quant,SetRoundModeD(2));
-				ORrw.Sum = Round(ORrw.Price * ORrw.Quant * ((100 - ORrw.vRebate) * 0.01),SetRoundModeD(2));
+				ORrw.Sum = Round(ORrw.Price * ORrw.Quant * ((100 - ORrw.vRebate) * 0.01),SetRoundModeD(0));
 				ORrw.VATCode = LocORrw.VATCode;
 				ORrw.ECReservStock = LocORrw.Location;
 				ORrw.ECReservComp = vItemComp[LocORrw.ArtCode];
