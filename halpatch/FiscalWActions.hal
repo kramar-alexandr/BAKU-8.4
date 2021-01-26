@@ -1,0 +1,194 @@
+remote procedure RemoteAPI2Login(var area,string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 20 01 2021 y. at 11:43:00 AM
+remote procedure APIv2SendSale_Remote(var area, record IVVc);
+remote procedure WriteCustomLogOnServer(area,string);
+remote function string 255 NormalizeStrToJson (string);
+external procedure IVDClass_RefreshStringList(Integer,record IVVc);
+
+global updating procedure LoginToKassaDsm()
+begin
+	Integer wn,mwn,rownr,mtrw,i,j,k;
+  record RcVc RepSpec;
+  record IPVc IPr;
+  record UserVc Userr;
+  row IPVc IPrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId, parentDocument;
+  json jsresponse;
+  val cash, terminal, discount,loyalty,bonus,vatsum;
+  record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:39:37 PM
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	area logarea,biglogarea,tmpar1,tmpar2;
+	vector val vatperc;
+	array string 50 vtags;
+	record CassaIDBlock CIDb;
+	
+  host = "10.10.12.116"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  page = "/v2"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+	
+	Userr.Code = CurrentUser;
+	if (ReadFirstMain(Userr,1,true)) then begin
+		host = Userr.KassaIPAddr;
+	end;
+	
+	RemoteAPI2Login(req,"SuperApi","123");	
+	SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  jsresponse = ParseJSONArea(reply);
+	writeareatofile(reply,"LogitReply.txt",1);
+	//access_token": "7dOF7HlXb/uG2J/FD+GtjA==", "code": 1,
+	if(nonblank(JSONGet(jsresponse,"access_token")))then begin
+		blockload(CIDb);
+		CIDb.CassaToken = JSONGet(jsresponse,"access_token");
+		blockstore(CIDb);
+	end;
+	
+return;
+end;
+
+global
+updating procedure APIv2SendSaleDsm()
+begin
+  Integer wn,mwn,rownr,mtrw,i,j,k;
+  record RcVc RepSpec;
+  record IVVc IVr;
+  record UserVc Userr;
+  row IVVc IVrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId, parentDocument;
+  json jsresponse;
+  val cash, terminal, discount,loyalty,bonus,vatsum;
+  record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:39:37 PM
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	area logarea,biglogarea,tmpar1,tmpar2;
+	vector val vatperc;
+	array string 50 vtags;
+	boolean isnewrec;
+	
+  wn = CurWindow;
+  if(windowstate(wn)!=0)then begin
+  	messagebox(0,"Сначала сохраните сч/ф");
+  	goto LAPIv2SendSaleDsm;
+  end;
+	getwindowrecord(wn,IVr);
+	if(IVr.OKFlag==0)then begin
+		messagebox(0,"Сначала завершите сч/ф");
+  	goto LAPIv2SendSaleDsm;
+	end;
+	
+  blockload(PMb);
+  
+  host = "10.10.12.116"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  page = "/v2"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  //http://192.168.5.236:8989
+  
+	Userr.Code = CurrentUser;
+	if (ReadFirstMain(Userr,1,true)) then begin
+		host = Userr.KassaIPAddr;
+	end;
+	cash = 0.0;
+	terminal = 0.0;
+	discount = 0.0;
+	loyalty = 0;
+	
+	APIv2SendSale_Remote(req,IVr);
+  writeareatofile(req,"SendTAXRequest.txt",1);
+  
+  SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+
+  jsresponse = ParseJSONArea(reply);
+	
+	writeareatofile(reply,"SendTAXResponse.txt",1);
+	
+		setareazerosize(logarea);
+		addtexttoarea(chr(13) & chr(10) & "=========================" & IVr.SerNr &  "=V2================================" & chr(13) & chr(10) & "{",logarea);
+		addtexttoarea("\"Date\":" & "\"" & currentdate & "\"," & chr(13) & chr(10),logarea);
+		addtexttoarea("\"Invoice\":" & "\"" & IVr.SerNr & "\"," & chr(13) & chr(10),logarea);
+		addtexttoarea("\"SendData\":" & chr(13) & chr(10),logarea);
+		
+		setareazerosize(tmpar1);
+		insertareabeforearea(logarea,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(logarea,"FiscalPrinter.log",1);
+
+		setareazerosize(tmpar1);
+		insertareabeforearea(req,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(req,"FiscalPrinter.log",1);
+		setareazerosize(logarea);
+		addtexttoarea("," & chr(13) & chr(10),logarea);
+		addtexttoarea("\"ResponseData\":",logarea);
+		
+		setareazerosize(tmpar1);
+		insertareabeforearea(logarea,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(logarea,"FiscalPrinter.log",1);
+		
+		setareazerosize(tmpar1);
+		insertareabeforearea(reply,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(reply,"FiscalPrinter.log",1);
+		
+		
+		setareazerosize(logarea);
+		addtexttoarea("}",logarea);
+		
+		setareazerosize(tmpar1);
+		insertareabeforearea(logarea,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(logarea,"FiscalPrinter.log",1);
+		
+		WriteCustomLogOnServer(biglogarea,"FiscalPrinterAllLog.log");
+	
+	
+	
+		if(nonblank(JSONGet(jsresponse,"short_id")))then begin
+			transactionId = JSONGet(jsresponse,"short_id");
+			IVr.TaxTransactionCode = transactionId;
+			IVr.TaxTransactionDate=CurrentDate;
+			parentDocument = JSONGet(jsresponse,"long_id");
+			IVr.TaxParentDocument = parentDocument;
+		
+			IVTaxTr.SerNr = IVr.SerNr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:41:19 PM
+			if(readfirstmain(IVTaxTr,1,true))then begin
+				IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+				recordstore(IVTaxTr,true);
+			end else begin
+				 IVTaxTr.SerNr = IVr.SerNr;
+				 IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+				 recordstore(IVTaxTr,true);
+			end;
+		
+			RecordStore(IVr,true);
+			if(isnewrec==false)then begin
+				putwindowrecord(mwn,IVr);
+				IVDClass_RefreshStringList(mwn,IVr);
+			end;
+		end;
+
+LAPIv2SendSaleDsm:;
+  return;
+end;
