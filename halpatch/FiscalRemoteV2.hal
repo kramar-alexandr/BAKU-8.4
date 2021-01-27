@@ -24,13 +24,16 @@ begin
 return;
 end;
 
-global updating procedure API2PrintSale(var area req,var record IVVc IVr)
+global updating procedure API2PrintSale(string token,var area req,var record IVVc IVr)
 begin
-	val cash,terminal,bonus,credit,loyalty;
-	integer i,rwcnt,j;
+	val cash,terminal,bonus,credit,loyalty,checksum;
+	integer i,rwcnt,j,k;
 	record PMBlock PMb;
   row PMBlock PMrw;
   row IVVc IVrw;
+	vector val vatperc;
+	array string 50 vtags;
+	string 200 tstr;
 	
 	rwcnt = matrowcnt(IVr);
 	For(i=0;i<rwcnt;i=i+1) begin
@@ -79,9 +82,74 @@ begin
 	
 	addtexttoarea("{" & chr(13) & chr(10),req);
 	addtexttoarea("\"requestData\":{" & chr(13) & chr(10),req);
-		
+		addtexttoarea("\"access_token\":\"" & token & "\"," & chr(13) & chr(10),req);
+		addtexttoarea("\"int_ref\":\"" & currentcompany & "_" & IVr.SerNr & "\"," & chr(13) & chr(10),req);
+		addtexttoarea("\"tokenData\":{" & chr(13) & chr(10),req);
+			addtexttoarea("\"parameters\":{" & chr(13) & chr(10),req);
+				addtexttoarea("\"doc_type\":\"sale\"," & chr(13) & chr(10),req);
+				addtexttoarea("\"data\":{" & chr(13) & chr(10),req);
+					addtexttoarea("\"cashier\":\"" & IVr.SalesMan & "\"," & chr(13) & chr(10),req);
+					addtexttoarea("\"currency\":\"AZN\"," & chr(13) & chr(10),req);
+					addtexttoarea("\"items\":{" & chr(13) & chr(10),req);
+					
+					addtexttoarea("}," & chr(13) & chr(10),req);
+					addtexttoarea("\"sum\":" & checksum & "," & chr(13) & chr(10),req);
+					if(cash!=0)then begin
+						addtexttoarea("\"cashSum\":" & cash & "," & chr(13) & chr(10),req);
+					end else begin
+						addtexttoarea("\"cashSum\":0.0," & chr(13) & chr(10),req);
+					end;
+					if(terminal!=0)then begin
+						addtexttoarea("\"cashlessSum\":" & terminal & "," & chr(13) & chr(10),req);
+					end else begin
+						addtexttoarea("\"cashlessSum\":0.0," & chr(13) & chr(10),req);
+					end;
+					if(loyalty!=0)then begin
+						addtexttoarea("\"prepaymentSum\":" & loyalty & "," & chr(13) & chr(10),req);
+					end else begin
+						addtexttoarea("\"prepaymentSum\":0.0," & chr(13) & chr(10),req);
+					end;
+					addtexttoarea("\"credutSum\":0.0," & chr(13) & chr(10),req);
+					if(bonus!=0)then begin
+						addtexttoarea("\"bonusSum\":" & bonus & "," & chr(13) & chr(10),req);
+					end else begin
+						addtexttoarea("\"bonusSum\":0.0," & chr(13) & chr(10),req);
+					end;
+					
+					getVectorTags(vatperc,vtags);
+					addtexttoarea("\"vatAmounts\":[" & chr(13) & chr(10),req);
+						for(k=0;k<vtags.length;k=k+1)begin
+							if(k>0)then begin
+								addtexttoarea("," & chr(13) & chr(10),req);
+							end;
+							addtexttoarea("{" & chr(13) & chr(10),req);
+							tstr = ValToString(vatperc[vtags[k]],M45Val,"",".",0);
+							if(vatperc[vtags[k]]!=0)then begin
+								addtexttoarea("\"vatSum\":" & tstr & "",req);
+							end else begin
+								addtexttoarea("\"vatSum\":" & "0" & "",req);
+							end;
+							if(vtags[k]!="0.0")then begin
+								addtexttoarea(",\"vatPercent\":" & vtags[k],req);
+							end;
+							addtexttoarea("}" & chr(13) & chr(10),req);	
+						
+						end;
+					addtexttoarea("]" & chr(13) & chr(10),req);
+					
+				addtexttoarea("}," & chr(13) & chr(10),req);
+			addtexttoarea("}," & chr(13) & chr(10),req);
+			addtexttoarea("\"operationId\":\"createDocument\"," & chr(13) & chr(10),req);
+			addtexttoarea("\"version\":1" & chr(13) & chr(10),req);
+		addtexttoarea("}," & chr(13) & chr(10),req);
+		addtexttoarea("\"checkData\":{" & chr(13) & chr(10),req);
+			addtexttoarea("\"payment_change\":0.0," & chr(13) & chr(10),req);
+			addtexttoarea("\"check_type\":1" & chr(13) & chr(10),req);
+		addtexttoarea("}," & chr(13) & chr(10),req);
+	addtexttoarea("}," & chr(13) & chr(10),req);
 	
-	addtexttoarea("}" & chr(13) & chr(10),req);
+	
+	addtexttoarea("\"receiptDetails\":[]" & chr(13) & chr(10),req);//Дополнительная инфо о чеке
 	addtexttoarea("}" & chr(13) & chr(10),req);
 	
 return;
