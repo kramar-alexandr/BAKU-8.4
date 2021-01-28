@@ -3975,3 +3975,149 @@ LNewINVcRecordCheck:;
   NewINVcRecordCheck = res;
   RETURN;
 END;
+
+
+
+
+
+
+global
+updating function LongInt IDEANewINVcRecordCheck(var record IDEANewINVc IDEAnewINr,record IDEANewINVc IDEAnewIN2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+  row IDEANewINVc IDEAnewINrw;
+	record INVc tmpINr,OldConsINr;
+  record INVc INr,IN2r,INConsr,IN3r, testINr, UINr;
+  record ITVc ITr;
+  integer mtrw,i,insertmode,updatemode,j, compNumber; //Edit***************************Sasha2,17:50 07.12.2015
+  integer pos,rwcnt, t,tcnt,oldComp,CompQty,k;
+  string 20 type; //Edit***************************Sasha2,10:34 08.12.2015
+	record ConsCompBlock CCB;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	Array string 255 astr;
+  Integer acnt,strlen,y;
+	record IdINSNOneBlock IINSNOb;
+	row IdINSNOneBlock IINSNOrw;
+	string 255 SNOneNumber, compstr, comp, consItcode;
+	val SNMiddleval, strval;
+	boolean Catef,TrHs2,locompcritemf;
+	array string 100 asnt;
+	integer check,curcomp;
+	record ConsItemVc CI2r,CIr;
+	vector string 255 companies;
+	boolean CompFlag;
+	record BarCodeVc BCr;
+	record PIVc PIr;
+	vector boolean BarVector,INConsCodef,VEcodeVector;
+	vector integer rowBarCode, rowVECode;
+	boolean ConsCompf;
+	
+	BlockLoad(Compb);
+		
+	curcomp = currentcompany;
+	BlockLoad(CCB);
+  res = 0;
+  insertmode = 1;
+  updatemode = 2;
+  
+	oldComp = currentcompany;
+  matrowget(IDEAnewINr,0,IDEAnewINrw);
+	
+  if (IDEAnewINr.OKFlag==1) then begin		
+	
+    mtrw = matrowcnt(IDEAnewINr);
+		for (i=0;i<mtrw;i=i+1) begin
+			matrowget(IDEAnewINr,i,IDEAnewINrw);
+			if(nonblank(IDEAnewINrw.NewBarCode)) then begin
+				if(BarVector[IDEAnewINrw.NewBarCode]) then begin
+					res = -1;
+					RecordCheckError(36330,"в строках " & i+1 & " и " & rowBarCode[IDEAnewINrw.NewVECode],i,"NewBarCode");
+					goto LIDEANewINVcRecordCheck;
+				end;
+				BarVector[IDEAnewINrw.NewBarCode] = true;
+				rowBarCode[IDEAnewINrw.NewBarCode] = i+1;
+			end;	
+			if(nonblank(IDEAnewINrw.NewVECode)) then begin
+				if(BarVector[IDEAnewINrw.NewVECode]) then begin
+					res = -1;
+					RecordCheckError(36330,"в строках " & i & " и " & rowBarCode[IDEAnewINrw.NewVECode],i,"NewVECode");
+					goto LIDEANewINVcRecordCheck;
+				end;
+				BarVector[IDEAnewINrw.NewVECode] = true;
+				rowBarCode[IDEAnewINrw.NewVECode] = i+1;
+			end;	
+			if(currentcompany==18 and nonblank(IDEAnewINrw.VendorCode)) then begin
+				if(VEcodeVector[IDEAnewINrw.VendorCode]) then begin
+					res = -1;
+					RecordCheckError(36330,"в строках " & i & " и " & rowVECode[IDEAnewINrw.VendorCode],i,"VendorCode");
+					goto LIDEANewINVcRecordCheck;
+				end;
+				VEcodeVector[IDEAnewINrw.VendorCode] = true;
+				rowVECode[IDEAnewINrw.VendorCode] = i+1;
+			end;	
+		end;
+		
+
+		
+		
+		
+    For(i=0;i<mtrw;i=i+1) begin
+  	  matrowget(IDEAnewINr,i,IDEAnewINrw);
+			if(nonblank(IDEAnewINrw.BarCode)) then begin
+				IN2r.BarCode = IDEAnewINrw.BarCode;
+				if(ReadFirstKey("BarCode",IN2r,1,true)) then begin
+					if(IN2r.Code != IDEAnewINrw.Code  and IDEAnewINrw.ConsgType!=3) then begin
+						RecordCheckError(31249," уже существует",i,"BarCode");      
+						res = -1; 
+						goto LIDEANewINVcRecordCheck;
+					end;	
+				end;
+			end;	
+			if(blank(IDEAnewINrw.Group)) then begin IDEAnewINrw.Group = IDEAnewINr.Group; end;
+			
+			if(currentcompany==28) then begin
+				if(blank(IDEAnewINrw.Name)  and IDEAnewINrw.ConsgType!=3 and IDEAnewINrw.ConsgType!=4)then begin
+					RecordCheckError(1058,"",i,"Name");      
+					res = -1; 
+					goto LIDEANewINVcRecordCheck;
+				end;	
+				if(blank(IDEAnewINr.Group)  and IDEAnewINrw.ConsgType!=3 and IDEAnewINrw.ConsgType!=4)then begin
+					RecordCheckError(1058,"",-1,"Group");      
+					res = -1; 
+					goto LIDEANewINVcRecordCheck;
+				end;	
+				if(blank(IDEAnewINrw.Category) and blank(IDEAnewINrw.Code)  and IDEAnewINrw.ConsgType!=3 and IDEAnewINrw.ConsgType!=4)then begin
+					RecordCheckError(1058,"",i,"Category");      
+					res = -1; 
+					goto LIDEANewINVcRecordCheck;
+				end;	
+			end;
+			if(currentcompany==18 and blank(IDEAnewINrw.VendorCode) and IDEAnewINrw.ConsgType!=3 and IDEAnewINrw.ConsgType!=4) then begin
+				RecordCheckError(1058,"",i,"VendorCode");      
+				res = -1; 
+				goto LIDEANewINVcRecordCheck;
+			end;
+  		
+  	  if(blank(IDEAnewINrw.Name) and IDEAnewINr.PreOrderf==0 and IDEAnewINrw.ConsgType!=3 and IDEAnewINrw.ConsgType!=4)then begin
+  	  	RecordCheckError(1058,"",i,"Name");      
+        res = -1; 
+        goto LIDEANewINVcRecordCheck;
+  	  end;
+		end;
+		mtrw = matrowcnt(IDEAnewINr);
+		For(i=0;i<mtrw;i=i+1) begin
+  	  matrowget(IDEAnewINr,i,IDEAnewINrw);
+  	end;
+	end; 
+	
+
+	if (IDEAnewINr.SerNr==-1) then begin
+      IDEAnewINr.SerNr = NextSerNr("IDEANewINVc",currentdate,-1,false,""); 
+  end;
+	
+LIDEANewINVcRecordCheck:;
+	logtext(0,CurrentCompany & Chr(9) & "Saved IDEANewINVc");
+  IDEANewINVcRecordCheck = res;
+  RETURN;
+END;
