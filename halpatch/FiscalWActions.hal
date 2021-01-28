@@ -3,9 +3,39 @@ remote procedure APIv2SendSale_Remote(string,var area, record IVVc);
 remote procedure WriteCustomLogOnServer(area,string);
 remote function string 255 NormalizeStrToJson (string);
 external procedure IVDClass_RefreshStringList(Integer,record IVVc);
+external function LongInt POSNETHexToLong(string);
 
 SetLangMode(LangRussian,"RUS",0);
 
+global
+function string 255 ChekUnicode(string str)
+begin
+  string 10 c, c1;
+  string 10 ucode;
+  string 255 res,tmp; 
+  integer slen,i,int;
+  longint lmes;
+  
+  res = str;
+  i=0;
+  slen = Len(res);
+	
+	if(slen>0)then begin
+		for(i=0;i<slen;i=i+1)begin
+			c = mid(res,i,2);
+			if(c==(chr(92) & "u"))then begin
+				ucode = mid(res,i,6);
+				lmes = POSNETHexToLong(ucode);
+				int = lmes;
+				res = left(res,i) & uchr(int) & right(res, (len(res)-(i+6)));
+				slen = Len(res);
+			end;
+		end;
+	end;
+		
+  ChekUnicode = res;
+  return;
+end;
 
 global updating procedure Fiscal_Login()   // by Ira
 begin
@@ -28,6 +58,68 @@ end;
 global updating procedure Fiscal_AutoReturn()  // by Ira
 begin
 	messagebox(0,"FiscalAutoReturn");
+return;
+end;
+
+
+global procedure SendFiscalLogToServer(string docnr,string doctype,area req,area reply)
+begin
+	area logarea,biglogarea,tmpar1,tmpar2;
+	
+	setareazerosize(logarea);
+	addtexttoarea(chr(13) & chr(10) & "=========================" & doctype & "=" & docnr & "================================" & chr(13) & chr(10) & "{",logarea);
+	addtexttoarea("\"Date\":" & "\"" & currentdate & "\"," & chr(13) & chr(10),logarea);
+	addtexttoarea("\"SendData\":" & chr(13) & chr(10),logarea);
+	
+	setareazerosize(tmpar1);
+	insertareabeforearea(logarea,tmpar1);
+	insertareabeforearea(biglogarea,tmpar1);
+	setareazerosize(biglogarea);
+	insertareabeforearea(tmpar1,biglogarea);
+	
+	writeareatofile(logarea,"FiscalPrinter.log",1);
+
+	setareazerosize(tmpar1);
+	insertareabeforearea(req,tmpar1);
+	insertareabeforearea(biglogarea,tmpar1);
+	setareazerosize(biglogarea);
+	insertareabeforearea(tmpar1,biglogarea);
+	
+	writeareatofile(req,"FiscalPrinter.log",1);
+	setareazerosize(logarea);
+	addtexttoarea("," & chr(13) & chr(10),logarea);
+	addtexttoarea("\"ResponseData\":",logarea);
+	
+	setareazerosize(tmpar1);
+	insertareabeforearea(logarea,tmpar1);
+	insertareabeforearea(biglogarea,tmpar1);
+	setareazerosize(biglogarea);
+	insertareabeforearea(tmpar1,biglogarea);
+	
+	writeareatofile(logarea,"FiscalPrinter.log",1);
+	
+	setareazerosize(tmpar1);
+	insertareabeforearea(reply,tmpar1);
+	insertareabeforearea(biglogarea,tmpar1);
+	setareazerosize(biglogarea);
+	insertareabeforearea(tmpar1,biglogarea);
+	
+	writeareatofile(reply,"FiscalPrinter.log",1);
+	
+	
+	setareazerosize(logarea);
+	addtexttoarea("}",logarea);
+	
+	setareazerosize(tmpar1);
+	insertareabeforearea(logarea,tmpar1);
+	insertareabeforearea(biglogarea,tmpar1);
+	setareazerosize(biglogarea);
+	insertareabeforearea(tmpar1,biglogarea);
+	
+	writeareatofile(logarea,"FiscalPrinter.log",1);
+	
+	WriteCustomLogOnServer(biglogarea,"FiscalPrinterAllLog.log");
+
 return;
 end;
 
@@ -71,9 +163,11 @@ begin
 	//access_token": "7dOF7HlXb/uG2J/FD+GtjA==", "code": 1,
 	if(nonblank(JSONGet(jsresponse,"access_token")))then begin
 		blockload(CIDb);
-		CIDb.CassaToken = JSONGet(jsresponse,"access_token");
+		CIDb.CassaToken = urldecode(ChekUnicode(JSONGet(jsresponse,"access_token")));
 		blockstore(CIDb);
 	end;
+	
+	SendFiscalLogToServer("","LOGIN",req,reply);
 	
 return;
 end;
@@ -143,60 +237,7 @@ begin
 	
 	writeareatofile(reply,"SendTAXResponse.txt",1);
 	
-		setareazerosize(logarea);
-		addtexttoarea(chr(13) & chr(10) & "=========================" & IVr.SerNr &  "=V2================================" & chr(13) & chr(10) & "{",logarea);
-		addtexttoarea("\"Date\":" & "\"" & currentdate & "\"," & chr(13) & chr(10),logarea);
-		addtexttoarea("\"Invoice\":" & "\"" & IVr.SerNr & "\"," & chr(13) & chr(10),logarea);
-		addtexttoarea("\"SendData\":" & chr(13) & chr(10),logarea);
-		
-		setareazerosize(tmpar1);
-		insertareabeforearea(logarea,tmpar1);
-		insertareabeforearea(biglogarea,tmpar1);
-		setareazerosize(biglogarea);
-		insertareabeforearea(tmpar1,biglogarea);
-		
-		writeareatofile(logarea,"FiscalPrinter.log",1);
-
-		setareazerosize(tmpar1);
-		insertareabeforearea(req,tmpar1);
-		insertareabeforearea(biglogarea,tmpar1);
-		setareazerosize(biglogarea);
-		insertareabeforearea(tmpar1,biglogarea);
-		
-		writeareatofile(req,"FiscalPrinter.log",1);
-		setareazerosize(logarea);
-		addtexttoarea("," & chr(13) & chr(10),logarea);
-		addtexttoarea("\"ResponseData\":",logarea);
-		
-		setareazerosize(tmpar1);
-		insertareabeforearea(logarea,tmpar1);
-		insertareabeforearea(biglogarea,tmpar1);
-		setareazerosize(biglogarea);
-		insertareabeforearea(tmpar1,biglogarea);
-		
-		writeareatofile(logarea,"FiscalPrinter.log",1);
-		
-		setareazerosize(tmpar1);
-		insertareabeforearea(reply,tmpar1);
-		insertareabeforearea(biglogarea,tmpar1);
-		setareazerosize(biglogarea);
-		insertareabeforearea(tmpar1,biglogarea);
-		
-		writeareatofile(reply,"FiscalPrinter.log",1);
-		
-		
-		setareazerosize(logarea);
-		addtexttoarea("}",logarea);
-		
-		setareazerosize(tmpar1);
-		insertareabeforearea(logarea,tmpar1);
-		insertareabeforearea(biglogarea,tmpar1);
-		setareazerosize(biglogarea);
-		insertareabeforearea(tmpar1,biglogarea);
-		
-		writeareatofile(logarea,"FiscalPrinter.log",1);
-		
-		WriteCustomLogOnServer(biglogarea,"FiscalPrinterAllLog.log");
+		SendFiscalLogToServer(IVr.SerNr,"SALE",req,reply);
 	
 	
 	
@@ -210,17 +251,29 @@ begin
 			IVTaxTr.SerNr = IVr.SerNr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:41:19 PM
 			if(readfirstmain(IVTaxTr,1,true))then begin
 				IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+				
+				IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+				IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+				IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+				IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
 				recordstore(IVTaxTr,true);
 			end else begin
-				 IVTaxTr.SerNr = IVr.SerNr;
-				 IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+				IVTaxTr.SerNr = IVr.SerNr;
+				IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+				
+				IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+				IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+				IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+				IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
 				 recordstore(IVTaxTr,true);
 			end;
 		
 			RecordStore(IVr,true);
 			if(isnewrec==false)then begin
 				putwindowrecord(mwn,IVr);
-				IVDClass_RefreshStringList(mwn,IVr);
+				if(currentuser!="SA")then begin
+					IVDClass_RefreshStringList(mwn,IVr);
+				end;
 			end;
 		end;
 
