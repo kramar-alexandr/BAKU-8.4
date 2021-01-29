@@ -4012,6 +4012,8 @@ BEGIN
 	vector boolean BarVector,INConsCodef,VEcodeVector;
 	vector integer rowBarCode, rowVECode;
 	boolean ConsCompf;
+	vector longint CtaegMiddleNum;
+	record BPIBrandVc BPIBrandr;
 	
 	BlockLoad(Compb);
 		
@@ -4024,58 +4026,36 @@ BEGIN
 	oldComp = currentcompany;
   matrowget(IDEAnewINr,0,IDEAnewINrw);
 	
-  if (IDEAnewINr.OKFlag==1) then begin		
-	
+  if (IDEAnewINr.OKFlag==1) then begin	
+		if (oldComp!=28) then begin  SetCompany(28,false); end;
+		blockload(IINSNOb);
+		rwcnt = matrowcnt(IINSNOb);
+		for (y=rwcnt;y>=0;y=y-1) begin
+			matrowget(IINSNOb,y-1,IINSNOrw);
+			CtaegMiddleNum[IINSNOrw.Category] = IINSNOrw.SNMiddle;
+		end;
+		ResetCompany(oldComp);
     mtrw = matrowcnt(IDEAnewINr);
+		INCatSClassArrayOnOpen(astr,acnt);
 		for (i=0;i<mtrw;i=i+1) begin
+			ResetCompany(oldComp);
 			matrowget(IDEAnewINr,i,IDEAnewINrw);
 			
 			if (oldComp!=28) then begin  SetCompany(28,false); end;
 			
-			blockload(IINSNOb);
+
 			if(CurrentCompany==28 and blank(IDEAnewINrw.Code) and nonblank(IDEAnewINrw.Category)) then begin
 				if(IDEAnewINrw.ConsgType==0) then begin
 					IDEAnewINrw.SerNrf = 2;
 				end else begin
 					IDEAnewINrw.SerNrf = 0;
 				end;	
-				INCatSClassArrayOnOpen(astr,acnt);
 				for (j=0;j<acnt;j=j+1) begin
+					SetCompany(28,false);
 					if(left(astr[j],4)==IDEAnewINrw.Category)then begin
-						rwcnt = matrowcnt(IINSNOb);
-						for (y=rwcnt;y>=0;y=y-1) begin
-							matrowget(IINSNOb,y-1,IINSNOrw);
-							if(IINSNOrw.Category==IDEAnewINrw.Category)then begin
-								Catef = true;
-								SNMiddleval = IINSNOrw.SNMiddle + 1;
-								IINSNOrw.SNMiddle = IINSNOrw.SNMiddle + 1;
-								IINSNOrw.Category = IDEAnewINrw.Category;
-								matrowput(IINSNOb,rwcnt,IINSNOrw);
-								SNOneNumber = ValToString(SNMiddleval,M4val,"","",1);
-								SNOneNumber = left(SNOneNumber,len(SNOneNumber)-2);
-								for (k=0;k<5;k=k+1) begin
-									strlen = len(SNOneNumber);
-									if(strlen<5)then begin 
-										SNOneNumber = "0" & SNOneNumber;
-									end else begin
-										k = 5;
-									end;
-								end;
-								IDEAnewINrw.SNOne = IDEAnewINrw.Category & "-" & SNOneNumber;
-								IDEAnewINrw.SN = IDEAnewINrw.SNOne & "-" & IDEAnewINrw.CompletCode;
-								IDEAnewINrw.VendorCode = IDEAnewINrw.SNOne & "-" & IDEAnewINrw.CompletCode;
-								ResetCompany(oldComp);
-								matrowput(IDEAnewINr,i,IDEAnewINrw);
-								SetCompany(28,false);
-								BlockStore(IINSNOb);
-								y=0;
-							end;
-						end;
-						if (!Catef) then begin
-							IINSNOrw.SNMiddle = 0;
-							SNMiddleval = IINSNOrw.SNMiddle;
-							IINSNOrw.Category = IDEAnewINrw.Category;
-							matrowput(IINSNOb,rwcnt,IINSNOrw);
+						if(CtaegMiddleNum[IDEAnewINrw.Category]>0)then begin
+							Catef = true;
+							SNMiddleval = CtaegMiddleNum[IDEAnewINrw.Category] + 1;
 							SNOneNumber = ValToString(SNMiddleval,M4val,"","",1);
 							SNOneNumber = left(SNOneNumber,len(SNOneNumber)-2);
 							for (k=0;k<5;k=k+1) begin
@@ -4092,13 +4072,93 @@ BEGIN
 							ResetCompany(oldComp);
 							matrowput(IDEAnewINr,i,IDEAnewINrw);
 							SetCompany(28,false);
-							BlockStore(IINSNOb);
+							RecordNew(INr);
+							recordCopy(IN2r,INr)
+							INr.Code = IDEAnewINrw.VendorCode;
+							INr.SNOne = IDEAnewINrw.SNOne;
+							INr.SN = IDEAnewINrw.SN;
+							INr.Category = IDEAnewINrw.Category;
+							INr.CompletCode = IDEAnewINrw.CompletCode;
+							INr.Name = IDEAnewINrw.Name;
+							INr.Group = IDEAnewINr.Group;
+							if (RecordInsert (INr,true)) then begin
+								CtaegMiddleNum[IDEAnewINrw.Category] = SNMiddleval;
+								ResetCompany(oldComp);
+								BPIBrandr.Name = "IDEA_STORE";
+								if (!ReadfirstKey("Name",BPIBrandr,1,true)) then begin
+									RecordNew(BPIBrandr);
+									BPIBrandr.Name = "IDEA_STORE";
+									RecordInsert(BPIBrandr,true);
+								end;
+								RecordNew (INConsr);
+								RecordCopy (INConsr,INr);
+								RecordNew(UINr);
+								INConsr.Code = "";
+								INConsr.UUID = UINr.UUID;
+								INConsr.BPIBrand = BPIBrandr.Code;
+								INConsr.AlternativeCode = INr.Code;
+								if (RecordInsert(INConsr,true)) then begin 
+									IDEAnewINrw.Code = INConsr.Code;
+									logtext(0,INConsr.Code & " IDEAnewINrw.Code");
+									matrowput(IDEAnewINr,i,IDEAnewINrw);
+								end;
+								SetCompany(28,false);
+							end;
+						end;
+						if (!Catef) then begin
+							SNMiddleval = 0;
+							SNOneNumber = ValToString(SNMiddleval,M4val,"","",1);
+							SNOneNumber = left(SNOneNumber,len(SNOneNumber)-2);
+							for (k=0;k<5;k=k+1) begin
+								strlen = len(SNOneNumber);
+								if(strlen<5)then begin 
+									SNOneNumber = "0" & SNOneNumber;
+								end else begin
+									k = 5;
+								end;
+							end;
+							IDEAnewINrw.SNOne = IDEAnewINrw.Category & "-" & SNOneNumber;
+							IDEAnewINrw.SN = IDEAnewINrw.SNOne & "-" & IDEAnewINrw.CompletCode;
+							IDEAnewINrw.VendorCode = IDEAnewINrw.SNOne & "-" & IDEAnewINrw.CompletCode;
+							ResetCompany(oldComp);
+							matrowput(IDEAnewINr,i,IDEAnewINrw);
+							SetCompany(28,false);
+							BPIBrandr.Name = "IDEA_STORE";
+							if (!ReadfirstKey("Name",BPIBrandr,1,true)) then begin
+								RecordNew(BPIBrandr);
+								BPIBrandr.Name = "IDEA_STORE";
+								BPIBrandr.CWHCode = "CWH_I"
+								RecordInsert(BPIBrandr,true);
+							end;
+							RecordNew(INr);
+							recordCopy(IN2r,INr)
+							INr.Code = IDEAnewINrw.VendorCode;
+							INr.SNOne = IDEAnewINrw.SNOne;
+							INr.SN = IDEAnewINrw.SN;
+							INr.Category = IDEAnewINrw.Category;
+							INr.CompletCode = IDEAnewINrw.CompletCode;
+							INr.Name = IDEAnewINrw.Name;
+							INr.Group = IDEAnewINr.Group;
+							if (RecordInsert (INr,true)) then begin
+								CtaegMiddleNum[IDEAnewINrw.Category] = 0;
+								ResetCompany(oldComp);
+								RecordNew (INConsr);
+								RecordCopy (INConsr,INr);
+								RecordNew(UINr);
+								INConsr.Code = "";
+								INConsr.UUID = UINr.UUID;
+								INConsr.BPIBrand = BPIBrandr.Code;
+								INConsr.AlternativeCode = INr.Code;
+								if (RecordInsert(INConsr,true)) then begin 
+									IDEAnewINrw.Code = INConsr.Code;
+									matrowput(IDEAnewINr,i,IDEAnewINrw);
+								end;
+								SetCompany(28,false);
+							end;
 						end;
 					end;
 				end;
 			end;
-			
-			ResetCompany(oldComp);
 			
 			
 			if(nonblank(IDEAnewINrw.NewBarCode)) then begin
@@ -4130,6 +4190,18 @@ BEGIN
 			end;	
 		end;
 		
+		SetCompany(28,false);
+		blockload(IINSNOb);
+		rwcnt = matrowcnt(IINSNOb);
+		for (y=rwcnt-1;y>=0;y=y-1) begin
+			matrowget(IINSNOb,y,IINSNOrw);
+			IINSNOrw.SNMiddle = CtaegMiddleNum[IINSNOrw.Category];
+			IINSNOrw.Category = IINSNOrw.Category;
+			matrowput(IINSNOb,y,IINSNOrw);
+		end;
+		blockstore(IINSNOb);
+		
+		ResetCompany(oldComp);
 
 		
 		
