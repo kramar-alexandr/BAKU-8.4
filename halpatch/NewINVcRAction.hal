@@ -3999,7 +3999,7 @@ BEGIN
   Integer acnt,strlen,y;
 	record IdINSNOneBlock IINSNOb;
 	row IdINSNOneBlock IINSNOrw;
-	string 255 SNOneNumber, compstr, comp, consItcode;
+	string 255 SNOneNumber, compstr, comp, consItcode, oldCode;
 	val SNMiddleval, strval;
 	boolean Catef,TrHs2,locompcritemf;
 	array string 100 asnt;
@@ -4011,7 +4011,7 @@ BEGIN
 	record PIVc PIr;
 	vector boolean BarVector,INConsCodef,VEcodeVector;
 	vector integer rowBarCode, rowVECode;
-	boolean ConsCompf;
+	boolean ConsCompf, TrHs;
 	vector longint CtaegMiddleNum;
 	record BPIBrandVc BPIBrandr;
 	
@@ -4081,15 +4081,17 @@ BEGIN
 							INr.CompletCode = IDEAnewINrw.CompletCode;
 							INr.Name = IDEAnewINrw.Name;
 							INr.Group = IDEAnewINr.Group;
+							INr.BPIBrand = IDEAnewINrw.Brand;
+							BPIBrandr.Code = INr.BPIBrand;
+							if (ReadFirstMain(BPIBrandr,1,true)) then begin
+								if (!SetInSet(BPIBrandr.IDEABrandRef,INr.DispGroups)) then begin
+									if (nonblank(INr.DispGroups)) then begin INr.DispGroups = INr.DispGroups & ","; end;
+									INr.DispGroups = INr.DispGroups & BPIBrandr.IDEABrandRef;
+								end;
+							end;
 							if (RecordInsert (INr,true)) then begin
 								CtaegMiddleNum[IDEAnewINrw.Category] = SNMiddleval;
-								ResetCompany(oldComp);
-								BPIBrandr.Name = "IDEA_STORE";
-								if (!ReadfirstKey("Name",BPIBrandr,1,true)) then begin
-									RecordNew(BPIBrandr);
-									BPIBrandr.Name = "IDEA_STORE";
-									RecordInsert(BPIBrandr,true);
-								end;
+								SetCompany(18,false);
 								RecordNew (INConsr);
 								RecordCopy (INConsr,INr);
 								RecordNew(UINr);
@@ -4097,10 +4099,39 @@ BEGIN
 								INConsr.UUID = UINr.UUID;
 								INConsr.BPIBrand = BPIBrandr.Code;
 								INConsr.AlternativeCode = INr.Code;
+								INConsr.SNOne = IDEAnewINrw.SNOne;
+								INConsr.SN = IDEAnewINrw.SN;
+								INConsr.Category = IDEAnewINrw.Category;
+								INConsr.CompletCode = IDEAnewINrw.CompletCode;
+								INConsr.Name = IDEAnewINrw.Name;
+								INConsr.Group = IDEAnewINr.Group;
+								if(blank(INConsr.Code)) then begin
+									OldConsINr.Code = "IN_9999999";
+									TrHs = true;
+									while (LoopBackKey("Code",OldConsINr,1,TrHs)) begin
+										oldCode = OldConsINr.Code;
+										TrHs = false;
+									end;
+									ResetLoop(OldConsINr);
+									if(blank(oldCode)) then begin oldCode = "IN_0000000"; end;
+									NextM4SerialNumber(OldConsINr.Code,INConsr.Code);
+								end;
 								if (RecordInsert(INConsr,true)) then begin 
-									IDEAnewINrw.Code = INConsr.Code;
-									logtext(0,INConsr.Code & " IDEAnewINrw.Code");
+									CIr.Code = INConsr.Code;
+									if (!ReadFirstMain(CIr,1,true)) then begin
+										CIr.Code = INConsr.Code;
+										CIr.LocCode = INr.Code;
+										CIr.BrandCode = INConsr.BPIBrand;
+										RecordStore(CIr,true);
+									end;
+									resetCompany(oldComp);
+									if (CurrentCompany==18) then begin
+										IDEAnewINrw.Code = INConsr.Code;
+									end else begin
+										IDEAnewINrw.Code = INConsr.SN;
+									end;
 									matrowput(IDEAnewINr,i,IDEAnewINrw);
+									MilliSleep(500);
 								end;
 								SetCompany(28,false);
 							end;
@@ -4123,13 +4154,6 @@ BEGIN
 							ResetCompany(oldComp);
 							matrowput(IDEAnewINr,i,IDEAnewINrw);
 							SetCompany(28,false);
-							BPIBrandr.Name = "IDEA_STORE";
-							if (!ReadfirstKey("Name",BPIBrandr,1,true)) then begin
-								RecordNew(BPIBrandr);
-								BPIBrandr.Name = "IDEA_STORE";
-								BPIBrandr.CWHCode = "CWH_I"
-								RecordInsert(BPIBrandr,true);
-							end;
 							RecordNew(INr);
 							recordCopy(IN2r,INr)
 							INr.Code = IDEAnewINrw.VendorCode;
@@ -4139,8 +4163,17 @@ BEGIN
 							INr.CompletCode = IDEAnewINrw.CompletCode;
 							INr.Name = IDEAnewINrw.Name;
 							INr.Group = IDEAnewINr.Group;
+							INr.BPIBrand = IDEAnewINrw.Brand;
+							BPIBrandr.Code = INr.BPIBrand;
+							if (ReadFirstMain(BPIBrandr,1,true)) then begin
+								if (!SetInSet(BPIBrandr.IDEABrandRef,INr.DispGroups)) then begin
+									if (nonblank(INr.DispGroups)) then begin INr.DispGroups = INr.DispGroups & ","; end;
+									INr.DispGroups = INr.DispGroups & BPIBrandr.IDEABrandRef;
+								end;
+							end;
 							if (RecordInsert (INr,true)) then begin
 								CtaegMiddleNum[IDEAnewINrw.Category] = 0;
+								SetCompany(18,false);
 								ResetCompany(oldComp);
 								RecordNew (INConsr);
 								RecordCopy (INConsr,INr);
@@ -4149,8 +4182,37 @@ BEGIN
 								INConsr.UUID = UINr.UUID;
 								INConsr.BPIBrand = BPIBrandr.Code;
 								INConsr.AlternativeCode = INr.Code;
+								INConsr.SNOne = IDEAnewINrw.SNOne;
+								INConsr.SN = IDEAnewINrw.SN;
+								INConsr.Category = IDEAnewINrw.Category;
+								INConsr.CompletCode = IDEAnewINrw.CompletCode;
+								INConsr.Name = IDEAnewINrw.Name;
+								INConsr.Group = IDEAnewINr.Group;
+								if(blank(INConsr.Code)) then begin
+									OldConsINr.Code = "IN_9999999";
+									TrHs = true;
+									while (LoopBackKey("Code",OldConsINr,1,TrHs)) begin
+										oldCode = OldConsINr.Code;
+										TrHs = false;
+									end;
+									ResetLoop(OldConsINr);
+									if(blank(oldCode)) then begin oldCode = "IN_0000000"; end;
+									NextM4SerialNumber(OldConsINr.Code,INConsr.Code);
+								end;
 								if (RecordInsert(INConsr,true)) then begin 
-									IDEAnewINrw.Code = INConsr.Code;
+									CIr.Code = INConsr.Code;
+									if (!ReadFirstMain(CIr,1,true)) then begin
+										CIr.Code = INConsr.Code;
+										CIr.LocCode = INr.Code;
+										CIr.BrandCode = INConsr.BPIBrand;
+										RecordStore(CIr,true);
+									end;
+									resetCompany(oldComp);
+									if (CurrentCompany==18) then begin
+										IDEAnewINrw.Code = INConsr.Code;
+									end else begin
+										IDEAnewINrw.Code = INConsr.SN;
+									end;
 									matrowput(IDEAnewINr,i,IDEAnewINrw);
 								end;
 								SetCompany(28,false);

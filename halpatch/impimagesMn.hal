@@ -86,6 +86,7 @@ external updating function Boolean SendMailFromSystem(string,string,string,strin
 external updating function Boolean SendSMSFromSystem(string,string,string,string);
 external procedure ExtractObj(string,var Integer,var string);
 external function Boolean SendNotificationToUser(string,string);
+external procedure HandleIDEANewIN2DClassCode(var record IDEANewINVc, integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -17129,6 +17130,65 @@ begin
 return;
 end;	
 
+
+
+
+
+
+global procedure CheckItemIDEACC(var record IDEANewINVc IDEANewINr, integer rownr)
+begin
+	integer i,mtrw,oldComp,CompQty;
+	record INVc OldINr,tmpINr,INr;
+	row IDEANewINVc IDEANewINrw,IDEANewIN2rw;
+	boolean res,testf,TrHs;
+	record BPIBrandVc BBr;
+	string 200 new,old;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record ConsItemVc CIr;
+	record RcVc RepSpec;
+	BlockLoad(Compb);
+	
+	oldComp = CurrentCompany;
+	CompQty = matrowcnt(Compb);
+		matrowget(IDEANewINr,rownr,IDEANewINrw);
+		
+		CIr.LocCode = IDEANewINrw.VendorCode;
+		// CIr.BrandCode = IDEANewINr.Brand;
+		if(ReadfirstKey("LocCodeBrand",CIr,1,true)) then begin
+				IDEANewINrw.Code = CIr.Code;
+				matrowput(IDEANewINr,rownr,IDEANewINrw)
+				HandleIDEANewIN2DClassCode(IDEANewINr,rownr);
+				matrowget(IDEANewINr,rownr,IDEANewIN2rw);
+				matrowput(IDEANewINr,rownr,IDEANewIN2rw);
+		end else begin
+			INr.Code = IDEANewIN2rw.VendorCode;
+			if(ReadFirstMain(INr,1,true)) then begin
+				IDEANewIN2rw.Code = INr.Code;
+				matrowput(IDEANewINr,rownr,IDEANewIN2rw)
+				HandleIDEANewIN2DClassCode(IDEANewINr,rownr);
+				matrowget(IDEANewINr,rownr,IDEANewIN2rw);
+				matrowput(IDEANewINr,rownr,IDEANewIN2rw);
+				goto IDEAskipsearch;
+			end;	
+			SetCompany(28,false);
+			tmpINr.Code = IDEANewIN2rw.VendorCode;
+			if(ReadFirstMain(tmpINr,1,true)) then begin
+				HandleIDEANewIN2DClassCode(IDEANewINr,rownr);
+				matrowget(IDEANewINr,rownr,IDEANewIN2rw);
+				matrowput(IDEANewINr,rownr,IDEANewIN2rw);
+			end;	
+		end;	
+	SetCompany(oldComp,false);
+	IDEAskipsearch:;
+return;
+end;	
+
+
+
+
+
+
 global procedure CheckItemCCBeforCreate(var record newINVc newINr, integer rownr)
 begin
 	integer i,mtrw,oldComp,cnt;
@@ -17345,6 +17405,40 @@ BEGIN
   SelectWindow(wn);
   RETURN;
 END;
+
+
+
+
+global updating procedure ImpIdeaBrndIn()
+begin
+	record BPIBrandVc BPIBrandr;
+	string 255 sfield0,sfield1,sfield2,sfield3,sfield4,sfield5,sfield6,sfield7,color,size;
+	while (TestEOF()==false) begin
+		sfield0 = "";
+		sfield1 = "";
+		sfield0 = ImportField;
+		if(nonblank(sfield0))then begin
+			FormatUpperCaseCode(sfield0);
+			sfield1 = ImportField;
+			FormatUpperCaseCode(sfield1);
+			BPIBrandr.Name = sfield1;
+			if(!ReadFirstKey("Name",BPIBrandr,1,true))then begin
+				RecordNew(BPIBrandr);
+				BPIBrandr.Name = sfield1;
+				BPIBrandr.IDEABrandRef = sfield0;
+				RecordInsert(BPIBrandr,true);
+			end else begin
+				logtext(0,BPIBrandr.Name);
+				BPIBrandr.IDEABrandRef = sfield0;
+				RecordStore(BPIBrandr,true);
+			end;
+		end;
+		NextImportLine(true);
+	end;
+	return;
+end;
+
+
 
 
 
