@@ -24,6 +24,84 @@ external function roundmode SetRoundModeD(Integer);
 									
 SetLangMode(LangRussian,"RUS",0);
 
+
+global procedure SendMailTiCRMForChangeCustomer(record CUVc CUr,record CUVc newCUr)
+begin
+	area custinfo,text,replyPr;
+	
+	addtexttoarea("Данные по клиенту в системе CRM изменились",custinfo);
+	addtexttoarea(chr(13) & chr(10),custinfo);
+	addtexttoarea("Код клиента: " & CUr.Code,custinfo);
+	addtexttoarea(chr(13) & chr(10),custinfo);
+	addtexttoarea("Имя клиента: " & CUr.Name,custinfo);
+	addtexttoarea(chr(13) & chr(10),custinfo);
+	addtexttoarea("Изменения:",custinfo);
+	addtexttoarea(chr(13) & chr(10),custinfo);
+	
+	if(CUr.BirthDate!=newCUr.BirthDate)then begin
+		addtexttoarea("BirthDate: " & CUr.BirthDate & " ->  " & newCUr.BirthDate,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	if(CUr.Phone!=newCUr.Phone)then begin
+		addtexttoarea("Phone: " & CUr.Phone & " ->  " & newCUr.Phone,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	if(CUr.Mobile!=newCUr.Mobile)then begin
+		addtexttoarea("Phone1: " & CUr.Mobile & " ->  " & newCUr.Mobile,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	if(CUr.AltPhone!=newCUr.AltPhone)then begin
+		addtexttoarea("Phome2: " & CUr.AltPhone & " ->  " & newCUr.AltPhone,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	if(CUr.Fax!=newCUr.Fax)then begin
+		addtexttoarea("Phone3: " & CUr.Fax & " ->  " & newCUr.Fax,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	if(CUr.eMail!=newCUr.eMail)then begin
+		addtexttoarea("eMail: " & CUr.eMail & " ->  " & newCUr.eMail,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	if(CUr.Gender!=newCUr.Gender)then begin
+		addtexttoarea("Gender: " & CUr.Gender & " ->  " & newCUr.Gender,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	if(CUr.CRMName!=newCUr.CRMName)then begin
+		addtexttoarea("Name :" & CUr.CRMName & " ->  " & newCUr.CRMName,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	if(CUr.CRMLName!=newCUr.CRMLName)then begin
+		addtexttoarea("LastName :" & CUr.CRMLName & " ->  " & newCUr.CRMLName,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	if(CUr.CRMPatr!=newCUr.CRMPatr)then begin
+		addtexttoarea("MidleName :" & CUr.CRMPatr & " ->  " & newCUr.CRMPatr,custinfo);
+		addtexttoarea(chr(13) & chr(10),custinfo);
+	end;
+	
+	
+	
+	writeareatofile(custinfo,"CustomerChangedInCRM.txt",0);
+	setareazerosize(text);
+	addtexttoarea("{",text);
+	addtexttoarea("\"host\":\"smtp.gmail.com\",",text);
+	addtexttoarea("\"port\":465,",text);
+	addtexttoarea("\"secure\":true,",text);
+	addtexttoarea("\"user\":\"IDReporSender@gmail.com\",",text);
+	addtexttoarea("\"pass\":\"c2h5ohc2h5oh\",",text);
+	addtexttoarea("\"from\":\"IDReportSender@gmail.com\",",text);
+	addtexttoarea("\"to\":\"" & "kramar.alexandr@gmail.com" & "\",",text);
+	addtexttoarea("\"subject\":\"" & "Изменены данные клиента" & "\",",text);
+	addtexttoarea("\"plaintext\":\"notblank\",",text);			
+	addtexttoarea("\"filename\":\"" & "CustomerChangedInCRM.txt" & "\",",text);			
+	addtexttoarea("\"path\":\"/usr/local/bin/StandardERPServer/" & "CustomerChangedInCRM.txt" & "\"",text);
+	addtexttoarea("}",text);
+
+	SendWebRequest("127.0.0.1",1071,-1,false,"POST","/sendMail","application/json","",false,text,replyPr,5);
+	
+return;
+end;
+
 global 
 function string 255 ParseHEX(string tag)
 begin
@@ -597,6 +675,7 @@ begin
 	boolean TrHs;
 	integer i,phonesqty;
 	array string 255 phones;
+	boolean updatef;
 	
 	logtext(0,"WebUpdateCustomer");
 	
@@ -621,47 +700,146 @@ begin
 		end;
 		
 		if(readfirstkey("Code",CUr,1,true)==true)then begin
-			//recordcopy(oldCUr,CUr);
-			CUr.CRMName = MyJSGet(jsresponse,"firstName");
-			CUr.CRMLName = MyJSGet(jsresponse,"lastName");
-			CUr.CRMPatr = MyJSGet(jsresponse,"middleName");
-			StripEndingSpaces(CUr.CRMName);
-			StripEndingSpaces(CUr.CRMLName);
-			status = MyJSGet(jsresponse,"status");
+		
+			//Обновление персональных данных в карточке клиента отключено по письму от Натаван И Щахрияра 4/2/2021 "Re: Отключение обновление ФИО контактов из CMR"
 			
+			status = MyJSGet(jsresponse,"status");
 			if(status=="active")then begin
-				CUr.blockedFlag = 0;
+				oldCUr.blockedFlag = 0;
 			end;
 			if(status=="inactive")then begin
-				CUr.blockedFlag = 1;
+				oldCUr.blockedFlag = 1;
 			end;
 			
-			gender = MyJSGet(jsresponse,"gender");
-			if(status=="Male")then begin
-				CUr.Gender = 0;
-			end;
-			if(status=="Female")then begin
-				CUr.Gender = 1;
+			if(oldCUr.blockedFlag!=CUr.blockedFlag)then begin
+				CUr.blockedFlag = oldCUr.blockedFlag;
+				updatef = true;
 			end;
 			
 			if(nonblank(MyJSGet(jsresponse,"firstName")) or nonblank(MyJSGet(jsresponse,"lastName")))then begin
-				CUr.Name = MyJSGet(jsresponse,"firstName") & " " & MyJSGet(jsresponse,"lastName");
+				oldCUr.Name = MyJSGet(jsresponse,"firstName") & " " & MyJSGet(jsresponse,"lastName");
 			end;
-			StripEndingSpaces(CUr.Name);
-			CUr.Phone = MyJSGet(jsresponse,"landlineNumber");
-			CUr.Mobile = MyJSGet(jsresponse,"mobilePhone1");
-			CUr.AltPhone = MyJSGet(jsresponse,"mobilePhone2");
-			CUr.Fax = MyJSGet(jsresponse,"mobilePhone3");
-			CUr.eMail = MyJSGet(jsresponse,"mainEmail");
+			if(blank(CUr.Name) and CUr.Name!=oldCUr.Name)then begin
+				CUr.Name = oldCUr.Name;
+				updatef = true;
+			end;
+			
+			StripEndingSpaces(oldCUr.Name);
 			birthdate.year = stringtoint(left(MyJSGet(jsresponse,"birthday"),4));
 			birthdate.day = stringtoint(mid(MyJSGet(jsresponse,"birthday"),8,2));
 			birthdate.month = stringtoint(mid(MyJSGet(jsresponse,"birthday"),5,2));
-			CUr.BirthDate = birthdate;
 			
-			CUr.CRMid = MyJSGet(jsresponse,"Id");
 			
-			recordstore(CUr,true);
+			if(CUr.CRMid!=MyJSGet(jsresponse,"Id"))then begin
+				CUr.CRMid = MyJSGet(jsresponse,"Id");
+				updatef = true;
+			end;
 			
+			
+			
+//			CUr.BirthDate = birthdate;			
+//			CUr.Phone = MyJSGet(jsresponse,"landlineNumber");
+//			CUr.Mobile = MyJSGet(jsresponse,"mobilePhone1");
+//			CUr.AltPhone = MyJSGet(jsresponse,"mobilePhone2");
+//			CUr.Fax = MyJSGet(jsresponse,"mobilePhone3");
+//			CUr.eMail = MyJSGet(jsresponse,"mainEmail");			
+			gender = MyJSGet(jsresponse,"gender");
+			if(status=="Male")then begin
+//				CUr.Gender = 0;
+			end;
+			if(status=="Female")then begin
+//				CUr.Gender = 1;
+			end;			
+//CUr.CRMName = MyJSGet(jsresponse,"firstName");
+//CUr.CRMLName = MyJSGet(jsresponse,"lastName");
+//CUr.CRMPatr = MyJSGet(jsresponse,"middleName");		
+
+
+
+//Фиксирование изменения регистра
+
+			oldCUr.BirthDate = birthdate;			
+			if(blank(CUr.BirthDate) and CUr.BirthDate!=oldCUr.BirthDate)then begin
+				CUr.BirthDate = oldCUr.BirthDate;
+				updatef = true;
+			end;
+			oldCUr.Phone = MyJSGet(jsresponse,"landlineNumber");
+			if(blank(CUr.Phone) and CUr.Phone!=oldCUr.Phone)then begin
+				CUr.Phone = oldCUr.Phone;
+				updatef = true;
+			end;
+			oldCUr.Mobile = MyJSGet(jsresponse,"mobilePhone1");
+			if(blank(CUr.Mobile) and CUr.Mobile!=oldCUr.Mobile)then begin
+				CUr.Mobile = oldCUr.Mobile;
+				updatef = true;
+			end;
+			oldCUr.AltPhone = MyJSGet(jsresponse,"mobilePhone2");
+			if(blank(CUr.AltPhone) and CUr.Mobile!=oldCUr.AltPhone)then begin
+				CUr.AltPhone = oldCUr.AltPhone;
+				updatef = true;
+			end;
+			oldCUr.Fax = MyJSGet(jsresponse,"mobilePhone3");
+			if(blank(CUr.Fax) and CUr.Fax!=oldCUr.Fax)then begin
+				CUr.Fax = oldCUr.Fax;
+				updatef = true;
+			end;
+			oldCUr.eMail = MyJSGet(jsresponse,"mainEmail");		
+			if(blank(CUr.eMail) and CUr.eMail!=oldCUr.eMail)then begin
+				CUr.eMail = oldCUr.eMail;
+				updatef = true;
+			end;	
+			gender = MyJSGet(jsresponse,"gender");
+			if(status=="Male")then begin
+				oldCUr.Gender = 0;
+			end;
+			if(status=="Female")then begin
+				oldCUr.Gender = 1;
+			end;		
+			if(CUr.Gender!=oldCUr.Gender)then begin
+				CUr.Gender = oldCUr.Gender;
+				updatef = true;
+			end;	
+			
+				
+			oldCUr.CRMName = MyJSGet(jsresponse,"firstName");
+			StripEndingSpaces(oldCUr.CRMName);
+			if(blank(CUr.CRMName) and CUr.CRMName!=oldCUr.CRMName)then begin
+				CUr.CRMName = oldCUr.CRMName;
+				updatef = true;
+			end;	
+			oldCUr.CRMLName = MyJSGet(jsresponse,"lastName");
+			StripEndingSpaces(oldCUr.CRMLName);
+			if(blank(CUr.CRMLName) and CUr.CRMLName!=oldCUr.CRMLName)then begin
+				CUr.CRMLName = oldCUr.CRMLName;
+				updatef = true;
+			end;
+			oldCUr.CRMPatr = MyJSGet(jsresponse,"middleName");	
+			if(blank(CUr.CRMPatr) and CUr.CRMPatr!=oldCUr.CRMPatr)then begin
+				CUr.CRMPatr = oldCUr.CRMPatr;
+				updatef = true;
+			end;
+			
+			
+			
+			
+			if(nonblank(CUr.Name) and CUr.Name!=oldCUr.Name or
+				nonblank(CUr.BirthDate) and CUr.BirthDate!=oldCUr.BirthDate or
+				nonblank(CUr.Phone) and CUr.Phone!=oldCUr.Phone or
+				nonblank(CUr.Mobile) and CUr.Mobile!=oldCUr.Mobile or
+				nonblank(CUr.AltPhone) and CUr.AltPhone!=oldCUr.AltPhone or
+				nonblank(CUr.Fax) and CUr.Fax!=oldCUr.Fax or
+				nonblank(CUr.eMail) and CUr.eMail!=oldCUr.eMail or
+				CUr.Gender!=oldCUr.Gender or
+				nonblank(CUr.CRMName) and CUr.CRMName!=oldCUr.CRMName or
+				nonblank(CUr.CRMLName) and CUr.CRMLName!=oldCUr.CRMLName or
+				nonblank(CUr.CRMPatr) and CUr.CRMPatr!=oldCUr.CRMPatr)then begin
+				SendMailTiCRMForChangeCustomer(CUr,oldCUr);
+			end;
+			
+			if(updatef)then begin
+				recordstore(CUr,true);
+			end;
+/*			
 			resetloop(Phoner);
 			TrHs = true;
 			Phoner.CUCode = CUr.Code;
@@ -697,11 +875,8 @@ begin
 				recordStore(Phoner,true);
 			end;
 			
-			//if(recordupdate(oldCUr,CUr,true)==0)then begin
+*/
 			weboutstring("{\"id\":\"" & CUr.Code & "\"}");
-			//end	else begin
-			//	weboutstring("{\"error\":\"Can't update Customer\"}");
-			//end;
 			
 		end else begin
 			weboutstring("{\"error\":\"Customer not exist\",\"result\":\"try create\"}");

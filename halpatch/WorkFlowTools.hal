@@ -1,0 +1,82 @@
+SetLangMode(LangRussian,"RUS",0);
+
+
+global updating procedure CreateActsForWorkFlowIdea(record IPVc IPr, record IPVc IP2r)
+begin
+	row IPVc IPrw;
+	integer i,rwcnt,j,mtrw;
+	record IVVc IVr;
+	record ORVc ORr;
+	record ActVc Actr;
+	boolean TrHs,disfoundf;
+	row ORVc ORrw;
+	vector boolean vIDManufacturerName;
+	array string 255 aIDManufacturerName;
+	
+	if(currentcompany==23)then begin
+		if(IPr.OKFlag==1 and IP2r.OKFlag==0)then begin
+			rwcnt = matrowcnt(IPr);
+			for(i=0;i<rwcnt;i=i+1)begin
+				matrowget(IPr,i,IPrw);
+				if(IPrw.InvoiceNr>0)then begin
+					IVr.SerNr = IPrw.InvoiceNr;
+					if(readfirstmain(IVr,1,true))then begin
+						if(IVr.OrderNr>-1)then begin
+							ORr.SerNr = IVr.OrderNr;
+							if(readfirstmain(ORr,1,true))then begin
+								Actr.FromFileName = "ORVc";
+								Actr.FromSerNr = ORr.SerNr;
+								
+								TrHs = true;
+								while (LoopKey("FromFileName",Actr,2,TrHs)) begin
+									if (Actr.FromFileName!="ORVc") then begin TrHs = false; end;
+									if (StringToLongInt(Actr.FromSerNr)!=ORr.SerNr) then begin TrHs = false; end;
+									if (TrHs) then begin
+										
+										if(Actr.ActType=="DIS1")then begin
+											disfoundf = true;
+										end;
+									end;
+								end;
+								
+								if(disfoundf==false)then begin
+									mtrw = matrowcnt(ORr);
+									for(j=0;j<mtrw;j=j+1)begin
+										matrowget(ORr,j,ORrw);
+										if(nonblank(ORrw.IDManufacturerName))then begin
+											vIDManufacturerName[ORrw.IDManufacturerName] = true;
+										end;
+									end;
+									
+									getVectorTags(vIDManufacturerName,aIDManufacturerName);
+									if(aIDManufacturerName.length>0)then begin
+										for(j=0;j<aIDManufacturerName.length;j=j+1)begin
+											recordnew(Actr);
+											Actr.FromFileName = "ORVc";
+											Actr.FromSerNr = ORr.SerNr;
+											Actr.MainPersons = ORr.SalesMan;
+											Actr.ActType = "DIS1";
+											Actr.Comment = "Заказ: " & ORr.CustOrdNr & " Создать заказ на пурчейзера " & aIDManufacturerName[j];
+											Actr.SerNr = NextSerNr("ActVc",currentdate,-1,false,"");
+										end;
+									end else begin
+										recordnew(Actr);
+										Actr.FromFileName = "ORVc";
+										Actr.FromSerNr = ORr.SerNr;
+										Actr.MainPersons = ORr.SalesMan;
+										Actr.ActType = "DIS1";
+										Actr.Comment = "Заказ: " & ORr.CustOrdNr & " Заполнить бренды и создать заказ на пурчейзера";
+										Actr.SerNr = NextSerNr("ActVc",currentdate,-1,false,"");
+									end;
+									
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+
+return;
+end;
