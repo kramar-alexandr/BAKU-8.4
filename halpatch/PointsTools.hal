@@ -42,7 +42,7 @@ begin
   record IVCashVc IVCashr;
   boolean TrHs,test,testf;
   val bal;
-  
+
   TrHs = true;
   PHr.LMCardNr = card;
   bal = 0;
@@ -149,7 +149,11 @@ begin
       pointsStatistic = points;
     end; //Edit***************************Sasha2,17:15 15.09.2017 }
     cardnr = IVr.LoyaltyCardNr;
-    RecordDelete(PHr);
+		if(blank(IVr.LoyaltyCardNr) and nonblank(IVr.LinkLoyaltyCardNr)) then begin
+			cardnr = IVr.LinkLoyaltyCardNr;
+    end;
+		
+		RecordDelete(PHr);
     
     //removes PointsHistVc record with points payment information
     PHr.TransNr = transnr; //Edit***************************Sasha2,17:57 26.07.2017 {
@@ -233,6 +237,7 @@ end;
 global 
 updating procedure AddPointsHist(LongInt transnr,string filename, integer invtype)
 begin 
+	string 255 lc;
   record PointsHistVc PHr;
   record LoyaltyCardVc LoyaltyCardr,LoyaltyCard2r,oldLoyaltyCardr,LCr;
   record IVVc IVr;
@@ -254,17 +259,24 @@ begin
       if (ReadFirstMain(IVr,1,true)) begin end;
       PHr.TransDate = IVr.TransDate;
       PHr.CustCode = IVr.CustCode;
-      PHr.Location = IVr.Location;
-      LoyaltyCardr.SerNr = IVr.LoyaltyCardNr;
+      PHr.Location = IVr.Location; 
+      
+			lc = IVr.LoyaltyCardNr;
+			if(blank(IVr.LoyaltyCardNr) and nonblank(IVr.LinkLoyaltyCardNr)) then begin
+				lc = IVr.LinkLoyaltyCardNr;
+			end;
+
+			LoyaltyCardr.SerNr = lc;
+
+			
       if (ReadFirstMain(LoyaltyCardr,1,true)) then begin end;
-      
-      
-      PHr.LMCardNr = IVr.LoyaltyCardNr;
+   
+      PHr.LMCardNr = lc;
       PHr.FWBalance = LoyaltyCardr.PointsBalance;
       
       if (nonblank(LoyaltyCardr.PointsTo)) then begin
         PHr.LMCardNr = LoyaltyCardr.PointsTo;
-        PHr.PointsFrom = IVr.LoyaltyCardNr;
+        PHr.PointsFrom = lc;
         LoyaltyCard2r.SerNr = LoyaltyCardr.PointsTo;
         if (ReadFirstMain(LoyaltyCard2r,1,true)) then begin 
           PHr.FWBalance = LoyaltyCard2r.PointsBalance;
@@ -512,9 +524,16 @@ begin
     MatRowGet(IVp,i,IVrw);
     switch (IVrw.stp) begin
       case kInvoiceRowTypeLoyaltyPointsPayment:
+			if(nonblank(IVp.LoyaltyCardNr)) then begin
         LoyaltyCardPointsRedemption(IVp.LoyaltyCardNr,IVrw.Points,negf);
         UpdatePointHistory("IVVc",IVp.SerNr,IVp.CustCode,IVp.TransDate,IVp.Location,IVp.LoyaltyCardNr,IVrw.Points);
-    end;
+			end else begin
+				if(nonblank(IVp.LinkLoyaltyCardNr))then begin
+			    LoyaltyCardPointsRedemption(IVp.LinkLoyaltyCardNr,IVrw.Points,negf);
+					UpdatePointHistory("IVVc",IVp.SerNr,IVp.CustCode,IVp.TransDate,IVp.Location,IVp.LinkLoyaltyCardNr,IVrw.Points);
+				end;
+			end;
+		end;
   end;
   return;
 end; 
