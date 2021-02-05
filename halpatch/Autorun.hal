@@ -898,8 +898,8 @@ begin
 	row CompaniesBlock Comprw;
 	record ECAutoRetSMBlock ECARSMb;
 	area text,replyPr,text2;
-	record GlobalItemVc mainGIr,TPCPGIr;
-	boolean TrHs,testf,testf1;
+	record GlobalItemVc mainGIr,TPCPGIr,DupGlobalItem;
+	boolean TrHs,testf,testf1, TrHs2;
 	val ITRebate,price;
 	record INVc INr;
 	vector boolean compCh;
@@ -913,6 +913,7 @@ begin
 	string 255 file1,file2,obj,crn,tpcurrency;
 	val fr,to1,to2,br1,br2,TempItemPrice,tprice;  
 	date td,tdp;
+	record ItemDuplicatesVc IDr; 
 	
 	startCompany = currentCompany;
   blockload(WRChb);
@@ -941,22 +942,21 @@ begin
 			if(stop==100) then begin stop=0; end;
 			stop = stop+1;
 			matrowget(Compb,i,Comprw);
-			If(SetInSet(i+1,"1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,19,20,21,22,23,24,25,26,27,28,29,30,31")) then begin	
+			if(SetInSet(i+1,"1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,19,20,21,22,23,24,25,26,27,28,29,30,31")) then begin	
 				if(Comprw.ActiveStatus==0 and i+1!=10 and i+1!=32)then begin
 					SetCompany(i+1,false);
 					price = blankval;
 					tprice = blankval;
 					INr.Code = GIr.HansaCode;
-					if(CurrentCompany==29 and blank(INr.Group)) then begin
-					end else begin
-						if(GIr.Code=="BRND0057_16146")then begin
-							logtext(0,"recalc BRND0057_16146");
-						end;
+					if(!(CurrentCompany==29 and blank(INr.Group))) then begin
+						// if(GIr.Code=="BRND0057_16146")then begin
+							// logtext(0,"recalc BRND0057_16146");
+						// end;
 						if (ReadFirstMain(INr,1,true) and INr.BPIBrand==left(GIr.Code,8)) then begin
 							GetPriceItem(INr.Code,price,ITRebate);
-							if(GIr.Code=="BRND0057_16146")then begin
-								logtext(0,"GetPriceItem(INr.Code,price,ITRebate);  " & price & "  " & ITRebate);
-							end;
+							// if(GIr.Code=="BRND0057_16146")then begin
+								// logtext(0,"GetPriceItem(INr.Code,price,ITRebate);  " & price & "  " & ITRebate);
+							// end;
 							ISr.Code = INr.Code;
 							ISr.Location = ";;;";
 							tdp = currentdate;
@@ -997,11 +997,74 @@ begin
 							end;	
 						end;
 					end;	
-				end;	
+					IDr.OrigCode = INr.Code;
+					TrHs2 = true;
+					while(loopMain(IDr,1,TrHs2))begin
+						if (IDr.OrigCode!=INr.Code) then begin TrHs2 = false; end;
+						if (IDr.OrigBrandCode==left(GIr.Code,8) and TrHs2) then begin
+							price = blankval;
+							tprice = blankval;
+							INr.Code = IDr.DupCode;
+							if(!(CurrentCompany==29 and blank(INr.Group))) then begin
+								// if(GIr.Code=="BRND0057_16146")then begin
+									// logtext(0,"recalc BRND0057_16146");
+								// end;
+								if (ReadFirstMain(INr,1,true) and INr.BPIBrand==left(GIr.Code,8)) then begin
+									GetPriceItem(INr.Code,price,ITRebate);
+									// if(GIr.Code=="BRND0057_16146")then begin
+										// logtext(0,"GetPriceItem(INr.Code,price,ITRebate);  " & price & "  " & ITRebate);
+									// end;
+									ISr.Code = INr.Code;
+									ISr.Location = ";;;";
+									tdp = currentdate;
+									if (GetTempItemPrice(TempItemPrice,INr.Code,tpcurrency,tdp,obj)) then begin
+										if(tpcurrency!="AZN")then begin
+											crn = tpcurrency;
+											td = tdp;
+											fr = 0;
+											to1 = 0;
+											to2 = 0;
+											br1 = 0;
+											br2 = 0;
+											GetFullCurncyRate(crn,td,fr,to1,to2,br1,br2);
+											tprice = TempItemPrice/fr*to1;
+										end else begin
+											tprice = TempItemPrice;
+										end;
+										ITRebate = 0;
+										if(tprice!=blankval)then begin
+											price = tprice;
+										end;
+										//if(tprice>price) then begin price = tprice; end;
+									end;	
+									if(ReadFirstMain(ISr,2,true)) then begin 
+										if(ISr.Instock>0) then begin
+											if(!OldItemf and (price!=GIr.Price or GIr.Rebate!=ITRebate))then begin
+												OldItemf = true;
+											end;
+											if(price!=GIr.Price)then begin
+												DiffItemsCnt = DiffItemsCnt + 1;
+											end;
+											if(DiffItemsCnt>0) then begin
+												compCh[i+1] = true;
+											end;	
+											if ((ItemPriceComp[GIr.Code & "_" & i+1] - (ItemPriceComp[GIr.Code & "_" & i+1]/100*ItemRebComp[GIr.Code & "_" & i+1]))<(price - (price / 100 * ITRebate))) then begin 
+												ItemPriceComp[GIr.Code & "_" & i+1] = price;
+												ItemRebComp[GIr.Code & "_" & i+1] = ITRebate;
+											end;
+										end;	
+									end;	
+								end;
+							end;
+						end;
+					end;
+					ResetLoop(IDr);
+				end;
 			end;
 		end;
 		if(OldItemf) then begin
 			price = 0;
+			ITRebate = 0;
 			oldPrice = GIr.Price;
 			oldReb = GIr.Rebate;
 			for(i=1;i<34;i=i+1) begin
@@ -1009,8 +1072,9 @@ begin
 					matrowget(Compb,i-1,Comprw);
 					AddTextToArea(GIr.Code & chr(9) & ItemPriceComp[GIr.Code & "_" & i] & chr(9) & ItemRebComp[GIr.Code & "_" & i] & chr(9) & Comprw.CompName & chr(13),text2);
 				end;
-				if(ItemPriceComp[GIr.Code & "_" & i]>price) then begin
+				if((ItemPriceComp[GIr.Code & "_" & i] - (ItemPriceComp[GIr.Code & "_" & i]/100*ItemRebComp[GIr.Code & "_" & i]))>(price - (price / 100 * ITRebate))) then begin
 					price = ItemPriceComp[GIr.Code & "_" & i];
+					ITRebate = ItemRebComp[GIr.Code & "_" & i];
 					GIr.Price = Round(ItemPriceComp[GIr.Code & "_" & i],SetRoundModeD(0));
 					GIr.Rebate = ItemRebComp[GIr.Code & "_" & i];
 					compnr = i;
@@ -1086,7 +1150,7 @@ begin
 		GIr.Code = RepSpec.f1;
 		if(ReadFirstMain(GIr,1,true))then begin 
 			queued.updateGIrAuto(GIr);
-			MilliSleep(50);
+			MilliSleep(100);
 		end;
 	end;
 	
@@ -1110,7 +1174,7 @@ begin
 					GIr.Code = INr.GlobalArtCode;
 					if(ReadFirstMain(GIr,1,true))then begin
 						queued.updateGIrAuto(GIr);
-						MilliSleep(50);
+						MilliSleep(100);
 					end;
 				end;
 			end;
@@ -1120,7 +1184,7 @@ begin
 		if(blank(RepSpec.f1)) then begin
 			while(loopmain(GIr,1,TrHs)) begin	
 				queued.updateGIrAuto(GIr);
-				MilliSleep(50);
+				MilliSleep(100);
 			end;
 		end;
 	end;
