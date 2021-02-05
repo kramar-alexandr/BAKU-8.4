@@ -675,7 +675,8 @@ begin
 	boolean TrHs;
 	integer i,phonesqty;
 	array string 255 phones;
-	boolean updatef;
+	boolean updatef,mail,lcfound;
+	record LoyaltyCardVc LCr;
 	
 	logtext(0,"WebUpdateCustomer");
 	
@@ -700,9 +701,21 @@ begin
 		end;
 		
 		if(readfirstkey("Code",CUr,1,true)==true)then begin
-		
+			LCr.CustCode = Cur.Code;
+			lcfound = false;
+			TrHs = true;
+			while(loopkey("CustCode",LCr,1,TrHs))begin
+				if(LCr.CustCode!=Cur.Code)then begin
+					TrHs = false;
+				end;
+				if(TrHs)then begin
+					if(LCr.LCMLevel=="1" or LCr.LCMLevel=="EMPL")then begin
+						lcfound = true;
+					end;
+				end;
+			end;
 			//Обновление персональных данных в карточке клиента отключено по письму от Натаван И Щахрияра 4/2/2021 "Re: Отключение обновление ФИО контактов из CMR"
-			
+			logtext(0,CUr.Code);
 			status = MyJSGet(jsresponse,"status");
 			if(status=="active")then begin
 				oldCUr.blockedFlag = 0;
@@ -716,16 +729,6 @@ begin
 				updatef = true;
 			end;
 			
-			if(nonblank(MyJSGet(jsresponse,"firstName")) or nonblank(MyJSGet(jsresponse,"lastName")))then begin
-				oldCUr.Name = MyJSGet(jsresponse,"firstName") & " " & MyJSGet(jsresponse,"lastName");
-				StripEndingSpaces(oldCUr.Name);
-			end;
-			if(blank(CUr.Name) and CUr.Name!=oldCUr.Name)then begin
-				CUr.Name = oldCUr.Name;
-				updatef = true;
-			end;
-			
-			
 			birthdate.year = stringtoint(left(MyJSGet(jsresponse,"birthday"),4));
 			birthdate.day = stringtoint(mid(MyJSGet(jsresponse,"birthday"),8,2));
 			birthdate.month = stringtoint(mid(MyJSGet(jsresponse,"birthday"),5,2));
@@ -735,182 +738,193 @@ begin
 				CUr.CRMid = MyJSGet(jsresponse,"Id");
 				updatef = true;
 			end;
-			
-			
-			
-//			CUr.BirthDate = birthdate;			
-//			CUr.Phone = MyJSGet(jsresponse,"landlineNumber");
-//			CUr.Mobile = MyJSGet(jsresponse,"mobilePhone1");
-//			CUr.AltPhone = MyJSGet(jsresponse,"mobilePhone2");
-//			CUr.Fax = MyJSGet(jsresponse,"mobilePhone3");
-//			CUr.eMail = MyJSGet(jsresponse,"mainEmail");			
-			gender = MyJSGet(jsresponse,"gender");
-			if(status=="Male")then begin
-//				CUr.Gender = 0;
-			end;
-			if(status=="Female")then begin
-//				CUr.Gender = 1;
-			end;			
-//CUr.CRMName = MyJSGet(jsresponse,"firstName");
-//CUr.CRMLName = MyJSGet(jsresponse,"lastName");
-//CUr.CRMPatr = MyJSGet(jsresponse,"middleName");		
-
-
-
-//Фиксирование изменения регистра
-
-			oldCUr.BirthDate = birthdate;	
-			if(nonblankdate(oldCUr.BirthDate))then begin		
-				if(blankdate(CUr.BirthDate) and CUr.BirthDate!=oldCUr.BirthDate)then begin
-					CUr.BirthDate = oldCUr.BirthDate;
-					updatef = true;
+			if(lcfound==false)then begin
+				CUr.BirthDate = birthdate;			
+				CUr.Phone = MyJSGet(jsresponse,"landlineNumber");
+				CUr.Mobile = MyJSGet(jsresponse,"mobilePhone1");
+				CUr.AltPhone = MyJSGet(jsresponse,"mobilePhone2");
+				CUr.Fax = MyJSGet(jsresponse,"mobilePhone3");
+				CUr.eMail = MyJSGet(jsresponse,"mainEmail");			
+				gender = MyJSGet(jsresponse,"gender");
+				if(status=="Male")then begin
+					CUr.Gender = 0;
 				end;
-			end;
-			
-			oldCUr.Phone = MyJSGet(jsresponse,"landlineNumber");
-			if(nonblank(oldCUr.Phone))then begin
-				if(blank(CUr.Phone) and CUr.Phone!=oldCUr.Phone)then begin
-					CUr.Phone = oldCUr.Phone;
-					updatef = true;
+				if(status=="Female")then begin
+					CUr.Gender = 1;
+				end;			
+				CUr.CRMName = MyJSGet(jsresponse,"firstName");
+				StripEndingSpaces(CUr.CRMName);
+				CUr.CRMLName = MyJSGet(jsresponse,"lastName");
+				StripEndingSpaces(CUr.CRMLName);
+				CUr.CRMPatr = MyJSGet(jsresponse,"middleName");		
+				StripEndingSpaces(CUr.CRMPatr);
+				if(nonblank(MyJSGet(jsresponse,"middleName")) or nonblank(MyJSGet(jsresponse,"lastName")))then begin
+					CUr.Name = MyJSGet(jsresponse,"firstName") & " " & MyJSGet(jsresponse,"lastName");
+					StripEndingSpaces(CUr.Name);
 				end;
-			end;
-			oldCUr.Mobile = MyJSGet(jsresponse,"mobilePhone1");
-			if(nonblank(oldCUr.Mobile))then begin
-				if(blank(CUr.Mobile) and CUr.Mobile!=oldCUr.Mobile)then begin
-					CUr.Mobile = oldCUr.Mobile;
-					updatef = true;
-				end;
-			end;
-			
-			oldCUr.AltPhone = MyJSGet(jsresponse,"mobilePhone2");
-			if(nonblank(oldCUr.AltPhone))then begin
-				if(blank(CUr.AltPhone) and CUr.Mobile!=oldCUr.AltPhone)then begin
-					CUr.AltPhone = oldCUr.AltPhone;
-					updatef = true;
-				end;
-			end;
-			oldCUr.Fax = MyJSGet(jsresponse,"mobilePhone3");
-			if(nonblank(oldCUr.Fax))then begin
-				if(blank(CUr.Fax) and CUr.Fax!=oldCUr.Fax)then begin
-					CUr.Fax = oldCUr.Fax;
-					updatef = true;
-				end;
-			end;
-			oldCUr.eMail = MyJSGet(jsresponse,"mainEmail");		
-			if(nonblank(oldCUr.eMail))then begin
-				if(blank(CUr.eMail) and CUr.eMail!=oldCUr.eMail)then begin
-					CUr.eMail = oldCUr.eMail;
-					updatef = true;
-				end;	
-			end;
-			
-			gender = MyJSGet(jsresponse,"gender");
-			if(nonblank(gender))then begin
-				if(gender=="Male")then begin
-					oldCUr.Gender = 0;
-				end;
-				if(gender=="Female")then begin
-					oldCUr.Gender = 1;
-				end;		
-				if(CUr.Gender!=oldCUr.Gender)then begin
-					CUr.Gender = oldCUr.Gender;
-					updatef = true;
-				end;
+				updatef = true;
 			end else begin
-				oldCUr.Gender = CUr.Gender;
-			end;
+				//Фиксирование изменения регистра
+				oldCUr.BirthDate = birthdate;	
+				if(nonblankdate(oldCUr.BirthDate))then begin		
+					if(blankdate(CUr.BirthDate) and CUr.BirthDate!=oldCUr.BirthDate)then begin
+						CUr.BirthDate = oldCUr.BirthDate;
+						updatef = true;
+					end;
+				end;
+			
+				oldCUr.Phone = MyJSGet(jsresponse,"landlineNumber");
+				if(nonblank(oldCUr.Phone))then begin
+					if(blank(CUr.Phone) and CUr.Phone!=oldCUr.Phone)then begin
+						CUr.Phone = oldCUr.Phone;
+						updatef = true;
+					end;
+				end;
+				oldCUr.Mobile = MyJSGet(jsresponse,"mobilePhone1");
+				if(nonblank(oldCUr.Mobile))then begin
+					if(blank(CUr.Mobile) and CUr.Mobile!=oldCUr.Mobile)then begin
+						CUr.Mobile = oldCUr.Mobile;
+						updatef = true;
+					end;
+				end;
+			
+				oldCUr.AltPhone = MyJSGet(jsresponse,"mobilePhone2");
+				if(nonblank(oldCUr.AltPhone))then begin
+					if(blank(CUr.AltPhone) and CUr.Mobile!=oldCUr.AltPhone)then begin
+						CUr.AltPhone = oldCUr.AltPhone;
+						updatef = true;
+					end;
+				end;
+				oldCUr.Fax = MyJSGet(jsresponse,"mobilePhone3");
+				if(nonblank(oldCUr.Fax))then begin
+					if(blank(CUr.Fax) and CUr.Fax!=oldCUr.Fax)then begin
+						CUr.Fax = oldCUr.Fax;
+						updatef = true;
+					end;
+				end;
+				oldCUr.eMail = MyJSGet(jsresponse,"mainEmail");		
+				if(nonblank(oldCUr.eMail))then begin
+					if(blank(CUr.eMail) and CUr.eMail!=oldCUr.eMail)then begin
+						CUr.eMail = oldCUr.eMail;
+						updatef = true;
+					end;	
+				end;
+			
+				gender = MyJSGet(jsresponse,"gender");
+				if(nonblank(gender))then begin
+					if(gender=="Male")then begin
+						oldCUr.Gender = 0;
+					end;
+					if(gender=="Female")then begin
+						oldCUr.Gender = 1;
+					end;		
+					if(CUr.Gender!=oldCUr.Gender)then begin
+						CUr.Gender = oldCUr.Gender;
+						updatef = true;
+					end;
+				end else begin
+					oldCUr.Gender = CUr.Gender;
+				end;
 			
 				
-			oldCUr.CRMName = MyJSGet(jsresponse,"firstName");
-			StripEndingSpaces(oldCUr.CRMName);
-			if(nonblank(oldCUr.CRMName))then begin
-				if(blank(CUr.CRMName) and CUr.CRMName!=oldCUr.CRMName)then begin
-					CUr.CRMName = oldCUr.CRMName;
-					updatef = true;
-				end;	
-			end;
-			oldCUr.CRMLName = MyJSGet(jsresponse,"lastName");
-			StripEndingSpaces(oldCUr.CRMLName);
-			if(nonblank(oldCUr.CRMLName))then begin
-				if(blank(CUr.CRMLName) and CUr.CRMLName!=oldCUr.CRMLName)then begin
-					CUr.CRMLName = oldCUr.CRMLName;
-					updatef = true;
+				oldCUr.CRMName = MyJSGet(jsresponse,"firstName");
+				StripEndingSpaces(oldCUr.CRMName);
+				if(nonblank(oldCUr.CRMName))then begin
+					if(blank(CUr.CRMName) and CUr.CRMName!=oldCUr.CRMName)then begin
+						CUr.CRMName = oldCUr.CRMName;
+						updatef = true;
+					end;	
 				end;
-			end;
-			oldCUr.CRMPatr = MyJSGet(jsresponse,"middleName");	
-			if(nonblank(oldCUr.CRMPatr))then begin
-				if(blank(CUr.CRMPatr) and CUr.CRMPatr!=oldCUr.CRMPatr)then begin
-					CUr.CRMPatr = oldCUr.CRMPatr;
-					updatef = true;
+				oldCUr.CRMLName = MyJSGet(jsresponse,"lastName");
+				StripEndingSpaces(oldCUr.CRMLName);
+				if(nonblank(oldCUr.CRMLName))then begin
+					if(blank(CUr.CRMLName) and CUr.CRMLName!=oldCUr.CRMLName)then begin
+						CUr.CRMLName = oldCUr.CRMLName;
+						updatef = true;
+					end;
 				end;
-			end;
+				oldCUr.CRMPatr = MyJSGet(jsresponse,"middleName");	
+				if(nonblank(oldCUr.CRMPatr))then begin
+					if(blank(CUr.CRMPatr) and CUr.CRMPatr!=oldCUr.CRMPatr)then begin
+						CUr.CRMPatr = oldCUr.CRMPatr;
+						updatef = true;
+					end;
+				end;
 			
-if(nonblank(CUr.Name) and CUr.Name!=oldCUr.Name) then begin logtext(0,"Name"); end;
-if(nonblankdate(CUr.BirthDate) and CUr.BirthDate!=oldCUr.BirthDate)  then begin logtext(0,"BirthDate"); end;
-if(nonblank(CUr.Phone) and CUr.Phone!=oldCUr.Phone)  then begin logtext(0,"Phone"); end;
-if(nonblank(CUr.Mobile) and CUr.Mobile!=oldCUr.Mobile)  then begin logtext(0,"Mobile"); end;
-if(nonblank(CUr.AltPhone) and CUr.AltPhone!=oldCUr.AltPhone)  then begin logtext(0,"AltPhone"); end;
-if(nonblank(CUr.Fax) and CUr.Fax!=oldCUr.Fax)  then begin logtext(0,"Fax"); end;
-if(nonblank(CUr.eMail) and CUr.eMail!=oldCUr.eMail)  then begin logtext(0,"eMail"); end;
-if((CUr.Gender!=3 and CUr.Gender!=oldCUr.Gender))  then begin logtext(0,"Gender"); end;
-if(nonblank(CUr.CRMName) and CUr.CRMName!=oldCUr.CRMName)  then begin logtext(0,"CRMName"); end;
-if(nonblank(CUr.CRMLName) and CUr.CRMLName!=oldCUr.CRMLName)  then begin logtext(0,"CRMLName"); end;
-if(nonblank(CUr.CRMPatr) and CUr.CRMPatr!=oldCUr.CRMPatr) then begin logtext(0,"CRMPatr"); end;
+			
+				if(nonblank(MyJSGet(jsresponse,"firstName")) or nonblank(MyJSGet(jsresponse,"lastName")))then begin
+					oldCUr.Name = MyJSGet(jsresponse,"firstName") & " " & MyJSGet(jsresponse,"lastName");
+					StripEndingSpaces(oldCUr.Name);
+				end;
+				if(blank(CUr.Name) and CUr.Name!=oldCUr.Name)then begin
+					CUr.Name = oldCUr.Name;
+					updatef = true;
+				end else begin
+					if(CUr.CRMName==oldCUr.CRMName and CUr.CRMLName==oldCUr.CRMLName)then begin
+						oldCUr.Name = MyJSGet(jsresponse,"firstName") & " " & MyJSGet(jsresponse,"lastName");
+						StripEndingSpaces(oldCUr.Name);
+						updatef = true;
+					end;
+				end;
+			
+				mail = false;
+				//if(nonblank(CUr.Name) and CUr.Name!=oldCUr.Name) then begin logtext(0,"Name"); mail = true; end;
+				if(nonblankdate(CUr.BirthDate) and CUr.BirthDate!=oldCUr.BirthDate)  then begin logtext(0,"BirthDate"); mail = true; end;
+				if(nonblank(CUr.Phone) and CUr.Phone!=oldCUr.Phone)  then begin logtext(0,"Phone"); mail = true; end;
+				if(nonblank(CUr.Mobile) and CUr.Mobile!=oldCUr.Mobile)  then begin logtext(0,"Mobile"); mail = true; end;
+				if(nonblank(CUr.AltPhone) and CUr.AltPhone!=oldCUr.AltPhone)  then begin logtext(0,"AltPhone"); mail = true; end;
+				if(nonblank(CUr.Fax) and CUr.Fax!=oldCUr.Fax)  then begin logtext(0,"Fax"); mail = true; end;
+				if(nonblank(CUr.eMail) and CUr.eMail!=oldCUr.eMail)  then begin logtext(0,"eMail"); mail = true; end;
+				if((CUr.Gender!=3 and CUr.Gender!=oldCUr.Gender))  then begin logtext(0,"Gender"); mail = true; end;
+				if(nonblank(CUr.CRMName) and CUr.CRMName!=oldCUr.CRMName)  then begin logtext(0,"CRMName"); mail = true; end;
+				if(nonblank(CUr.CRMLName) and CUr.CRMLName!=oldCUr.CRMLName)  then begin logtext(0,"CRMLName"); mail = true; end;
+				if(nonblank(CUr.CRMPatr) and CUr.CRMPatr!=oldCUr.CRMPatr) then begin logtext(0,"CRMPatr"); mail = true; end;
 		
-			if(nonblank(CUr.Name) and CUr.Name!=oldCUr.Name or
-				nonblankdate(CUr.BirthDate) and CUr.BirthDate!=oldCUr.BirthDate or
-				nonblank(CUr.Phone) and CUr.Phone!=oldCUr.Phone or
-				nonblank(CUr.Mobile) and CUr.Mobile!=oldCUr.Mobile or
-				nonblank(CUr.AltPhone) and CUr.AltPhone!=oldCUr.AltPhone or
-				nonblank(CUr.Fax) and CUr.Fax!=oldCUr.Fax or
-				nonblank(CUr.eMail) and CUr.eMail!=oldCUr.eMail or
-				(CUr.Gender!=3 and CUr.Gender!=oldCUr.Gender) or
-				nonblank(CUr.CRMName) and CUr.CRMName!=oldCUr.CRMName or
-				nonblank(CUr.CRMLName) and CUr.CRMLName!=oldCUr.CRMLName or
-				nonblank(CUr.CRMPatr) and CUr.CRMPatr!=oldCUr.CRMPatr)then begin
+				if(mail)then begin
 					SendMailTiCRMForChangeCustomer(CUr,oldCUr);
+				end;
 			end;
 			
 			if(updatef)then begin
 				recordstore(CUr,true);
 			end;
-/*			
-			resetloop(Phoner);
-			TrHs = true;
-			Phoner.CUCode = CUr.Code;
-			while (LoopKey("CUCode",Phoner,1,TrHs)) begin
-				if (Phoner.CUCode!=CUr.Code) then begin TrHs = false; end;
-				if (TrHs) then begin
-					RecordDelete(Phoner);
-					StepBack(Phoner);
+			
+			if(updatef)then begin
+				resetloop(Phoner);
+				TrHs = true;
+				Phoner.CUCode = CUr.Code;
+				while (LoopKey("CUCode",Phoner,1,TrHs)) begin
+					if (Phoner.CUCode!=CUr.Code) then begin TrHs = false; end;
+					if (TrHs) then begin
+						RecordDelete(Phoner);
+						StepBack(Phoner);
+					end;
+				end;
+		
+				ParsePhones(CUr.Phone,phonesqty,phones);
+				for (i=0;i<=phonesqty;i=i+1) begin
+					recordnew(Phoner);
+					Phoner.PhoneNum = phones[i];
+					Phoner.CUCode = CUr.Code;
+					recordStore(Phoner,true);
+				end;
+		
+				ParsePhones(CUr.AltPhone,phonesqty,phones);
+				for (i=0;i<=phonesqty;i=i+1) begin
+					recordnew(Phoner);
+					Phoner.PhoneNum = phones[i];
+					Phoner.CUCode = CUr.Code;
+					recordStore(Phoner,true);
+				end;
+		
+				ParsePhones(CUr.Mobile,phonesqty,phones);
+				for (i=0;i<=phonesqty;i=i+1) begin
+					recordnew(Phoner);
+					Phoner.PhoneNum = phones[i];
+					Phoner.CUCode = CUr.Code;
+					recordStore(Phoner,true);
 				end;
 			end;
-		
-			ParsePhones(CUr.Phone,phonesqty,phones);
-			for (i=0;i<=phonesqty;i=i+1) begin
-				recordnew(Phoner);
-				Phoner.PhoneNum = phones[i];
-				Phoner.CUCode = CUr.Code;
-				recordStore(Phoner,true);
-			end;
-		
-			ParsePhones(CUr.AltPhone,phonesqty,phones);
-			for (i=0;i<=phonesqty;i=i+1) begin
-				recordnew(Phoner);
-				Phoner.PhoneNum = phones[i];
-				Phoner.CUCode = CUr.Code;
-				recordStore(Phoner,true);
-			end;
-		
-			ParsePhones(CUr.Mobile,phonesqty,phones);
-			for (i=0;i<=phonesqty;i=i+1) begin
-				recordnew(Phoner);
-				Phoner.PhoneNum = phones[i];
-				Phoner.CUCode = CUr.Code;
-				recordStore(Phoner,true);
-			end;
-			
-*/
 			weboutstring("{\"id\":\"" & CUr.Code & "\"}");
 			
 		end else begin
