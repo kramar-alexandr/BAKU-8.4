@@ -23,16 +23,16 @@ begin
 	record IVVc IVr;
 	
 	integer i,rows, j;
-	vector val vSum;
-	vector Boolean vOrders;
-	vector string 255 vDates;
+	vector val vSum, vivSum;
 	array string 255 tags;
+	vector string 255 vDates, vivDates;
+	vector Boolean vOrders, vivOrders;
 	val allSum, allSumar, allSumiv, price;
   val fr, to1, to2, base1, base2;
 	string 255 curcode;
 	boolean TrHs, testf, trhs1;
 	record UserVc USr;
-	vector string 200 vusers; 
+	vector string 200 vusers, ivusers; 
   record PMBlock PMb;
   row PMBlock PMrw;
 	
@@ -57,13 +57,17 @@ begin
 		OutString(400,0,"Дата последней оплаты",false);
 		OutString(430,0,"Общий остаток долга",false);
 	EndFormat;
-	
+				resetloop(USr);
 	curcode = "AZN";
 	IPr.TransDate = RepSpec.sStartDate;
 	TrHs = true;
 	while(LoopKey("TransDate",IPr,1,TrHs))begin
 		trhs1	= true;
 		testf = true;
+		if(IPr.SerNr == -1) then begin
+			testf = false;
+		end;	
+		
 		for(j=0;j<matrowcnt(PMb) and trhs1 ;j=j+1)begin
 			matrowget(PMb,j,PMrw);
 			if(PMrw.Code==IPr.PayMode)then begin
@@ -80,20 +84,31 @@ begin
 			for(i=0;i<rows;i=i+1) begin
 				matrowget(IPr,i,IPrw);
 				IVr.SerNr = IPrw.InvoiceNr;
+				
 				if(readfirstmain(IVr,1,true))then begin
-					ORr.SerNr = IVr.OrderNr;
-					if(readfirstmain(ORr,1,true) ) then begin
-						price = IPrw.BankVal;
-						if(IPrw.BankCurncy != curcode) then begin
-							GetFullCurncyRate(IPrw.BankCurncy,IPr.TransDate,fr,to1,to2,base1,base2);
-							price = price/fr*to1;
+					price = IPrw.BankVal;
+					GetFullCurncyRate(IPrw.BankCurncy,IPr.TransDate,fr,to1,to2,base1,base2);
+					if(IPrw.BankCurncy != curcode) then begin
+						price = price/fr*to1;
+					end;
+					if(IVr.OrderNr != -1) then begin
+						ORr.SerNr = IVr.OrderNr;
+						if(readfirstmain(ORr,1,true) ) then begin	
+						
+							vSum[ORr.CustOrdNr] = vSum[ORr.CustOrdNr] + price;
+							vOrders[ORr.CustOrdNr] = true;
+							vDates[ORr.CustOrdNr] = IPr.TransDate;
+							//OutString(0,0,vSum[ORr.CustOrdNr & ";;;" & IPrw.BankCurncy & ";;;"],false);
+							//OutString(40,0,IPrw.BankCurncy,false);OutString(82,0,ORr.CustOrdNr,false);
+							//OutString(140,0,IPrw.BankVal,false);
 						end;
-						vSum[ORr.CustOrdNr] = vSum[ORr.CustOrdNr] + price;
-						vOrders[ORr.CustOrdNr] = true;
-						vDates[ORr.CustOrdNr] = IPr.TransDate;
-						//OutString(0,0,vSum[ORr.CustOrdNr & ";;;" & IPrw.BankCurncy & ";;;"],false);
-						//OutString(40,0,IPrw.BankCurncy,false);OutString(82,0,ORr.CustOrdNr,false);
-						//OutString(140,0,IPrw.BankVal,false);
+					end else begin
+						USr.Code = IVr.SalesMan;
+						readfirstmain(USr,1,true);
+						vivOrders[IVr.SerNr] = true;
+						vivDates[IVr.SerNr] = IPr.TransDate;
+						vivSum[IVr.SerNr] = vivSum[IVr.SerNr] + price;
+						ivusers[IVr.SerNr] = USr.Name;
 					end;
 				end;
 			end;
@@ -129,7 +144,7 @@ begin
 			allSum = price - allSumiv + allSumar;
 			resetloop(IVr);
 			StartFormat(15);
-			OutString(0,0,vusers[ORr.SalesMan],false);
+			OutString(0,0,vUsers[ORr.SalesMan],false);
 			OutString(50,0,ORr.RefStr,false);
 			OutString(110,0,ORr.AuthorizationCode,false);
 			OutString(160,0,ORr.IDReguester,false);
@@ -143,7 +158,22 @@ begin
 			EndFormat;
 		end;
 	end;
-	
+  
+	GetVectorTags(vivOrders,tags);
+	for(i=0;i<tags.length;i=i+1)begin
+		StartFormat(15);
+		OutString(0,0,ivUsers[tags[i]],false);
+		OutString(50,0,"",false);
+		OutString(110,0,"",false);
+		OutString(160,0,"",false);
+		OutString(210,0,"",false);
+		OutString(210,0,"",false);
+		OutDate(280,0,"",false);
+		OutString(330,0,vivSum[tags[i]],false);
+		OutString(400,0,vivDates[tags[i]],false);
+		OutString(430,0,"",false);
+		EndFormat;
+	end;
 EndJob;
 return;
 end;
