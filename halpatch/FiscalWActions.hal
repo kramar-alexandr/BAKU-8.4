@@ -1,5 +1,7 @@
 remote procedure RemoteAPI2Login(var area,string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 20 01 2021 y. at 11:43:00 AM
+remote procedure RemoteAPI2OpenShift(record CassaIDBlock,var area);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 20 01 2021 y. at 11:43:00 AM
 remote procedure APIv2SendSale_Remote(string,var area, record IVVc);
+remote procedure APIv2SendReturnAuto_Remote(string,var area,record IVVc,record IVVc);
 remote procedure WriteCustomLogOnServer(area,string);
 remote function string 255 NormalizeStrToJson (string);
 external procedure IVDClass_RefreshStringList(Integer,record IVVc);
@@ -45,7 +47,19 @@ end;
 
 global updating procedure Fiscal_Sale()   // by Ira
 begin
-	messagebox(0,"FiscalSale");
+	Integer wn,nwn,i;
+	record IVVc IVr;
+	record RcVc RepSpec;
+	wn = CurWindow;
+	getwindowrecord(wn,IVr);
+	if(ReadFirstMain(IVr,1,true))then begin
+		if(IVr.OKFlag==1)then begin
+			RepSpec.long1 = IVr.SerNr;
+			nwn = OpenWindow("APIv2SendSaleVClass",1,wn,"","",RepSpec);
+		end else begin
+			messagebox(0,"Печать доступнатолько из утвержденной сч/ф");
+		end;
+	end;
 return;
 end;
 
@@ -57,9 +71,14 @@ end;
 
 global updating procedure Fiscal_AutoReturn()  // by Ira
 begin
+	record RcVc RepSpec;
+	
+	
 	messagebox(0,"FiscalAutoReturn");
 return;
 end;
+
+
 
 
 global procedure SendFiscalLogToServer(string docnr,string doctype,area req,area reply)
@@ -172,6 +191,49 @@ begin
 return;
 end;
 
+
+global updating procedure OpenShiftKassaDsm()
+begin
+	Integer wn,mwn,rownr,mtrw,i,j,k;
+  record RcVc RepSpec;
+  record IPVc IPr;
+  record UserVc Userr;
+  row IPVc IPrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId, parentDocument;
+  json jsresponse;
+  val cash, terminal, discount,loyalty,bonus,vatsum;
+  record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:39:37 PM
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	area logarea,biglogarea,tmpar1,tmpar2;
+	vector val vatperc;
+	array string 50 vtags;
+	record CassaIDBlock CIDb;
+	
+	logtext(0,"LoginToKassaDsm");
+	
+  host = "10.12.11.11"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  page = "/v2"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+	
+	Userr.Code = CurrentUser;
+	if (ReadFirstMain(Userr,1,true)) then begin
+		host = Userr.KassaIPAddr;
+	end;
+	
+	blockload(CIDb);
+	RemoteAPI2OpenShift(CIDb,req);	
+	SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  jsresponse = ParseJSONArea(reply);
+	SendFiscalLogToServer("","OPEN_SHIFT",req,reply);
+	
+return;
+end;
+
 global
 updating procedure APIv2SendSaleDsm()
 begin
@@ -223,10 +285,6 @@ begin
 	if (ReadFirstMain(Userr,1,true)) then begin
 		host = Userr.KassaIPAddr;
 	end;
-	cash = 0.0;
-	terminal = 0.0;
-	discount = 0.0;
-	loyalty = 0;
 	
 	APIv2SendSale_Remote(CIDb.CassaToken,req,IVr);
   writeareatofile(req,"SendTAXRequest.txt",1);
@@ -278,5 +336,184 @@ begin
 		end;
 
 LAPIv2SendSaleDsm:;
+  return;
+end;
+
+
+global updating procedure APIv2SendSale()
+begin
+	record RcVc RepSpec;
+	integer wn,mwn;
+	
+	wn = curwindow;
+	mwn = motherwindow(wn);
+	closewindow(wn);
+	selectwindow(mwn);
+	APIv2SendSaleDsm;
+	
+return;
+end;
+
+global
+updating procedure APIv2SendReturnAutoDsm()//Новая процедура возврата
+begin
+  Integer wn,mwn,rownr,mtrw,i,loopcount,quant,sum,rwcnt,j;
+  record RcVc RepSpec;
+  record IVVc IVr,IV2r;
+  record UserVc Userr;
+  row IVVc IVrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId,parentDocument;
+  json jsresponse;
+  val cash,terminal,discount,summary,loyalty,bonus,vatsum;
+  array string 50 artCode;
+	record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 7:01:40 PM
+	area logarea,tmpar1,tmpar2,biglogarea;
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	string 255 orTaxTransactionCode,orTaxParentDocument;
+	record CassaIDBlock CIDb;
+	boolean isnewrec;
+	
+  wn = CurWindow;
+  DeselectWindow(wn,true);
+  
+  getwindowrecord(wn,IVr);
+  rwcnt = matrowcnt(IVr);
+  for(i=0;i<rwcnt;i=i+1)begin
+  	matrowget(IVr,i,IVrw);
+  	if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+  		if(IVrw.Quant>=0 and IVr.InvType==kInvoiceTypeNormal)then begin
+				messagebox(0,"При возврате все кол-ва товаров в сч/ф должны быть < 0");
+				goto LAPIv2SendReturnAutoDsm;
+  		end;
+  	end;
+  	if(IVr.InvType==kInvoiceTypeCredit)then begin
+  		IV2r.SerNr = IVr.CredInv;
+  		if(readfirstmain(IV2r,1,true))then begin
+  			if(readfirstmain(IV2r,1,true))then begin
+					if(blank(IV2r.TaxTransactionCode) or blank(IV2r.TaxParentDocument))then begin
+						messagebox(0,"Сч/ф продажи не содержит данных по чеку. Создайте возврат через ручной ввод фискального номера");
+						goto LAPIv2SendReturnAutoDsm;
+					end else begin
+						if(blank(orTaxTransactionCode) and blank(orTaxParentDocument))then begin
+							orTaxTransactionCode = IV2r.TaxTransactionCode;
+							orTaxParentDocument = IV2r.TaxParentDocument;
+						end else begin
+							if(orTaxTransactionCode!=IV2r.TaxTransactionCode)then begin
+								messagebox(0,"В одном чеке можно вернуть только товары проданные в одном чеке. Проверьте возврат");
+								goto LAPIv2SendReturnAutoDsm;
+							end;
+						end;
+					end;
+				end else begin
+					messagebox(0,"Оригинальная сч/ф продажи не найдена");
+					goto LAPIv2SendReturnAutoDsm;
+				end;
+  		end;
+  	end else begin
+			if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+				if(IVrw.Quant<0)then begin
+					if(IVrw.IVForRetNr<0)then begin
+						messagebox(0,"Возвращаемый товар не связан с сч/ф продажи");
+						goto LAPIv2SendReturnAutoDsm;
+					end else begin
+						IV2r.SerNr = IVrw.IVForRetNr;
+						if(readfirstmain(IV2r,1,true))then begin
+							if(blank(IV2r.TaxTransactionCode) or blank(IV2r.TaxParentDocument))then begin
+								messagebox(0,"Сч/ф продажи не содержит данных по чеку. Создайте возврат через ручной ввод фискального номера");
+								goto LAPIv2SendReturnAutoDsm;
+							end else begin
+								if(blank(orTaxTransactionCode) and blank(orTaxParentDocument))then begin
+									orTaxTransactionCode = IV2r.TaxTransactionCode;
+									orTaxParentDocument = IV2r.TaxParentDocument;
+								end else begin
+									if(orTaxTransactionCode!=IV2r.TaxTransactionCode)then begin
+										messagebox(0,"В одном чеке можно вернуть только товары проданные в одном чеке. Проверьте возврат");
+										goto LAPIv2SendReturnAutoDsm;
+									end;
+								end;
+							end;
+						end else begin
+							messagebox(0,"Оригинальная сч/ф продажи не найдена");
+							goto LAPIv2SendReturnAutoDsm;
+						end;
+					end;
+				end;
+			end;
+  	end;
+  end;
+
+  if(true)then begin
+		if(true)then begin	
+			blockload(CIDb);
+			if(IVr.SerNr<0) then begin
+				goto LAPIv2SendReturnAutoDsm;
+			end;
+			blockload(PMb);
+			host = "10.12.11.11"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+			page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+			port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+			//http://192.168.5.236:8989
+	
+			Userr.Code = CurrentUser;
+			if (ReadFirstMain(Userr,1,true)) then begin
+					host = Userr.KassaIPAddr;
+			end;
+
+			APIv2SendReturnAuto_Remote(CIDb.CassaToken,req,IVr,IV2r);
+			writeareatofile(req,"SendTAXRequest.txt",1);
+	
+			SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+
+			jsresponse = ParseJSONArea(reply);
+	
+			writeareatofile(reply,"SendTAXResponse.txt",1);
+			SendFiscalLogToServer(IVr.SerNr,"RETURN",req,reply);
+			/*if(nonblank(JSONGet(jsresponse,"short_id")))then begin
+				transactionId = JSONGet(jsresponse,"short_id");
+				IVr.TaxTransactionCode = transactionId;
+				IVr.TaxTransactionDate=CurrentDate;
+				parentDocument = JSONGet(jsresponse,"long_id");
+				IVr.TaxParentDocument = parentDocument;
+	
+				IVTaxTr.SerNr = IVr.SerNr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:41:19 PM
+				if(readfirstmain(IVTaxTr,1,true))then begin
+					IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+			
+					IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+					IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+					IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+					IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
+					recordstore(IVTaxTr,true);
+				end else begin
+					IVTaxTr.SerNr = IVr.SerNr;
+					IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+			
+					IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+					IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+					IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+					IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
+					 recordstore(IVTaxTr,true);
+				end;
+	
+				RecordStore(IVr,true);
+				if(isnewrec==false)then begin
+					putwindowrecord(mwn,IVr);
+					if(currentuser!="SA")then begin
+						IVDClass_RefreshStringList(mwn,IVr);
+					end;
+				end;
+			end;*/
+		end else begin
+		end;
+	end else begin
+	end;
+	
+LAPIv2SendReturnAutoDsm:;
+ 
   return;
 end;
