@@ -9,6 +9,7 @@ external updating procedure UpdatePrice(record PLVc);
 external procedure LogProcTime(string,longint);
 external procedure ExtractObj(string,var Integer,var string);
 external function string 255 StrReplace(string,string,string);
+external procedure GetObjs(string,string,var string);
 
 
 procedure GetPurchItemPrice(string ItemCode,var val newprp)
@@ -841,10 +842,22 @@ global webpublic updating procedure WebAFFPUVc()
 begin
 	record PUVc PUr;
 	record BPIBrandVc BPIBrandr;
-	vector string 20 vVendAFF;
-	string 20 tstr;
+	vector string 20 vVendAFF,vFOBAff;
+	string 20 tstr,fobobj;
 	integer pos;
 	boolean change;
+	record OTypeAddControlBlock OTACb;
+	row OTypeAddControlBlock OTACrw;
+	integer i,rwcnt;
+	
+	blockload(OTACb);
+	rwcnt = matrowcnt(OTACb);
+	for(i=0;i<rwcnt;i=i+1)begin
+		matrowget(OTACb,i,OTACrw);
+		if(nonblank(OTACrw.FOB))then begin
+			vFOBAff[OTACrw.FOB] = OTACrw.SUBDI;
+		end;
+	end;
 	
 	change = false;
 	if(webgetarg("change")=="true")then begin
@@ -895,7 +908,22 @@ begin
 											PUr.Objects = StrReplace(PUr.Objects,"AFF","AFF_CR");
 											recordstore(PUr,true);
 										end;
-				otherwise weboutstring("<td>" & "***********************************" & "</td>");
+				otherwise 
+										fobobj = "";
+					 					GetObjs("FOB",PUr.Objects,fobobj);
+										if(nonblank(fobobj))then begin
+											if(nonblank(vFOBAff[fobobj]))then begin 
+												weboutstring("<td>" & vFOBAff[fobobj] & "</td>");
+												if(change)then begin
+													PUr.Objects = StrReplace(PUr.Objects,"AFF",vFOBAff[fobobj]);
+													recordstore(PUr,true);
+												end;
+											end else begin
+												weboutstring("<td>" & "***********************************" & "</td>");
+											end;
+										end else begin
+											weboutstring("<td>" & "***********************************" & "</td>");
+										end;
 			end;
 			
 			weboutstring("</tr>");
