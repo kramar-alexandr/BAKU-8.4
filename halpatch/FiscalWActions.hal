@@ -45,14 +45,21 @@ end;
 
 global updating procedure Fiscal_AutoReturn()  // by Ira
 begin
+	Integer wn,nwn,i;
+	record IVVc IVr;
 	record RcVc RepSpec;
-	
-	
-	messagebox(0,"FiscalAutoReturn");
+	wn = CurWindow;
+	getwindowrecord(wn,IVr);
+	if(ReadFirstMain(IVr,1,true))then begin
+		if(IVr.OKFlag==1)then begin
+			RepSpec.long1 = IVr.SerNr;
+			nwn = OpenWindow("APIv2AutoReturnVClass",1,wn,"","",RepSpec);
+		end else begin
+			messagebox(0,"Печать доступнатолько из утвержденной сч/ф");
+		end;
+	end;
 return;
 end;
-
-
 
 global updating procedure Fiscal_Login()   // by Ira
 begin
@@ -394,12 +401,28 @@ begin
 	boolean isnewrec;
 	record CassaIDBlock CIDb;
 	
+	
   wn = CurWindow;
+	
+/*
   if(windowstate(wn)!=0)then begin
   	messagebox(0,"Сначала сохраните сч/ф");
   	goto LAPIv2SendSaleDsm;
   end;
-	getwindowrecord(wn,IVr);
+*/
+
+	
+	mwn = motherwindow(wn);
+  getwindowrecord(wn,RepSpec);
+	getwindowrecord(mwn,IVr);
+	
+	if(IVr.SerNr<0)then begin
+		isnewrec = true;
+	end;
+	
+  IVr.SerNr = RepSpec.long1;
+  ReadFirstMain(IVr,1,true);
+	
 	if(IVr.OKFlag==0)then begin
 		messagebox(0,"Сначала завершите сч/ф");
   	goto LAPIv2SendSaleDsm;
@@ -470,7 +493,12 @@ begin
 				end;
 			end;
 		end;
-
+	
+	if(isnewrec==false)then begin
+		putwindowrecord(mwn,IVr);
+		IVDClass_RefreshStringList(mwn,IVr);
+	end;
+	
 LAPIv2SendSaleDsm:;
   return;
 end;
@@ -515,9 +543,20 @@ begin
 	boolean isnewrec;
 	
   wn = CurWindow;
+	
   DeselectWindow(wn,true);
+	getwindowrecord(wn,RepSpec);
   
-  getwindowrecord(wn,IVr);
+	if(IVr.SerNr<0)then begin
+		isnewrec = true;
+	end;
+	
+  IVr.SerNr = RepSpec.long1;
+  ReadFirstMain(IVr,1,true);
+  //getwindowrecord(wn,IVr);
+	
+
+	
   rwcnt = matrowcnt(IVr);
   for(i=0;i<rwcnt;i=i+1)begin
   	matrowget(IVr,i,IVrw);
@@ -648,6 +687,12 @@ begin
 		end;
 	end else begin
 	end;
+	
+	if(isnewrec==false)then begin
+		putwindowrecord(mwn,IVr);
+		IVDClass_RefreshStringList(mwn,IVr);
+	end;
+	
 	
 LAPIv2SendReturnAutoDsm:;
  

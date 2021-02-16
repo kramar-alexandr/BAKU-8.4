@@ -979,18 +979,49 @@ end;
 
 global procedure SendTax()
 begin
-	Integer wn,nwn,i;
+	Integer wn,nwn;
+	record UserVc Userr;
+	boolean isret;
 	record IVVc IVr;
 	record RcVc RepSpec;
+	row IVVc IVrw;
+  Integer i, rwcnt;
+	
+	Userr.Code = CurrentUser;
+	readfirstmain(Userr,1,true);
+	
 	wn = CurWindow;
 	getwindowrecord(wn,IVr);
 	if(ReadFirstMain(IVr,1,true))then begin
-				if(IVr.OKFlag==1)then begin
-					RepSpec.long1 = IVr.SerNr;
+		if(IVr.OKFlag==1)then begin
+			rwcnt = MatRowCnt(IVr);
+			isret = false;
+			for (i=0;i<rwcnt and isret == false;i=i+1) begin
+				MatRowGet(IVr,i,IVrw);
+				if(IVrw.stp == 1) begin
+					if(IVrw.Quant < 0) then begin
+						isret = true;
+					end;
+				end;
+			end;
+			
+			RepSpec.long1 = IVr.SerNr;
+			if(Userr.FiscalV2 == 1) then begin 
+				if(isret == false) then begin
+					nwn = OpenWindow("APIv2SendSaleVClass",1,wn,"","",RepSpec);
+				end else begin
+					nwn = OpenWindow("APIv2AutoReturnVClass",1,wn,"","",RepSpec);
+				end;
+			end else begin
+				if(isret == false) then begin
 					nwn = OpenWindow("SendTaxNPTSOClass",1,wn,"","",RepSpec);
-        end else begin
-        	messagebox(0,"Печать доступнатолько из утвержденной сч/ф");
-        end;
+				end else begin
+					nwn = OpenWindow("ReturnTaxAutoNPTSOClass",1,wn,"","",RepSpec);
+				end;
+			end;
+		end else begin
+			messagebox(0,"Печать доступна только из утвержденной сч/ф");
+		end;
 	end;
 return;
 end;
