@@ -76,7 +76,7 @@ external procedure CalcEANCHS(var string); //Edit***************************Sash
 external procedure StringValIncrement(var string,Integer); //Edit***************************Sasha2,13:40 24.06.2016
 external procedure LogProcTime(string,longint);
 remote updating procedure ExchCurrInTr41AccRow(string,longint);
-
+external procedure ExtractObj(string,var Integer,var string);
 
 procedure GetNextPackageEANNumber(var string newEAN,string prewEAN)
 begin
@@ -913,6 +913,9 @@ BEGIN
 	record BPIBrandVc BPIBrandr;
 	record LocationVc Locr;
 	vector boolean vItemDupl,consStock;
+	Integer pos;
+  string 255 ostr,objstr;
+	
 	if(currentuser=="SA1")then begin
 		// res = 0;
 		// goto LRetPUVcRecordCheck;
@@ -1579,7 +1582,23 @@ BEGIN
   for (i = 0;i<rwcnt;i=i+1) begin
     MatRowGet(RetPUp,i,RetPUrw);
     if (check!=0) then begin //Edit***************************Sasha2,13:11 02.07.2015 {
-      VerifyRowObjects("PL","",RetPUrw.Objects,RetPUrw.CredAcc,errcode,errstr,initotcheckf,otcheckaccs,otcheckobjtyps,otcheckcnt);                              
+      if (SetInSet("AFF_CR",RetPUrw.Objects) or SetInSet("AFF_TW",RetPUrw.Objects)) then begin 
+				if (SetInSet("AFF",RetPUp.Objects)) then begin
+					pos = 0;
+					objstr = RetPUp.Objects;
+					RetPUp.Objects = "";
+					ExtractObj(objstr,pos,ostr);
+					logtext(0,objstr & " str");
+					while (nonblank(ostr)) begin
+						if (ostr!="AFF") then begin
+							if (nonblank(RetPUp.Objects)) then begin RetPUp.Objects = RetPUp.Objects & ","; end;
+							RetPUp.Objects = RetPUp.Objects & ostr;
+						end;
+						ExtractObj(objstr,pos,ostr);
+					end;
+				end;
+			end;
+			VerifyRowObjects("PL","",RetPUp.Objects,RetPUrw.Objects,errcode,errstr,initotcheckf,otcheckaccs,otcheckobjtyps,otcheckcnt);                              
       if (errcode!=0) then begin
         //RecordCheckError(errcode,errstr,i,"Objects");    
         error = errcode;
@@ -1814,6 +1833,7 @@ BEGIN
       goto LRetPUVcRecordCheck;
     end;
     GetRetPUCostAcc(CAb.ItemGroupAccounts,RetPUrw.CostAcc,INr.CostAcc,INr.Group,retpucostacc);
+		
     VerifyRowObjects("PL",RetPUp.Objects,RetPUrw.Objects,retpucostacc,errcode,errstr,initotcheckf,otcheckaccs,otcheckobjtyps,otcheckcnt);                          
     if (errcode!=0) then begin
       //RecordCheckError(errcode,errstr,i,"Objects");      
