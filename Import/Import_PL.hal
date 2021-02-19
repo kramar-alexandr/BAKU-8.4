@@ -49,6 +49,8 @@ external function boolean NewIN2DClassSubGroupClEFAfter(integer,integer,integer,
 remote procedure CheckItemCC(var record newINVc, integer);
 external updating procedure CreateTPGlobalItem(string, string, string, array string, vector string);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger
 external updating procedure SetReffItem(string, string);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:40 18.02.2021
+external updating procedure CreateGlobalSet(string,string,val,string);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 18:06 19.02.2021
+
 SetLangMode(LangRussian,"RUS",0); 
 
 procedure PUVc_FillRow(var record PUVc PUr,Integer rownr)		//Edit-----------Dima 25.12.2014
@@ -14378,6 +14380,130 @@ begin
 	end;
 	return;
 end;
+
+
+
+
+
+
+
+
+
+
+global procedure ImportGlobalSetsQueuedIn()  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:50 13.10.2020
+begin
+	record INVc INr,oldINr;
+	integer i,flushcnt,curcomp,cnt,j,k,CompQty,ErrCnt1,ErrCnt2,mtrw,INComp,StatAllRows,StatOkRows,StatFailItemRows,StatFailClassRows,ErrClasscnt,ErrCnt3,slipcont;
+	record GlobalItemVc GIr, ExtPrGIr;
+	string 100 artcode,brand,newBrand,code,glCode,tstr,bltstr,cntstr,origartcode;
+	record BPIBrandVc BPIBrandr;
+	record BPIBrandVc BPIBrand1r;
+	area ErrAr1, ErrAr2, reply;
+	array string 255 abrand,anewbrand,ErrArr,ErrAr3;
+	array string 100 headers,params;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	vector boolean Errf, Classf;
+	array string 255 SetItemCode,ItemName,ItemBrand,ItemPrice,DealerPrice,ItemCode,SetName;
+	array val SetItenQty;
+	boolean INrf, ExtPrItemf, namef, dpf;
+	string 255 filename, FinRow, PrefCode;
+	LongInt rcnt, r, okend ;
+	vector string 255 vparams, vartcode, vbrand, vorigartcode,vJSONParENG,vJSONParRUS,vJSONParAZE;
+	record JSONClassNamesVc JCNr;
+	boolean TrHs;
+	record GlobalItemSetVc GISr;
+		
+	BlockLoad(Compb);
+	
+	CompQty = matrowcnt(Compb);
+	curcomp = currentcompany;	
+	// SetImportCodePage("CP1251");
+	SetCompany(1,false);
+	okend = 0;
+	for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN");i=i+1) begin
+		if (right(GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i),4) == ".txt") then begin 
+			filename = GetFileNameInDir("/mnt/database/Ecommerce/ExtItemIN",i);
+			i = CountFilesInDir("/mnt/database/Ecommerce/ExtItemIN"); 
+		end;
+	end;
+	if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/ExtItemIN/" & filename))then begin
+		if (fileexists("/mnt/database/Ecommerce/ExtItemOUT/" & filename)) then begin
+			delete_file("/mnt/database/Ecommerce/ExtItemOUT/" & filename);
+		end;
+		logtext(0,"start ImportGlobalSetsQueuedIn");
+		SetImportCodePage("UTF-8");
+		openfile("/mnt/database/Ecommerce/ExtItemIN/" & filename);
+		// _______________________________________________________________________
+		// for (i=0;i<CountFilesInDir("ExtItemIN");i=i+1) begin
+			// if (right(GetFileNameInDir("ExtItemIN",i),4) == ".txt") then begin 
+				// filename = GetFileNameInDir("ExtItemIN",i);
+				// i = CountFilesInDir("ExtItemIN"); 
+			// end;
+		// end;
+		// if(nonblank(filename) and fileexists("ExtItemIN/" & filename))then begin
+			// if (fileexists("ExtItemOUT/" & filename)) then begin
+				// delete_file("ExtItemOUT/" & filename);
+			// end;
+			// logtext(0,"start ImportGlobalSetsQueuedIn");
+			// SetImportCodePage("UTF-8");
+			// openfile("ExtItemIN/" & filename);
+		// _______________________________________________________________________
+		
+		
+		
+		tstr = importfield;
+		tstr = right(tstr,(len(tstr)-1));
+		if(tstr!=USetStr(36229))then begin
+			logtext(0,"Import global sets CODEPAGE Error");
+			AddTextToArea	(USetStr(36351) & chr(09),ErrAr1);
+			while (TestEOF()==false) begin
+				if (NextImportLine(true)) then begin end;
+			end;
+		end;
+		if (NextImportLine(true)) then begin end;
+		tstr = ImportField;
+		if(tstr!=USetStr(36388))then begin
+			logtext(0,"ImportGlobalSetsQueuedIn CODEWORD Error");
+			while (TestEOF()==false) begin
+				if (NextImportLine(true)) then begin end;
+			end;
+			CloseFile;
+		end else begin
+			if (NextImportLine(true)) then begin end;
+			tstr = ImportField;
+			tstr = ImportField;
+			tstr = ImportField;
+			if (NextImportLine(true)) then begin end;
+			i=0;
+			while (TestEOF()==false) begin
+				tstr = trim(ImportField);
+				SetItemCode[i] = tstr;
+				tstr = trim(ImportField);
+				ItemCode[i] =  tstr;
+				tstr = trim(ImportField);
+				SetItenQty[i] =  StringToVal(tstr,M4Val);
+				tstr = trim(ImportField);
+				SetName[i] =  tstr;
+				if (NextImportLine(true)) then begin end;
+				i=i+1;
+			end;
+			cnt = i;
+			CloseFile;
+			MoveFile(filename,"/mnt/database/Ecommerce/ExtItemIN","/mnt/database/Ecommerce/ExtItemOUT");
+			delete_file("/mnt/database/Ecommerce/ExtItemIN/" & filename);
+			runprogram("chmod","-R a+rw Ecommerce");
+			for (i=0;i<cnt;i=i+1) begin
+				if (nonblank(ItemCode[i])) then begin
+					queued.CreateGlobalSet(SetItemCode[i],ItemCode[i],SetItenQty[i],SetName[i]);
+					MilliSleep(50);
+				end;
+			end;
+		end;
+	end;
+	return;
+end;
+
 
 
 
