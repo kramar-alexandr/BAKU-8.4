@@ -7358,6 +7358,72 @@ end;
 
 
 
+global updating procedure UpdateStockInSetGlobalItem(string GIrCode)
+begin
+	record GlobalItemVc GIr;
+	row GlobalItemVc GIrw;
+	record GlobalItemSetVc ItemGISr, SetGISr;
+	boolean TrHs, testf, TrHs2, testf2;
+	vector val SetQty;
+	vector boolean SetQtyf, SetNotExItf;
+	longint i;
+	val Qty;
+	roundmode rnd;
+	array string 255 tags;
+
+
+	rnd = DefaultValRoundoff;
+	rnd.decimals = 0; 
+	rnd.mode = kRoundingModeTruncate;
+	
+	
+	TrHs = true;
+	ItemGISr.SetUnitGlCode = GIrCode;
+	while (loopkey("SetUnitGlCode",ItemGISr,1,TrHs)) begin
+		if (ItemGISr.SetUnitGlCode!=GIrCode) then begin TrHs = false; end;
+		if (TrHs) then begin
+			SetGISr.SetGlCode = ItemGISr.SetGlCode;
+			TrHs2 = true;
+			while (loopmain(SetGISr,1,TrHs2)) begin
+				if (SetGISr.SetGlCode!=ItemGISr.SetGlCode) then begin TrHs2 = false; end;
+				if (TrHs2) then begin
+					GIr.Code = SetGISr.SetUnitGlCode;
+					if (ReadFirstMain(GIr,1,true)) then begin
+						Qty = 0;
+						for (i=0;i<matrowcnt(GIr);i=i+1) begin
+							matrowget(GIr,i,GIrw);
+							Qty = Qty + GIrw.Instock;
+						end;
+						Qty = round((Qty / SetGISr.SUQuant),rnd);
+						if (!SetQtyf[SetGISr.SetGlCode]) then begin 
+							SetQty[SetGISr.SetGlCode] = Qty;
+						end else begin
+							if (Qty<SetQty[SetGISr.SetGlCode]) then begin
+								SetQty[SetGISr.SetGlCode] = Qty;
+							end;
+						end;
+					end else begin
+						SetNotExItf[SetGISr.SetGlCode] = true;
+					end;
+				end;
+			end;
+			resetloop(SetGISr);
+			if (!SetNotExItf[ItemGISr.SetGlCode] and SetQtyf[ItemGISr.SetGlCode]) then begin
+				GIr.Code = ItemGISr.SetGlCode;
+				if (ReadFirstMain(GIr,1,true)) then begin
+					GIrw.Location = "MAIN";
+					GIrw.Instock = SetQty[SetGISr.SetGlCode];
+					matrowput(GIr,0,GIrw);
+					RecordStore(GIr,true);
+				end;
+			end;
+		end;
+	end;
+	resetloop(ItemGISr);
+	
+return;
+end;
+
 
 
 global updating procedure UpdateStockInOrigGlobalItem(string GIrCode, val DiffValue, string location, var boolean ItemDuplicatesf)
@@ -7452,6 +7518,11 @@ begin
 	end;
 return;
 end;
+
+
+
+
+
 
 
 
