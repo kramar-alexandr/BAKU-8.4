@@ -4366,6 +4366,7 @@ begin
 	record GlobalItemVc GIr, DupGIr;
 	row GlobalItemVc GIrw, DupGIrw;
 	record LoyaltyCardVc LoyCardr;
+	record GlobalItemSetVc GISr;
 
 	
 	BlockLoad(ARb);
@@ -4428,39 +4429,84 @@ begin
 			ORr.Phone = ph;
 			ORr.eMail = em;
 			for(i=0;i<JSONCountChildren(datajson,"basket_items");i=i+1) begin
-				ORrw.stp = 1;
-				if (left(code[i],3)=="CP_")then begin
-					ORrw.GlobalItemArtCode = right(code[i],(len(code[i]) - 3));
+				GISr.SetGlCode = code[i];
+				if (ReadFirstMain(GISr,1,true)) then begin
+					TrHs2 = true;
+					GISr.SetGlCode = code[i];
+					while (loopmain(GISr,1,TrHs2)) begin
+						if (GISr.SetGlCode!=code[i]) then begin TrHs2 = false; end;
+						if (TrHs2) then begin
+							ORrw.stp = 1;
+							if (left(GISr.SetUnitGlCode,3)=="CP_")then begin
+								ORrw.GlobalItemArtCode = right(GISr.SetUnitGlCode,(len(GISr.SetUnitGlCode) - 3));
+							end else begin
+								GIr.Code = GISr.SetUnitGlCode;
+								if (ReadFirstMain(GIr,1,true)) then begin
+									TrHs = true;
+									IDr.OrigCode = GIr.HansaCode;
+									while(loopkey("OrigCode",IDr,1,TrHs)) begin
+										if (IDr.OrigCode!=GIr.HansaCode) then begin TrHs = false; end;
+										if (TrHs and IDr.OrigBrandCode==GIr.BPIBrand) then begin
+											DupGIr.Code = IDr.DupBrandCode  & "_" & IDr.DupCode;
+											if (ReadFirstMain(DupGIr,1,true)) then begin
+												for (j=0;j<matrowcnt(DupGIr);j=j+1) begin
+													matrowget(DupGIr,j,DupGIrw);
+													if (DupGIrw.Instock>0) then begin
+														j = matrowcnt(DupGIr);
+														TrHs = false;
+														GISr.SetUnitGlCode = DupGIr.Code;
+													end;
+												end;
+											end;
+										end;
+									end;
+									ResetLoop(IDr);
+								end;
+								ORrw.GlobalItemArtCode = GISr.SetUnitGlCode;
+							end;
+							ORrw.Quant = GISr.SUQuant * StringToVal(quant[i],M4Val);
+							ORrw.Price = GIr.Price - GIr.Price / 100 * GIr.Rebate;
+							ORrw.Sum = ORrw.Price * ORrw.Quant;
+							ORrw.SalesAcc = ARb.DomSalesAcc;
+							MatRowPut(ORr,i,ORrw);
+						end;
+					end;
+					resetloop(GISr);
 				end else begin
-					GIr.Code = code[i];
-					if (ReadFirstMain(GIr,1,true)) then begin
-						TrHs = true;
-						IDr.OrigCode = GIr.HansaCode;
-						while(loopkey("OrigCode",IDr,1,TrHs)) begin
-							if (IDr.OrigCode!=GIr.HansaCode) then begin TrHs = false; end;
-							if (TrHs and IDr.OrigBrandCode==GIr.BPIBrand) then begin
-								DupGIr.Code = IDr.DupBrandCode  & "_" & IDr.DupCode;
-								if (ReadFirstMain(DupGIr,1,true)) then begin
-									for (j=0;j<matrowcnt(DupGIr);j=j+1) begin
-										matrowget(DupGIr,j,DupGIrw);
-										if (DupGIrw.Instock>0) then begin
-											j = matrowcnt(DupGIr);
-											TrHs = false;
-											code[i] = DupGIr.Code;
+					ORrw.stp = 1;
+					if (left(code[i],3)=="CP_")then begin
+						ORrw.GlobalItemArtCode = right(code[i],(len(code[i]) - 3));
+					end else begin
+						GIr.Code = code[i];
+						if (ReadFirstMain(GIr,1,true)) then begin
+							TrHs = true;
+							IDr.OrigCode = GIr.HansaCode;
+							while(loopkey("OrigCode",IDr,1,TrHs)) begin
+								if (IDr.OrigCode!=GIr.HansaCode) then begin TrHs = false; end;
+								if (TrHs and IDr.OrigBrandCode==GIr.BPIBrand) then begin
+									DupGIr.Code = IDr.DupBrandCode  & "_" & IDr.DupCode;
+									if (ReadFirstMain(DupGIr,1,true)) then begin
+										for (j=0;j<matrowcnt(DupGIr);j=j+1) begin
+											matrowget(DupGIr,j,DupGIrw);
+											if (DupGIrw.Instock>0) then begin
+												j = matrowcnt(DupGIr);
+												TrHs = false;
+												code[i] = DupGIr.Code;
+											end;
 										end;
 									end;
 								end;
 							end;
+							ResetLoop(IDr);
 						end;
-						ResetLoop(IDr);
+						ORrw.GlobalItemArtCode = code[i];
 					end;
-					ORrw.GlobalItemArtCode = code[i];
+					ORrw.Quant = StringToVal(quant[i],M4Val);
+					ORrw.Sum = StringToVal(suma[i],M4Val);
+					ORrw.Price = ORrw.Sum/ORrw.Quant;
+					ORrw.SalesAcc = ARb.DomSalesAcc;
+					MatRowPut(ORr,i,ORrw);
 				end;
-				ORrw.Quant = StringToVal(quant[i],M4Val);
-				ORrw.Sum = StringToVal(suma[i],M4Val);
-				ORrw.Price = ORrw.Sum/ORrw.Quant;
-				ORrw.SalesAcc = ARb.DomSalesAcc;
-				MatRowPut(ORr,i,ORrw);
 			end;
 			IdentClientf = false;
 			if (blank(ORr.ECLoyaltyCard) and nonblank(loyaltycard)) then begin
