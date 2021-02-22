@@ -7364,10 +7364,10 @@ begin
 	row GlobalItemVc GIrw;
 	record GlobalItemSetVc ItemGISr, SetGISr;
 	boolean TrHs, testf, TrHs2, testf2;
-	vector val SetQty;
+	vector val SetQty, SetPrice;
 	vector boolean SetQtyf, SetNotExItf;
 	longint i;
-	val Qty;
+	val Qty, Price;
 	roundmode rnd;
 	array string 255 tags;
 
@@ -7390,13 +7390,19 @@ begin
 					GIr.Code = SetGISr.SetUnitGlCode;
 					if (ReadFirstMain(GIr,1,true)) then begin
 						Qty = 0;
+						Price = 0;
 						for (i=0;i<matrowcnt(GIr);i=i+1) begin
 							matrowget(GIr,i,GIrw);
 							Qty = Qty + GIrw.Instock;
 						end;
 						Qty = round((Qty / SetGISr.SUQuant),rnd);
+						Price = GIr.Price - GIr.Price / 100 * GIr.Rebate;
+						Price = Price * SetGISr.SUQuant;
+						logtext(0,Qty & "  " & SetGISr.SetGlCode);
+						SetPrice[SetGISr.SetGlCode] = SetPrice[SetGISr.SetGlCode] + Price;
 						if (!SetQtyf[SetGISr.SetGlCode]) then begin 
 							SetQty[SetGISr.SetGlCode] = Qty;
+							SetQtyf[SetGISr.SetGlCode] = true;
 						end else begin
 							if (Qty<SetQty[SetGISr.SetGlCode]) then begin
 								SetQty[SetGISr.SetGlCode] = Qty;
@@ -7412,7 +7418,8 @@ begin
 				GIr.Code = ItemGISr.SetGlCode;
 				if (ReadFirstMain(GIr,1,true)) then begin
 					GIrw.Location = "MAIN";
-					GIrw.Instock = SetQty[SetGISr.SetGlCode];
+					GIrw.Instock = SetQty[GIr.Code];
+					GIr.Price = SetPrice[SetGISr.SetGlCode];
 					matrowput(GIr,0,GIrw);
 					RecordStore(GIr,true);
 				end;
@@ -8357,6 +8364,7 @@ begin
 						if (blank(GIr.BPIBrand)) then begin GIr.BPIBrand = UnitGIr.BPIBrand; end;
 					end;
 					RecordStore(GIr,true);
+					UpdateStockInSetGlobalItem(UnitGIr.Code);
 				end;
 			end else begin
 				logtext(0,"Global set NOT Created, Blank name " & GISr.SetGlCode & " " & GISr.SetUnitGlCode);
@@ -8376,6 +8384,7 @@ begin
 					if (blank(GIr.BPIBrand)) then begin GIr.BPIBrand = UnitGIr.BPIBrand; end;
 				end;
 				RecordStore(GIr,true);
+				UpdateStockInSetGlobalItem(UnitGIr.Code);
 			end else begin
 				if (blank(GIr.Code) and blank(SetName)) then begin 
 					logtext(0,"Global set NOT Created, Blank name " & GISr.SetGlCode & " " & GISr.SetUnitGlCode);
