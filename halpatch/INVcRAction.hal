@@ -1484,48 +1484,72 @@ begin
   end;
   // Edit Start ---------------------------------------------- Edit Start
 	//Thursday, 21 February 2013 09:51:57
- 	if(currentcompany!=1 and currentcompany!=28)then begin
-			PLDr.Code="";
-			While(loopmain(PLDr,1,true))begin
-				RepSpec.f1 = PLDr.Code;
-				RepSpec.f2 = INr.Code;
-				if(matrowcnt(PLDr)>0)then begin
+	if(nonblank(INr.Code))then begin
+		if(currentcompany!=1 and currentcompany!=28)then begin
+				PLDr.Code="";
+				While(loopmain(PLDr,1,true))begin
+					RepSpec.f1 = PLDr.Code;
+					RepSpec.f2 = INr.Code;
+					if(matrowcnt(PLDr)>0)then begin
 				
 				
-				CalcPriceListsMn(RepSpec);// Edit ************************** Thursday, 21 February 2013 09:43:32
-				end;
-			end;	
-			resetloop(PLDr);
-			if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
-				foundfVEitem = false;
-				PIr.ItemCode = INr.Code;
-				if(readfirstmain(PIr,1,true))then begin
-					if(INr.Code==PIr.ItemCode)then begin
-						foundfVEitem = true;
+					CalcPriceListsMn(RepSpec);// Edit ************************** Thursday, 21 February 2013 09:43:32
 					end;
-				end;        
+				end;	
+				resetloop(PLDr);
 				if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
-					i = StringToInt(INr.CPSCode);
-					PPLr.TransDate = CurrentDate;
-					loopbackkey("TransDate",PPLr,1,true);
-					mtrw = matrowcnt(PPLr);
-					if(i<=mtrw)then begin
-						matrowget(PPLr,i-1,PPLrw);
-						if(PPLrw.Cost>0)then begin
-							if(foundfVEitem)then begin
-								PIr.PurPrice = PPLrw.Cost;
-								INr.InPrice = PPLrw.Cost/PIr.PIFactor;
-								RecordStore(PIr,true);
-							end else begin
-								INr.InPrice = PPLrw.Cost;
-							end;
+					foundfVEitem = false;
+					PIr.ItemCode = INr.Code;
+					if(readfirstmain(PIr,1,true))then begin
+						if(INr.Code==PIr.ItemCode)then begin
+							foundfVEitem = true;
 						end;
-						RecordStore(INr,true);
-						PLr.PLCode  = "RRP";
-						PLr.ArtCode = INr.Code;
-						PLr.CurncyCode = "";
-						if(readfirstmain(PLr,2,true))then begin     
-							if(PLr.DonotRecalculate==0)then begin         
+					end;        
+					if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
+						i = StringToInt(INr.CPSCode);
+						PPLr.TransDate = CurrentDate;
+						loopbackkey("TransDate",PPLr,1,true);
+						mtrw = matrowcnt(PPLr);
+						if(i<=mtrw)then begin
+							matrowget(PPLr,i-1,PPLrw);
+							if(PPLrw.Cost>0)then begin
+								if(foundfVEitem)then begin
+									PIr.PurPrice = PPLrw.Cost;
+									INr.InPrice = PPLrw.Cost/PIr.PIFactor;
+									RecordStore(PIr,true);
+								end else begin
+									INr.InPrice = PPLrw.Cost;
+								end;
+							end;
+							RecordStore(INr,true);
+							PLr.PLCode  = "RRP";
+							PLr.ArtCode = INr.Code;
+							PLr.CurncyCode = "";
+							if(readfirstmain(PLr,2,true))then begin     
+								if(PLr.DonotRecalculate==0)then begin         
+									if(foundfVEitem)then begin
+										if (INr.LastPurchCurncyCode=="USD") then begin
+											PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
+										end else begin
+											PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+										end;
+									end else begin
+										if (INr.LastPurchCurncyCode=="USD") then begin
+											PLr.ExVatPrice = PPLrw.PriceUSD;
+											PLr.CurncyCode = "";
+										end else begin
+											PLr.ExVatPrice = PPLrw.Price;
+											PLr.CurncyCode = "";
+										end;
+									end;
+									recordStore(PLr,true);
+									UpdatePrice(PLr);
+								end;
+							end else begin
+								recordNew(PLr);
+								PLr.PLCode  = "RRP";
+								PLr.ArtCode = INr.Code;
+								PLr.Comment = INr.Name;
 								if(foundfVEitem)then begin
 									if (INr.LastPurchCurncyCode=="USD") then begin
 										PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
@@ -1544,33 +1568,11 @@ begin
 								recordStore(PLr,true);
 								UpdatePrice(PLr);
 							end;
-						end else begin
-							recordNew(PLr);
-							PLr.PLCode  = "RRP";
-							PLr.ArtCode = INr.Code;
-							PLr.Comment = INr.Name;
-							if(foundfVEitem)then begin
-								if (INr.LastPurchCurncyCode=="USD") then begin
-									PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
-								end else begin
-									PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
-								end;
-							end else begin
-								if (INr.LastPurchCurncyCode=="USD") then begin
-									PLr.ExVatPrice = PPLrw.PriceUSD;
-									PLr.CurncyCode = "";
-								end else begin
-									PLr.ExVatPrice = PPLrw.Price;
-									PLr.CurncyCode = "";
-								end;
-							end;
-							recordStore(PLr,true);
-							UpdatePrice(PLr);
-						end;
 					
+						end;
 					end;
 				end;
-			end;
+		end;
 	end;
 	// Edit End ---------------------------------------------- Edit End
   	//GlobalItemVcfFrDI(INr.Code);
@@ -2650,62 +2652,86 @@ begin
   AutomatedSales(autmsgfunciontags,kAutomatedSalesTagRandom);
   threadasync.SugarCRM_PUT_INVc(INr);
   SiteMinder_Update_INVc(INr,prevINr);
-  if(currentcompany!=1)then begin //edited by BPI {
-  	PLr.ArtCode = INr.Code;
-  	PLr.PLCode  = "RRP";
-  	readfirstmain(PLr,2,true);
-		if(PLr.CurncyCode!=INr.LastPurchCurncyCode or prevINr.LastPurchPrice2!=INr.LastPurchPrice2 or prevINr.InPrice!=INr.InPrice or prevINr.LastPurchCurncyCode!=INr.LastPurchCurncyCode or prevINr.Group!=INr.Group or prevINr.CPSCode!=INr.CPSCode)then begin
+  if(nonblank(INr.Code))then begin
+		if(currentcompany!=1)then begin //edited by BPI {
 			PLr.ArtCode = INr.Code;
 			PLr.PLCode  = "RRP";
+			readfirstmain(PLr,2,true);
+			if(PLr.CurncyCode!=INr.LastPurchCurncyCode or prevINr.LastPurchPrice2!=INr.LastPurchPrice2 or prevINr.InPrice!=INr.InPrice or prevINr.LastPurchCurncyCode!=INr.LastPurchCurncyCode or prevINr.Group!=INr.Group or prevINr.CPSCode!=INr.CPSCode)then begin
+				PLr.ArtCode = INr.Code;
+				PLr.PLCode  = "RRP";
 			
-			if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
-				PLr.CurncyCode = "";
-			end;
-			if(blank(PLr.CurncyCode) and (blank(INr.CPSCode) or stringtoint(INr.CPSCode)==0))then begin
-				PLr.CurncyCode = INr.LastPurchCurncyCode;
-			end;
-			recordstore(PLr,true);
-			UpdatePrice(PLr);
-			PLDr.Code="";
-			While(loopmain(PLDr,1,true))begin
-				RepSpec.f1 = PLDr.Code;
-				RepSpec.f2 = INr.Code;
-				if(matrowcnt(PLDr)>0)then begin
-					CalcPriceListsMn(RepSpec);// Edit ************************** Thursday, 21 February 2013 09:43:32
-				end;
-			end;
-			logtext(0,"IN update INr.CPSCode " & INr.CPSCode);
-			if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
-				foundfVEitem = false;
-				PIr.ItemCode = INr.Code;
-				if(readfirstmain(PIr,1,true))then begin
-					if(INr.Code==PIr.ItemCode)then begin
-						foundfVEitem = true;
-					end;
-				end;        
 				if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
-					i = StringToInt(INr.CPSCode);
-					PPLr.TransDate = CurrentDate;
-					readlastkey("TransDate",PPLr,1,false);
-					mtrw = matrowcnt(PPLr);
-					if(i<=mtrw)then begin
-						matrowget(PPLr,i-1,PPLrw);
-						if(PPLrw.Cost>0)then begin
-							if(foundfVEitem)then begin
-								PIr.PurPrice = PPLrw.Cost;
-								INr.InPrice = PPLrw.Cost/PIr.PIFactor;
-								RecordStore(PIr,true);
-							end else begin
-								INr.InPrice = PPLrw.Cost;
-							end;
+					PLr.CurncyCode = "";
+				end;
+				if(blank(PLr.CurncyCode) and (blank(INr.CPSCode) or stringtoint(INr.CPSCode)==0))then begin
+					PLr.CurncyCode = INr.LastPurchCurncyCode;
+				end;
+				recordstore(PLr,true);
+				UpdatePrice(PLr);
+				PLDr.Code="";
+				While(loopmain(PLDr,1,true))begin
+					RepSpec.f1 = PLDr.Code;
+					RepSpec.f2 = INr.Code;
+					if(matrowcnt(PLDr)>0)then begin
+						CalcPriceListsMn(RepSpec);// Edit ************************** Thursday, 21 February 2013 09:43:32
+					end;
+				end;
+				logtext(0,"IN update INr.CPSCode " & INr.CPSCode);
+				if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
+					foundfVEitem = false;
+					PIr.ItemCode = INr.Code;
+					if(readfirstmain(PIr,1,true))then begin
+						if(INr.Code==PIr.ItemCode)then begin
+							foundfVEitem = true;
 						end;
-						RecordStore(INr,true);
-						PLr.PLCode  = "RRP";
-						PLr.ArtCode = INr.Code;
-						PLr.CurncyCode = "";
-						logtext(0,"IN Update new pplist " & INr.Code);
-						if(readfirstmain(PLr,2,true))then begin     
-							if(PLr.DonotRecalculate==0)then begin         
+					end;        
+					if(nonblank(INr.CPSCode) and stringtoint(INr.CPSCode)>0)then begin
+						i = StringToInt(INr.CPSCode);
+						PPLr.TransDate = CurrentDate;
+						readlastkey("TransDate",PPLr,1,false);
+						mtrw = matrowcnt(PPLr);
+						if(i<=mtrw)then begin
+							matrowget(PPLr,i-1,PPLrw);
+							if(PPLrw.Cost>0)then begin
+								if(foundfVEitem)then begin
+									PIr.PurPrice = PPLrw.Cost;
+									INr.InPrice = PPLrw.Cost/PIr.PIFactor;
+									RecordStore(PIr,true);
+								end else begin
+									INr.InPrice = PPLrw.Cost;
+								end;
+							end;
+							RecordStore(INr,true);
+							PLr.PLCode  = "RRP";
+							PLr.ArtCode = INr.Code;
+							PLr.CurncyCode = "";
+							logtext(0,"IN Update new pplist " & INr.Code);
+							if(readfirstmain(PLr,2,true))then begin     
+								if(PLr.DonotRecalculate==0)then begin         
+									if(foundfVEitem)then begin
+										if (INr.LastPurchCurncyCode=="USD") then begin
+											PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
+										end else begin
+											PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
+										end;
+									end else begin
+										if (INr.LastPurchCurncyCode=="USD") then begin
+											PLr.ExVatPrice = PPLrw.PriceUSD;
+											PLr.CurncyCode = "";
+										end else begin
+											PLr.ExVatPrice = PPLrw.Price;
+											PLr.CurncyCode = "";
+										end;
+									end;
+									recordStore(PLr,true);
+									UpdatePrice(PLr);
+								end;
+							end else begin
+								recordNew(PLr);
+								PLr.PLCode  = "RRP";
+								PLr.ArtCode = INr.Code;
+								PLr.Comment = INr.Name;
 								if(foundfVEitem)then begin
 									if (INr.LastPurchCurncyCode=="USD") then begin
 										PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
@@ -2724,35 +2750,13 @@ begin
 								recordStore(PLr,true);
 								UpdatePrice(PLr);
 							end;
-						end else begin
-							recordNew(PLr);
-							PLr.PLCode  = "RRP";
-							PLr.ArtCode = INr.Code;
-							PLr.Comment = INr.Name;
-							if(foundfVEitem)then begin
-								if (INr.LastPurchCurncyCode=="USD") then begin
-									PLr.ExVatPrice = round(PPLrw.PriceUSD/PIr.PIFactor,SetRoundModeD(0));
-								end else begin
-									PLr.ExVatPrice = round(PPLrw.Price/PIr.PIFactor,SetRoundModeD(0));
-								end;
-							end else begin
-								if (INr.LastPurchCurncyCode=="USD") then begin
-									PLr.ExVatPrice = PPLrw.PriceUSD;
-									PLr.CurncyCode = "";
-								end else begin
-									PLr.ExVatPrice = PPLrw.Price;
-									PLr.CurncyCode = "";
-								end;
-							end;
-							recordStore(PLr,true);
-							UpdatePrice(PLr);
-						end;
 					
+						end;
 					end;
-				end;
-			end;				
-		end;
-	end;  //edited by BPI }
+				end;				
+			end;
+		end;  //edited by BPI }
+	end;
   //GlobalItemVcfFrDI(INr.Code);
   INVcRecordUpdateAfter = res; 
   return;
