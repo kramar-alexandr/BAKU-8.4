@@ -15138,7 +15138,7 @@ webpublic updating procedure WebCheckFixJWPrices()
 begin
   record GlobalItemVc GIr,mainGIr;
 	row GlobalItemVc GIrw;
-	boolean TrHs,TrHs1,changed;
+	boolean TrHs,TrHs1,changed,noneedtochange;
 	val ITRebate,price;
 	record INVc INr;
 	record PLVc PLr,OldPLr;
@@ -15156,13 +15156,11 @@ begin
 				resetloop(RHistr);
 				rstr = BuildRecordIdStr(PLr,CurrentCompany);
 				RHistr.RecidStr = rstr;
-				RHistr.SerNr = 99999999;
 				TrHs1 = true;
 				changed = false;
-				while(loopbackkey("RecidStr",RHistr,2,TrHs1)) begin
+				noneedtochange = false;
+				while(loopkey("RecidStr",RHistr,1,TrHs1)) begin
 					if(RHistr.RecidStr!=rstr)then begin TrHs1 = false; end;
-					if(RHistr.TransDate<stringtodate("19/02/2021"))then begin TrHs1 = false; end;
-					if(RHistr.TransDate>stringtodate("19/02/2021") and RHistr.accode==1)then begin TrHs1 = false; end;
 					
 					if(TrHs1)then begin
 						if(RHistr.TransDate==stringtodate("19/02/2021"))then begin
@@ -15178,8 +15176,8 @@ begin
 												weboutstring("<td>" & OldPLr.ExVatPrice & "</td>");
 												weboutstring("<td>" & PLr.ExVatPrice & "</td>");
 											weboutstring("</tr>");
-											PLr.ExVatPrice = OldPLr.ExVatPrice;
-											PLr.CurncyCode = OldPLr.CurncyCode;
+											//PLr.ExVatPrice = OldPLr.ExVatPrice;
+											//PLr.CurncyCode = OldPLr.CurncyCode;
 											//recordstore(PLr,true);
 											changed = true;
 											TrHs1 = false;
@@ -15187,15 +15185,42 @@ begin
 									end;
 									
 								end;
-							end else begin
-								if(RHistr.accode==1)then begin
-									TrHs = false;
-								end;
 							end;
 						end;
 					end;
 				end;
-				if(changed)then begin
+				
+				resetloop(RHistr);
+				rstr = BuildRecordIdStr(PLr,CurrentCompany);
+				RHistr.RecidStr = rstr;
+				RHistr.SerNr = 99999999;
+				TrHs1 = true;
+				while(loopbackkey("RecidStr",RHistr,2,TrHs1)) begin
+					if(RHistr.RecidStr!=rstr)then begin TrHs1 = false; end;
+					
+					if(RHistr.TransDate>stringtodate("19/02/2021") and RHistr.accode==1)then begin
+						TrHs1 = false;
+						noneedtochange = true;
+					end;
+					if(RHistr.TransDate==stringtodate("19/02/2021") and RHistr.TransTime>stringtotime("15:35:00") and RHistr.accode==1)then begin
+						TrHs1 = false;
+						noneedtochange = true;
+					end;
+					if(RHistr.TransDate<stringtodate("19/02/2021"))then begin
+						TrHs1 = false;
+					end;
+				end;
+				
+				
+				
+				if(changed and noneedtochange==false)then begin
+					weboutstring("<tr>");
+						weboutstring("<td>" & PLr.ArtCode & "</td>");
+						weboutstring("<td>" & PLr.Comment & "</td>");
+						weboutstring("<td>" & PLr.PLCode & "</td>");
+						weboutstring("<td>" & OldPLr.ExVatPrice & "</td>");
+						weboutstring("<td>" & PLr.ExVatPrice & "</td>");
+					weboutstring("</tr>");
 					//logtext(0,PLr.ArtCode);
 				end;
 			end;
