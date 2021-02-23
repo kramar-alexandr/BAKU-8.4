@@ -1990,11 +1990,7 @@ begin
 					weboutstring("<td>" & PUr.TransDate & "</td>");
 					weboutstring("<td>" & PUr.VECode & "</td>");
 					weboutstring("<td>" & vVendAFF[PUr.VECode] & "</td>");
-					if(UpdateAFFTransFromPU(PUr))then begin
-						weboutstring("<td>" & "UPDATED" & "</td>");
-					end else begin
-						weboutstring("<td>" & "NOTUPDATED+++++++++++++++++++++" & "</td>");
-					end;
+					UpdateAFFTransFromPU(PUr);
 				weboutstring("</tr>");
 			end;
 		end;
@@ -2004,6 +2000,55 @@ begin
 return;
 end;
 
+
+updating function boolean UpdateAFFTransFromRetPU(record RetPUVc RetPUr)
+begin
+	record TRVc TRr,oldTRr;
+	row TRVc TRrw;
+	integer i,rwcnt;
+	boolean chngd;
+	string 20 affobj;
+	boolean res;
+	
+	res = false;
+	
+	TRr.Number = RetPUr.SerNr;
+	TRr.IntYc = RetPUYc;
+	chngd = false;
+	if(readfirstmain(TRr,2,true))then begin
+		rwcnt = matrowcnt(TRr);
+		recordcopy(oldTRr,TRr);
+		for(i=0;i<rwcnt;i=i+1)begin
+			matrowget(TRr,i,TRrw);
+			if(setinset("AFF",TRrw.Objects))then begin
+				affobj = "";
+				GetObjs("SUBDI",RetPUr.Objects,affobj);
+				if(nonblank(affobj))then begin
+					TRrw.Objects = StrReplace(TRrw.Objects,"AFF",affobj);
+					matrowput(TRr,i,TRrw);
+					chngd = true;
+				end;
+			end;
+		end;
+		if(chngd)then begin
+			res = recordupdate(oldTRr,TRr,true)==0;
+			if(res)then begin
+				weboutstring("<td>" & "UPDATED" & "</td>");
+			end else begin
+				weboutstring("<td>" & "ERROR++++++++++++++++++++++++++++" & "</td>");
+			end;
+		end else begin
+			res = true;
+			weboutstring("<td>" & "GoodRecord" & "</td>");
+		end;
+	end else begin
+		res = true;
+		weboutstring("<td>" & "NORECORD" & "</td>");
+	end;
+	
+	UpdateAFFTransFromRetPU = res;
+return;
+end;
 
 global webpublic updating procedure WebAFFRetPUVc()
 begin
@@ -2058,22 +2103,30 @@ begin
 				case "CWH1": weboutstring("<td>" & "AFF_TW" & "</td>");
 										if(change)then begin
 											RetPUr.Objects = StrReplace(RetPUr.Objects,"AFF","AFF_TW");
-											recordstore(RetPUr,true);
+											if(UpdateAFFTransFromRetPU(RetPUr))then begin
+												recordstore(RetPUr,true);
+											end;
 										end;
 				case "CWH2": weboutstring("<td>" & "AFF_TW" & "</td>");
 										if(change)then begin
 											RetPUr.Objects = StrReplace(RetPUr.Objects,"AFF","AFF_TW");
-											recordstore(RetPUr,true);
+											if(UpdateAFFTransFromRetPU(RetPUr))then begin
+												recordstore(RetPUr,true);
+											end;
 										end;
 				case "CWH3": weboutstring("<td>" & "AFF_CR" & "</td>");
 										if(change)then begin
 											RetPUr.Objects = StrReplace(RetPUr.Objects,"AFF","AFF_CR");
-											recordstore(RetPUr,true);
+											if(UpdateAFFTransFromRetPU(RetPUr))then begin
+												recordstore(RetPUr,true);
+											end;
 										end;
 				case "CWH4": weboutstring("<td>" & "AFF_CR" & "</td>");
 										if(change)then begin
 											RetPUr.Objects = StrReplace(RetPUr.Objects,"AFF","AFF_CR");
-											recordstore(RetPUr,true);
+											if(UpdateAFFTransFromRetPU(RetPUr))then begin
+												recordstore(RetPUr,true);
+											end;
 										end;
 				otherwise 
 										fobobj = "";
@@ -2083,7 +2136,9 @@ begin
 												weboutstring("<td>" & vFOBAff[fobobj] & "</td>");
 												if(change)then begin
 													RetPUr.Objects = StrReplace(RetPUr.Objects,"AFF",vFOBAff[fobobj]);
-													recordstore(RetPUr,true);
+													if(UpdateAFFTransFromRetPU(RetPUr))then begin
+														recordstore(RetPUr,true);
+													end;
 												end;
 											end else begin
 												weboutstring("<td>" & "***********************************" & "</td>");
@@ -2094,6 +2149,16 @@ begin
 			end;
 			
 			weboutstring("</tr>");
+		end else begin
+			if(setinset("AFF_CR",RetPUr.Objects) or setinset("AFF_TW",RetPUr.Objects))then begin
+				weboutstring("<tr>");
+					weboutstring("<td>" & RetPUr.SerNr & "</td>");
+					weboutstring("<td>" & RetPUr.TransDate & "</td>");
+					weboutstring("<td>" & RetPUr.VECode & "</td>");
+					weboutstring("<td>" & vVendAFF[RetPUr.VECode] & "</td>");
+					UpdateAFFTransFromRetPU(RetPUr);
+				weboutstring("</tr>");
+			end;
 		end;
 	end;
 	weboutstring("</table>");
