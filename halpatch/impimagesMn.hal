@@ -88,6 +88,9 @@ external procedure ExtractObj(string,var Integer,var string);
 external function Boolean SendNotificationToUser(string,string);
 external procedure HandleIDEANewIN2DClassCode(var record IDEANewINVc, integer);
 external procedure NextCode(string,var string);
+remote procedure TRVc_PasteDebVal(var record TRVc,Integer);	  //  by Ira
+remote procedure TRVc_PasteCredVal(var record TRVc,Integer);	  //  by Ira
+external procedure TRSumup(var record TRVc,var val);	   //  by Ira
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -11490,6 +11493,109 @@ begin
   end;
   return;
 end;
+
+
+global updating procedure TROperMn(Record RcVc RepSpec)  //  by Ira
+begin
+	record TRVc oldTRr, TRr;
+	row TRVc TRrw, TRrw2, TRrw3;
+	record AccVc Accr;
+	integer mtrw, i;
+	val tval;
+	boolean testf, testf1, testf2;
+	
+	
+	TRr.Number = RepSpec.f1;
+	TRr.IntYc = IVYc;
+	if(readFirstMain(TRr,2,true)) then begin
+	  RecordCopy(oldTRr,TRr);
+		mtrw = matrowcnt(TRr);
+		testf = true;
+		for (i=0;i<mtrw and testf;i=i+1) begin
+			matrowget (TRr,i,TRrw);
+			testf2 = true;
+			if(TRrw.ovst!=0 or TRrw.stp!=1) then begin testf2 = false; end;
+			if(testf2) then begin
+				if(TRrw.AccNumber == "68/1") then begin
+					testf = false;
+				end;
+			end;
+		end;
+		resetLoop(TRr);
+		for (i=0;i<mtrw and testf;i=i+1) begin
+			matrowget (TRr,i,TRrw);
+			testf2 = true;
+			if(TRrw.ovst!=0 or TRrw.stp!=1) then begin testf2 = false; end;
+			if(testf2) then begin
+				if(TRrw.AccNumber == "46" or TRrw.AccNumber == "47") then begin
+
+					TRrw2.AccNumber = "46";
+					TRrw2.Objects = TRrw.Objects;
+					TRrw2.Curncy = TRrw.Curncy;
+					TRrw2.Comment = TRrw.Comment;		
+					
+					if(nonblank(TRrw.CredVal)) then begin
+						TRrw2.DebVal = round(TRrw.CredVal * 18 / 100, defaultcurroundoff);
+						TRrw2.CurDebVal = TRrw2.DebVal;
+					end else begin
+						TRrw2.CredVal = round(TRrw.DebVal * 18 / 100, defaultcurroundoff);
+						TRrw2.CurCredVal = TRrw2.CredVal;
+					end;
+			
+			
+					TRrw3.AccNumber = "68/01";
+					TRrw3.Objects = TRrw.Objects;
+					TRrw3.Curncy = TRrw.Curncy;
+					
+					Accr.AccNumber = TRrw3.AccNumber;
+					if(readFirstMain(Accr,1,true)) then begin
+						TRrw3.Comment = Accr.Comment;
+					end;
+					
+					if(NonBlank(TRrw.CredVal)) then begin
+						TRrw3.CredVal = round(TRrw.CredVal * 18 / 100, defaultcurroundoff);
+						TRrw3.CurCredVal = TRrw3.CredVal;
+					end else begin
+						TRrw3.DebVal = round(TRrw.DebVal * 18 / 100, defaultcurroundoff);
+						TRrw3.CurDebVal = TRrw3.DebVal;
+					end;
+					
+					testf = false;
+				end;	
+			end;
+		end;
+		
+		matrowPUt(TRr,mtrw,TRrw2);
+		matrowget (TRr,mtrw,TRrw);
+		if(nonblank(TRrw.CredVal)) then begin
+			TRVc_PasteCredVal(TRr,mtrw);
+		end else begin
+			TRVc_PasteDebVal(TRr,mtrw);
+		end;
+		matrowPUt(TRr,mtrw,TRrw);
+		
+		mtrw = mtrw + 1;
+		
+		matrowPUt(TRr,mtrw,TRrw3);
+		matrowget (TRr,mtrw,TRrw);
+		if(nonblank(TRrw.DebVal)) then begin
+			TRVc_PasteDebVal(TRr,mtrw);
+		end else begin
+			TRVc_PasteCredVal(TRr,mtrw);
+		end;
+		matrowPUt(TRr,mtrw,TRrw);
+		
+		TRSumup(TRr,tval);
+		
+		if (RecordUpdate(oldTRr,TRr,false)==0) then begin 
+		end;
+		
+		//recordStore(TRr,true);
+	end;
+	
+return;
+end;
+
 
 
 global updating procedure FixDublDispMn()
