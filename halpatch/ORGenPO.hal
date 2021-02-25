@@ -175,7 +175,8 @@ end; // edited by BPI } //functions transferred here from 6.4 file halcust/halpa
 
 global updating procedure SyncPOInIDG(record POVc POr)
 begin
-	integer mtrw,i,j,k,pos,rownum;
+	integer mtrw,pos,rownum;
+	longint i,j;
 	record POVc IDEAPOr, IDGPOr;
 	row POVc POrw, IDGPOrw;
 	string 50 ostr;
@@ -193,27 +194,30 @@ begin
 	record OTypeAddControlBlock OTACb;
 	row OTypeAddControlBlock OTACrw;
 	record ObjVc Objr;
-
-	if (CurrentCompany==28) then begin
-		BPIBrandr.Code = "";
-		i = 0;
-		while (loopmain(BPIBrandr,1,true)) begin
-			if (nonblank(BPIBrandr.IDEABrandRef)) then begin
-				IDEABrandCodes[i] = BPIBrandr.IDEABrandRef;
-				vIdeaBrandIDBrand[BPIBrandr.IDEABrandRef] = BPIBrandr.Code;
-				pos = 0;
-				vendor = "";
-				ExtractObjWithSeparator(",",BPIBrandr.Vendor,true,pos,vendor);
-				while(nonblank(vendor)) begin
-					VendorBrand[BPIBrandr.Vendor] = BPIBrandr.Code;
+	vector val IDEACodeExist, IDEACodeSum, IDEACodePrice, IDEACodeRebate;
+	vector boolean IDEACodeEx;
+	array string 255 tags;
+	
+	if (POr.IDReguester=="Client") then begin
+		if (CurrentCompany==28) then begin
+			BPIBrandr.Code = "";
+			i = 0;
+			while (loopmain(BPIBrandr,1,true)) begin
+				if (nonblank(BPIBrandr.IDEABrandRef)) then begin
+					IDEABrandCodes[i] = BPIBrandr.IDEABrandRef;
+					vIdeaBrandIDBrand[BPIBrandr.IDEABrandRef] = BPIBrandr.Code;
+					pos = 0;
+					vendor = "";
 					ExtractObjWithSeparator(",",BPIBrandr.Vendor,true,pos,vendor);
+					while(nonblank(vendor)) begin
+						VendorBrand[BPIBrandr.Vendor] = BPIBrandr.Code;
+						ExtractObjWithSeparator(",",BPIBrandr.Vendor,true,pos,vendor);
+					end;
+					BrandAccObj[BPIBrandr.Code] = BPIBrandr.StockGroup;
+					i = i + 1;
 				end;
-				BrandAccObj[BPIBrandr.Code] = BPIBrandr.StockGroup;
-				i = i + 1;
 			end;
-		end;
-		ResetLoop(BPIBrandr);
-		if (POr.IDGDEAPORef<1) then begin
+			ResetLoop(BPIBrandr);
 			for (i=0;i<matrowcnt(POr);i=i+1) begin
 				matrowget(POr,i,POrw);
 				INr.Code = POrw.ArtCode;
@@ -229,111 +233,262 @@ begin
 					end;
 				end;
 			end;
-			SetCompany(18,false);		
-			BlockLoad(OTACb);
-			for (i=0;i<matrowcnt(OTACb);i=i+1) begin
-				matrowget(OTACb,i,OTACrw);
-				if (OTACrw.STORE=="IDEA") then begin
-					IDEAObjcts = OTACrw.SUBDI;
+			if (POr.IDGDEAPORef<1) then begin
+				SetCompany(18,false);		
+				BlockLoad(OTACb);
+				for (i=0;i<matrowcnt(OTACb);i=i+1) begin
+					matrowget(OTACb,i,OTACrw);
+					if (OTACrw.STORE=="IDEA") then begin
+						IDEAObjcts = OTACrw.SUBDI;
+					end;
 				end;
-			end;
-			RecordNew(IDGPOr);
-			recordCopy(IDGPOr,POr);
-			IDGPOr.TransDate = CurrentDate;
-			IDGPOr.SerNr = NextSerNr("POVc",IDGPOr.TransDate,-1,false,""); 
-			IDGPOr.InvAddr4 = "";
-			IDGPOr.VEContact = "";
-			CUr.Code = IDGPOr.VECode;
-			if (ReadFirstMain(CUr,1,true)) then begin
-				if (nonblank(CUr.VEObjects)) then begin
-					pos = 0;
-					vendor = "";
-					VendorBrandObj = "";
-					ExtractObjWithSeparator(",",CUr.VEObjects,true,pos,tstr);
-					Objr.Code = tstr;
-					if (ReadFirstMain(Objr,1,true)) then begin
-						if (Objr.OTCode=="BRAND") then begin
-							VendorBrandObj = Objr.Code;
+				RecordNew(IDGPOr);
+				recordCopy(IDGPOr,POr);
+				IDGPOr.TransDate = CurrentDate;
+				IDGPOr.SerNr = NextSerNr("POVc",IDGPOr.TransDate,-1,false,""); 
+				IDGPOr.POClass = "CLIEN";
+				IDGPOr.InvAddr4 = "";
+				IDGPOr.VEContact = "";
+				CUr.Code = IDGPOr.VECode;
+				if (ReadFirstMain(CUr,1,true)) then begin
+					if (nonblank(CUr.VEObjects)) then begin
+						pos = 0;
+						vendor = "";
+						VendorBrandObj = "";
+						ExtractObjWithSeparator(",",CUr.VEObjects,true,pos,tstr);
+						Objr.Code = tstr;
+						if (ReadFirstMain(Objr,1,true)) then begin
+							if (Objr.OTCode=="BRAND") then begin
+								VendorBrandObj = Objr.Code;
+							end;
 						end;
 					end;
 				end;
-			end;
-			IDGPOr.Objects = "‘‘," & IDEAObjcts;
-			if (nonblank(BrandAccObj[VendorBrand[IDGPOr.VECode]])) then begin 
-				if (nonblank(IDGPOr.Objects)) then begin IDGPOr.Objects = IDGPOr.Objects & ","; end;
-				IDGPOr.Objects = IDGPOr.Objects & BrandAccObj[VendorBrand[IDGPOr.VECode]]; 
-			end;
-			if (nonblank(VendorBrandObj)) then begin 
-				if (nonblank(IDGPOr.Objects)) then begin IDGPOr.Objects = IDGPOr.Objects & ","; end;
-				IDGPOr.Objects = IDGPOr.Objects & VendorBrandObj; 
-			end;
-			IDGPOr.IDGDEAPORef = POr.SerNr;
-			for (i=0;i<matrowcnt(IDGPOr);i=i+1) begin
-				matrowget(IDGPOr,i,IDGPOrw);
-				CIr.LocCode = IDGPOrw.ArtCode;
-				CIr.BrandCode = vItemBPIBrand[IDGPOrw.ArtCode];
-				if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
-					IDGPOrw.VEArtCode = IDGPOrw.ArtCode;
-					IDGPOrw.ArtCode = CIr.Code;
-					matrowput(IDGPOr,i,IDGPOrw);
-				end else begin
-					SetCompany(28,false);
-					INr.Code = IDGPOrw.ArtCode;
-					if (ReadFirstMain(INr,1,true)) then begin
-						ResetCompany(18);
-						RecordNew(UINr);
-						RecordNew(INConsr);
-						RecordCopy(INConsr,INr);
-						INConsr.Code = "";
-						INConsr.UUID = UINr.UUID;
-						INConsr.BPIBrand = vItemBPIBrand[IDGPOrw.ArtCode];
-						INConsr.AlternativeCode = INr.Code;
-						INConsr.SNOne = INr.SNOne;
-						INConsr.SN = INr.SN;
-						INConsr.Category = INr.Category;
-						INConsr.CompletCode = INr.CompletCode;
-						INConsr.Name = INr.Name;
-						INConsr.Group = INr.Group;
-						if(blank(INConsr.Code)) then begin
-							OldConsINr.Code = "IN_9999999";
-							TrHs = true;
-							while (LoopBackKey("Code",OldConsINr,1,TrHs)) begin
-								oldCode = OldConsINr.Code;
-								TrHs = false;
-							end;
-							ResetLoop(OldConsINr);
-							if(blank(oldCode)) then begin oldCode = "IN_0000000"; end;
-							NextM4SerialNumber(OldConsINr.Code,INConsr.Code);
-						end;
-						if (RecordInsert(INConsr,true)) then begin 
-							CIr.Code = INConsr.Code;
-							if (!ReadFirstMain(CIr,1,true)) then begin
-								CIr.Code = INConsr.Code;
-								CIr.LocCode = INr.Code;
-								CIr.BrandCode = INConsr.BPIBrand;
-								RecordStore(CIr,true);
-							end;
-							IDGPOrw.VEArtCode = IDGPOrw.ArtCode;
-							IDGPOrw.ArtCode = CIr.Code;
-							matrowput(IDGPOr,i,IDGPOrw);
-						end;
+				IDGPOr.Objects = "‘‘," & IDEAObjcts;
+				if (nonblank(BrandAccObj[VendorBrand[IDGPOr.VECode]])) then begin 
+					if (nonblank(IDGPOr.Objects)) then begin IDGPOr.Objects = IDGPOr.Objects & ","; end;
+					IDGPOr.Objects = IDGPOr.Objects & BrandAccObj[VendorBrand[IDGPOr.VECode]]; 
+				end;
+				if (nonblank(VendorBrandObj)) then begin 
+					if (nonblank(IDGPOr.Objects)) then begin IDGPOr.Objects = IDGPOr.Objects & ","; end;
+					IDGPOr.Objects = IDGPOr.Objects & VendorBrandObj; 
+				end;
+				IDGPOr.IDGDEAPORef = POr.SerNr;
+				for (i=0;i<matrowcnt(IDGPOr);i=i+1) begin
+					matrowget(IDGPOr,i,IDGPOrw);
+					CIr.LocCode = IDGPOrw.ArtCode;
+					CIr.BrandCode = vItemBPIBrand[IDGPOrw.ArtCode];
+					if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
+						IDGPOrw.VEArtCode = IDGPOrw.ArtCode;
+						IDGPOrw.ArtCode = CIr.Code;
+						matrowput(IDGPOr,i,IDGPOrw);
 					end else begin
-						ResetCompany(18);
+						SetCompany(28,false);
+						INr.Code = IDGPOrw.ArtCode;
+						if (ReadFirstMain(INr,1,true)) then begin
+							ResetCompany(18);
+							RecordNew(UINr);
+							RecordNew(INConsr);
+							RecordCopy(INConsr,INr);
+							INConsr.Code = "";
+							INConsr.UUID = UINr.UUID;
+							INConsr.BPIBrand = vItemBPIBrand[IDGPOrw.ArtCode];
+							INConsr.AlternativeCode = INr.Code;
+							INConsr.SNOne = INr.SNOne;
+							INConsr.SN = INr.SN;
+							INConsr.Category = INr.Category;
+							INConsr.CompletCode = INr.CompletCode;
+							INConsr.Name = INr.Name;
+							INConsr.Group = INr.Group;
+							if(blank(INConsr.Code)) then begin
+								OldConsINr.Code = "IN_9999999";
+								TrHs = true;
+								while (LoopBackKey("Code",OldConsINr,1,TrHs)) begin
+									oldCode = OldConsINr.Code;
+									TrHs = false;
+								end;
+								ResetLoop(OldConsINr);
+								if(blank(oldCode)) then begin oldCode = "IN_0000000"; end;
+								NextM4SerialNumber(OldConsINr.Code,INConsr.Code);
+							end;
+							if (RecordInsert(INConsr,true)) then begin 
+								CIr.Code = INConsr.Code;
+								if (!ReadFirstMain(CIr,1,true)) then begin
+									CIr.Code = INConsr.Code;
+									CIr.LocCode = INr.Code;
+									CIr.BrandCode = INConsr.BPIBrand;
+									RecordStore(CIr,true);
+								end;
+								IDGPOrw.VEArtCode = IDGPOrw.ArtCode;
+								IDGPOrw.ArtCode = CIr.Code;
+								matrowput(IDGPOr,i,IDGPOrw);
+							end;
+						end else begin
+							ResetCompany(18);
+						end;
 					end;
 				end;
+				RecordStore(IDGPOr,true);
+				SetCompany(28,false);
+				POr.IDGDEAPORef = IDGPOr.SerNr;
+				logtext(0,POr.IDGDEAPORef);
+				RecordStore(POr,true);
+				createrecordlink(POr,CurrentCompany,IDGPOr,18);
+				createrecordlink(IDGPOr,18,POr,CurrentCompany);
+			end else begin
+				logtext(0,"CurrentCompany  " & CurrentCompany);
+				for (i=0;i<matrowcnt(POr);i=i+1) begin
+					matrowget(POr,i,POrw);
+					IDEACOdeExist[POrw.ArtCode] = IDEACOdeExist[POrw.ArtCode] + POrw.Quant;
+					IDEACodeSum[POrw.ArtCode] = IDEACodeSum[POrw.ArtCode] + POrw.Sum;
+					IDEACodePrice[POrw.ArtCode] = POrw.Price;
+					IDEACodeRebate[POrw.ArtCode] = POrw.vRebate;
+					IDEACodeEx[POrw.ArtCode] = true;
+				end;
+				SetCompany(18,false);	
+				IDGPOr.SerNr = POr.IDGDEAPORef;			
+				if (ReadFirstMain(IDGPOr,1,true)) then begin
+					for (i=matrowcnt(IDGPOr)-1;i>=0;i=i-1) begin
+						matrowget(IDGPOr,i,IDGPOrw);
+						if (IDEACodeEx[IDGPOrw.VEArtCode]) then begin
+							IDEACodeEx[IDGPOrw.VEArtCode] = false;
+							IDGPOrw.Quant = IDEACOdeExist[IDGPOrw.VEArtCode];
+							IDGPOrw.Sum = IDEACodeSum[IDGPOrw.VEArtCode];
+							IDGPOrw.Price = IDEACodePrice[IDGPOrw.VEArtCode];
+							IDGPOrw.vRebate = IDEACodeRebate[IDGPOrw.VEArtCode];
+							matrowput(IDGPOr,i,IDGPOrw);
+						end else begin
+							matrowdelete(IDGPOr,i);
+						end;
+					end;
+					getvectortags(IDEACodeEx,tags);
+					for (i=0;i<tags.length;i=i+1) begin
+						if (IDEACodeEx[tags[i]]) then begin
+							CIr.LocCode = tags[i];
+							CIr.BrandCode = vItemBPIBrand[tags[i]];
+							mtrw = matrowcnt(IDGPOr);
+							if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
+								IDGPOrw.VEArtCode = CIr.LocCode;
+								IDGPOrw.ArtCode = CIr.Code;
+								matrowput(IDGPOr,mtrw,IDGPOrw);
+								POVc_PasteArtCode(IDGPOr,mtrw,false);
+								matrowget(IDGPOr,mtrw,IDGPOrw);
+								IDGPOrw.Quant = IDEACOdeExist[tags[i]];
+								IDGPOrw.Sum = IDEACodeSum[tags[i]];
+								IDGPOrw.Price = IDEACodePrice[tags[i]];
+								IDGPOrw.vRebate = IDEACodeRebate[tags[i]];
+								matrowput(IDGPOr,mtrw,IDGPOrw);
+								POVc_PasteQuant(IDGPOr,mtrw);
+							end else begin
+								SetCompany(28,false);
+								INr.Code = tags[i];
+								if (ReadFirstMain(INr,1,true)) then begin
+									logtext(0,"+_+_+_+_+_+_+_+_+_+_+_+_+_+_+_+_+_+_+_");
+									ResetCompany(18);
+									RecordNew(UINr);
+									RecordNew(INConsr);
+									RecordCopy(INConsr,INr);
+									INConsr.Code = "";
+									INConsr.UUID = UINr.UUID;
+									INConsr.BPIBrand = vItemBPIBrand[tags[i]];
+									INConsr.AlternativeCode = INr.Code;
+									INConsr.SNOne = INr.SNOne;
+									INConsr.SN = INr.SN;
+									INConsr.Category = INr.Category;
+									INConsr.CompletCode = INr.CompletCode;
+									INConsr.Name = INr.Name;
+									INConsr.Group = INr.Group;
+									if(blank(INConsr.Code)) then begin
+										OldConsINr.Code = "IN_9999999";
+										TrHs = true;
+										while (LoopBackKey("Code",OldConsINr,1,TrHs)) begin
+											oldCode = OldConsINr.Code;
+											TrHs = false;
+										end;
+										ResetLoop(OldConsINr);
+										if(blank(oldCode)) then begin oldCode = "IN_0000000"; end;
+										NextM4SerialNumber(OldConsINr.Code,INConsr.Code);
+									end;
+									if (RecordInsert(INConsr,true)) then begin 
+										CIr.Code = INConsr.Code;
+										if (!ReadFirstMain(CIr,1,true)) then begin
+											CIr.Code = INConsr.Code;
+											CIr.LocCode = INr.Code;
+											CIr.BrandCode = INConsr.BPIBrand;
+											RecordStore(CIr,true);
+										end;
+										IDGPOrw.VEArtCode = CIr.LocCode;
+										IDGPOrw.ArtCode = CIr.Code;
+										matrowput(IDGPOr,mtrw,IDGPOrw);
+										POVc_PasteArtCode(IDGPOr,mtrw,false);
+										matrowget(IDGPOr,mtrw,IDGPOrw);
+										IDGPOrw.Quant = IDEACOdeExist[tags[i]];
+										IDGPOrw.Sum = IDEACodeSum[tags[i]];
+										IDGPOrw.Price = IDEACodePrice[tags[i]];
+										IDGPOrw.vRebate = IDEACodeRebate[tags[i]];
+										matrowput(IDGPOr,mtrw,IDGPOrw);
+										POVc_PasteQuant(IDGPOr,mtrw);
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+				RecordStore(IDGPOr,true);
+				SetCompany(28,false);
 			end;
-			RecordStore(IDGPOr,true);
-			ResetCompany(28);
-			POr.IDGDEAPORef = IDGPOr.SerNr;
-			RecordStore(POr,true);
 		end else begin
-			IDGPOr.SerNr = POr.IDGDEAPORef;
-			if (ReadFirstMain(IDGPOr,1,true)) then begin
-				
+			if (CurrentCompany==18 and POr.IDGDEAPORef>1) then begin
+				for (i=0;i<matrowcnt(POr);i=i+1) begin
+					matrowget(POr,i,POrw);
+					IDEACOdeExist[POrw.VEArtCode] = IDEACOdeExist[POrw.VEArtCode] + POrw.Quant;
+					IDEACodeSum[POrw.VEArtCode] = IDEACodeSum[POrw.VEArtCode] + POrw.Sum;
+					IDEACodePrice[POrw.VEArtCode] = POrw.Price;
+					IDEACodeRebate[POrw.VEArtCode] = POrw.vRebate;
+					IDEACodeEx[POrw.VEArtCode] = true;
+				end;
+				SetCompany(28,false);	
+				IDGPOr.SerNr = POr.IDGDEAPORef;			
+				if (ReadFirstMain(IDGPOr,1,true)) then begin
+					for (i=matrowcnt(IDGPOr)-1;i>=0;i=i-1) begin
+						matrowget(IDGPOr,i,IDGPOrw);
+						if (IDEACodeEx[IDGPOrw.ArtCode]) then begin
+							IDEACodeEx[IDGPOrw.ArtCode] = false;
+							IDGPOrw.Quant = IDEACOdeExist[IDGPOrw.ArtCode];
+							IDGPOrw.Sum = IDEACodeSum[IDGPOrw.ArtCode];
+							IDGPOrw.Price = IDEACodePrice[IDGPOrw.ArtCode];
+							IDGPOrw.vRebate = IDEACodeRebate[IDGPOrw.ArtCode];
+							matrowput(IDGPOr,i,IDGPOrw);
+						end else begin
+							matrowdelete(IDGPOr,i);
+						end;
+					end;
+					getvectortags(IDEACodeEx,tags);
+					for (i=0;i<tags.length;i=i+1) begin
+						logtext(0,tags[i]);
+						if (IDEACodeEx[tags[i]]) then begin
+							INr.Code = tags[i];
+							mtrw = matrowcnt(IDGPOr);
+							if (ReadFirstKey("Code",INr,1,true)) then begin
+								IDGPOrw.ArtCode = INr.Code;
+								matrowput(IDGPOr,mtrw,IDGPOrw);
+								POVc_PasteArtCode(IDGPOr,mtrw,false);
+								matrowget(IDGPOr,mtrw,IDGPOrw);
+								IDGPOrw.Quant = IDEACOdeExist[tags[i]];
+								IDGPOrw.Sum = IDEACodeSum[tags[i]];
+								IDGPOrw.Price = IDEACodePrice[tags[i]];
+								IDGPOrw.vRebate = IDEACodeRebate[tags[i]];
+								matrowput(IDGPOr,mtrw,IDGPOrw);
+								POVc_PasteQuant(IDGPOr,mtrw);
+							end;
+						end;
+					end;
+				end;
+				RecordStore(IDGPOr,true);
+				SetCompany(18,false);
 			end;
 		end;
 	end;
-	
 	
 
 return;
