@@ -7,7 +7,7 @@ external updating procedure RecalculatePricesfromConsComp(record INVc); // _-_-_
 external function string 255 StrReplace(string,string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 14 12 2020 y. at 9:37:36 AM
 external procedure GetObjs(string,string,var string);
 external function string 255 StrReplace(string,string,string);
-
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -1722,8 +1722,67 @@ begin
 end;
 
 
+global
+webpublic updating procedure WebRecalcClientReservesforBigPUMn()
+begin
+record BigPUVc BPUr;
+record ORVc ORr;
+row ORVc ORrw;
+record POVc POr;
+row POVc POrw;
+integer pos, i, j, ORCnt;
+string 255 tstr;
+array string 255 ClientORrs;
+record ClientItemStatusVc CISr;
+val ReserClQty;
+
+	BPUr.SerNr = 27;
+	if (ReadFirstMain(BPUr,1,true)) then begin
+		pos = 0;
+		tstr = "";
+		ExtractObjWithSeparator(",",BPUr.FromOrds,true,pos,tstr);
+		i=0;
+		while (nonblank(tstr)) begin
+			if (nonblank(tstr)) then begin
+				POr.SerNr = StringToLongInt(tstr);
+				if (ReadFirstMain(POr,1,true)) then begin
+					if (POr.POClass=="CLIEN") then begin
+						ClientORrs[i] = POr.OrdNr;
+						i=i+1;
+					end;
+				end;
+			end;
+			ExtractObjWithSeparator(",",BPUr.FromOrds,true,pos,tstr);
+		end;
+		ORCnt = i;
+		for (i=0;i<ORCnt;i=i+1) begin
+			ORr.SerNr = StringToLongInt(ClientORrs[i]);
+			if (ReadFirstMain(ORr,1,true)) then begin
+				for (j=0;j<matrowcnt(ORr);j=j+1) begin
+					matrowget(ORr,j,ORrw);
+					ReserClQty = ORrw.Quant-ORrw.Shipd2;
+					if (ReserClQty>0) then begin
+						CISr.ItemCode = ORrw.ArtCode;
+						CISr.OrderNr = ORr.SerNr;
+						if(ReadFIrstMain(CISr,2,true)) then begin
+							CISr.Quant = ReserClQty;
+							recordStore (CISr,true);
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
 
 
+
+
+
+
+
+
+return
+end;
 
 global
 webpublic updating procedure WebNewMaintAddToDBMn()
