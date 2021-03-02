@@ -94,6 +94,9 @@ external function roundmode SetRoundModeD(Integer);
 remote procedure PUDClassWeightRow(var record BigPUVc,integer);
 remote procedure PUDClassCaratRow(var record BigPUVc,integer);
 external function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
+external function string 60 AddObjectToObjectList(string,string);
+remote function Boolean SDVc_PasteArtCode(var record SDVc,Integer,Integer,var string,var string);
+remote updating function LongInt RecordAction_raPastePOInPU(var record POVc,var record PUVc);
 
 SetLangMode(LangRussian,"RUS",0);
  
@@ -669,6 +672,126 @@ LPUVcRecordUpdate:;
   return;
 end;
 
+
+global
+updating procedure PUCreateTransferToIDEA(record PUVc PUr)
+begin
+  record PUVc IDEAPUr, OldIDEAPUr;
+	row PUVc PUrw, IDEAPUrw;
+	record POVc POr, IDEAPOr;
+	row POVc POrw, IDEAPOrw;
+	boolean testf;
+	longint i, r;
+	record SDVc SDr, OldSDr;
+	row SDVc SDrw;
+	record LocationVc Lcr;
+	string 255 tstr, IDEAObjcts;
+	record OTypeAddControlBlock OTACb;
+	row OTypeAddControlBlock OTACrw;
+	vector val vArtCodeQty;
+
+	
+	if (nonblank(PUr.PONr) and PUr.OKFlag==1) then begin
+		POr.SerNr = PUr.PONr;
+		if (ReadFIrstMain(POr,1,true)) then begin
+			if (POr.IDGDEAPORef>0) then begin
+				testf = true;
+			end;
+		end;
+	end;
+	if (testf) then begin
+		RecordNew(SDr);
+		SDr.SerNr = NextSerNr("SDVc",SDr.TransDate,-1,false,""); 
+		SDr.Location = PUr.Location;
+		SDr.CostAcc = "41/06";
+		SDr.Comment = "IDEA Purchase";
+		if (nonblank(SDr.Location)) then begin
+			Lcr.Code = SDr.Location;
+			if(ReadFirstMain(Lcr,1,true))then begin
+				SDr.Objects = AddObjectToObjectList(SDr.Objects,Lcr.Objects);
+				SDr.Objects = SDr.Objects & ",CENTRAL_RETURN";
+			end;
+		end;
+		BlockLoad(OTACb);
+		for (i=0;i<matrowcnt(OTACb);i=i+1) begin
+			matrowget(OTACb,i,OTACrw);
+			if (OTACrw.STORE=="IDEA") then begin
+				IDEAObjcts = OTACrw.SUBDI;
+			end;
+		end;
+		if (nonblank(IDEAObjcts)) then begin
+			if (nonblank(SDr.Objects)) then begin SDr.Objects = SDr.Objects & ","; end;
+			SDr.Objects = SDr.Objects & IDEAObjcts;
+		end;
+		for (i=0;i<matrowcnt(PUr);i=i+1) begin
+			MatRowGet(PUr,i,PUrw);
+			ClearRow(SDr,SDrw,1);
+			if (nonblank(PUrw.Location)) then begin
+				SDrw.Location = PUrw.Location;
+			end else begin
+				SDrw.Location = PUr.Location;
+			end;
+			SDrw.PosCode = PUrw.ToPosCode;
+			SDrw.ArtCode = PUrw.ArtCode;
+			vArtCodeQty[PUrw.VIReconComment] = PUrw.Quant;
+			SDrw.Qty = PUrw.Quant;
+			MatRowPut(SDr,i,SDrw);
+			SDVc_PasteArtCode(SDr,i,1,tstr,tstr);
+		end;
+		recordStore (SDr,false);
+		RecordCopy(OldSDr,SDr);
+		SDr.OKFlag = 1;
+		if(RecordUpdate(OldSDr,SDr,true)==0) then begin
+			createrecordlink(SDr,CurrentCompany,POr,CurrentCompany);
+			createrecordlink(POr,CurrentCompany,SDr,CurrentCompany);
+			createrecordlink(SDr,CurrentCompany,PUr,CurrentCompany);
+			createrecordlink(PUr,CurrentCompany,SDr,CurrentCompany);
+			SetCompany(28,false);
+			IDEAPOr.SerNr = POr.IDGDEAPORef;
+			if (ReadFIrstMain(IDEAPOr,1,true)) then begin
+				r = RecordAction_raPastePOInPU(IDEAPOr,IDEAPUr);
+				if(Readfirstmain(IDEAPUr,1,true))then begin
+					for (i=matrowcnt(IDEAPUr)-1;i>=0;i=i-1) begin
+						matrowget(IDEAPUr,i,IDEAPUrw);
+						if (vArtCodeQty[IDEAPUrw.ArtCode]>0) then begin
+							IDEAPUrw.Quant = vArtCodeQty[IDEAPUrw.ArtCode];
+							matrowput(IDEAPUr,i,IDEAPUrw);
+						end else begin
+							matrowdelete(IDEAPUr,i);
+						end;
+					end;
+				end;
+				PUSumUp(IDEAPUr);
+				RecordStore(IDEAPUr, true);
+				RecordCopy(OldIDEAPUr,IDEAPUr);
+				IDEAPUr.OKFlag = 1;
+				if (PUr.ShipCostOKFlag==1) then begin
+					IDEAPUr.ShipCostOKFlag = 1;
+				end;
+				if (PUr.CustomsCostOKFlag==1) then begin
+					IDEAPUr.CustomsCostOKFlag = 1;
+				end;
+				if (RecordUpdate(OldIDEAPUr,IDEAPUr,true)==0) then begin
+					createrecordlink(SDr,18,OldIDEAPUr,CurrentCompany);
+					createrecordlink(OldIDEAPUr,CurrentCompany,SDr,18);
+					createrecordlink(OldIDEAPUr,CurrentCompany,PUr,18);
+					createrecordlink(PUr,18,OldIDEAPUr,CurrentCompany);
+					
+				end;
+			end;
+			ResetCompany(18);
+		end;
+	end;
+	
+  
+	
+	
+  return;
+end;
+
+
+
+
 global
 updating procedure UnOKGoodsReceipt(record PUVc PUr,record PUVc PU2r,Boolean deltrf)
 begin
@@ -737,6 +860,9 @@ begin
     end;
   end;
   if ((PUr.OKFlag!=0) and (PU2r.OKFlag==0)) then begin
+		if (CurrentCompany==18) then begin
+			PUCreateTransferToIDEA (PUr);
+		end;
     if (ihf==false) then begin
       BlockLoad(POSb);
       PUMakeStockMovement(PUr,false);
