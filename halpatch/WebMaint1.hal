@@ -8,6 +8,9 @@ external function string 255 StrReplace(string,string,string);// Edit **********
 external procedure GetObjs(string,string,var string);
 external function string 255 StrReplace(string,string,string);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function string 60 RemoveObjectFromObjectList(string,string);
+external function string 60 AddObjectToObjectList(string,string);
+external procedure ExtractObjectsByType(string, string, var array string, var integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -2758,16 +2761,20 @@ begin
 	area importfile;
 	vector boolean artcode;
 	longint cntlin,i,j,rwcnt;
-	string 20 sd1,sd2,sart,promo,apric,areb;
+	string 20 sd1,sd2,sart,promo,apric,areb,promoacc,updtef;
 	record IVVc IVr;
 	row IVVc IVrw;
 	boolean TrHs;
-	integer items,counter;
+	integer items,counter,oscnt,k;
 	boolean changed;
+	array string 10 aapric,aareb;
 	
 	logtext(0,"WebUpdatePROMO");
+	updtef = webgetarg("updtef");
 	compnr = stringtoint(webgetarg("compnr"));
 	logtext(0,"compnr " & compnr);
+	promoacc = webgetarg("promoobj");
+	
 	weboutstring("<table>");
 	if(compnr>0)then begin
 		d1 = stringtodate(webgetarg("d1"));
@@ -2819,19 +2826,41 @@ begin
 									weboutstring("<td>" & IVr.InvDate & "</td>");
 									weboutstring("<td>" & IVrw.vRebate & "</td>");
 								
-								promo = "";
-								GetObjs("PROMO",IVrw.Objects,promo);
-								if(blank(promo))then begin
-									apric = "";
-									areb = "";
-									GetObjs("APRIC",IVrw.Objects,apric);
-									GetObjs("AREB",IVrw.Objects,areb);
-								end;
+									promo = "";
+									GetObjs("PROMO",IVrw.Objects,promo);
+									if(blank(promo) and nonblank(promoacc))then begin
+										apric = "";
+										areb = "";
+										oscnt = 0;
+										ExtractObjectsByType(IVrw.Objects,"APRIC",aapric,oscnt);
+										oscnt = 0;
+										ExtractObjectsByType(IVrw.Objects,"AREB",aareb,oscnt);
+										
+										for(k=0;k<aapric.length;k=k+1)begin
+											apric = aapric[k];
+											if(nonblank(apric))then begin
+												IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,apric);
+											end;
+										end;
+										for(k=0;k<aareb.length;k=k+1)begin
+											areb = aareb[k];
+											if(nonblank(areb))then begin
+												IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,areb);
+											end;
+										end;
+										IVrw.Objects = AddObjectToObjectList(IVrw.Objects,promoacc);      
+										matrowput(IVr,j,IVrw);  
+										changed = true;
+									end;
 									weboutstring("<td>" & apric & "</td>");
 									weboutstring("<td>" & areb & "</td>");
+									weboutstring("<td>" & IVrw.Objects & "</td>");
 								weboutstring("</tr>");
 								
 							end;
+						end;
+						if(updtef=="true" and changed)then begin
+							recordstore(IVr,true);
 						end;
 					end;
 				end;
