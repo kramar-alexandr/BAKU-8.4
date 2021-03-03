@@ -2753,7 +2753,97 @@ end;
 
 global webpublic updating procedure WebUpdatePROMO()
 begin
-
+	integer compnr;
+	date d1,d2;
+	area importfile;
+	vector boolean artcode;
+	longint cntlin,i,j,rwcnt;
+	string 20 sd1,sd2,sart,promo,apric,areb;
+	record IVVc IVr;
+	row IVVc IVrw;
+	boolean TrHs;
+	integer items,counter;
+	boolean changed;
+	
+	logtext(0,"WebUpdatePROMO");
+	compnr = stringtoint(webgetarg("compnr"));
+	logtext(0,"compnr " & compnr);
+	weboutstring("<table>");
+	if(compnr>0)then begin
+		d1 = stringtodate(webgetarg("d1"));
+		d2 = stringtodate(webgetarg("d2"));
+		logtext(0,"d1 " & d1);
+		logtext(0,"d2 " & d2);
+		if(nonblankdate(d1) and nonblankdate(d2))then begin
+			logtext(0,"filename " & webgetarg("filename"));
+			if(nonblank(webgetarg("filename")))then begin
+				setcompany(compnr,false);
+				addfiletoarea("PromoRecalc/" & webgetarg("filename"),importfile,false);
+				cntlin = countlinesinarea(importfile);
+				for(i=0;i<cntlin;i=i+1)begin
+					sd1 = GetTabTextFromArea(i,0,importfile);
+					sd2 = GetTabTextFromArea(i,1,importfile);
+					sart = GetTabTextFromArea(i,2,importfile);
+					
+					if(stringtodate(sd1)==d1 and stringtodate(sd2)==d2)then begin
+						artcode[sart] = true;
+						items = items + 1;
+						/*weboutstring("<tr>");
+							weboutstring("<td>" & sd1 & "</td>");
+							weboutstring("<td>" & sd2 & "</td>");
+							weboutstring("<td>" & sart & "</td>");
+						weboutstring("</tr>");*/
+					end;
+				end;
+				
+				weboutstring("<tr>");
+					weboutstring("<td>" & "Items:" & "</td>");
+					weboutstring("<td>" & items & "</td>");
+				weboutstring("</tr>");
+				
+				IVr.InvDate = d1;
+				TrHs = true;
+				while(loopkey("InvDate",IVr,1,TrHs))begin
+					if(IVr.InvDate>d2)then begin TrHs = false; end;
+					
+					if(TrHs)then begin
+						changed = false;
+						counter = counter + 1;
+						rwcnt = matrowcnt(IVr);
+						for(j=0;j<rwcnt;j=j+1)begin
+							matrowget(IVr,j,IVrw);
+							if(artcode[IVrw.ArtCode])then begin
+								weboutstring("<tr>");
+									weboutstring("<td>" & IVr.SerNr & "</td>");
+									weboutstring("<td>" & IVrw.ArtCode & "</td>");
+									weboutstring("<td>" & IVr.InvDate & "</td>");
+									weboutstring("<td>" & IVrw.vRebate & "</td>");
+								
+								promo = "";
+								GetObjs("PROMO",IVrw.Objects,promo);
+								if(blank(promo))then begin
+									apric = "";
+									areb = "";
+									GetObjs("APRIC",IVrw.Objects,apric);
+									GetObjs("AREB",IVrw.Objects,areb);
+								end;
+									weboutstring("<td>" & apric & "</td>");
+									weboutstring("<td>" & areb & "</td>");
+								weboutstring("</tr>");
+								
+							end;
+						end;
+					end;
+				end;
+				resetloop(IVr);
+				weboutstring("<tr>");
+					weboutstring("<td>" & "Counter:" & "</td>");
+					weboutstring("<td>" & counter & "</td>");
+				weboutstring("</tr>");
+			end;
+		end;
+	end;
+	weboutstring("</table>");
 
 return;
 end;
