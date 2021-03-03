@@ -2758,9 +2758,9 @@ global webpublic updating procedure WebUpdatePROMO()
 begin
 	integer compnr;
 	date d1,d2;
-	area importfile;
+	area importfile,aperiods;
 	vector boolean artcode;
-	longint cntlin,i,j,rwcnt;
+	longint cntlin,i,j,rwcnt,periods,kk;
 	string 20 sd1,sd2,sart,promo,apric,areb,promoacc,updtef;
 	record IVVc IVr;
 	row IVVc IVrw;
@@ -2776,109 +2776,121 @@ begin
 	logtext(0,"compnr " & compnr);
 	promoacc = webgetarg("promoobj");
 	
+	addfiletoarea("PromoRecalc/" & webgetarg("filename") & "-periods",aperiods,false);
+	
 	weboutstring("<table>");
-	if(compnr>0)then begin
-		d1 = stringtodate(webgetarg("d1"));
-		d2 = stringtodate(webgetarg("d2"));
-		logtext(0,"d1 " & d1);
-		logtext(0,"d2 " & d2);
-		if(nonblankdate(d1) and nonblankdate(d2))then begin
-			logtext(0,"filename " & webgetarg("filename"));
-			if(nonblank(webgetarg("filename")))then begin
-				setcompany(compnr,false);
-				addfiletoarea("PromoRecalc/" & webgetarg("filename"),importfile,false);
-				cntlin = countlinesinarea(importfile);
-				for(i=0;i<cntlin;i=i+1)begin
-					sd1 = GetTabTextFromArea(i,0,importfile);
-					sd2 = GetTabTextFromArea(i,1,importfile);
-					sart = GetTabTextFromArea(i,2,importfile);
+	periods = countlinesinarea(importfile);
+	for(kk=0;kk<periods;kk=kk+1)begin
+		d1 = stringtodate(GetTabTextFromArea(i,0,aperiods));
+		d2 = stringtodate(GetTabTextFromArea(i,1,aperiods));
+		weboutstring("<tr>");
+			weboutstring("<td>" & "d1:" & "</td>");
+			weboutstring("<td>" & d1 & "</td>");
+			weboutstring("<td>" & "d2:" & "</td>");
+			weboutstring("<td>" & d2 & "</td>");
+		weboutstring("</tr>");
+		if(compnr>0)then begin
+			
+			logtext(0,"d1 " & d1);
+			logtext(0,"d2 " & d2);
+			if(nonblankdate(d1) and nonblankdate(d2))then begin
+				logtext(0,"filename " & webgetarg("filename"));
+				if(nonblank(webgetarg("filename")))then begin
+					setcompany(compnr,false);
+					addfiletoarea("PromoRecalc/" & webgetarg("filename"),importfile,false);
+					cntlin = countlinesinarea(importfile);
+					for(i=0;i<cntlin;i=i+1)begin
+						sd1 = GetTabTextFromArea(i,0,importfile);
+						sd2 = GetTabTextFromArea(i,1,importfile);
+						sart = GetTabTextFromArea(i,2,importfile);
 					
-					if(stringtodate(sd1)==d1 and stringtodate(sd2)==d2)then begin
-						artcode[sart] = true;
-						items = items + 1;
-						/*weboutstring("<tr>");
-							weboutstring("<td>" & sd1 & "</td>");
-							weboutstring("<td>" & sd2 & "</td>");
-							weboutstring("<td>" & sart & "</td>");
-						weboutstring("</tr>");*/
+						if(stringtodate(sd1)==d1 and stringtodate(sd2)==d2)then begin
+							artcode[sart] = true;
+							items = items + 1;
+							/*weboutstring("<tr>");
+								weboutstring("<td>" & sd1 & "</td>");
+								weboutstring("<td>" & sd2 & "</td>");
+								weboutstring("<td>" & sart & "</td>");
+							weboutstring("</tr>");*/
+						end;
 					end;
-				end;
 				
-				weboutstring("<tr>");
-					weboutstring("<td>" & "Items:" & "</td>");
-					weboutstring("<td>" & items & "</td>");
-				weboutstring("</tr>");
+					weboutstring("<tr>");
+						weboutstring("<td>" & "Items:" & "</td>");
+						weboutstring("<td>" & items & "</td>");
+					weboutstring("</tr>");
 				
-				IVr.InvDate = d1;
-				TrHs = true;
-				while(loopkey("InvDate",IVr,1,TrHs))begin
-					if(IVr.InvDate>d2)then begin TrHs = false; end;
+					IVr.InvDate = d1;
+					TrHs = true;
+					while(loopkey("InvDate",IVr,1,TrHs))begin
+						if(IVr.InvDate>d2)then begin TrHs = false; end;
 					
-					if(TrHs)then begin
-						changed = false;
-						counter = counter + 1;
-						rwcnt = matrowcnt(IVr);
-						for(j=0;j<rwcnt;j=j+1)begin
-							matrowget(IVr,j,IVrw);
-lGroupReb:;							
-							if(artcode[IVrw.ArtCode])then begin
-								weboutstring("<tr>");
-									weboutstring("<td>" & IVr.SerNr & "</td>");
-									weboutstring("<td>" & IVrw.ArtCode & "</td>");
-									weboutstring("<td>" & IVr.InvDate & "</td>");
-									weboutstring("<td>" & IVrw.vRebate & "</td>");
+						if(TrHs)then begin
+							changed = false;
+							counter = counter + 1;
+							rwcnt = matrowcnt(IVr);
+							for(j=0;j<rwcnt;j=j+1)begin
+								matrowget(IVr,j,IVrw);
+	lGroupReb:;							
+								if(artcode[IVrw.ArtCode])then begin
+									weboutstring("<tr>");
+										weboutstring("<td>" & IVr.SerNr & "</td>");
+										weboutstring("<td>" & IVrw.ArtCode & "</td>");
+										weboutstring("<td>" & IVr.InvDate & "</td>");
+										weboutstring("<td>" & IVrw.vRebate & "</td>");
 								
-									promo = "";
-									GetObjs("PROMO",IVrw.Objects,promo);
-									if(blank(promo) and nonblank(promoacc))then begin
-										apric = "";
-										areb = "";
-										oscnt = 0;
-										ExtractObjectsByType(IVrw.Objects,"APRIC",aapric,oscnt);
-										oscnt = 0;
-										ExtractObjectsByType(IVrw.Objects,"AREB",aareb,oscnt);
+										promo = "";
+										GetObjs("PROMO",IVrw.Objects,promo);
+										if(blank(promo) and nonblank(promoacc))then begin
+											apric = "";
+											areb = "";
+											oscnt = 0;
+											ExtractObjectsByType(IVrw.Objects,"APRIC",aapric,oscnt);
+											oscnt = 0;
+											ExtractObjectsByType(IVrw.Objects,"AREB",aareb,oscnt);
 										
-										for(k=0;k<aapric.length;k=k+1)begin
-											apric = aapric[k];
-											if(nonblank(apric))then begin
-												IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,apric);
+											for(k=0;k<aapric.length;k=k+1)begin
+												apric = aapric[k];
+												if(nonblank(apric))then begin
+													IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,apric);
+												end;
 											end;
-										end;
-										for(k=0;k<aareb.length;k=k+1)begin
-											areb = aareb[k];
-											if(nonblank(areb))then begin
-												IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,areb);
+											for(k=0;k<aareb.length;k=k+1)begin
+												areb = aareb[k];
+												if(nonblank(areb))then begin
+													IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,areb);
+												end;
 											end;
+											IVrw.Objects = AddObjectToObjectList(IVrw.Objects,promoacc);      
+											matrowput(IVr,j,IVrw);  
+											changed = true;
 										end;
-										IVrw.Objects = AddObjectToObjectList(IVrw.Objects,promoacc);      
-										matrowput(IVr,j,IVrw);  
-										changed = true;
-									end;
-									weboutstring("<td>" & apric & "</td>");
-									weboutstring("<td>" & areb & "</td>");
-									weboutstring("<td>" & IVrw.Objects & "</td>");
-								weboutstring("</tr>");
+										weboutstring("<td>" & apric & "</td>");
+										weboutstring("<td>" & areb & "</td>");
+										weboutstring("<td>" & IVrw.Objects & "</td>");
+									weboutstring("</tr>");
 								
-							end else begin
-								INr.Code = IVrw.ArtCode;
-								if(readfirstmain(INr,1,true))then begin
-									if(artcode[INr.Group])then begin
-										artcode[IVrw.ArtCode] = true;
-										goto lGroupReb;
+								end else begin
+									INr.Code = IVrw.ArtCode;
+									if(readfirstmain(INr,1,true))then begin
+										if(artcode[INr.Group])then begin
+											artcode[IVrw.ArtCode] = true;
+											goto lGroupReb;
+										end;
 									end;
 								end;
 							end;
-						end;
-						if(updtef=="true" and changed)then begin
-							recordstore(IVr,true);
+							if(updtef=="true" and changed)then begin
+								recordstore(IVr,true);
+							end;
 						end;
 					end;
+					resetloop(IVr);
+					weboutstring("<tr>");
+						weboutstring("<td>" & "Counter:" & "</td>");
+						weboutstring("<td>" & counter & "</td>");
+					weboutstring("</tr>");
 				end;
-				resetloop(IVr);
-				weboutstring("<tr>");
-					weboutstring("<td>" & "Counter:" & "</td>");
-					weboutstring("<td>" & counter & "</td>");
-				weboutstring("</tr>");
 			end;
 		end;
 	end;
