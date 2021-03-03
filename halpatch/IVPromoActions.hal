@@ -7,8 +7,85 @@ external function Boolean GetItemPriceDiscount3(string,val,var record INVc,strin
                                                 string,Boolean,var Boolean,string,var string,var val,string,string,var string);
 external function string 60 RemoveObjectFromObjectList(string,string);
 external function string 60 AddObjectToObjectList(string,string);
+external function Boolean GetRebate2(record INVc,var val,var val,string,string,var val,var Boolean,Date,var string);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 17:20 26.06.2019
+remote function Boolean IVVc_PasteArtCode(var record IVVc,Integer,var string,var string,Boolean,var Integer);
+external procedure ExtractObjectsByType(string, string, var array string, var integer);
 
 SetLangMode(LangRussian,"RUS",0);
+
+global // Edit ************************** BPI Ukraine - KramarAlexandr - 02, 02 03 2021 y. at 11:26:27 AM
+function string 255 ExtraMarch2021Akciya(var record IVVc IVr,string opearation)
+begin
+  record SWexItemsBlock SWexItemsb;
+  row SWexItemsBlock SWexItemsrw;
+  vector boolean excludeitems;
+  integer i,rwcnt,minrow;
+  string 50 res,custcat,rebcode;
+  row IVVc IVrw;
+  val totqty,minprice,qty;
+  integer rowqty,oscnt,sernrf;
+  record INVc INr;
+  string 255 tstr,tax2code,location,dummystr,obj,inwarning;
+  array string 20 rebobj;
+  val t,s,price,vreb,baseprice,temp,tax2prc;
+  Boolean calcprice;
+  Integer exportflag;
+  Boolean dummyf;
+  record SerNrTrackBlock SNrb;
+  val TPrice;
+  val rebvp, tdisc;
+  Boolean foundstaff;
+  date tdp;
+  record RebVc Rebr;
+	
+	Rebr.Code = IVr.RebCode;
+	readfirstmain(Rebr,1,true);
+  
+  minprice = 99999999;
+  rwcnt = matrowcnt(IVr);
+  for(i=0;i<rwcnt;i=i+1)begin
+  	matrowget(IVr,i,IVrw);
+  	if(IVrw.stp==kInvoiceRowTypeNormal)then begin
+  		if(IVrw.Quant>0)then begin
+				totqty = totqty + IVrw.Quant;
+  		end;
+  	end;
+  end;
+  
+  if(totqty>1)then begin
+		for(i=0;i<rwcnt;i=i+1)begin
+			matrowget(IVr,i,IVrw);
+			oscnt = 0;
+			cleararray(rebobj);
+			ExtractObjectsByType(IVrw.Objects,"AREB",rebobj,oscnt);
+			if(blank(rebobj[0]))then begin
+				oscnt = 0;
+				ExtractObjectsByType(IVrw.Objects,"APRIC",rebobj,oscnt);
+			end;
+			if(blank(rebobj[0]))then begin
+				oscnt = 0;
+				ExtractObjectsByType(IVrw.Objects,"PROMO",rebobj,oscnt);
+			end;
+			
+			if(IVrw.stp==kInvoiceRowTypeNormal and blank(rebobj[0]))then begin
+				if(IVrw.Quant>0)then begin
+						if(IVrw.vRebate==Rebr.vra0)then begin
+							IVrw.vRebate = 20;
+							IVrw.Objects = AddObjectToObjectList(IVrw.Objects,"PR_SPEC");
+							MatRowPut(IVr,i,IVrw);
+							IVVc_PasteQuantity(IVr,i);		
+							IVDchrsum(IVr,i);
+							IVDchsum(IVr,i);
+						end;
+				end;
+			end;
+		end;
+  end;
+  res = "";
+  ExtraMarch2021Akciya = res;
+  return;
+end; // Edit ************************** BPI Ukraine - KramarAlexandr - 05, 27 03 2020 y. at 10:27:59 AM
+
 
 
 global // Edit ************************** BPI Ukraine - KramarAlexandr - 05, 27 03 2020 y. at 10:27:53 AM
@@ -254,6 +331,16 @@ begin
   	if(currentcompany==1)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 27 03 2020 y. at 10:29:52 AM
   		if(IVr.InvDate>=stringtodate("27/03/2020") and IVr.InvDate<=stringtodate("05/04/2020"))then begin
   			res = AciaTwoLusOneSW(IVr,opearation);
+  		end;
+  	end;
+  	
+  	// Акция FW: Маркетинговые акции // Edit ************************** BPI Ukraine - KramarAlexandr - 02, 02 03 2021 y. at 11:21:28 AM
+		//Инна,
+		//Данная акция будет действовать в Xtravaganza c 5 марта по 8 марта включительно. 
+		//Если кол-во товаров в чек в любой комбинации больше 1 тогда скидка на товары будет 20% (не включая товары, на которых действует скидка вне акции). Прошу иметь в виду, что максимальная клиентская скидка по карте лояльности 20%, поэтому данная акция должна перебивать их. 
+ 		if(currentcompany==16 and currentuser=="SA1")then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 27 03 2020 y. at 10:29:52 AM
+  		if(IVr.InvDate>=stringtodate("01/03/2021") and IVr.InvDate<=stringtodate("08/03/2021"))then begin
+  			res = ExtraMarch2021Akciya(IVr,opearation);
   		end;
   	end;
   
