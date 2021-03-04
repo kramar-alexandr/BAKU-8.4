@@ -2617,6 +2617,148 @@ lWebAFFVIVc1:;
 return;
 end;
 
+
+global webpublic updating procedure WebAFFOPVc()
+begin
+	record VIVc VIr;
+	record POVc POr;
+	record OPVc OPr;
+	row OPVc OPrw;
+	record BPIBrandVc BPIBrandr;
+	vector string 20 vVendAFF,vFOBAff;
+	string 20 tstr,fobobj;
+	integer pos,opi,oprwcnt;
+	boolean change,changed;
+	record OTypeAddControlBlock OTACb;
+	row OTypeAddControlBlock OTACrw;
+	integer i,rwcnt;
+	
+	blockload(OTACb);
+	rwcnt = matrowcnt(OTACb);
+	for(i=0;i<rwcnt;i=i+1)begin
+		matrowget(OTACb,i,OTACrw);
+		if(nonblank(OTACrw.FOB))then begin
+			vFOBAff[OTACrw.FOB] = OTACrw.SUBDI;
+		end;
+	end;
+	
+	change = false;
+	if(webgetarg("change")=="true")then begin
+		change = true;
+	end;
+	
+	while(loopmain(BPIBrandr,1,true))begin
+		tstr = "";
+		pos = 0;
+		
+		ExtractObj(BPIBrandr.Vendor,pos,tstr);
+		while(nonblank(tstr))begin
+			if(nonblank(tstr))then begin
+				vVendAFF[tstr] = BPIBrandr.CWHCode;
+				ExtractObj(BPIBrandr.Vendor,pos,tstr);
+			end;
+		end;
+	end;
+	
+	setcompany(18,false);
+	weboutstring("<table>");
+	while(loopmain(OPr,1,true))begin
+		oprwcnt = matrowcnt(OPr);
+		changed = false;
+		for(opi=0;opi<oprwcnt;opi=opi+1)begin
+			matrowget(OPr,opi,OPrw);
+			if(setinset("AFF",OPrw.Objects))then begin
+				weboutstring("<tr>");
+				weboutstring("<td>" & OPr.SerNr & "</td>");
+				weboutstring("<td>" & OPr.TransDate & "</td>");
+				weboutstring("<td>" & OPrw.VECode & "</td>");
+				weboutstring("<td>" & vVendAFF[OPrw.VECode] & "</td>");
+			
+				switch(vVendAFF[OPrw.VECode]) begin 
+					case "CWH1": weboutstring("<td>" & "AFF_TW" & "</td>");
+											if(change)then begin
+												OPrw.Objects = StrReplace(OPrw.Objects,"AFF","AFF_TW");
+												//if(UpdateAFFTransFromOP(VIr))then begin
+													changed = true;
+													matrowput(OPr,opi,OPrw);
+													//recordstore(OPrw,true);
+												//end;
+											end;
+					case "CWH2": weboutstring("<td>" & "AFF_TW" & "</td>");
+											if(change)then begin
+												OPrw.Objects = StrReplace(OPrw.Objects,"AFF","AFF_TW");
+												changed = true;
+												matrowput(OPr,opi,OPrw);
+												/*if(UpdateAFFTransFromVI(VIr))then begin
+													recordstore(VIr,true);
+												end;*/
+											end;
+					case "CWH3": weboutstring("<td>" & "AFF_CR" & "</td>");
+											//if(change)then begin
+												OPrw.Objects = StrReplace(OPrw.Objects,"AFF","AFF_CR");
+												changed = true;
+												matrowput(OPr,opi,OPrw);
+												/*if(UpdateAFFTransFromVI(VIr))then begin
+													recordstore(VIr,true);
+												end;*/
+											//end;
+					case "CWH4": weboutstring("<td>" & "AFF_CR" & "</td>");
+												OPrw.Objects = StrReplace(OPrw.Objects,"AFF","AFF_CR");
+												matrowput(OPr,opi,OPrw);
+					otherwise 
+											fobobj = "";
+											GetObjs("FOB",OPrw.Objects,fobobj);
+											if(nonblank(fobobj))then begin
+												if(nonblank(vFOBAff[fobobj]))then begin 
+													weboutstring("<td>" & vFOBAff[fobobj] & "</td>");
+													OPrw.Objects = StrReplace(OPrw.Objects,"AFF",vFOBAff[fobobj]);
+													matrowput(OPr,opi,OPrw);
+												end else begin
+													weboutstring("<td>" & "***********************************" & "</td>");
+												end;
+											end else begin
+												if(OPrw.VISerNr>-1)then begin
+	lWebAFFOPVc1:;
+													VIr.SerNr = OPrw.VISerNr;
+													if(readfirstmain(VIr,1,true))then begin
+														if(setinset("AFF_TW",VIr.Objects))then begin
+															weboutstring("<td>" & "AFF_TW" & "</td>");
+															OPrw.Objects = StrReplace(OPrw.Objects,"AFF","AFF_TW");
+															matrowput(OPr,opi,OPrw);
+														end;
+														if(setinset("AFF_CR",VIr.Objects))then begin
+															weboutstring("<td>" & "AFF_CR" & "</td>");
+															OPrw.Objects = StrReplace(OPrw.Objects,"AFF","AFF_CR");
+															matrowput(OPr,opi,OPrw);
+														end;
+													end;
+													if(nonblank(VIr.VATNr))then begin
+														if(setinset("AFF_TW",VIr.VATNr))then begin
+															weboutstring("<td>" & "AFF_TW" & "</td>");
+															OPrw.Objects = StrReplace(OPrw.Objects,"AFF","AFF_TW");
+															matrowput(OPr,opi,OPrw);
+														end;
+														if(setinset("AFF_CR",VIr.VATNr))then begin
+															weboutstring("<td>" & "AFF_CR" & "</td>");
+															OPrw.Objects = StrReplace(OPrw.Objects,"AFF","AFF_CR");
+															matrowput(OPr,opi,OPrw);
+														end;
+													end else begin
+														weboutstring("<td>" & "***********************************" & "</td>");	
+													end;
+												end;		
+											end;
+				end;
+			
+				weboutstring("</tr>");
+			end;
+		end;
+	end;
+	weboutstring("</table>");
+
+return;
+end;
+
 global webpublic updating procedure WebFixSutra()
 begin
 	record INVc INr,IN2r;
@@ -2787,6 +2929,7 @@ begin
 	// http://idhansa.italdizain.az:8034/WebUpdatePROMO.hal?compnr=20&filename=ElluxusLic1.txt&promoobj=PR_LIC&updtef=true
 	
 	//http://idhansa.italdizain.az:8034/WebUpdatePROMO.hal?compnr=22&filename=GL_T-Lic.txt&promoobj=PR_LIC&updtef=true
+	//http://idhansa.italdizain.az:8034/WebUpdatePROMO.hal?compnr=22&filename=GL_T-REMOVE.txt&promoobj=REMOVE&updtef=true
 	
 	weboutstring("<table>");
 	periods = countlinesinarea(aperiods);
