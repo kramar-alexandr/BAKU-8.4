@@ -1795,6 +1795,101 @@ val ReserClQty;
 return
 end;
 
+
+
+
+
+
+
+global
+webpublic updating procedure WebRecalcClientReservesforPUMn()
+begin
+record PUVc PUr;
+row PUVc PUrw;
+record ORVc ORr;
+row ORVc ORrw;
+record POVc POr;
+row POVc POrw;
+integer pos, i, j, ORCnt;
+string 255 tstr;
+record ClientItemStatusVc CISr;
+val ReserClQty;
+longint ClientORrs;
+vector boolean vClientORrs;
+array longint aORrs;
+vector val PUArtCodes;
+	
+	SetCompany(18,false);
+	PUr.SerNr = 1;
+	while (loopmain(PUr,1,true)) begin
+		if (PUr.PONr>0) then begin
+			POr.SerNr = PUr.PONr;
+			if (ReadFirstMain(POr,1,true)) then begin
+				if (POr.POClass=="CLIEN") then begin
+					if (!vClientORrs[POr.OrdNr]) then begin
+						vClientORrs[POr.OrdNr] = true;
+						aORrs[aORrs.length] = POr.OrdNr;
+						for (i=0;i<matrowcnt(PUr);i=i+1) begin
+							matrowget(PUr,i,PUrw);
+							PUArtCodes[POr.OrdNr & "_" & PUrw.ArtCode] = PUArtCodes[POr.OrdNr & "_" & PUrw.ArtCode] + PUrw.Quant;
+						end;
+					end else begin
+						for (i=0;i<matrowcnt(PUr);i=i+1) begin
+							matrowget(PUr,i,PUrw);
+							PUArtCodes[POr.OrdNr & "_" & PUrw.ArtCode] = PUArtCodes[POr.OrdNr & "_" & PUrw.ArtCode] + PUrw.Quant;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	for (i=0;i<aORrs.length;i=i+1) begin
+		if (vClientORrs[aORrs[i]]) then begin
+			ORr.SerNr = aORrs[i];
+			if (ReadFirstMain(ORr,1,true)) then begin
+				for (j=0;j<matrowcnt(ORr);j=j+1) begin
+					matrowget(ORr,j,ORrw);
+					ReserClQty = PUArtCodes[ORr.SerNr & "_" & ORrw.ArtCode] - ORrw.Shipd2;
+					CISr.ItemCode = ORrw.ArtCode;
+					CISr.OrderNr = ORr.SerNr;
+					if(ReadFIrstMain(CISr,2,true)) then begin
+						if (ReserClQty<0) then begin ReserClQty = 0; end;
+						CISr.Quant = ReserClQty;
+						if (ORr.Closed==1) then begin 
+							RecordDelete(CISr);
+							logtext(0,"Delete client reserve" & CISr.ItemCode & " " & CISr.Quant & " " & CISr.OrderNr);
+						end else begin
+							if(recordStore (CISr,true))then begin
+								logtext(0,"recalc PU " & CISr.ItemCode & " " & CISr.Quant);
+							end;
+						end;
+					end else begin
+						if (ORr.Closed==0) then begin
+							RecordNew(CISr);
+							CISr.ItemCode = ORrw.ArtCode;
+							CISr.OrderNr = ORr.SerNr;
+							if (ReserClQty<0) then begin ReserClQty = 0; end;
+							if (ORr.Closed==1) then begin ReserClQty = 0; end;
+							CISr.Quant = ReserClQty;
+							if(recordStore (CISr,true))then begin
+								logtext(0,"recalc PU " & CISr.ItemCode & " " & CISr.Quant);
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+return
+end;
+
+
+
+
+
+
+
+
 global
 webpublic updating procedure WebNewMaintAddToDBMn()
 begin
