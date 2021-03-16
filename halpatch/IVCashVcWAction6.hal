@@ -88,7 +88,7 @@ remote procedure IVVc_PastePrice(var record IVVc,record IVVc,Integer,var string)
 external function roundmode SetRoundModeD(Integer);// Edit ************************** BPI Ukraine - KramarAlexandr - Tuesday, 13 February 2018 11:38:01
 remote procedure WriteCustomLogOnServer(area,string);
 remote function string 255 NormalizeStrToJson (string);
-remote procedure ProceedSendTaxNPTSOClass_Remote(var area, var record IVVc);// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 30 11 2020 y. at 12:02:12 PM
+remote procedure ProceedSendTaxNPTSOClass_Remote(var area, var record IVVc,record RcVc);// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 30 11 2020 y. at 12:02:12 PM
 remote procedure ProceedReturnTaxNPTSOClass_Remote(record RcVc, var area, var record IVVc);
 remote procedure ProceedReturnTaxAutoNPTSOClass_Remote(var area, var record IVVc,record IVVc);// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 30 11 2020 y. at 12:02:12 PM
 remote procedure ProceedCredirRepayment_Remote(var area, var record IPVc);// Edit ************************** BPI Ukraine - KramarAlexandr - 02, 15 12 2020 y. at 10:30:27 AM
@@ -3963,7 +3963,7 @@ begin
 	discount = 0.0;
 	loyalty = 0;
 	
-	ProceedSendTaxNPTSOClass_Remote(req,IVr);
+	ProceedSendTaxNPTSOClass_Remote(req,IVr,RepSpec);
   writeareatofile(req,"SendTAXRequest.txt",1);
   
   SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,10); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
@@ -6411,7 +6411,7 @@ begin
   Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
-  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status,isterminal,iscash; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   string 255 category, transactionId, parentDocument;
   json jsresponse;
   val cash, terminal, discount,loyalty,bonus,vatsum;
@@ -6421,16 +6421,54 @@ begin
 	area logarea,biglogarea,tmpar1,tmpar2;
 	vector val vatperc;
 	array string 50 vtags;
+	record IVVc IVr;
+	
 	
   wn = CurWindow;
   mwn = motherwindow(wn);
   GetWindowRecord(wn,RepSpec);
+	blockload(PMb);
 
   IPr.SerNr = RepSpec.long1;
-
   ReadFirstMain(IPr,1,true);
   
-  blockload(PMb);
+  for(j=0;j<matrowcnt(PMb);j=j+1)begin
+		matrowget(PMb,j,PMrw);
+		if(PMrw.Code==IPr.PayMode)then begin
+			if(PMrw.AccNr=="51")then begin
+				isterminal = true;
+			end;
+			if(PMrw.AccNr=="50")then begin
+				iscash = true;
+			end;
+		end;
+	end;
+  
+  if(RepSpec.flags[1]>0)then begin
+  	matrowget(IPr,RepSpec.flags[1],IPrw);
+  	if(IPrw.InvoiceNr>0 and IPrw.InvoiceNr==RepSpec.long2)then begin
+  		IVr.SerNr = IPrw.InvoiceNr;
+  		if(readfirstmain(IVr,1,true))then begin
+  			if(IVr.CurncyCode=="AZN")then begin
+  				if(iscash)then begin
+  					RepSpec.vals3 = IPrw.InvVal;
+  				end;
+  				if(isterminal)then begin
+  					RepSpec.vals4 = IPrw.InvVal;
+  				end;
+  			end else begin
+  				if(iscash)then begin
+  					RepSpec.vals3 = IPrw.InvVal*IVr.ToRateB1;
+  				end;
+  				if(isterminal)then begin
+  					RepSpec.vals4 = IPrw.InvVal*IVr.ToRateB1;
+  				end;
+  			end;
+  		end;
+  	end;
+  end;
+  
+  
   
   host = "10.10.12.116"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
@@ -6446,7 +6484,8 @@ begin
 	discount = 0.0;
 	loyalty = 0;
 	
-	ProceedCredirRepayment_Remote(req,IPr);
+	//ProceedCredirRepayment_Remote(req,IPr);
+	ProceedSendTaxNPTSOClass_Remote(req,IVr,RepSpec);
   writeareatofile(req,"SendTAXRequest.txt",1);
   
   SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
