@@ -3287,12 +3287,16 @@ end;
 global webpublic procedure WebReportRebPromo()
 begin
 	record RebVc Rebr;
-	boolean TrHs, TrHs2, testf;
+	boolean TrHs, TrHs2, testf, changed;
 	val percentInCode;
 	integer compnr; 
 	record IVVc IVr;
 	row IVVc IVrw;
-	integer i;
+	integer i, oscnt,k;
+	string 255 promo, apric, areb, aprom, DelStr, AddStr, OldObj, NewObj;
+	array string 10 aapric,aareb,aaprom;
+	record INVc INr;
+	
 	
 	compnr = stringtoint(webgetarg("compnr"));
 	SetCompany(compnr,false);
@@ -3305,8 +3309,8 @@ begin
 			percentInCode = StringToVal(left(Rebr.Code,len(Rebr.Code)-1),M4Val);
 		end;
 		if (percentInCode!=Rebr.vra0) then begin
-			WebOutString(Rebr.Code & "<=>" & Rebr.vra0 & "<=>" & Rebr.FromDate & "<=>" & Rebr.ToDate);
-			weboutstring("<BR>");
+			// WebOutString(Rebr.Code & "<=>" & Rebr.vra0 & "<=>" & Rebr.FromDate & "<=>" & Rebr.ToDate);
+			// weboutstring("<BR>");
 			TrHs2 = true;
 			IVr.TransDate = Rebr.FromDate;
 			while (loopKey("TransDate",IVr,1,TrHs2)) begin
@@ -3317,10 +3321,65 @@ begin
 					for (i=0;i<matrowcnt(IVr);i=i+1) begin
 						matrowget(IVr,i,IVrw);
 						if (IVrw.vRebate==Rebr.vra0) then begin
-							WebOutString(IVr.SerNr & "<=>" & IVrw.ArtCode & "<=>" & IVrw.vRebate);
+							OldObj = IVrw.Objects;
+							DelStr = "";
+							AddStr = "";
+							changed = false;
+							apric = "";
+							areb = "";
+							oscnt = 0;
+							clearArray(aapric);
+							ExtractObjectsByType(IVrw.Objects,"APRIC",aapric,oscnt);
+							oscnt = 0;
+							clearArray(aareb);
+							ExtractObjectsByType(IVrw.Objects,"AREB",aareb,oscnt);
+							for(k=0;k<aapric.length;k=k+1)begin
+								apric = aapric[k];
+								if(nonblank(apric))then begin
+									IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,apric);
+									if (nonblank(DelStr)) then begin DelStr = DelStr & ","; end;
+									DelStr = DelStr & apric;
+									changed = true;
+								end;
+							end;
+							for(k=0;k<aareb.length;k=k+1)begin
+								areb = aareb[k];
+								if(nonblank(areb))then begin
+									IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,areb);
+									if (nonblank(DelStr)) then begin DelStr = DelStr & ","; end;
+									DelStr = DelStr & areb;
+									changed = true;
+								end;
+							end;
+							
+							oscnt = 0;
+							clearArray(aaprom);
+							ExtractObjectsByType(IVrw.Objects,"PROMO",aaprom,oscnt);
+							
+							for(k=0;k<aaprom.length;k=k+1)begin
+								aprom = aaprom[k];
+								if(nonblank(areb))then begin
+									IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,areb);
+									if (nonblank(DelStr)) then begin DelStr = DelStr & ","; end;
+									DelStr = DelStr & aprom;
+									changed = true;
+								end;
+							end;
+							
+							IVrw.Objects = AddObjectToObjectList(IVrw.Objects,"PR_MAGAZ");      
+							changed = true;
+							
+							AddStr = "PR_MAGAZ";
+							NewObj = IVrw.Objects;
+							
+							if(changed)then begin
+								matrowput(IVr,i,IVrw);  
+							end;
+							WebOutString(IVr.SerNr & "<=>" & IVrw.ArtCode & "<=>" & IVrw.vRebate & "<=>" & Rebr.Code & "<=>" & Rebr.vra0 & "<=>" & Rebr.FromDate & "<=>" & Rebr.ToDate & "<=>" & AddStr & "<=>" & DelStr & "<=>" & OldObj & "<=>" & NewObj);
 							weboutstring("<BR>");
 						end;
 					end;
+					RecordStore(IVr,true);
 				end;
 			end;
 			Resetloop(IVr);
