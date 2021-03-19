@@ -11517,7 +11517,7 @@ begin
 	record AccVc Accr;
 	integer mtrw, i,compnr;
 	val tval;
-	boolean testf, testf1, testf2,TrHs;
+	boolean testf, testf1, testf2,TrHs,changed;
 	record IVVc IVr;
 	string 10 rkey;
 	integer counter;
@@ -11534,7 +11534,7 @@ begin
 		if(compnr!=18)then begin
 			setcompany(compnr,false);
 			if(nonblank(RepSpec.f1))then begin
-				IVr.SerNr = RepSpec.f1;
+				IVr.SerNr = stringtolongint(RepSpec.f1);
 				rkey = "SerNr";
 			end else begin
 				IVr.InvDate = currentdate;
@@ -11567,8 +11567,6 @@ begin
 					TRr.Number = IVr.SerNr;
 					TRr.IntYc = IVYc;
 					if(readFirstMain(TRr,2,true)) then begin
-						logtext(0,currentcompany & " TROperMn    =======================   " & IVr.SerNr);
-						logtext(0,currentcompany & " TROperMn    =======================   " & TRr.TransDate);
 						RecordCopy(oldTRr,TRr);
 						mtrw = matrowcnt(TRr);
 						testf = true;
@@ -11597,6 +11595,7 @@ begin
 						end;
 						//resetLoop(TRr);//не нужно
 						if(testf)then begin
+							changed = false;
 							for (i=0;i<mtrw;i=i+1) begin
 								matrowget(TRr,i,TRrw);
 								testf2 = true;
@@ -11618,7 +11617,7 @@ begin
 											TRrw2.CurDebVal = round(TRrw.CurCredVal * 18 / 118, defaultcurroundoff);
 										end else begin
 											TRrw2.CredVal = round(TRrw.DebVal * 18 / 118, defaultcurroundoff);
-											TRrw2.CurCredVal = round(TRrw.CurDebVal * 18 / 118, defaultcurroundoff);
+											TRrw2.CurCredVal = round(TRrw.CurCredVal * 18 / 118, defaultcurroundoff);
 										end;
 										matrowPUt(TRr,matrowcnt(TRr),TRrw2);
 										if(nonblank(TRrw2.CredVal)) then begin
@@ -11647,25 +11646,27 @@ begin
 											TRVc_PasteDebVal(TRr,matrowcnt(TRr)-1);
 										end;
 										TRSumup(TRr,tval);
+										changed = true;
 									end;	
 								end;
 							end;
-		
-							if (RecordUpdate(oldTRr,TRr,true)==0) then begin 
+							if(changed)then begin
+								if (RecordUpdate(oldTRr,TRr,true)==0) then begin 
 					
-							end else begin
-								setareazerosize(alog);
-								addtexttoarea(currentcompany & " problemm " & IVr.SerNr & chr(13) & chr(10),alog);
-								writeareatofile(alog,"TROperMn_log.txt",1);
-							end;
-							counter = counter + 1;
-							if(counter>20)then begin						
-								counter = 0;
-								RepSpec.d1 = TRr.TransDate;
-								RepSpec.f1 = IVr.SerNr;
-								RepSpec.flags[1] = currentcompany;
-								queued.TROperMn(RepSpec);
-								goto lEndThis;
+								end else begin
+									setareazerosize(alog);
+									addtexttoarea(currentcompany & " problemm " & IVr.SerNr & chr(13) & chr(10),alog);
+									writeareatofile(alog,"TROperMn_log.txt",1);
+								end;
+								counter = counter + 1;
+								if(counter>20)then begin						
+									counter = 0;
+									RepSpec.d1 = TRr.TransDate;
+									RepSpec.f1 = IVr.SerNr;
+									RepSpec.flags[1] = currentcompany;
+									queued.TROperMn(RepSpec);
+									goto lEndThis;
+								end;
 							end;
 						end;
 						//recordStore(TRr,true);
