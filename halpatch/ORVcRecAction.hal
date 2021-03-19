@@ -2581,8 +2581,12 @@ begin
 	record ClientItemStatusVc CISr;
 	row ORVc ORrw;
 	integer mtrw;
+	record ECCasierDocSetBlock ECCDSb;
+	row ECCasierDocSetBlock ECCDSrw;
+	vector boolean vStockf;
 
-	
+	BlockLoad(ECCDSb);
+
 	BlockLoad(ECMUb);
 	logtext (0,"ORVcRecordUpdateAfter - Start");
 //  ORObjectStats(ORr,OR2r); it is stored only and not used ever
@@ -2609,6 +2613,10 @@ begin
 	end;
 	if((ORr.Reserved==1 and OR2r.Reserved==0) or (nonblank(ORr.EndReserv) and blank(OR2r.EndReserv)))then begin
 		if(nonblank(ORr.EndReserv) and ORr.EndReserv>=CurrentDate and ORr.Reserved==1)then begin
+			for (i=0;i<matrowcnt(ORr);i=i+1) begin
+				matrowget(ORr,i,ORrw);
+				vStockf[ORrw.Location] = true;
+			end;
 			RecordNew(Actr);
 			ActVcRecordDefClient(Actr);
 			MakeActFromOR(ORr,Actr);
@@ -2619,7 +2627,13 @@ begin
 			Actr.EndDate = addday(ORr.EndReserv,3);
 			Actr.Comment = "Истекает срок резервирования товаров по счету клиента №: " & ORr.SerNr;
 			Actr.TodoFlag = 1;
-			Actr.MainPersons = ECMUb.UserSalMSet;
+			for (i=0;i<matrowcnt(ECCDSb);i=i+1) begin
+				matrowget(ECCDSb,i,ECCDSrw);
+				if(vStockf[ECCDSrw.LocCode])then begin
+					if (nonblank(Actr.MainPersons)) then begin Actr.MainPersons = Actr.MainPersons & ","; end;
+					Actr.MainPersons = Actr.MainPersons & ECCDSrw.CashierName;
+				end;
+			end;
 			Actr.CalTimeFlag = kCalTimeFlagTime;
 			Actr.AlarmType = 1;
 			Actr.SymbNr = 3;
