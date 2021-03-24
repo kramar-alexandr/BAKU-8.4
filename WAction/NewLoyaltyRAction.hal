@@ -5,12 +5,14 @@ global updating procedure SendCustomerIDToKassa(area webdata)
 begin
 	json webjson;
 	string 255 token,request;
-	record CUVc CUr;
+	record CUVc CUr,CU2r;
 	date birthdate;
 	integer reb;
-	string 200 status;
-	record LoyaltyCardVc LCr;
-	boolean okfl;
+	string 200 status,cucode;
+	record LoyaltyCardVc LCr,LC2r;
+	boolean okfl,TrHs,testf;
+	integer newdisk,olddisk;
+	val bal;
 	
 	logtext(0,"WebSendCustomerIDToKassa");
 	setcompany(1,false);
@@ -21,73 +23,127 @@ begin
 	writeareatofile(webdata,"WebSendCustomerIDToKassa.txt",0);
 	
 	if(token=="sdkhf76J56rKJHf5tg")then begin
-		if(nonblank(JSONGet(webjson,"uuid")))then begin
-			if(nonblank(JSONGet(webjson,"clientid")))then begin
-				if(nonblank(JSONGet(webjson,"loycard")))then begin
-					if(nonblank(JSONGet(webjson,"profile/phone")))then begin
+		if(nonblank(JSONGet(webjson,"clientid")))then begin
+			if(nonblank(JSONGet(webjson,"loycard")))then begin
+				if(nonblank(JSONGet(webjson,"profile/phone")))then begin
+					CUr.Code = JSONGet(webjson,"clientid");
+					if(readfirstmain(CUr,1,true))then begin
+						olddisk = stringtoint(CUr.RebCode);
+						newdisk = stringtoint(JSONGet(webjson,"profile/discount"));
+						if(olddisk!=newdisk)then begin
+							recordcopy(CU2r,CUr);
+							CUr.RebCode = newdisk & "%";
+							recordupdate(CU2r,CUr,true);
+						end;
+						okfl = true;
+					end else begin
+						recordnew(CUr);
 						CUr.Code = JSONGet(webjson,"clientid");
-						if(readfirstmain(CUr,1,true))then begin
+						CUr.CRMName = JSONGet(webjson,"profile/fname");
+						CUr.CRMLName = JSONGet(webjson,"profile/lname");
+						CUr.CRMPatr = JSONGet(webjson,"profile/mname");
 						
-						end else begin
-							recordnew(CUr);
-							CUr.Code = JSONGet(webjson,"clientid");
-							CUr.CRMName = JSONGet(webjson,"profile/fname");
-							CUr.CRMLName = JSONGet(webjson,"profile/lname");
-							CUr.CRMPatr = JSONGet(webjson,"profile/mname");
-							
-							CUr.Name = CUr.CRMName & " " & CUr.CRMLName & " " & CUr.CRMPatr;
-							StripEndingSpaces(CUr.Name);
-							CUr.Mobile = JSONGet(webjson,"profile/phone");
-							birthdate.year = stringtoint(left(JSONGet(webjson,"profile/bday"),4));
-							birthdate.day = stringtoint(mid(JSONGet(webjson,"profile/bday"),8,2));
-							birthdate.month = stringtoint(mid(JSONGet(webjson,"profile/bday"),5,2));
-							CUr.BirthDate = birthdate;
-							CUr.blockedFlag = 1;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 29 01 2021 y. at 1:14:31 PM
-							
-							CUr.InstagramAcc = JSONGet(webjson,"profile/instagram");
+						CUr.Name = CUr.CRMName & " " & CUr.CRMLName & " " & CUr.CRMPatr;
+						StripEndingSpaces(CUr.Name);
+						CUr.Mobile = JSONGet(webjson,"profile/phone");
+						birthdate.year = stringtoint(left(JSONGet(webjson,"profile/bday"),4));
+						birthdate.day = stringtoint(mid(JSONGet(webjson,"profile/bday"),8,2));
+						birthdate.month = stringtoint(mid(JSONGet(webjson,"profile/bday"),5,2));
+						CUr.BirthDate = birthdate;
+						CUr.blockedFlag = 1;// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 29 01 2021 y. at 1:14:31 PM
 						
-							status = JSONGet(webjson,"profile/sex");
-							if(status=="m")then begin
-								CUr.Gender = 0;
-							end;
-							if(status=="f")then begin
-								CUr.Gender = 1;
-							end;
-						
-							CUr.RebCode = "0%";
-							CUr.PLCode = "RRP";
-						
-							if(nonblank(JSONGet(webjson,"profile/discount")))then begin
-								reb = stringtoval(JSONGet(webjson,"profile/discount"),m40val);
-								if(reb>0)then begin
-									CUr.RebCode = reb & "%";
-								end;
-							end;
-						
-							if(nonblank(CUr.Code))then begin
-								recordstore(CUr,true)
-							
-								LCr.SerNr = JSONGet(webjson,"loycard");
-								if(readfirstmain(LCr,1,true))then begin
-								
-								end else begin
-									recordnew(LCr);
-									LCr.SerNr = JSONGet(webjson,"loycard");
-									LCr.CustCode = CUr.Code;
-									LCr.LCMLevel = "1";
-									LCr.CustName = CUr.Name;
-									recordstore(LCr,true);
-								end;
-							
+						CUr.InstagramAcc = JSONGet(webjson,"profile/instagram");
+					
+						status = JSONGet(webjson,"profile/sex");
+						if(status=="m")then begin
+							CUr.Gender = 0;
+						end;
+						if(status=="f")then begin
+							CUr.Gender = 1;
+						end;
+					
+						CUr.RebCode = "0%";
+						CUr.PLCode = "RRP";
+					
+						if(nonblank(JSONGet(webjson,"profile/discount")))then begin
+							reb = stringtoval(JSONGet(webjson,"profile/discount"),m40val);
+							if(reb>0)then begin
+								CUr.RebCode = reb & "%";
 							end;
 						end;
+					
+						if(nonblank(CUr.Code))then begin
+							recordstore(CUr,true)
+						
+							LCr.SerNr = JSONGet(webjson,"loycard");
+							if(readfirstmain(LCr,1,true))then begin
+								if(LCr.RebCodeCRM!=CUr.RebCode)then begin
+									recordcopy(LC2r,LCr);
+										LCr.RebCodeCRM = CUr.RebCode;
+									recordupdate(LC2r,LCr,true);
+								end;
+							end else begin
+								LCr.CustCode = CUr.Code;
+								TrHs = true;
+								while(loopkey("ActCustCode",LCr,1,TrHs))begin
+									testf = true;
+									if(LCr.CustCode!=CUr.Code)then begin TrHs = false; testf = false; end;
+									if(LCr.LCMLevel!="1")then begin testf = false; end;
+
+									if(testf)then begin
+										recordcopy(LC2r,LCr);
+										LCr.Closed = 1;
+										recordupdate(LC2r,LCr,true);
+									end;
+								end;
+								
+								
+								if(nonblank(JSONGet(webjson,"binding/owner")))then begin
+									if(JSONGet(webjson,"binding/owner")=="true")then begin
+										cucode = JSONGet(webjson,"binding/clientid");
+										resetloop(LCr);
+										LCr.CustCode = cucode;
+										TrHs = true;
+										while(loopkey("ActCustCode",LCr,1,TrHs))begin
+											testf = true;
+											if(LCr.CustCode!=cucode)then begin TrHs = false; testf = false; end;
+											if(LCr.LCMLevel!="1")then begin testf = false; end;
+
+											if(testf)then begin
+												recordcopy(LC2r,LCr);
+												LCr.Closed = 1;
+												bal = bal + LCr.PointsBalance;
+												recordupdate(LC2r,LCr,true);
+											end;
+										end;
+									end;
+								end;
+
+								recordnew(LCr);
+								LCr.SerNr = JSONGet(webjson,"loycard");
+								LCr.CustCode = CUr.Code;
+								LCr.LCMLevel = "1";
+								LCr.CustName = CUr.Name;
+								LCr.RebCodeCRM = CUr.RebCode;
+								if(bal>0)then begin
+									LCr.PointsBalance = bal;
+									LCr.StartBalance = bal;
+									LCr.PointsBalanceTotal = bal;
+								end;
+								recordinsert(LCr,true);
+							end;
+							okfl = true;
+						end;
 					end;
+				end;
+				if(nonblank(JSONGet(webjson,"uuid")))then begin
 					request = JSONGet(webjson,"uuid") & "," &  JSONGet(webjson,"clientid") & "," &  JSONGet(webjson,"loycard");
 					logtext(0,"request " & request);
 					AllClientsRemoteAsync.ResieveDataFromLoyaltyApp(request);
 					weboutstring("{\"result\":\"ok\"}");
 					okfl = true;
 				end;
+				
 			end;
 		end;
 	end;
