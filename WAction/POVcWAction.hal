@@ -78,6 +78,8 @@ remote function boolean PTCCCodesCheck(string);
 remote updating function LongInt RecordAction_raPasteOrdInShip2(var record SHVc,LongInt,var string);
 remote updating function integer Remote_ORFromPOConsDsm2(var record POVc,var record ORVc,var string,longint);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+external function string 60 RemoveObjectFromObjectList(string,string);
+external procedure ExtractObjectsByType(string, string, var array string, var integer);
 
 SetLangMode(LangRussian,"RUS",0);
 global
@@ -3171,6 +3173,53 @@ end;
 
 
 
+function Boolean PODClassPOClassEFAfter(Integer wn,Integer changed)
+begin
+  record POVc POr, oldPOr;
+	row POVc POrw;
+  boolean res;
+  integer i,mtrw, oscnt, k;
+	array string 255 asubdi, aacc;
+  
+  res = true;
+  if (changed!=0) then begin
+		GetWindowRecord(wn,POr);
+    if (currentcompany==18 and POr.POClass=="STOCK_IDEA") then begin
+			POr.Location = "CWH_I";
+		if (!SetInSet("CC",POr.Objects)) then begin
+			if (nonblank(POr.Objects)) then begin POr.Objects = POr.Objects & ","; end;
+			POr.Objects = POr.Objects & "CC";
+		end;
+		if (!SetInSet("IDE",POr.Objects)) then begin
+			ExtractObjectsByType(POr.Objects,"SUBDI",asubdi,oscnt);
+			for(k=0;k<asubdi.length;k=k+1)begin
+				if(nonblank(asubdi[k]))then begin
+					POr.Objects = RemoveObjectFromObjectList(POr.Objects,asubdi[k]);
+				end;
+			end;
+			if (nonblank(POr.Objects)) then begin POr.Objects = POr.Objects & ","; end;
+			POr.Objects = POr.Objects & "IDE";
+		end;
+		if (!SetInSet("SNT",POr.Objects)) then begin
+			cleararray(aacc);
+			ExtractObjectsByType(POr.Objects,"ACC",aacc,oscnt);
+			for(k=0;k<aacc.length;k=k+1)begin
+				if(nonblank(aacc[k]))then begin
+					POr.Objects = RemoveObjectFromObjectList(POr.Objects,aacc[k]);
+				end;
+			end;
+			if (nonblank(POr.Objects)) then begin POr.Objects = POr.Objects & ","; end;
+				POr.Objects = POr.Objects & "SNT";
+			end;
+	
+      PutWindowRecord(wn,POr);
+    end;
+  end;
+  PODClassPOClassEFAfter = res;
+end;
+
+
+
 
 function Boolean PODClassConsgTypeEFAfter(integer wn,integer fn,integer rownr,integer changed)// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 19 07 2019 y. at 10:46:55 AM
 begin
@@ -3366,6 +3415,7 @@ BEGIN
 		case "CaratplacerRow": res = PODClassCaratRowEFAfter(wn,fn,rownr,changed,5);
 		case "ConsgType": res = PODClassConsgTypeEFAfter(wn,fn,rownr,changed);// Edit ************************** BPI Ukraine - KramarAlexandr - 05, 19 07 2019 y. at 10:43:30 AM
 		case "IDMfrFinConfirmDate": res = PODClassIDMfrFinConfirmEFAfter(wn,changed);
+		case "POClass": res = PODClassIDMfrFinConfirmEFAfter(wn,changed);
   end;
   PODClassAfterEditField = res;
   RETURN;
