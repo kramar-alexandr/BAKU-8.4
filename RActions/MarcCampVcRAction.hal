@@ -4460,61 +4460,70 @@ end; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
 
 
 
-// global webpublic procedure WebConfirmBTRxOrdersFromMobileCheckuot() 
-// begin
-	// area getpost;
-	// string 255 filename;
-	// json datajson;
-	// record ORVc ORr,OldORr;
-	// row ORVc ORrw,OldORrw;
-	// string 255 uname,pn,ph,em,sn,bitrono,pay,stat,city,street,house,apart;
-	// string 155 id,sum;
-	// array string 255 prod,prodn,quant,suma,code;
-	// integer i,j,wn,y;
-	// longint a;
-	// string 255 hex,out,warning,errstr,loyaltycard,namesname;
-	// boolean UPDf,chsum, TrHs, IdentClientf,TrHs2;
-	// record AccBlock ARb;
-	// record CUVc CUr;
+global webpublic updating procedure WebConfirmBTRxOrdersFromMobileCheckuot() 
+begin
+	area getpost;
+	string 255 filename;
+	json datajson;
+	record ORVc ORr;
+	row ORVc ORrw;
+	string 255 orderNo,sum;
+	array string 255 itemCode,itemQuantity;
+	integer i,j;
+	longint a;
+	record SHVc SHr, OldSHr;
+	row SHVc SHrw;
+	record RetVc Retr;
+	boolean Retf;
+	vector val ArtCodeRetQty;
 
-
-	// WriteAreaToFile(getpost,"getpost.txt",0);
-	// CloseFile;
-	// a = GetArealength(getpost);
-	// datajson = ParseJsonArea(getpost);
-	// filename = "Orders/Order" & datetostring(currentdate,"YYYYMMDD") & TimeToString(currenttime,"HHMMSS",false) & ".txt";
-	// writeareatofile(getpost,filename,0);
-	// WebOutString("{\"result\":\"ok\"}");
-	// uname = JSONGet(datajson,"user[0]/name");
-	// pn = JSONGet(datajson,"user[0]/profile_name");
-	// ph = JSONGet(datajson,"user[0]/phone");
-	// em = JSONGet(datajson,"user[0]/email");
-	// sn = JSONGet(datajson,"user[0]/surname");
-	// city = JSONGet(datajson,"user[0]/city");
-	// street = JSONGet(datajson,"user[0]/street");
-	// house = JSONGet(datajson,"user[0]/house");
-	// apart = JSONGet(datajson,"user[0]/apart");
+	SetCompany(0,29);
 	
-	// bitrono = JSONGet(datajson,"order[0]/id");
-	// uname = ParseHEX(uname);
-	// sn = ParseHEX(sn);
-	// pn = ParseHEX(pn);
-	// city = ParseHEX(city);
-	// street = ParseHEX(street);
-	// house = ParseHEX(house);
-	// apart = ParseHEX(apart);
-	// namesname = uname & " " & sn;
-	// id = JSONGet(datajson,"order[0]/id");
-	// sum = JSONGet(datajson,"order[0]/summ");
-	// pay = JSONGet(datajson,"order[0]/pay");
-	// stat = JSONGet(datajson,"order[0]/status");
-	// loyaltycard = JSONGet(datajson,"loyaltycard");
-	// stat = ParseHEX(stat);
-	// logtext(0,stat);
+	webgetpostdata(getpost);
+	AddfiletoArea("C:/Users/tohas/Desktop/BitrixOrderlast.txt",getpost,false);
+	a = GetArealength(getpost);
+	logtext(0,a);
+	datajson = ParseJsonArea(getpost);
+	orderNo = JSONGet(datajson,"orderNo");
+	sum = JSONGet(datajson,"sum");
+	for(i=0;i<JSONCountChildren(datajson,"items");i=i+1) begin
+		itemCode[i] = JSONGet(datajson,"items[0]/[" & i & "]/itemCode");
+		itemQuantity[i] = JSONGet(datajson,"items[0]/[" & i & "]/itemQuantity");
+	end;
+	logtext(0,orderNo);
+	logtext(0,sum);
+	for (i=0;i<itemCode.length;i=i+1) begin
+		logtext(0,itemCode[i]);
+		logtext(0,itemQuantity[i]);
+	end;
 
+	ORr.SerNr = orderNo;
+	if (readfirstmain(ORr,1,true)) then begin
+		SHr.OrderNr = ORr.SerNr;
+		if (readfirstkey("OrderKey",SHr,1,true)) then begin
+			recordCopy(OldSHr,SHr);
+			SHr.OKFlag = 1;
+			if (RecordUpdate(OldSHr,SHr,true)) then begin
+				for (i=0;i<matrowcnt(SHr);i=i+1) begin
+					matrowget(SHr,i,SHrw);
+					for (j=0;j<itemCode.length;i=i+1) begin
+						if (SHrw.ArtCode==itemCode[j]) then begin
+							if (SHrw.Ship!=StringToVal(itemQuantity[j],M45Val)) then begin
+								Retf = true;
+								ArtCodeRetQty[SHrw.ArtCode] = SHrw.Ship - StringToVal(itemQuantity[j],M45Val);
+							end;
+						end;
+					end;
+				end;
+			end;
+			if (Retf) then begin
+				
+			end;
+		end;
+	end;
 
-// return;
-// end;
+return;
+end;
 
 
 
