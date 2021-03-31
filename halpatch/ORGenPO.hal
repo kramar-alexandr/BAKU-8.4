@@ -46,6 +46,12 @@ external procedure NextM4SerialNumber(string,var string);
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 external procedure POSumup(var record POVc);
 remote function Boolean POVc_PasteVECode(var record POVc,Boolean);
+external function Boolean PasteCustInOrder(var record ORVc,string,string,var string,var string);
+remote procedure ORVc_PasteLocation(var record ORVc,Integer);
+remote function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var string,Boolean);
+remote procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
+
+
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -175,18 +181,189 @@ end; // edited by BPI } //functions transferred here from 6.4 file halcust/halpa
 
 
 
+
+global updating function integer CreateORFromIDEAPOConsDsm(var record POVc POr, var record ORVc ORr, var string warn) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:23 31.03.2021
+begin
+	row POVc POrw;
+	integer wn,i,mtrw,curcomp, keys, oscnt, k;
+	row ORVc ORrw;
+	record LocationVc Locr;
+	string 100 backfob,msg,warning,errstr,inwarning, OldCode, key;
+	integer res,rowor;
+	record MainStockBlock MSb;
+	record ConsItemVc CIr;
+	record INVc INr, UINr, ConsIN, OldConsINr, ConsINr;
+	vector string 255 Brands;
+	boolean chsum, TrHs2, testf, testfrowf;
+	integer comp;
+	record BPIBrandVc BBr;
+	record ConsCompBlock CCB;
+	record PosVc Posr;	
+	string 255 obj;
+	record ItemStatusVc ISr;
+	array string 255 tags, asubdi, aacc;
+	
+	
+	BlockLoad(CCB);
+	curcomp = currentcompany;
+	mtrw = matrowcnt(POr);
+	for(i=0;i<mtrw;i=i+1)begin
+		matrowget(POr,i,POrw);
+		INr.Code = POrw.ArtCode;
+		if(readFirstMain(INr,1,true)) then begin
+			Brands[POrw.ArtCode] = INr.BPIBrand;
+		end;
+	end;	
+			
+	Locr.Code = "CWH_I";
+	if(readfirstmain(Locr,1,true))then begin
+		backfob = "FOB_IDEA";
+	end;
+	comp = currentcompany;
+	// SetCompany(18,false);//++++++++++++++++++++++++ CC in
+	blockload(MSb);
+	recordnew(ORr);
+	ORr.CustCode = backfob;
+	if (PasteCustInOrder(ORr,ORr.CustCode,"",warning,errstr)) then begin
+	end;
+	ORr.Location = "CWH_I";
+	ORVc_PasteLocation(ORr,-1);
+	// ORr.OrderClass = "STOCK";
+	// ORr.CurncyCode = POr.CurncyCode;
+	ORr.CurncyCode = "AZN";
+	mtrw = matrowcnt(POr);
+	rowor = 0;
+	for(i=0;i<mtrw;i=i+1)begin
+		matrowget(POr,i,POrw);
+		if (left(INr.Code,3)=="IN_") then begin
+			CIr.Code = POrw.ArtCode;
+			key = "Code";
+			keys = 1;
+		end else begin
+			CIr.LocCode = POrw.ArtCode;
+			CIr.BrandCode = Brands[POrw.ArtCode];
+			key = "LocCodeBrand";
+			keys = 2;
+		end;
+		// CIr.LocCode = POrw.ArtCode;
+		// CIr.BrandCode = Brands[POrw.ArtCode];
+		BBr.Code = Brands[POrw.ArtCode];
+		if(ReadFirstMain(BBr,1,true)) then begin
+		end;
+		Posr.Code = "CWH14";
+		Locr.Code = ORr.Location;
+		if(ReadFirstMain(Locr,1,true)) then begin
+			obj = Locr.Objects;
+		end;
+		if(nonblank(obj)) then begin
+			if(!SetInSet(obj,ORr.Objects)) then begin
+				if(blank(ORr.Objects)) then begin
+					ORr.Objects = obj;
+				end else begin
+					ORr.Objects = ORr.Objects & "," & obj;
+				end;
+			end;	
+		end;
+		if (CurrentCompany==18) then begin
+			if (!SetInSet("CC",ORr.Objects)) then begin
+				if (nonblank(ORr.Objects)) then begin ORr.Objects = ORr.Objects & ","; end;
+				ORr.Objects = ORr.Objects & "CC";
+			end;
+			if (!SetInSet("IDE",ORr.Objects)) then begin
+				ExtractObjectsByType(ORr.Objects,"SUBDI",asubdi,oscnt);
+				for(k=0;k<asubdi.length;k=k+1)begin
+					if(nonblank(asubdi[k]))then begin
+						ORr.Objects = RemoveObjectFromObjectList(ORr.Objects,asubdi[k]);
+					end;
+				end;
+				if (nonblank(ORr.Objects)) then begin ORr.Objects = ORr.Objects & ","; end;
+				ORr.Objects = ORr.Objects & "IDE";
+			end;
+			if (!SetInSet("SNT",ORr.Objects)) then begin
+				cleararray(aacc);
+				ExtractObjectsByType(ORr.Objects,"ACC",aacc,oscnt);
+				for(k=0;k<aacc.length;k=k+1)begin
+					if(nonblank(aacc[k]))then begin
+						ORr.Objects = RemoveObjectFromObjectList(ORr.Objects,aacc[k]);
+					end;
+				end;
+				if (nonblank(ORr.Objects)) then begin ORr.Objects = ORr.Objects & ","; end;
+				ORr.Objects = ORr.Objects & "SNT";
+			end;
+		end;
+		if(ReadFirstKey(key,CIr,keys,true)) then begin
+			// testfrowf = true;
+			// if(POrw.ItemConsgType==0) then begin
+				// ISr.Code = CIr.Code;
+				// ISr.Location = ";;;";
+				// if(ReadFirstMain(ISr,2,true)) then begin end;
+				// if(ISr.Instock<1) then begin testfrowf = false; end;
+			// end;
+			// if(testfrowf)then begin
+				//clearrow(ORr,ORrw,rowor);
+				ORrw.ArtCode = CIr.Code;
+				ORrw.ECReceived = POr.IDGDEAPORef;
+				ORrw.ECReservComp = 28;
+				ORrw.Quant = POrw.Quant;	
+				//ORrw.Price = POrw.Price;
+				ORrw.GlobalItemArtCode = CIr.LocCode;
+				ORrw.IDAltCode = CIr.BrandCode;
+				ORrw.Price = BlankVal;
+				ORrw.BasePrice = BlankVal;
+				matrowput(ORr,rowor,ORrw);	
+				ORr.OrderClass = "CLIEN";
+				ORVc_PasteArtCode(ORr,rowor,inwarning,warning,false);
+				matrowget(ORr,rowor,ORrw);
+				//ORrw.Price = POrw.Price;
+				matrowput(ORr,rowor,ORrw);
+				ORVc_PasteQuant(ORr,rowor,true,chsum);
+				matrowget(ORr,rowor,ORrw);
+				ORrw.Price = BlankVal;
+				ORrw.BasePrice = BlankVal;
+				ORrw.rowGP = BlankVal;
+				ORrw.LCPOrow = i + 1;
+				matrowput(ORr,rowor,ORrw);
+				rowor = rowor + 1;
+			// end;
+		end;
+	end;
+	
+	if(matrowcnt(ORr)<1)then begin
+		warn = "’оваров по заказу на склад нет на косолидированном складе !";
+		res = -1;
+		goto LRemote_ORFromPOConsDsm;
+	end;
+	
+	
+	
+	ORSumup(ORr);
+	ORr.SerNr = NextSerNr("ORVc",ORr.OrdDate,-1,false,"");
+	ORr.OfficialSerNr = POr.IDGDEAPORef & ":" & 28;
+	recordinsert(ORr,true);
+	
+	LRemote_ORFromPOConsDsm:;  
+		
+	resetcompany(curcomp);//++++++++++++++++++++++++ CC out
+	
+	CreateORFromIDEAPOConsDsm = res;
+return;
+end;
+
+
+
+
 global updating procedure SyncPOInIDG(record POVc POr)  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:05 26.03.2021
 begin
 	integer mtrw,pos,rownum, oscnt;
 	longint i,j,k;
-	record POVc IDEAPOr, IDGPOr;
+	record POVc IDEAPOr, IDGPOr, OldIDGPOr;
 	row POVc POrw, IDGPOrw;
 	string 50 ostr;
 	array string 100 IDEABrandCodes,artcode;
 	boolean foundf,TrHs,testf;
 	record CUVc CUr;
 	record DIVc DIr;
-	string 200 vendor, oldCode, IDEAObjcts, tstr, VendorBrandObj;
+	string 200 vendor, oldCode, IDEAObjcts, tstr, VendorBrandObj, warn;
 	record POVc oldPOr;
 	vector integer OrderedQuant;
 	record ConsItemVc CIr;
@@ -199,6 +376,7 @@ begin
 	vector val IDEACodeExist, IDEACodeSum, IDEACodePrice, IDEACodeRebate;
 	vector boolean IDEACodeEx;
 	array string 255 tags, asubdi, aacc;
+	record ORVc ORr;
 	
 	if (POr.IDReguester=="Client") then begin
 		if (CurrentCompany==28) then begin
@@ -289,7 +467,6 @@ begin
 						end;
 					end;
 				end;
-				IDGPOr.Location = "CWH_I";
 				IDGPOr.Location = "CWH_I";
 				if (!SetInSet("CC",IDGPOr.Objects)) then begin
 					if (nonblank(IDGPOr.Objects)) then begin IDGPOr.Objects = IDGPOr.Objects & ","; end;
@@ -383,6 +560,15 @@ begin
 				end;
 				POSumup(IDGPOr);
 				RecordStore(IDGPOr,true);
+				if (POr.OKFlag==1) then begin
+					//recordCopy(OldIDGPOr,IDGPOr);
+					IDGPOr.OKFlag = 1;
+					//RecordUpdate(OldIDGPOr,IDGPOr,true);
+					RecordStore(IDGPOr,true);
+					CreateORFromIDEAPOConsDsm(IDGPOr,ORr,warn);
+					createrecordlink(ORr,18,IDGPOr,18);
+					createrecordlink(IDGPOr,18,ORr,18);
+				end;
 				SetCompany(28,false);
 				POr.IDGDEAPORef = IDGPOr.SerNr;
 				POr.VECode = "FOB_SKLAD";
@@ -427,6 +613,10 @@ begin
 					end;
 					IDGPOr.CurncyCode = POr.CurncyCode;
 					IDGPOr.CheckCurncyCode = POr.CheckCurncyCode;
+					IDGPOr.IDMfrFinDate = POr.IDMfrFinDate;
+					IDGPOr.IDOldMfrFinConfirmDate = POr.IDOldMfrFinConfirmDate;
+					IDGPOr.IDMfrFinConfirmDate = POr.IDMfrFinConfirmDate;
+					IDGPOr.IDStatus = POr.IDStatus;
 					IDGPOr.Reference = POr.Reference;
 					for (i=matrowcnt(IDGPOr)-1;i>=0;i=i-1) begin
 						matrowget(IDGPOr,i,IDGPOrw);
@@ -517,6 +707,15 @@ begin
 				end;
 				POSumup(IDGPOr);
 				RecordStore(IDGPOr,true);
+				if (POr.OKFlag==1) then begin
+					//recordCopy(OldIDGPOr,IDGPOr);
+					IDGPOr.OKFlag = 1;
+					//RecordUpdate(OldIDGPOr,IDGPOr,true);
+					RecordStore(IDGPOr,true);
+					CreateORFromIDEAPOConsDsm(IDGPOr,ORr,warn);
+					createrecordlink(ORr,18,IDGPOr,18);
+					createrecordlink(IDGPOr,18,ORr,18);
+				end;
 				SetCompany(28,false);
 			end;
 		end else begin
@@ -590,9 +789,24 @@ begin
 				end;
 				IDGPOr.CurncyCode = POr.CurncyCode;
 				IDGPOr.CheckCurncyCode = POr.CheckCurncyCode;
+				IDGPOr.IDMfrFinDate = POr.IDMfrFinDate;
+				IDGPOr.IDOldMfrFinConfirmDate = POr.IDOldMfrFinConfirmDate;
+				IDGPOr.IDMfrFinConfirmDate = POr.IDMfrFinConfirmDate;
+				IDGPOr.IDStatus = POr.IDStatus;
 				POSumup(IDGPOr);
 				RecordStore(IDGPOr,true);
+				if (POr.OKFlag==1) then begin
+					//recordCopy(OldIDGPOr,IDGPOr);
+					IDGPOr.OKFlag = 1;
+					//RecordUpdate(OldIDGPOr,IDGPOr,true);
+					RecordStore(IDGPOr,true);
+				end;
 				SetCompany(18,false);
+				if (POr.OKFlag==1) then begin
+					CreateORFromIDEAPOConsDsm(POr,ORr,warn);
+					createrecordlink(ORr,18,IDGPOr,18);
+					createrecordlink(IDGPOr,18,ORr,18);
+				end;
 			end;
 		end;
 	end;
