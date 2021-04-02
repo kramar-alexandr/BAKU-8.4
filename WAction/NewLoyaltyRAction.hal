@@ -5,6 +5,7 @@ external procedure StripEndingSpaces(var string);
 /*
 {"clientid":"APP00027","loycard":"APPLC00027","uuid":"1037","profile":{"phone":"+994999978456","discount":5,"mail":"qq@qq.com","fname":"Pp","lname":"Pp","mname":"Pp","bday":"2021-04-01","sex":"m","facebook":"","instagram":""},"binding":{"owner":false,"barcode":"9999000049434","clientid":"4743","name":"Quliyev Şakir Əliağa"},"token":"sdkhf76J56rKJHf5tg"}administrator@idhansa:/usr/local/bin/StandardERPServer$ 
 
+{"clientid":"APP00021","loycard":"APPLC00028","profile":{"phone":"+994000000001","discount":5,"mail":"","fname":"","lname":"","mname":"","bday":"","sex":"","facebook":"","instagram":""},"binding":{"owner":true,"barcode":"9999987654321","clientid":"APP00021","name":null},"token":"sdkhf76J56rKJHf5tg"}administrator@idhansa:/usr/local/bin/StandardERPServer$ 
 
 */
 
@@ -39,9 +40,10 @@ begin
 				if(nonblank(JSONGet(webjson,"profile/phone")))then begin
 					logtext(0,"profile/phone");
 					CUr.Code = JSONGet(webjson,"clientid");
-					if(readfirstmain(CUr,1,true))then begin
+					if(readfirstmain(CUr,1,true))then begin//Если клиент в базе существует
+						
 						LCr.SerNr = JSONGet(webjson,"loycard");
-						if(readfirstmain(LCr,1,true))then begin
+						if(readfirstmain(LCr,1,true))then begin//Обновление клиенту скидки на карте лояльности
 							olddisk = stringtoint(LCr.RebCodeCRM);
 							newdisk = stringtoint(JSONGet(webjson,"profile/discount"));
 							if(olddisk!=newdisk)then begin
@@ -49,9 +51,64 @@ begin
 								LCr.RebCodeCRM = newdisk & "%";
 								recordupdate(LC2r,LCr,true);
 							end;
+						end else begin//Создание новой карты существующему клиенту и закрытие старых
+							LCr.CustCode = CUr.Code;
+							TrHs = true;
+							while(loopkey("ActCustCode",LCr,1,TrHs))begin//Закрытие старых. Накопление балансов
+								testf = true;
+								if(LCr.CustCode!=CUr.Code)then begin TrHs = false; testf = false; end;
+								if(LCr.LCMLevel!="1")then begin testf = false; end;
+
+								if(testf)then begin
+									recordcopy(LC2r,LCr);
+									bal = bal + LCr.PointsBalance;
+									LCr.Closed = 1;
+									recordupdate(LC2r,LCr,true);
+								end;
+							end;
+							
+							logtext(0,"binding/owner");//Если клиент был старым клиентом со старым ID -  закрываем старый ID
+							logtext(0,JSONGet(webjson,"binding/owner"));
+							if(nonblank(JSONGet(webjson,"binding/owner")))then begin
+								if(JSONGet(webjson,"binding/owner")=="true")then begin
+									cucode = JSONGet(webjson,"binding/clientid");
+									resetloop(LCr);
+									LCr.CustCode = cucode;
+									TrHs = true;
+									while(loopkey("ActCustCode",LCr,1,TrHs))begin
+										testf = true;
+										if(LCr.CustCode!=cucode)then begin TrHs = false; testf = false; end;
+										if(LCr.LCMLevel!="1")then begin testf = false; end;
+
+										if(testf)then begin
+											recordcopy(LC2r,LCr);
+											LCr.Closed = 1;
+											bal = bal + LCr.PointsBalance;
+											recordupdate(LC2r,LCr,true);
+										end;
+									end;
+								end;
+							end;
+
+							recordnew(LCr);
+							LCr.SerNr = JSONGet(webjson,"loycard");
+							LCr.CustCode = CUr.Code;
+							LCr.LCMLevel = "1";
+							LCr.CustName = CUr.Name;
+							LCr.RebCodeCRM = CUr.RebCode;
+							newdisk = stringtoint(JSONGet(webjson,"profile/discount"));
+							if(newdisk>0)then begin
+								LCr.RebCodeCRM = newdisk & "%";
+							end;
+							if(bal>0)then begin
+								LCr.PointsBalance = bal;
+								LCr.StartBalance = bal;
+								LCr.PointsBalanceTotal = bal;
+							end;
+							recordinsert(LCr,true);
 						end;
 						okfl = true;
-					end else begin
+					end else begin//Если клиент в базе не существует
 						recordnew(CUr);
 						CUr.Code = JSONGet(webjson,"clientid");
 						CUr.CRMName = JSONGet(webjson,"profile/fname");
