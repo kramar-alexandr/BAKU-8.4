@@ -1101,7 +1101,7 @@ begin
 	array string 255 ArtCodes, ItemBrands;
 	string 255 strlc,HansaArtCode,Store,strlc2, rowkey, inwarn, war, ExtPrFullName;
 	integer pos, pos2, p, maxp, qtyItpos, rownr, allitemqty, sbrqty, extPrCnt;
-	boolean testf,TrHs,Insertf,warf,chsum,ECStItf,LoyCardValidNrf;
+	boolean testf,TrHs,Insertf,warf,chsum,ECStItf,LoyCardValidNrf,VATVendor;
 	record INVc INr;
 	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock, PriorityStock, vPrefExt;
 	record GlobalItemVc GIr, GI2r, GI3r;
@@ -1119,7 +1119,7 @@ begin
 	record AccBlock ARb;
 	record LoyaltyCardVc LoyCardr;
 	record ExpProvItemRegVc EPIr;
-	record CUVc CUr;
+	record CUVc CUr, CU2r;
 	
 	BlockLoad(ECMUb);
 	BlockLoad(ARb);
@@ -1622,8 +1622,15 @@ begin
 		mtrw = matrowcnt(ORr);
     if(mtrw>0 and nonblank(ORr.OrderClass) and ORr.Closed==0)then begin
 			for (j=0;j<extPrCnt;j=j+1) begin 
+				VATVendor = false;
 				EPIr.PrefCode = vPrefExt[j];
 				readfirstkey("PrefCode",EPIr,1,true);
+				CU2r.Code = EPIr.Comment;
+				if (ReadfirstMain(CU2r,1,true)) then begin 
+					if (CU2r.VEVATCode=="18%") then begin
+						VATVendor = true;
+					end;
+				end;
 				ECCreatestockItPOfromOR(ORr,POr);
 				RecordCopy(OldPOr,POr);
 				mtrw = matrowcnt(POr);
@@ -1640,12 +1647,20 @@ begin
 							if (left(POrw.ArtCode,2)!="SB") then begin
 								GIr.Code = POrw.ArtCode;
 								if(readfirstmain(GIr,1,true))then begin
-									if (GIr.DealPrice > 0) then begin
-										POrw.Price = GIr.DealPrice - GIr.DealPrice/118*18;
+									if (VATVendor) then begin
+										if (GIr.DealPrice > 0) then begin
+											POrw.Price = GIr.DealPrice - GIr.DealPrice/118*18;
+										end else begin
+											POrw.Price = GIr.Price - GIr.Price/118*18;
+										end;
+										matrowput(POr,i,POrw);
 									end else begin
-										POrw.Price = GIr.Price - GIr.Price/118*18;
+										if (GIr.DealPrice > 0) then begin
+										POrw.Price = GIr.DealPrice;
+										end else begin
+											POrw.Price = GIr.Price;
+										end;
 									end;
-									matrowput(POr,i,POrw);
 									POVc_PastePrice(POr,i);
 								end;
 							end;
