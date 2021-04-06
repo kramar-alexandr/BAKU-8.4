@@ -648,6 +648,70 @@ end;
 
 
 
+global
+updating procedure CCPUFromLocalPODsm(var record POVc POr, var record PUVc PUr, vector val TotCostPrice, vector boolean SHOutItems, vector boolean SHConsItems)
+BEGIN
+  row POVc POrw;
+  row PUVc PUrw;
+	record ORVc ORr;
+	row ORVc ORrw;
+  LongInt r;
+  Integer mtrw,i,j,ormtrw, orn;
+  Boolean testf;
+  record POSettingBlock POSb;
+	vector string 255 SerialNumber;
+	record VIVc VIr;
+	string 255 errmsg, ConsStock;
+	record RLinkVc RLinkr;
+	record IVVc IVr;
+	record RcVc RepSpec;
+	record LocationVc Locr;
+  
+  
+  r = RecordAction_raPastePOInPU(POr,PUr);
+	if(Readfirstmain(PUr,1,true))then begin
+		Locr.Code = PUr.Location;
+		if (ReadFIrstMain(Locr,1,true)) then begin
+			ConsStock = Locr.ConsigStockCode;
+		end;
+		
+		if(r==0)then begin
+			ORr.SerNr = POr.InvAddr4;
+			if(ReadFirstMain(ORr,1,true))then begin
+				ormtrw = matrowcnt(ORr);
+				for (i=0;i<ormtrw;i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					SerialNumber[ORrw.ArtCode] = ORrw.SerialNr;
+				end;
+			end;
+			
+			mtrw = matrowcnt(PUr);
+			for (i=mtrw-1;i>=0;i=i-1)begin
+				matrowget(PUr,i,PUrw);
+				if (TotCostPrice[PUrw.ArtCode & "_" & i + 1]!=blankval) then begin
+					matrowget(PUr,i,PUrw);
+					PUrw.SerialNr = SerialNumber[PUrw.ArtCode];
+					PUrw.CostPrice = TotCostPrice[PUrw.ArtCode & "_" & i + 1];
+					logtext(0,TotCostPrice[PUrw.ArtCode & "_" & i + 1] & " TCP");
+					matrowput(PUr,i,PUrw);
+					PUVc_PasteCostPrice(PUr,i);
+					matrowget(PUr,i,PUrw);
+					matrowput(PUr,i,PUrw);
+					if (SHConsItems[PUrw.ArtCode & "_" & i + 1]) then begin
+						PUrw.Location = ConsStock;
+						matrowput(PUr,i,PUrw);
+					end;
+				end else begin
+					matrowdelete(PUr,i);
+				end;
+			end;
+			// PUSumUp(PUr);
+		end;
+	end;        
+  return;
+end;
+
+
 
 
 global  //Transfered by ----------------------Dima  19.05.2015
