@@ -1,6 +1,7 @@
 external function string 255 NormalizeStrToJson (string);
 external function val AbsoluteVal(val);
 external function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode);
+external function roundmode SetRoundModeD(Integer);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -103,7 +104,7 @@ end;
 
 global updating procedure APIv2SendSale_Remote(string token,var area req,var record IVVc IVr)
 begin
-	val cash,terminal,bonus,credit,loyalty,checksum,vatsum;
+	val cash,terminal,bonus,credit,loyalty,checksum,vatsum,gift,credperc;
 	integer i,rwcnt,j,k,mtrw,ii;
 	record PMBlock PMb;
   row PMBlock PMrw;
@@ -111,15 +112,30 @@ begin
 	vector val vatperc;
 	array string 50 vtags;
 	string 200 tstr;
+	record GCSVc GCSr;
 		
 	rwcnt = matrowcnt(IVr);
 	For(i=0;i<rwcnt;i=i+1) begin
 		matrowget(IVr,i,IVrw);
-		if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment or IVrw.stp==kInvoiceRowTypePrepayment)then begin
+		if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment)then begin
+			/*GCSr.SerNr = IVrw.GCNr;
+			if(readfirstmain(GCSr,1,true))then begin
+				if(GCSr.TransDate<stringtodate("06/04/2021"))then begin
+					bonus = bonus + IVrw.Sum;
+				end else begin
+					gift = gift + IVrw.Sum;
+				end;
+			end else begin
+				bonus = bonus + IVrw.Sum;
+			end;*/
+			gift = gift + IVrw.Sum;
+		end;
+		if(IVrw.stp==kInvoiceRowTypePrepayment)then begin
 			loyalty = loyalty + IVrw.Sum;
 		end;
+		
 		if(IVrw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
-			bonus = bonus + IVrw.Sum;
+			loyalty = loyalty + IVrw.Sum;
 		end;
 	end;
 
@@ -143,6 +159,14 @@ begin
 			end else begin
 				cash = cash + MulRateToBase1(IVrw.CurncyCode,IVrw.Sum,IVrw.FrRate,IVrw.ToRateB1,IVrw.ToRateB2,IVrw.BaseRate1,IVrw.BaseRate2,DefaultCurRoundOff);
 			end;
+		end;
+	end;
+	
+	
+	if(IVr.InvType==kInvoiceTypeNormal)then begin
+		credit = IVr.BaseSum4 - terminal - loyalty - bonus - cash;
+		if(credit>0)then begin
+			credperc = (terminal + loyalty + bonus + cash)/IVr.BaseSum4;
 		end;
 	end;
 	
@@ -179,14 +203,14 @@ begin
 							addtexttoarea("\"itemQuantityType\":0,",req);
 							tstr = ValToString(IVrw.Quant,M45Val,"",".",0);
 							addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
-							tstr = ValToString(IVrw.Sum/IVrw.Quant,M45Val,"",".",0);
+							tstr = ValToString(round(IVrw.Sum/IVrw.Quant*credperc,SetRoundModeD(2)),M45Val,"",".",0);
 							addtexttoarea("\"itemPrice\":" & tstr & ",",req);
-							tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
+							tstr = ValToString(round(IVrw.Sum*credperc,SetRoundModeD(2)),M45Val,"",".",0);
 							addtexttoarea("\"itemSum\":" & tstr & ",",req);
 							addtexttoarea("\"discount\":0.0,",req);
 							addtexttoarea("\"itemVatPercent\":18",req);
 							addtexttoarea("}",req);
-							vatsum = vatsum + IVrw.Sum;
+							vatsum = vatsum + round(IVrw.Sum*credperc,SetRoundModeD(2));
 							vatperc["18.00"] = vatsum;
 						end;
 						
@@ -197,20 +221,20 @@ begin
 							ii = ii + 1;
 							addtexttoarea("{",req);
 							addtexttoarea("\"itemName\":" & "\"" & "Gift Voucher" & "\",",req);
-							addtexttoarea("\"itemCodeType\":4,",req);
+							addtexttoarea("\"itemCodeType\":3,",req);
 							addtexttoarea("\"itemCode\":" & "\"" & "GV" & "\",",req);
 							addtexttoarea("\"itemQuantityType\":0,",req);
 							tstr = ValToString(1,M45Val,"",".",0);
 							addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
-							tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
+							tstr = ValToString(IVrw.Sum*credperc,M45Val,"",".",0);
 							addtexttoarea("\"itemPrice\":" & tstr & ",",req);
-							tstr = ValToString(IVrw.Sum,M45Val,"",".",0);
+							tstr = ValToString(IVrw.Sum*credperc,M45Val,"",".",0);
 							addtexttoarea("\"itemSum\":" & tstr & ",",req);
 							addtexttoarea("\"discount\":0.0,",req);
-							addtexttoarea("\"itemVatPercent\":0",req);
+							addtexttoarea("\"itemVatPercent\":18",req);
 							addtexttoarea("}",req);
-							vatsum = vatsum + IVrw.Sum;
-							vatperc["0.0"] = vatsum;
+							vatsum = vatsum + round(IVrw.Sum*credperc,SetRoundModeD(2));
+							vatperc["18.0"] = vatsum;
 						end;	
 					end; 
 					
@@ -392,7 +416,7 @@ begin
 							ii = ii + 1;
 							addtexttoarea("{",req);
 							addtexttoarea("\"itemName\":" & "\"" & "Gift Voucher" & "\",",req);
-							addtexttoarea("\"itemCodeType\":4,",req);
+							addtexttoarea("\"itemCodeType\":3,",req);
 							addtexttoarea("\"itemCode\":" & "\"" & "GV" & "\",",req);
 							addtexttoarea("\"itemQuantityType\":0,",req);
 							tstr = ValToString(1,M45Val,"",".",0);
@@ -402,10 +426,10 @@ begin
 							tstr = ValToString(AbsoluteVal(IVrw.Sum),M45Val,"",".",0);
 							addtexttoarea("\"itemSum\":" & tstr & ",",req);
 							addtexttoarea("\"discount\":0.0,",req);
-							addtexttoarea("\"itemVatPercent\":0",req);
+							addtexttoarea("\"itemVatPercent\":18",req);
 							addtexttoarea("}",req);
 							vatsum = vatsum + AbsoluteVal(IVrw.Sum);
-							vatperc["0.0"] = vatsum;
+							vatperc["18.0"] = vatsum;
 						end;	
 					end; 
 					
