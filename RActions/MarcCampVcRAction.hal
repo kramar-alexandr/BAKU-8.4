@@ -4481,10 +4481,10 @@ begin
 	record LocalMachineBlock LMb;
 
 
-	SetCompany(0,29);
+	SetCompany(29,false);
 	
 	webgetpostdata(getpost);
-	AddfiletoArea("C:/Users/tohas/Desktop/BitrixOrderlast.txt",getpost,false);
+	// AddfiletoArea("C:/Users/tohas/Desktop/BitrixOrderlast.txt",getpost,false);
 	a = GetArealength(getpost);
 	logtext(0,a);
 	datajson = ParseJsonArea(getpost);
@@ -4503,17 +4503,28 @@ begin
 
 	ORr.SerNr = StringToLongInt(orderNo);
 	if (readfirstmain(ORr,1,true)) then begin
+		for (i=0;i<matrowcnt(ORr);i=i+1) begin
+			matrowget(ORr,i,ORrw);
+			for (j=0;j<itemCode.length;j=j+1) begin
+				if (ORrw.GlobalItemArtCode==itemCode[j]) then begin
+					itemCode[j] = ORrw.ArtCode;
+				end;
+			end;
+		end;
 		SHr.OrderNr = ORr.SerNr;
 		if (readfirstkey("OrderKey",SHr,1,true)) then begin
 			recordCopy(OldSHr,SHr);
+			SHr.Location = "MAIN";
 			SHr.OKFlag = 1;
-			if (RecordUpdate(OldSHr,SHr,true)) then begin
+			if (RecordUpdate(OldSHr,SHr,true)==0) then begin
 				for (i=0;i<matrowcnt(SHr);i=i+1) begin
 					matrowget(SHr,i,SHrw);
-					for (j=0;j<itemCode.length;i=i+1) begin
+					for (j=0;j<itemCode.length;j=j+1) begin
 						if (SHrw.ArtCode==itemCode[j]) then begin
+							logtext(0,"12345");
 							if (SHrw.Ship!=StringToVal(itemQuantity[j],M45Val)) then begin
 								Retf = true;
+								logtext(0,"Retf " & Retf);
 								ArtCodeRetQty[SHrw.ArtCode] = SHrw.Ship - StringToVal(itemQuantity[j],M45Val);
 							end;
 						end;
@@ -4521,10 +4532,12 @@ begin
 				end;
 			end;
 			if (Retf) then begin
+				logtext(0,"1");
 				BlockLoad(LMb);
 				r = PasteSHInRet(SHr,Retr,LMb.DefReturnLocation);
 				mtrw = matrowcnt(Retr);
 				for (i=mtrw-1;i>=0;i=i-1) begin
+					logtext(0,"2");
 					matrowget(Retr,i,Retrw);
 					if (ArtCodeRetQty[Retrw.ArtCode]>0) then begin
 						Retrw.Quant = ArtCodeRetQty[Retrw.ArtCode];
@@ -4534,11 +4547,70 @@ begin
 					end;
 				end;
 				RecordStore(Retr,true);
+				logtext(0,"3");
 			end;
 		end;
 	end;
 return;
 end;
+
+
+
+
+
+
+
+
+
+global webpublic updating procedure WebCreateReturnFromMobileCheckuot() 
+begin
+	area getpost;
+	string 255 filename;
+	json datajson;
+	record ORVc ORr;
+	row ORVc ORrw;
+	string 255 orderNo,sum;
+	array string 255 itemCode,itemQuantity;
+	integer i,j, mtrw;
+	longint a,r;
+	record SHVc SHr, OldSHr;
+	row SHVc SHrw;
+	record RetVc Retr, OldRetr;
+	row RetVc Retrw;
+	boolean Retf;
+	vector val ArtCodeRetQty;
+	record LocalMachineBlock LMb;
+
+
+	SetCompany(29,false);
+	
+	webgetpostdata(getpost);
+	// AddfiletoArea("C:/Users/tohas/Desktop/BitrixOrderlast.txt",getpost,false);
+	a = GetArealength(getpost);
+	logtext(0,a);
+	datajson = ParseJsonArea(getpost);
+	orderNo = JSONGet(datajson,"order");
+
+	ORr.SerNr = StringToLongInt(orderNo);
+	if (readfirstmain(ORr,1,true)) then begin
+		SHr.OrderNr = ORr.SerNr;
+		if (readfirstkey("OrderKey",SHr,1,true)) then begin
+			Retr.SHNr = SHr.SerNr;
+			if (readfirstkey("SHNr",Retr,1,true)) then begin
+				RecordCopy(OldRetr,Retr);
+				Retr.OKFlag = 1;
+				if (RecordUpdate(OldRetr,Retr,true)==0) then begin
+					logtext(0,"3");
+				end;
+			end;
+		end;
+	end;
+return;
+end;
+
+
+
+
 
 
 
