@@ -252,3 +252,113 @@ begin
 
 return;
 end;
+
+
+updating function boolean UpdateAFFTransFromRet(record RetVc Retr)
+begin
+	record TRVc TRr,oldTRr;
+	row TRVc TRrw;
+	integer i,rwcnt;
+	boolean chngd;
+	string 20 affobj;
+	boolean res;
+	
+	res = false;
+	
+	TRr.Number = Retr.SerNr;
+	TRr.IntYc = RetYc;
+	chngd = false;
+	if(readfirstmain(TRr,2,true))then begin
+		rwcnt = matrowcnt(TRr);
+		recordcopy(oldTRr,TRr);
+		for(i=0;i<rwcnt;i=i+1)begin
+			matrowget(TRr,i,TRrw);
+			if(setinset("AFF",TRrw.Objects))then begin
+				affobj = "";
+				GetObjs("SUBDI",Retr.Objects,affobj);
+				if(nonblank(affobj))then begin
+					TRrw.Objects = StrReplace(TRrw.Objects,"AFF",affobj);
+					matrowput(TRr,i,TRrw);
+					chngd = true;
+				end;
+			end;
+		end;
+		if(chngd)then begin
+			res = recordupdate(oldTRr,TRr,true)==0;
+			if(res)then begin
+				weboutstring("<td>" & "UPDATED" & "</td>");
+			end else begin
+				weboutstring("<td>" & "ERROR++++++++++++++++++++++++++++" & "</td>");
+			end;
+		end else begin
+			res = true;
+			weboutstring("<td>" & "GoodRecord" & "</td>");
+		end;
+	end else begin
+		res = true;
+		weboutstring("<td>" & "NORECORD" & "</td>");
+	end;
+	
+	UpdateAFFTransFromRet = res;
+return;
+end;
+
+global webpublic updating procedure WebAFFRetVc()
+begin
+	record RetVc Retr;
+	row RetVc Retrw;
+	record POVc POr;
+	record BPIBrandVc BPIBrandr;
+	vector string 20 vVendAFF,vFOBAff;
+	string 20 tstr,fobobj;
+	integer pos;
+	boolean change;
+	record OTypeAddControlBlock OTACb;
+	row OTypeAddControlBlock OTACrw;
+	integer i,rwcnt;
+	record CUVc CUr;
+	string 20 affobj;
+	
+	change = false;
+	if(webgetarg("change")=="true")then begin
+		change = true;
+	end;
+	
+	
+	setcompany(18,false);
+	weboutstring("<table>");
+	while(loopmain(Retr,1,true))begin
+		if(setinset("AFF",Retr.Objects))then begin
+			weboutstring("<tr>");
+			weboutstring("<td>" & Retr.SerNr & "</td>");
+			weboutstring("<td>" & Retr.TransDate & "</td>");
+			weboutstring("<td>" & Retr.CustCode & "</td>");
+			CUr.Code = Retr.CustCode;
+			ReadFirstMain(CUr,1,true);
+			affobj = "";
+			GetObjs("SUBDI",CUr.Objects,affobj);
+			weboutstring("<td>" & affobj & "</td>");
+			if(change and nonblank(affobj))then begin
+				Retr.Objects = StrReplace(Retr.Objects,"AFF",affobj);
+				for (i=0;i<matrowcnt(Retr);i=i+1) begin
+					matrowget(Retr,i,Retrw);
+					if(setinset("AFF",Retrw.Objects))then begin
+						affobj = "";
+						GetObjs("SUBDI",CUr.Objects,affobj);
+						Retrw.Objects = StrReplace(Retr.Objects,"AFF",affobj);
+						matrowput(Retr,i,Retrw);
+					end;
+				end;
+				if(change)then begin
+					if(UpdateAFFTransFromRet(Retr))then begin
+						recordstore(Retr,true);
+					end;
+				end;
+			end;
+			weboutstring("</tr>");
+		end;
+	end;
+	weboutstring("</table>");
+
+return;
+end;
