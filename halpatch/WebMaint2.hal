@@ -15,6 +15,54 @@ external function string 100 BPICodeToName(string);
 
 SetLangMode(LangRussian,"RUS",0);
 
+updating function boolean UpdateAFFTransFromIP(record IPVc IPr,string Objects)
+begin
+	record TRVc TRr,oldTRr;
+	row TRVc TRrw;
+	integer i,rwcnt;
+	boolean chngd;
+	string 20 affobj;
+	boolean res;
+	
+	res = false;
+	
+	TRr.Number = IPr.SerNr;
+	TRr.IntYc = IPYc;
+	chngd = false;
+	if(readfirstmain(TRr,2,true))then begin
+		rwcnt = matrowcnt(TRr);
+		recordcopy(oldTRr,TRr);
+		for(i=0;i<rwcnt;i=i+1)begin
+			matrowget(TRr,i,TRrw);
+			if(setinset("AFF",TRrw.Objects))then begin
+				affobj = "";
+				GetObjs("SUBDI",Objects,affobj);
+				if(nonblank(affobj))then begin
+					TRrw.Objects = StrReplace(TRrw.Objects,"AFF",affobj);
+					matrowput(TRr,i,TRrw);
+					chngd = true;
+				end;
+			end;
+		end;
+		if(chngd)then begin
+			res = recordupdate(oldTRr,TRr,true)==0;
+			if(res)then begin
+				weboutstring("<td>" & "UPDATED" & "</td>");
+			end else begin
+				weboutstring("<td>" & "ERROR++++++++++++++++++++++++++++" & "</td>");
+			end;
+		end else begin
+			res = true;
+			weboutstring("<td>" & "GoodRecord" & "</td>");
+		end;
+	end else begin
+		res = true;
+		weboutstring("<td>" & "NORECORD" & "</td>");
+	end;
+	
+	UpdateAFFTransFromIP = res;
+return;
+end;
 
 global webpublic updating procedure WebAFFIPVc()
 begin
@@ -50,6 +98,7 @@ begin
 	while(loopmain(IPr,1,true))begin
 		iprwcnt = matrowcnt(IPr);
 		changed = false;
+		Objects = "";
 		for(ipi=0;ipi<iprwcnt;ipi=ipi+1)begin
 			matrowget(IPr,ipi,IPrw);
 			if(setinset("AFF",IPrw.Objects))then begin
@@ -71,11 +120,17 @@ begin
 						IPrw.Objects = StrReplace(IPrw.Objects,"AFF",vFOBAff[fobobj]);
 						Objects = vFOBAff[fobobj];
 						matrowput(IPr,ipi,IPrw);
+						changed = true;
 					end else begin
 						weboutstring("<td>" & "***********************************" & "</td>");
 					end;
 				end;
 				weboutstring("</tr>");
+			end;
+		end;
+		if(changed)then begin
+			if(UpdateAFFTransFromIP(IPr,Objects))then begin
+				recordstore(IPr,true);
 			end;
 		end;
 	end;
