@@ -3645,7 +3645,7 @@ begin
 	row TRVc TRrw;
 	record POVc POr;
 	record BPIBrandVc BPIBrandr;
-	vector string 20 vVendAFF,vFOBAff;
+	vector string 20 vVendAFF,vFOBAff,vBrAff;
 	string 20 tstr,fobobj;
 	integer pos;
 	boolean change, changed, TRchanget;
@@ -3653,7 +3653,7 @@ begin
 	row OTypeAddControlBlock OTACrw;
 	integer i,rwcnt;
 	record CUVc CUr;
-	string 20 affobj;
+	string 20 affobj, vendor;
 	boolean res;
 	
 	change = false;
@@ -3663,6 +3663,40 @@ begin
 	
 	
 	setcompany(18,false);
+	
+	
+	
+	while (loopmain(BPIBrandr,1,true)) begin
+		if (nonblank(BPIBrandr.CWHCode) and nonblank(BPIBrandr.Vendor)) then begin
+			pos = 0;
+			vendor = "";
+			ExtractObjWithSeparator(",",BPIBrandr.Vendor,true,pos,vendor);
+			while(nonblank(vendor)) begin
+				CUr.Code = vendor;
+				if (ReadFIrstMain(CUr,1,true)) then begin
+					if(nonblank(CUr.VEObjects)) then begin
+						affobj = "";
+						GetObjs("BRAND",CUr.VEObjects,affobj);
+						if (nonblank(affobj)) then begin							
+							switch(BPIBrandr.CWHCode) begin 
+								case "CWH1": changed = true;
+															vBrAff[affobj] = "AFF_TW";
+								case "CWH2": changed = true;
+															vBrAff[affobj] = "AFF_TW";
+								case "CWH3": changed = true;
+															vBrAff[affobj] = "AFF_CR";
+								case "CWH4": changed = true;
+															vBrAff[affobj] = "AFF_CR";
+							end;
+							
+						end;
+					end;
+				end;
+				ExtractObjWithSeparator(",",BPIBrandr.Vendor,true,pos,vendor);
+			end;
+		end;
+	end;
+	
 	
 	
 	
@@ -3723,6 +3757,13 @@ begin
 						if (nonblank(affobj) and nonblank(vFOBAff[affobj])) then begin
 							changed = true;
 							TRrw.Objects = StrReplace(TRrw.Objects,"AFF",vFOBAff[affobj]);
+						end else begin
+							affobj = "";
+							GetObjs("BRAND",TRrw.Objects,affobj);
+							if (nonblank(affobj) and nonblank(vBrAff[affobj])) then begin
+								changed = true;
+								TRrw.Objects = StrReplace(TRrw.Objects,"AFF",vBrAff[affobj]);
+							end;
 						end;
 					end;
 					if (changed) then begin
