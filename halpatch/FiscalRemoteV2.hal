@@ -568,3 +568,70 @@ begin
 	
 return;
 end;
+
+global updating procedure RA_POSButtonsToAll(record POSButtonsVc POSBr)
+begin
+	record POSButtonsVc POSB2r;
+	row POSButtonsVc POSBrw;
+	integer rwcnt,oldcomp,i,wn,CompQty,j,curcpm,lastpage;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  boolean TrHs,foundf;
+	
+	blockload(Compb);
+	curcpm = currentcompany;
+	if(matrowcnt(POSBr)>0 and nonblank(POSBr.Comment))then begin
+		CompQty = matrowcnt(Compb);
+		for (j=1;j<=CompQty;j=j+1)begin
+			matrowget(Compb,j,Comprw);
+			if(Comprw.ActiveStatus==0 and j!=curcpm)then begin
+				SetCompany(j,false);
+				if(CountRecords("POSButtonsVc")>0)then begin
+					resetloop(POSB2r);
+					TrHs = true;
+					foundf = false;
+					lastpage = 0;
+					POSB2r.WindowClass = "";
+					while(loopmain(POSB2r,1,TrHs))begin
+						if(lastpage<POSB2r.Page)then begin 
+							lastpage = POSB2r.Page;
+						end;
+						if(POSBr.Comment==POSB2r.Comment)then begin
+							rwcnt = matrowcnt(POSB2r);
+							for(i=0;i<rwcnt;i=i+1)begin
+								matrowdelete(POSB2r,0);
+							end;
+							rwcnt = matrowcnt(POSBr);
+							for(i=0;i<rwcnt;i=i+1)begin
+								matrowget(POSBr,i,POSBrw);
+								matrowput(POSB2r,matrowcnt(POSB2r),POSBrw);
+							end;
+							TrHs = false;
+							foundf = true;
+							recordstore(POSB2r,true);
+						end;
+					end;
+					
+					if(foundf==false)then begin
+						recordnew(POSB2r);
+						POSB2r.WindowClass = POSBr.WindowClass;
+						POSB2r.POSButtonGroupCode = POSBr.POSButtonGroupCode;
+						POSB2r.Page = lastpage + 1;
+						POSB2r.Comment = POSBr.Comment;
+						POSB2r.KeyCode = POSBr.KeyCode;
+						POSB2r.Modifiers = POSBr.Modifiers;
+						rwcnt = matrowcnt(POSBr);
+						for(i=0;i<rwcnt;i=i+1)begin
+							matrowget(POSBr,i,POSBrw);
+							matrowput(POSB2r,matrowcnt(POSBr),POSBrw)
+						end;
+						recordstore(POSB2r,true);
+					end;
+					
+				end;
+			end;
+		end;
+	end;
+	SetCompany(curcpm,false);
+return;
+end;
