@@ -4307,6 +4307,138 @@ end;
 
 
 
+
+
+
+
+
+global webpublic updating procedure WebCheckPROMOInReturnIV()
+begin
+	record IVVc IVr, OrigIVr;
+	row IVVc IVrw, OrigIVrw;
+	longint i, k, j, compnr;
+	integer oscnt;
+	string 255 areb, newPromo;
+	array string 255 apromo;
+	boolean TrHs,changed;
+	
+	compnr = stringtoint(webgetarg("compnr"));
+	SetCompany(compnr,false);
+	
+	TrHs = true;
+	IVr.TransDate = StringToDate("01/01/2019");
+	while (loopKey("TransDate",IVr,1,TrHs)) begin
+		changed = false;
+		for (i=0;i<matrowcnt(IVr);i=i+1) begin
+			clearArray(apromo);
+			oscnt = 0;
+			matrowget(IVr,i,IVrw);
+			if (IVrw.Quant<0) then begin
+				if (IVrw.IVForRetNr<1) then begin
+					ExtractObjectsByType(IVrw.Objects,"PROMO",apromo,oscnt);
+					for(k=0;k<apromo.length;k=k+1)begin
+						areb = apromo[k];
+						if(nonblank(areb))then begin
+							IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,areb);
+							changed = true;
+						end;
+					end;
+					matrowput(IVr,i,IVrw);
+				end else begin
+					OrigIVr.SerNr = IVrw.IVForRetNr;
+					if (ReadFIrstMain(OrigIVr,1,true)) then begin
+						for (j=0;j<matrowcnt(OrigIVr);j=j+1) begin
+							matrowget(OrigIVr,j,OrigIVrw);
+							if (OrigIVrw.ArtCode==IVrw.ArtCode) then begin
+								clearArray(apromo);
+								oscnt = 0;
+								ExtractObjectsByType(OrigIVrw.Objects,"PROMO",apromo,oscnt);
+								if (apromo.length>0) then begin
+									for(k=0;k<apromo.length;k=k+1)begin
+										areb = apromo[k];
+										if(nonblank(areb))then begin
+											if (nonblank(newPromo)) then begin newPromo = newPromo & ","; end;
+											newPromo = newPromo & areb;
+										end;
+									end;
+									clearArray(apromo);
+									oscnt = 0;
+									ExtractObjectsByType(IVrw.Objects,"PROMO",apromo,oscnt);
+									if (apromo.length>0) then begin
+										for(k=0;k<apromo.length;k=k+1)begin
+											areb = apromo[k];
+											if(nonblank(areb))then begin
+												IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,areb);
+												changed = true;
+											end;
+										end;
+										matrowput(IVr,i,IVrw);
+										if (nonblank(newPromo)) then begin
+											if (nonblank(IVrw.Objects)) then begin IVrw.Objects = IVrw.Objects & ","; end;
+											IVrw.Objects = IVrw.Objects & newPromo;
+											changed = true;
+											matrowput(IVr,i,IVrw);
+										end;
+									end else begin
+										if (nonblank(newPromo)) then begin
+											if (nonblank(IVrw.Objects)) then begin IVrw.Objects = IVrw.Objects & ","; end;
+											IVrw.Objects = IVrw.Objects & newPromo;
+											changed = true;
+											matrowput(IVr,i,IVrw);
+										end;
+									end;
+								end else begin
+									clearArray(apromo);
+									oscnt = 0;
+									ExtractObjectsByType(IVrw.Objects,"PROMO",apromo,oscnt);
+									if (apromo.length>0) then begin
+										for(k=0;k<apromo.length;k=k+1)begin
+											areb = apromo[k];
+											if(nonblank(areb))then begin
+												IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,areb);
+												changed = true;
+											end;
+										end;
+										matrowput(IVr,i,IVrw);
+									end;
+								end;
+							end;
+						end;
+					end else begin
+						ExtractObjectsByType(IVrw.Objects,"PROMO",apromo,oscnt);
+						for(k=0;k<apromo.length;k=k+1)begin
+							areb = apromo[k];
+							if(nonblank(areb))then begin
+								IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,areb);
+								changed = true;
+							end;
+						end;
+						matrowput(IVr,i,IVrw);
+					end;
+				end;
+			end;
+		end;
+		if (changed) then begin
+			RecordStore(IVr,true);
+			weboutstring("<tr>");
+				weboutstring("<td>" & IVr.SerNr & "</td>");
+				weboutstring("<td>" & CurrentCompany & "</td>");
+			weboutstring("</tr>");
+		end;
+	end;
+	
+	
+	
+return;
+end;
+
+
+
+
+
+
+
+
 global webpublic updating procedure WebDeleteGIWithOldDrands()
 begin
 	record GlobalItemVc GIr;
