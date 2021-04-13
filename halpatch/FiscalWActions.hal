@@ -846,3 +846,165 @@ begin
 
 return;
 end;
+
+global
+updating procedure ProceedSendTaxIPV2(record RcVc RepSpec)
+begin
+  Integer wn,mwn,rownr,mtrw,i,j,k;
+  record IPVc IPr;
+  record UserVc Userr;
+  row IPVc IPrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status,isterminal,iscash; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId, parentDocument;
+  json jsresponse;
+  val cash, terminal, discount,loyalty,bonus,vatsum;
+  record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:39:37 PM
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	area logarea,biglogarea,tmpar1,tmpar2;
+	vector val vatperc;
+	array string 50 vtags;
+	record IVVc IVr;
+	record CassaIDBlock CIDb;
+	
+	blockload(PMb);
+	blockload(CIDb);
+
+  IPr.SerNr = RepSpec.long1;
+  ReadFirstMain(IPr,1,true);
+  
+  for(j=0;j<matrowcnt(PMb);j=j+1)begin
+		matrowget(PMb,j,PMrw);
+		if(PMrw.Code==IPr.PayMode)then begin
+			if(PMrw.AccNr=="51")then begin
+				isterminal = true;
+			end;
+			if(PMrw.AccNr=="50")then begin
+				iscash = true;
+			end;
+		end;
+	end;
+  
+  if(RepSpec.flags[1]>-1)then begin
+  	matrowget(IPr,RepSpec.flags[1],IPrw);
+  	if(IPrw.InvoiceNr>0 and IPrw.InvoiceNr==RepSpec.long2)then begin
+  		IVr.SerNr = IPrw.InvoiceNr;
+  		if(readfirstmain(IVr,1,true))then begin
+  			if(IVr.CurncyCode=="AZN")then begin
+  				if(iscash)then begin
+  					RepSpec.vals3 = IPrw.InvVal;
+  				end;
+  				if(isterminal)then begin
+  					RepSpec.vals4 = IPrw.InvVal;
+  				end;
+  			end else begin
+  				if(iscash)then begin
+  					RepSpec.vals3 = IPrw.InvVal*IVr.ToRateB1;
+  				end;
+  				if(isterminal)then begin
+  					RepSpec.vals4 = IPrw.InvVal*IVr.ToRateB1;
+  				end;
+  			end;
+  		end;
+  	end;
+  end;
+
+  host = "10.10.12.116"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  
+    Userr.Code = CurrentUser;
+    if (ReadFirstMain(Userr,1,true)) then begin
+      host = Userr.KassaIPAddr;
+    end;
+	cash = 0.0;
+	terminal = 0.0;
+	discount = 0.0;
+	loyalty = 0;
+	
+	//ProceedCredirRepayment_Remote(req,IPr);
+	APIv2SendSale_Remote(CIDb.CassaToken,req,IVr,RepSpec);
+  writeareatofile(req,"SendTAXRequest.txt",1);
+  
+  SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+
+  jsresponse = ParseJSONArea(reply);
+	
+	writeareatofile(reply,"SendTAXResponse.txt",1);
+	
+		setareazerosize(logarea);
+		addtexttoarea(chr(13) & chr(10) & "=========================IPVC " & IPr.SerNr &  "=================================" & chr(13) & chr(10) & "{",logarea);
+		addtexttoarea("\"Date\":" & "\"" & currentdate & "\"," & chr(13) & chr(10),logarea);
+		addtexttoarea("\"Paymet\":" & "\"" & IPr.SerNr & "\"," & chr(13) & chr(10),logarea);
+		addtexttoarea("\"SendData\":" & chr(13) & chr(10),logarea);
+		
+		setareazerosize(tmpar1);
+		insertareabeforearea(logarea,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(logarea,"FiscalPrinter.log",1);
+
+		setareazerosize(tmpar1);
+		insertareabeforearea(req,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(req,"FiscalPrinter.log",1);
+		setareazerosize(logarea);
+		addtexttoarea("," & chr(13) & chr(10),logarea);
+		addtexttoarea("\"ResponseData\":",logarea);
+		
+		setareazerosize(tmpar1);
+		insertareabeforearea(logarea,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(logarea,"FiscalPrinter.log",1);
+		
+		setareazerosize(tmpar1);
+		insertareabeforearea(reply,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(reply,"FiscalPrinter.log",1);
+		
+		setareazerosize(logarea);
+		addtexttoarea("}",logarea);
+		
+		setareazerosize(tmpar1);
+		insertareabeforearea(logarea,tmpar1);
+		insertareabeforearea(biglogarea,tmpar1);
+		setareazerosize(biglogarea);
+		insertareabeforearea(tmpar1,biglogarea);
+		
+		writeareatofile(logarea,"FiscalPrinter.log",1);
+		
+		WriteCustomLogOnServer(biglogarea,"FiscalPrinterAllLog.log");
+	
+	if(nonblank(JSONGet(jsresponse,"transactionId")))then begin
+		if(RepSpec.flags[1]>-1)then begin
+			matrowget(IPr,RepSpec.flags[1],IPrw);
+			transactionId=JSONGet(jsresponse,"transactionId");
+			IPrw.TaxTransactionCode = transactionId;
+			IPrw.TaxTransactionDate=CurrentDate;
+			parentDocument = JSONGet(jsresponse,"parentDocument");
+			IPrw.TaxParentDocument = parentDocument;
+		end;
+		
+		RecordStore(IPr,true);
+		putwindowrecord(mwn,IPr);
+	end;
+
+  DeselectWindow(wn,true);
+  CloseWindow(wn);
+
+  return;
+end;
