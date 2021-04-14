@@ -144,7 +144,7 @@ begin
 return;
 end;
 
-global updating procedure LoginToKassaDsm()
+global updating procedure LoginToKassaDsm(boolean autologin)
 begin
 	Integer wn,mwn,rownr,mtrw,i,j,k;
   record RcVc RepSpec;
@@ -187,14 +187,16 @@ begin
 		CIDb.CassaToken = urldecode(ChekUnicode(JSONGet(jsresponse,"access_token")));
 		blockstore(CIDb);
 	end;
-	if(nonblank(JSONGet(jsresponse,"code")))then begin
-		if(JSONGet(jsresponse,"code")=="0")then begin
-			messagebox(0,"Операция успешна");
+	if(autologin)then begin
+		if(nonblank(JSONGet(jsresponse,"code")))then begin
+			if(JSONGet(jsresponse,"code")=="0")then begin
+				messagebox(0,"Операция успешна");
+			end else begin
+				messagebox(0,JSONGet(jsresponse,"message"));
+			end;
 		end else begin
-			messagebox(0,JSONGet(jsresponse,"message"));
+			messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
 		end;
-	end else begin
-		messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
 	end;
 	SendFiscalLogToServer("","LOGIN",req,reply);
 	
@@ -205,7 +207,7 @@ end;
 global updating procedure Fiscal_Login()   // by Ira
 begin
 
-	LoginToKassaDsm;
+	LoginToKassaDsm(true);
 	
 return;
 end;
@@ -447,7 +449,7 @@ begin
 	area logarea,biglogarea,tmpar1,tmpar2;
 	vector val vatperc;
 	array string 50 vtags;
-	boolean isnewrec;
+	boolean isnewrec,issecond;
 	record CassaIDBlock CIDb;
 	
 	
@@ -455,6 +457,7 @@ begin
 	
 	mwn = motherwindow(wn);
   getwindowrecord(wn,RepSpec);
+  closewindow(wn);
 	getwindowrecord(mwn,IVr);
 	
 	if(IVr.SerNr<0)then begin
@@ -470,8 +473,13 @@ begin
 	end;
 	blockload(CIDb);
 	if(blank(CIDb.CassaToken))then begin
-		messagebox(0,"Залогинтесь в кассу");
-		goto LAPIv2SendSaleDsm;
+LbeginLogin:;
+		LoginToKassaDsm(false);
+		blockload(CIDb);
+		if(blank(CIDb.CassaToken))then begin
+			messagebox(0,"Залогинтесь в кассу");
+			goto LAPIv2SendSaleDsm;
+		end;
 	end;
 	
   blockload(PMb);
@@ -485,68 +493,72 @@ begin
 	if (ReadFirstMain(Userr,1,true)) then begin
 		host = Userr.KassaIPAddr;
 	end;
-	
+	setareazerosize(req);
+	setareazerosize(reply);
 	APIv2SendSale_Remote(CIDb.CassaToken,req,IVr,RepSpec);
   writeareatofile(req,"SendTAXRequest.txt",1);
-  
   SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
 
   jsresponse = ParseJSONArea(reply);
+	writeareatofile(reply,"SendTAXResponse.txt",1);
+	SendFiscalLogToServer(IVr.SerNr,"SALE",req,reply);
 	if(nonblank(JSONGet(jsresponse,"code")))then begin
 		if(JSONGet(jsresponse,"code")=="0")then begin
-
 		end else begin
-			messagebox(0,JSONGet(jsresponse,"message"));
+			if(JSONGet(jsresponse,"code")=="401")then begin
+				if(issecond)then begin
+					messagebox(0,JSONGet(jsresponse,"message"));
+					goto LAPIv2SendSaleDsm;
+				end else begin
+					issecond = true;
+					goto LbeginLogin;
+				end;
+			end else begin
+				messagebox(0,JSONGet(jsresponse,"message"));
+				goto LAPIv2SendSaleDsm;
+			end;
 		end;
 	end else begin
 		messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
-	end;
-	writeareatofile(reply,"SendTAXResponse.txt",1);
+		goto LAPIv2SendSaleDsm;
+	end;	
 	
-		SendFiscalLogToServer(IVr.SerNr,"SALE",req,reply);	
-		if(nonblank(JSONGet(jsresponse,"short_id")))then begin
-			transactionId = JSONGet(jsresponse,"short_id");
-			IVr.TaxTransactionCode = transactionId;
-			IVr.TaxTransactionDate=CurrentDate;
-			parentDocument = JSONGet(jsresponse,"long_id");
-			IVr.TaxParentDocument = parentDocument;
-		
-			IVTaxTr.SerNr = IVr.SerNr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:41:19 PM
-			if(readfirstmain(IVTaxTr,1,true))then begin
-				IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
-				IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
-				IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
-				IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
-				IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
-				recordstore(IVTaxTr,true);
-			end else begin
-				IVTaxTr.SerNr = IVr.SerNr;
-				IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
-				
-				IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
-				IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
-				IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
-				IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
-				 recordstore(IVTaxTr,true);
-			end;
-		
-			RecordStore(IVr,true);
-			if(isnewrec==false)then begin
-				putwindowrecord(mwn,IVr);
-				if(currentuser!="SA")then begin
-					IVDClass_RefreshStringList(mwn,IVr);
-				end;
-			end;
+	if(nonblank(JSONGet(jsresponse,"short_id")))then begin
+		transactionId = JSONGet(jsresponse,"short_id");
+		IVr.TaxTransactionCode = transactionId;
+		IVr.TaxTransactionDate=CurrentDate;
+		parentDocument = JSONGet(jsresponse,"long_id");
+		IVr.TaxParentDocument = parentDocument;
+	
+		IVTaxTr.SerNr = IVr.SerNr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:41:19 PM
+		if(readfirstmain(IVTaxTr,1,true))then begin
+			IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+			IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+			IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+			IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+			IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
+			recordstore(IVTaxTr,true);
+		end else begin
+			IVTaxTr.SerNr = IVr.SerNr;
+			IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+			
+			IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+			IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+			IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+			IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
+			 recordstore(IVTaxTr,true);
 		end;
 	
-	if(isnewrec==false)then begin
-		putwindowrecord(mwn,IVr);
-		IVDClass_RefreshStringList(mwn,IVr);
+		RecordStore(IVr,true);
+		if(isnewrec==false)then begin
+			//putwindowrecord(mwn,IVr);
+			//ReRunWindowDef(mwn);
+			//IVDClass_RefreshStringList(mwn,IVr);
+		end;
 	end;
 	
 LAPIv2SendSaleDsm:;
-
-	closewindow(wn);
+	
   return;
 end;
 
@@ -593,7 +605,7 @@ begin
 	
   DeselectWindow(wn,true);
 	getwindowrecord(wn,RepSpec);
-  
+  closewindow(wn);
 	if(IVr.SerNr<0)then begin
 		isnewrec = true;
 	end;
@@ -692,27 +704,23 @@ begin
 			SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
 
 			jsresponse = ParseJSONArea(reply);
+			writeareatofile(reply,"SendTAXResponse.txt",1);
 			if(nonblank(JSONGet(jsresponse,"code")))then begin
 				if(JSONGet(jsresponse,"code")=="0")then begin
 
 				end else begin
 					messagebox(0,JSONGet(jsresponse,"message"));
+					goto LAPIv2SendReturnAutoDsm;
 				end;
 			end else begin
 				messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
+				goto LAPIv2SendReturnAutoDsm;
 			end;
-			writeareatofile(reply,"SendTAXResponse.txt",1);
 			SendFiscalLogToServer(IVr.SerNr,"RETURN",req,reply);
 		end else begin
 		end;
 	end else begin
 	end;
-	
-	if(isnewrec==false)then begin
-		putwindowrecord(mwn,IVr);
-		IVDClass_RefreshStringList(mwn,IVr);
-	end;
-	
 	
 LAPIv2SendReturnAutoDsm:;
  
