@@ -493,9 +493,10 @@ begin
   SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
 
   jsresponse = ParseJSONArea(reply);
+	writeareatofile(reply,"SendTAXResponse.txt",1);
+	SendFiscalLogToServer(IVr.SerNr,"SALE",req,reply);
 	if(nonblank(JSONGet(jsresponse,"code")))then begin
 		if(JSONGet(jsresponse,"code")=="0")then begin
-
 		end else begin
 			messagebox(0,JSONGet(jsresponse,"message"));
 			goto LAPIv2SendSaleDsm;
@@ -503,53 +504,51 @@ begin
 	end else begin
 		messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
 		goto LAPIv2SendSaleDsm;
-	end;
-	writeareatofile(reply,"SendTAXResponse.txt",1);
+	end;	
 	
-		SendFiscalLogToServer(IVr.SerNr,"SALE",req,reply);	
-		if(nonblank(JSONGet(jsresponse,"short_id")))then begin
-			transactionId = JSONGet(jsresponse,"short_id");
-			IVr.TaxTransactionCode = transactionId;
-			IVr.TaxTransactionDate=CurrentDate;
-			parentDocument = JSONGet(jsresponse,"long_id");
-			IVr.TaxParentDocument = parentDocument;
-		
-			IVTaxTr.SerNr = IVr.SerNr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:41:19 PM
-			if(readfirstmain(IVTaxTr,1,true))then begin
-				IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
-				IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
-				IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
-				IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
-				IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
-				recordstore(IVTaxTr,true);
-			end else begin
-				IVTaxTr.SerNr = IVr.SerNr;
-				IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
-				
-				IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
-				IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
-				IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
-				IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
-				 recordstore(IVTaxTr,true);
-			end;
-		
-			RecordStore(IVr,true);
-			if(isnewrec==false)then begin
-				putwindowrecord(mwn,IVr);
-				if(currentuser!="SA")then begin
-					IVDClass_RefreshStringList(mwn,IVr);
-				end;
-			end;
+	if(nonblank(JSONGet(jsresponse,"short_id")))then begin
+		transactionId = JSONGet(jsresponse,"short_id");
+		IVr.TaxTransactionCode = transactionId;
+		IVr.TaxTransactionDate=CurrentDate;
+		parentDocument = JSONGet(jsresponse,"long_id");
+		IVr.TaxParentDocument = parentDocument;
+	
+		IVTaxTr.SerNr = IVr.SerNr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:41:19 PM
+		if(readfirstmain(IVTaxTr,1,true))then begin
+			IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+			IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+			IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+			IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+			IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
+			recordstore(IVTaxTr,true);
+		end else begin
+			IVTaxTr.SerNr = IVr.SerNr;
+			IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+			
+			IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+			IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+			IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+			IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
+			 recordstore(IVTaxTr,true);
 		end;
 	
-	if(isnewrec==false)then begin
-		readfirstmain(IVr,1,true);
-		putwindowrecord(mwn,IVr);
-		IVDClass_RefreshStringList(mwn,IVr);
+		RecordStore(IVr,true);
+		if(isnewrec==false)then begin
+			putwindowrecord(mwn,IVr);
+			ReRunWindowDef(mwn);
+			IVDClass_RefreshStringList(mwn,IVr);
+		end;
 	end;
 	
 LAPIv2SendSaleDsm:;
-
+	
+	if(left(currentuser,2)=="SA")then begin
+		IVr.TaxTransactionCode = 1;
+		RecordStore(IVr,true);
+		putwindowrecord(mwn,IVr);
+		ReRunWindowDef(mwn);
+		IVDClass_RefreshStringList(mwn,IVr);
+	end;
 	
   return;
 end;
@@ -696,6 +695,7 @@ begin
 			SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
 
 			jsresponse = ParseJSONArea(reply);
+			writeareatofile(reply,"SendTAXResponse.txt",1);
 			if(nonblank(JSONGet(jsresponse,"code")))then begin
 				if(JSONGet(jsresponse,"code")=="0")then begin
 
@@ -707,19 +707,11 @@ begin
 				messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
 				goto LAPIv2SendReturnAutoDsm;
 			end;
-			writeareatofile(reply,"SendTAXResponse.txt",1);
 			SendFiscalLogToServer(IVr.SerNr,"RETURN",req,reply);
 		end else begin
 		end;
 	end else begin
 	end;
-	
-	if(isnewrec==false)then begin
-		readfirstmain(IVr,1,true);
-		putwindowrecord(mwn,IVr);
-		IVDClass_RefreshStringList(mwn,IVr);
-	end;
-	
 	
 LAPIv2SendReturnAutoDsm:;
  
