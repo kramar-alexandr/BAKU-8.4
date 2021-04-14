@@ -447,7 +447,7 @@ begin
 	area logarea,biglogarea,tmpar1,tmpar2;
 	vector val vatperc;
 	array string 50 vtags;
-	boolean isnewrec;
+	boolean isnewrec,issecond;
 	record CassaIDBlock CIDb;
 	
 	
@@ -471,8 +471,13 @@ begin
 	end;
 	blockload(CIDb);
 	if(blank(CIDb.CassaToken))then begin
-		messagebox(0,"Залогинтесь в кассу");
-		goto LAPIv2SendSaleDsm;
+LbeginLogin:;
+		LoginToKassaDsm;
+		blockload(CIDb);
+		if(blank(CIDb.CassaToken))then begin
+			messagebox(0,"Залогинтесь в кассу");
+			goto LAPIv2SendSaleDsm;
+		end;
 	end;
 	
   blockload(PMb);
@@ -489,7 +494,6 @@ begin
 	
 	APIv2SendSale_Remote(CIDb.CassaToken,req,IVr,RepSpec);
   writeareatofile(req,"SendTAXRequest.txt",1);
-  
   SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
 
   jsresponse = ParseJSONArea(reply);
@@ -498,8 +502,18 @@ begin
 	if(nonblank(JSONGet(jsresponse,"code")))then begin
 		if(JSONGet(jsresponse,"code")=="0")then begin
 		end else begin
-			messagebox(0,JSONGet(jsresponse,"message"));
-			goto LAPIv2SendSaleDsm;
+			if(JSONGet(jsresponse,"code")=="0")then begin
+				if(issecond)then begin
+					messagebox(0,JSONGet(jsresponse,"message"));
+					goto LAPIv2SendSaleDsm;
+				end else begin
+					issecond = true;
+					goto LbeginLogin;
+				end;
+			end else begin
+				messagebox(0,JSONGet(jsresponse,"message"));
+				goto LAPIv2SendSaleDsm;
+			end;
 		end;
 	end else begin
 		messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
