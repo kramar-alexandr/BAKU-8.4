@@ -1120,6 +1120,7 @@ begin
 	record LoyaltyCardVc LoyCardr;
 	record ExpProvItemRegVc EPIr;
 	record CUVc CUr, CU2r;
+	vector val promoPrice, promoRebate;
 	
 	BlockLoad(ECMUb);
 	BlockLoad(ARb);
@@ -1131,7 +1132,7 @@ begin
 		ORr.Sum4 = 0;
 		for (i=0;i<orrwcnt;i=i+1) begin
 			matrowget(ORr,i,ORrw);
-			if (nonblank(ORrw.GlobalItemArtCode)) then begin
+			if (nonblank(ORrw.GlobalItemArtCode) and ORrw.Promof==0) then begin
 				GI3r.Code = ORrw.GlobalItemArtCode;
 				if (ReadFirstMain(GI3r,1,true)) then begin
 					ORrw.Price = GI3r.Price;
@@ -1139,6 +1140,11 @@ begin
 					ORrw.Sum = ORrw.Price * ORrw.Quant;
 					ORrw.Sum = Round(ORrw.Sum - (ORrw.Sum / 100 * GI3r.Rebate),SetRoundModeD(1));
 					ORr.Sum4 = ORr.Sum4 + ORrw.Sum;
+				end;
+			end else begin
+				if (ORrw.Promof==1) then begin
+					promoPrice[ORrw.GlobalItemArtCode] = ORrw.Price;
+					promoRebate[ORrw.GlobalItemArtCode] = ORrw.vRebate;
 				end;
 			end;
 		end;
@@ -1551,27 +1557,34 @@ begin
 					allitemqty = allitemqty + 1;
 					ORrw.Spec = LocORrw.Spec;
 					// ORrw.Price = LocORrw.Price;
-					if (LoyCardValidNrf) then begin
-						ORrw.vRebate = LocORrw.vRebate;
-					end else begin
-						ORrw.vRebate = 0;
+					if (ORrw.Promof==0) then begin 
+						if (LoyCardValidNrf) then begin
+							ORrw.vRebate = LocORrw.vRebate;
+						end else begin
+							ORrw.vRebate = 0;
+						end;
 					end;
 					// ORrw.Sum = LocORrw.Sum;
 					ORrw.GlobalItemArtCode = LocORrw.GlobalItemArtCode;
 					for (lc=0;lc<=prcnt;lc=lc+1)begin
 						if(PriceQuant[ORrw.ArtCode & "_" & lc]>0)then begin
 							GIr.Code = ORrw.GlobalItemArtCode;
-							if(readfirstmain(GIr,1,true))then begin
+							if(readfirstmain(GIr,1,true) and ORrw.Promof==0)then begin
 								ORrw.Price = GIr.Price;
 								logtext(0,"Price - " & GIr.Price & "item" & ORrw.ArtCode);
 								if (GIr.Rebate > 0 or GIr.Rebate!=blankval) then begin
 									ORrw.vRebate = GIr.Rebate;
 								end;
 							end;
+							if (ORrw.Promof==1) then begin
+								ORrw.Price = promoPrice[ORrw.GlobalItemArtCode];
+								ORrw.vRebate = promoRebate[ORrw.GlobalItemArtCode];
+							end;
 							PriceQuant[ORrw.ArtCode & "_" & lc] = PriceQuant[ORrw.ArtCode & "_" & lc] - 1;
 							lc = prcnt + 1;
 						end;
 					end;
+					logtext (0,ORrw.Price & " Price");
 					ORrw.SerialNr = LocORrw.SerialNr;
 					ORrw.PlanShipRow = LocORrw.PlanShipRow;
 					// ORrw.Sum = ORrw.Price * ((100 - ORrw.vRebate) * 0.01);
