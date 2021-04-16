@@ -31,14 +31,14 @@ begin
   row SHVc SHrw;
 	record RetVc Retr;
 	row RetVc Retrw;
-	record ORVc ORr;
+	record ORVc ORr, LocORr, ComplORr;
 	row ORVc ORrw;
   Boolean testf, TrHs, OrdInf;
   string 20 frit,toit;
   string 20 frin,toin;
   record INVc INr;
   string 255 tstr;
-  string 255 itsz,mask,subsets,mskrep;
+  string 255 itsz,mask,subsets,mskrep,NMStr,CPHStr,EmailStr;
 	vector val vRetItems, vRetOutItems;
 	vector boolean vInPerReturns;
 	val SaleTotal, Total, TotQty;
@@ -58,7 +58,10 @@ begin
 	record ExpProvItemRegVc EPIr;
 	record CUVc CUr;
 	record BtrxBrandVc BBr;
-	
+	record RLinkVc RLr;
+	array string 255 vtags;
+	vector integer complOr;
+	vector boolean ORf;
 	BlockLoad(PMb);
 
 	StartReportnoheaderjob("Отчет по продажам Е-Коммерс");
@@ -114,6 +117,27 @@ begin
 			end;
 		end;
 	end;
+	
+	Resetloop(IPr);
+	TrHs = true;
+	while (loopmain(IPr,1,TrHs)) begin
+		for (i=0;i<matrowcnt(IPr);i=i+1) begin
+			matrowget(IPr,i,IPrw);
+			if (nonblank(IPrw.InvoiceNr)) then begin
+				IVr.SerNr = IPrw.InvoiceNr;
+				if (ReadFIrstMain(IVr,1,true)) then begin
+					ORr.SerNr = IVr.CustOrdNr;
+					if (ReadFIrstMain(ORr,1,true)) then begin
+						if(ReadRecordLink(ORr,1,LocORr,RLr) and !ORf[ORr.SerNr]) begin
+							ORf[ORr.SerNr] = true;
+							complOr[LocORr.CustCode] = complOr[LocORr.CustCode] + 1;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	
 	
 	
 	Total = 0;
@@ -259,6 +283,11 @@ begin
 						outstring(340,0,"Способы оплаты",false);
 						outstring(340,0,"Общая сумма заказа",false);
 						outstring(340,0,"Оплачено",false);
+						outstring(340,0,"Категории товаров в заказе",false);
+						outstring(340,0,"ФИО клиента,",false);
+						outstring(340,0,"Номер телефона клиента",false);
+						outstring(340,0,"E-mail",false);
+						outstring(340,0,"Количество завершенных заказов клиента",false);
 					endformat;
 	
 					OrdInf = true;
@@ -335,6 +364,63 @@ begin
 									OrdInf = false;
 									outstring(340,0,PaySum-RetSum,false);
 								end else begin
+									outstring(340,0,"",false);
+								end;
+								if (nonblank(GIr.BTRxFourthLevCat)) then begin
+									outstring(340,0,GIr.BTRxFourthLevCat,false);
+								end else begin
+									outstring(340,0,GIr.BTRxThirdLevCat,false);
+								end;
+								if (OrdInf) then begin
+									NMStr = "";
+									CPHStr = "";
+									EmailStr = "";
+									if(ReadRecordLink(ORr,1,LocORr,RLr)) begin
+										CUr.Code = LocORr.CustCode;
+										if (ReadFIrstMain(CUr,1,true)) then begin
+											if (nonblank(CUr.CRMLName)) then begin
+												NMStr = CUr.CRMLName;
+												if (nonblank(CUr.CRMName)) then begin
+													NMStr = NMStr & " " & CUr.CRMName;
+												end;
+												if (nonblank(CUr.CRMPatr)) then begin
+													NMStr = NMStr & " " & CUr.CRMPatr;
+												end;
+											end else begin
+												NMStr = CUr.Name;
+											end;
+											if (nonblank(CUr.Phone)) then begin
+												CPHStr = CUr.Phone;
+											end;
+											if (nonblank(CUr.Mobile) and blank(CPHStr)) then begin
+												CPHStr = CUr.Mobile;
+											end;
+											if (nonblank(CUr.AltPhone) and blank(CPHStr)) then begin
+												CPHStr = CUr.AltPhone;
+											end;
+											if (nonblank(CUr.Fax) and blank(CPHStr)) then begin
+												CPHStr = CUr.Fax;
+											end;
+											if (nonblank(CUr.eMail)) then begin
+												EmailStr = CUr.eMail;
+											end;
+										end;
+									end;
+									if (nonblank(NMStr)) then begin
+										outstring(340,0,NMStr,false);
+										outstring(340,0,CPHStr,false);
+										outstring(340,0,EmailStr,false);
+										outstring(340,0,complOr[CUr.Code],false);
+									end else begin
+										outstring(340,0,"",false);
+										outstring(340,0,"",false);
+										outstring(340,0,"",false);
+										outstring(340,0,"",false);
+									end;
+								end else begin
+									outstring(340,0,"",false);
+									outstring(340,0,"",false);
+									outstring(340,0,"",false);
 									outstring(340,0,"",false);
 								end;
 								endformat;
@@ -468,6 +554,11 @@ begin
 				outstring(340,0,"Способы оплаты",false);
 				outstring(340,0,"Общая сумма возврата",false);
 				outstring(340,0,"Возвращено клиенту",false);
+				outstring(340,0,"Категории товаров в заказе",false);
+				outstring(340,0,"ФИО клиента,",false);
+				outstring(340,0,"Номер телефона клиента",false);
+				outstring(340,0,"E-mail",false);
+				outstring(340,0,"Количество завершенных заказов клиента",false);
 			endformat;
 			
 			
@@ -593,6 +684,63 @@ begin
 							end else begin
 								outstring(340,0,"",false);
 							end;
+							if (nonblank(GIr.BTRxFourthLevCat)) then begin
+									outstring(340,0,GIr.BTRxFourthLevCat,false);
+								end else begin
+									outstring(340,0,GIr.BTRxThirdLevCat,false);
+								end;
+								if (OrdInf) then begin
+									NMStr = "";
+									CPHStr = "";
+									EmailStr = "";
+									if(ReadRecordLink(ORr,1,LocORr,RLr)) begin
+										CUr.Code = LocORr.CustCode;
+										if (ReadFIrstMain(CUr,1,true)) then begin
+											if (nonblank(CUr.CRMLName)) then begin
+												NMStr = CUr.CRMLName;
+												if (nonblank(CUr.CRMName)) then begin
+													NMStr = NMStr & " " & CUr.CRMName;
+												end;
+												if (nonblank(CUr.CRMPatr)) then begin
+													NMStr = NMStr & " " & CUr.CRMPatr;
+												end;
+											end else begin
+												NMStr = CUr.Name;
+											end;
+											if (nonblank(CUr.Phone)) then begin
+												CPHStr = CUr.Phone;
+											end;
+											if (nonblank(CUr.Mobile) and blank(CPHStr)) then begin
+												CPHStr = CUr.Mobile;
+											end;
+											if (nonblank(CUr.AltPhone) and blank(CPHStr)) then begin
+												CPHStr = CUr.AltPhone;
+											end;
+											if (nonblank(CUr.Fax) and blank(CPHStr)) then begin
+												CPHStr = CUr.Fax;
+											end;
+											if (nonblank(CUr.eMail)) then begin
+												EmailStr = CUr.eMail;
+											end;
+										end;
+									end;
+									if (nonblank(NMStr)) then begin
+										outstring(340,0,NMStr,false);
+										outstring(340,0,CPHStr,false);
+										outstring(340,0,EmailStr,false);
+										outstring(340,0,complOr[CUr.Code],false);
+									end else begin
+										outstring(340,0,"",false);
+										outstring(340,0,"",false);
+										outstring(340,0,"",false);
+										outstring(340,0,"",false);
+									end;
+								end else begin
+									outstring(340,0,"",false);
+									outstring(340,0,"",false);
+									outstring(340,0,"",false);
+									outstring(340,0,"",false);
+								end;
 							endformat;
 						end;
 					end;
