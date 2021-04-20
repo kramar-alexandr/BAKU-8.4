@@ -13,6 +13,7 @@ external function string 60 AddObjectToObjectList(string,string);
 external procedure ExtractObjectsByType(string, string, var array string, var integer);
 external function string 100 BPICodeToName(string);
 external procedure TRSumup(var record TRVc,var val);
+external procedure SetORFlags(record ORVc);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -717,6 +718,206 @@ end;
 
 
 
+global
+updating procedure TestRecalcORMn(record RcVc RepSpec, var record ORVc ORr)
+begin
+  record ORVc oldORr;
+  record SHVc SHr;
+  record DropSHVc DropSHr;
+  record RetVc Retr;
+  record IVVc IVr;
+  row ORVc ORrw;
+  row SHVc SHrw;
+  row DropSHVc DropSHrw;
+  row RetVc Retrw;
+  row IVVc IVrw;
+  LongInt fror,toor;
+  Integer rwcnt,i,orrwcnt;
+  Boolean found,shfound,testf;
+  record XSrsVc XSrsr;
+  
+  if (RepSpec.flags[2]==0) then begin
+    if (blank(RepSpec.f1)) then begin
+      MessageBox(2278,"");
+      goto LRecalcORMn;
+    end;
+  end;
+  fror = FirstInRange(RepSpec.f1,10);
+  toor = LastInRange(RepSpec.f1,10);
+  ORr.SerNr = fror;
+  found = true;
+  while (LoopKey("SerNr",ORr,1,found)) begin
+    if (found) then begin
+      if (nonblank(RepSpec.f1)) then begin
+        if (ORr.SerNr>toor) then begin
+          found = false;
+        end;
+      end;
+    end;
+    testf = true;
+    if (found==false) then begin
+      testf = false;
+    end;
+    if (ORr.Closed<>0) then begin
+      if (RepSpec.ArtMode==0) then begin
+        testf = false;
+      end;
+    end;
+    if (testf) then begin
+      RecordCopy(oldORr,ORr);
+      orrwcnt = MatRowCnt(ORr);
+      for (i=0;i<orrwcnt;i=i+1) begin
+        MatRowGet(ORr,i,ORrw);
+        if (RepSpec.flags[0]<>0) then begin
+          ORrw.Shipd1 = BlankVal;
+          ORrw.Shipd2 = BlankVal;
+        end;
+        if (RepSpec.flags[1]<>0) then begin
+          ORrw.Invd = BlankVal;
+        end;
+        MatRowPut(ORr,i,ORrw);
+      end;
+      if (RepSpec.flags[0]<>0) then begin
+/* find all shipments */
+        SHr.OrderNr = ORr.SerNr;
+        shfound = true;
+        ResetLoop(SHr);
+        while (LoopKey("OrderKey",SHr,1,shfound)) begin
+          if (shfound) then begin
+            if (SHr.OrderNr!=ORr.SerNr) then begin
+              shfound = false;
+            end;
+          end;
+          if (shfound) then begin
+            rwcnt = MatRowCnt(SHr);
+            for (i=0;i<rwcnt;i=i+1) begin
+              MatRowGet(SHr,i,SHrw);
+              if ((SHrw.OrdRow>=0) and (SHrw.OrdRow<orrwcnt)) then begin
+                MatRowGet(ORr,SHrw.OrdRow,ORrw);
+                ORrw.Shipd1 = ORrw.Shipd1 + SHrw.Ship;
+                if (SHr.OKFlag<>0) then begin
+                  ORrw.Shipd2 = ORrw.Shipd2 + SHrw.Ship;
+                end;
+                MatRowPut(ORr,SHrw.OrdRow,ORrw);
+              end;
+            end;
+          end;
+        end;
+/* find all drop shipments */
+        DropSHr.OrderNr = ORr.SerNr;
+        shfound = true;
+        ResetLoop(DropSHr);
+        while (LoopKey("OrderNr",DropSHr,1,shfound)) begin
+          if (shfound) then begin
+            if (DropSHr.OrderNr!=ORr.SerNr) then begin
+              shfound = false;
+            end;
+          end;
+          if (shfound) then begin
+            rwcnt = MatRowCnt(DropSHr);
+            for (i=0;i<rwcnt;i=i+1) begin
+              MatRowGet(DropSHr,i,DropSHrw);
+              if ((DropSHrw.OrdRow>=0) and (DropSHrw.OrdRow<orrwcnt)) then begin
+                MatRowGet(ORr,DropSHrw.OrdRow,ORrw);
+                ORrw.Shipd1 = ORrw.Shipd1 + DropSHrw.Ship;
+                if (DropSHr.OKFlag<>0) then begin
+                  ORrw.Shipd2 = ORrw.Shipd2 + DropSHrw.Ship;
+                end;
+                MatRowPut(ORr,DropSHrw.OrdRow,ORrw);
+              end;
+            end;
+          end;
+        end;
+/* find all Returned Goods */
+        Retr.OrdNr = ORr.SerNr;
+        shfound = true;
+        ResetLoop(Retr);
+        while (LoopKey("OrdNr",Retr,1,shfound)) begin
+          if (shfound) then begin
+            if (Retr.OrdNr!=ORr.SerNr) then begin
+              shfound = false;
+            end;
+          end;
+         if (shfound) then begin
+           rwcnt = MatRowCnt(Retr);
+           for (i=0;i<rwcnt;i=i+1) begin
+             MatRowGet(Retr,i,Retrw);
+             if ((Retrw.OrdRow>=0) and (Retrw.OrdRow<orrwcnt)) then begin
+               MatRowGet(ORr,Retrw.OrdRow,ORrw);
+               if (Retr.OKFlag<>0) then begin
+                 ORrw.Shipd1 = ORrw.Shipd1 - Retrw.Quant;
+                 ORrw.Shipd2 = ORrw.Shipd2 - Retrw.Quant;
+               end;
+               MatRowPut(ORr,Retrw.OrdRow,ORrw);
+             end;
+           end;
+         end;
+       end;
+      end;
+      if (RepSpec.flags[1]<>0) then begin
+/* find all invoices */
+        IVr.OrderNr = ORr.SerNr;
+        shfound = true;
+        ResetLoop(IVr);
+        while (LoopKey("OrderNr",IVr,1,shfound)) begin
+          if (shfound) then begin
+            if (IVr.OrderNr!=ORr.SerNr) then begin
+              shfound = false;
+            end;
+          end;
+          if (shfound) then begin
+            if (IVr.Invalid==0) then begin
+              rwcnt = MatRowCnt(IVr);
+              for (i=0;i<rwcnt;i=i+1) begin
+                MatRowGet(IVr,i,IVrw);
+                if ((IVrw.OrdRow>=0) and (IVrw.OrdRow<orrwcnt)) then begin
+                  if (IVrw.stp==kInvoiceRowTypeNormal) or (IVrw.stp==kInvoiceRowTypeStructuredItemComponent) or (IVrw.stp==kInvoiceRowTypeCorrection) then begin
+                    MatRowGet(ORr,IVrw.OrdRow,ORrw);
+                    if (IVr.InvType==kInvoiceTypeCredit or IVr.InvType==kInvoiceTypeCreditSpecialSales) then begin
+                      switch (IVrw.stp) begin
+                        case kInvoiceRowTypeCorrection:
+                          ORrw.Invd = ORrw.Invd + IVrw.Quant;
+                        otherwise
+                          ORrw.Invd = ORrw.Invd - IVrw.Quant;
+                      end;                 
+                    end else begin
+                      ORrw.Invd = ORrw.Invd + IVrw.Quant;
+                    end;  
+                    MatRowPut(ORr,IVrw.OrdRow,ORrw);
+                  end;
+                end;
+              end;
+            end;  
+          end;
+        end;
+        XSrsr.TransType = 0;
+        XSrsr.FromFileName = "ORVc";
+        XSrsr.FromSerNr = ORr.SerNr;
+        shfound = true;
+        ResetLoop(XSrsr);
+        while (LoopKey("From",XSrsr,3,shfound)) begin
+          if (XSrsr.TransType!=0) then begin shfound = false; end;
+          if (XSrsr.FromFileName!="ORVc") then begin shfound = false; end;
+          if (XSrsr.FromSerNr!=ORr.SerNr) then begin shfound = false; end;
+          if (shfound) then begin
+            if (XSrsr.FromRow>=0) then begin
+              MatRowGet(ORr,XSrsr.FromRow,ORrw);
+              ORrw.Invd = ORrw.Invd + XSrsr.FromQty;
+              MatRowPut(ORr,XSrsr.FromRow,ORrw);
+            end;            
+          end;
+        end;
+        
+      end;
+      SetORFlags(ORr);
+      // if (RecordUpdate(oldORr,ORr,false)==0) then begin
+      // end;
+      //MaintTrace(ORr.SerNr);
+    end;
+  end;
+LRecalcORMn:;  
+  return;
+end;
 
 
 
@@ -727,7 +928,7 @@ end;
 
 global webpublic updating procedure WebRepBagORPriceDuplicates()
 begin
-	record ORVc ORr;
+	record ORVc ORr, OR2r;
 	row ORVc ORrw, OR2rw;
 	record POVc POr;
 	record BPIBrandVc BPIBrandr;
@@ -743,7 +944,7 @@ begin
 	vector string 255 vPriceArt;
 	vector val vRRPArt;
 	record PLVc PLr;
-	
+	record RcVc RepSpec;
 	// change = false;
 	// if(webgetarg("change")=="true")then begin
 		// change = true;
@@ -759,6 +960,13 @@ begin
 	while(loopmain(ORr,1,true))begin
 		clearVector(vPriceArt);
 		clearVector(vRRPArt);
+		RepSpec.f1 = ORr.SerNr;
+		RepSpec.flags[1] = 1;
+		RepSpec.flags[0] = 1;
+		RepSpec.flags[2] = 0;
+		RepSpec.ArtMode = 0;
+		logtext(0,"RecalcORMn");
+		TestRecalcORMn(RepSpec,OR2r);
 		for (i=0;i<matrowcnt(ORr);i=i+1) begin
 			matrowget(ORr,i,ORrw);
 			if (ORrw.Price>0) then begin
@@ -772,7 +980,8 @@ begin
 				end else begin
 					matrowget(ORr,i-1,OR2rw);
 					if (OR2rw.Price==ORrw.Price and vPriceArt[OR2rw.Price]==OR2rw.ArtCode) then begin
-						if (vPriceArt[ORrw.Price]!=ORrw.ArtCode and vRRPArt[vPriceArt[ORrw.Price]]!=vRRPArt[ORrw.ArtCode]) then begin
+						matrowget(OR2r,i,OR2rw);
+						if (vPriceArt[ORrw.Price]!=ORrw.ArtCode and vRRPArt[vPriceArt[ORrw.Price]]!=vRRPArt[ORrw.ArtCode] and (OR2rw.Shipd1!=ORrw.Shipd1 or OR2rw.Shipd2!=ORrw.Shipd2)) then begin
 							weboutstring("<tr>");
 							weboutstring("<td>" & ORr.SerNr & "</td>");	
 							weboutstring("<td>" & ORr.OrdDate & "</td>");	
