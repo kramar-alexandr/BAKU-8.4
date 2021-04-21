@@ -1,0 +1,82 @@
+external procedure TRSumup(var record TRVc,var val);
+external function Integer GetIntYc(Date);
+
+global updating procedure AddNevComissionMn(record RcVc RepSpec)
+begin
+  record TRVc TRr;
+  row TRVc TRrw;
+  integer curcmp,i,rwcnt,k,comprwcnt;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  record NewComissArr3Block NCA3b;
+  row NewComissArr3Block NCA3rw;
+  record SRBlock SRb;
+  val t;
+  boolean changed;
+  longint newnr;
+  record AccVc Accr;
+  
+  curcmp = CurrentCompany;
+  
+  if(nonblankdate(RepSpec.d1))then begin
+    blockload(Compb);
+    
+    comprwcnt = matrowcnt(Compb);
+    for(k=1;k<=comprwcnt;k=k+1)begin
+      matrowget(Compb,k-1,Comprw);
+      if(Comprw.ActiveStatus==0)then begin
+        setcompany(k,false);
+        
+        
+        blockload(NCA3b);
+        BlockLoad(SRb);
+        if(matrowcnt(NCA3b)>0)then begin
+          changed = false;
+          recordnew(TRr);
+          TRr.TransDate = RepSpec.d1;
+          TRr.RegDate = RepSpec.d1;
+          TRr.Comment = "44/11 ID GROUP COMMISSION";
+          if (TRr.Number<=0) then begin
+            newnr = SRb.LastTRNr;
+            TRr.Number = NextSerNr("TRVc",TRr.TransDate,newnr,false,"");
+          end;
+          TRr.IntYc = GetIntYc(TRr.TransDate);
+          for(i=0;i<matrowcnt(NCA3b);i=i+1)begin
+            matrowget(NCA3b,i,NCA3rw);
+            if(nonblank(NCA3rw.Obj) and NCA3rw.ConstSum!=0)then begin
+              clearrow(TRr,TRrw,1);
+              TRrw.AccNumber = NCA3rw.AccFr;
+              Accr.AccNumber = TRrw.AccNumber;
+              readfirstmain(Accr,1,true);
+              TRrw.Comment = Accr.Comment;
+              TRrw.Objects = NCA3rw.Obj;
+              TRrw.DebVal = NCA3rw.ConstSum;
+              TRrw.CurDebVal = NCA3rw.ConstSum;
+              matrowput(TRr,matrowcnt(TRr),TRrw);
+              TRSumup(TRr,t); 
+              clearrow(TRr,TRrw,1);
+              TRrw.AccNumber = NCA3rw.AccTo;
+              Accr.AccNumber = TRrw.AccNumber;
+              readfirstmain(Accr,1,true);
+              TRrw.Comment = Accr.Comment;
+              TRrw.Objects = NCA3rw.Obj;
+              TRrw.CredVal = NCA3rw.ConstSum;
+              TRrw.CurCredVal = NCA3rw.ConstSum;
+              matrowput(TRr,matrowcnt(TRr),TRrw);
+              changed = true;
+            end;
+          end;
+          if(changed)then begin
+            recordinsert(TRr,true);
+          end;
+        end;
+      
+      end;
+    end;
+    setcompany(curcmp,true);
+  end;
+  
+  
+  
+return;
+end;
