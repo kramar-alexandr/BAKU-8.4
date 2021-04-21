@@ -5788,7 +5788,7 @@ begin
 	string 155 id,sum;
 	vector val codequant;
 	integer i,j,wn,y,compno;
-	longint a;
+	longint a, ORSerNr, mtrw;
 	string 255 hex,out,warning,errstr,loyaltycard,namesname,inwarning,code,stockcode,affobj;
 	boolean UPDf,chsum, TrHs, IdentClientf,TrHs2;
 	record AccBlock ARb;
@@ -5815,7 +5815,6 @@ begin
 	datajson = ParseJsonArea(getpost);
 	filename = "Orders/Order" & datetostring(currentdate,"YYYYMMDD") & TimeToString(currenttime,"HHMMSS",false) & ".txt";
 	writeareatofile(getpost,filename,0);
-	WebOutString("{\"result\":\"ok\"}");
 	uname = JSONGet(datajson,"user[0]/name");
 	pn = JSONGet(datajson,"user[0]/profile_name");
 	ph = JSONGet(datajson,"user[0]/phone");
@@ -5827,7 +5826,10 @@ begin
 	apart = JSONGet(datajson,"user[0]/apart");
 	custcode = JSONGet(datajson,"user[0]/custcode");
 	
-	bitrono = JSONGet(datajson,"order[0]/id");
+	ORSerNr = StringToLongInt(JSONGet(datajson,"order[0]/id"));
+	if (blank(JSONGet(datajson,"order[0]/id")) or JSONGet(datajson,"order[0]/id")=="0") then begin
+		ORSerNr = -1;
+	end;
 	uname = ParseHEX(uname);
 	sn = ParseHEX(sn);
 	pn = ParseHEX(pn);
@@ -5837,27 +5839,245 @@ begin
 	apart = ParseHEX(apart);
 	namesname = uname & " " & sn;
 	id = JSONGet(datajson,"order[0]/id");
-	pay = JSONGet(datajson,"order[0]/pay");
+	pay = JSONGet(datajson,"order[0]/paydeal");
 	stat = JSONGet(datajson,"order[0]/status");
 	compno = StringToInt(JSONGet(datajson,"order[0]/compno"));
 	stockcode = JSONGet(datajson,"order[0]/stockcode");
 	SetCompany(compno,false);
 	loyaltycard = JSONGet(datajson,"loyaltycard");
-	if (compno) then begin
+	if (compno>0) then begin
 		stat = ParseHEX(stat);
 		logtext(0,stat);
-		if(nonblank(id))then begin
-			for(i=0;i<JSONCountChildren(datajson,"basket_items");i=i+1) begin
-				code = JSONGet(datajson,"basket_items[0]/["  & i & "]/code");
-				logtext(0,code);
-				codequant[code] = StringToVal(JSONGet(datajson,"basket_items[0]/["  & i & "]/quantity"),M4Val);
+		for(i=0;i<JSONCountChildren(datajson,"basket_items");i=i+1) begin
+			code = JSONGet(datajson,"basket_items[0]/["  & i & "]/code");
+			logtext(0,code);
+			codequant[code] = StringToVal(JSONGet(datajson,"basket_items[0]/["  & i & "]/quantity"),M4Val);
+		end;
+		if (ORSerNr==-1) then begin
+			RecordNew(ORr);
+			ORr.SerNr = NextSerNr("ORVc",CurrentDate,-1,false,"");	
+			IdentClientf = false;
+			if (blank(ORr.CustCode) and nonblank(loyaltycard)) then begin
+				LoyCardr.CustCode = loyaltycard;
+				if (ReadFirstKey("CustCode",LoyCardr,1,true)) then begin
+					ORr.CustCode = LoyCardr.CustCode;
+					PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+					IdentClientf = true;
+				end else begin
+					LoyCardr.SerNr = loyaltycard;
+					if (ReadFirstMain(LoyCardr,1,true)) then begin
+						ORr.CustCode = LoyCardr.CustCode;
+						PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+						IdentClientf = true;
+					end;
+				end;	
 			end;
-			ORr.SerNr = bitrono;
-			if(!ReadFirstMain(ORr,1,true))then begin
-				RecordNew(ORr);
-				ORr.SerNr = NextSerNr("ORVc",CurrentDate,-1,false,"");	
+			if (blank(ORr.CustCode) and nonblank(custcode)) then begin
+				CUr.Code = custcode;
+				if (ReadFirstMain(CUr,1,true)) then begin
+					ORr.CustCode = CUr.Code;
+					PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+					IdentClientf = true;
+				end;
+			end;
+			GetVectorTags(codequant,aCodes);
+			for (i=0;i<aCodes.length;i=i+1) begin
+				ORrw.stp = 1;
+				ORrw.ArtCode = aCodes[i];
+				ORrw.Quant = codequant[aCodes[i]];
+				ORrw.Location = stockcode;
+				
+				MatRowPut(ORr,i,ORrw);
+				ORVc_PasteArtCode(ORr,i,inwarning,warning,false)
+				MatRowGet(ORr,i,ORrw);
+			end;
+			
+			if (!IdentClientf) then begin
+				CUr.Code = "MT_" & ph;
+				if (ReadFirstMain(CUr,1,true)) then begin
+					if (CUr.blockedFlag==0) then begin
+						ORr.CustCode = CUr.Code;
+						PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+						IdentClientf = true;
+					end else begin
+						CUr.Code = "MT_" & ph;
+						TrHs2 = true;
+						while (loopmain(CUr,1,TrHs2)) begin
+							if (CUr.Code!="MT_" & ph) then begin TrHs2 = false; end;
+							if (TrHs2 and CUr.blockedFlag==0) then begin
+								ORr.CustCode = CUr.Code;
+								PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+								IdentClientf = true;
+								TrHs2 = false;
+							end;
+						end;
+						ResetLoop(CUr);
+					end;
+				end;
+			end;
+			if (!IdentClientf) then begin
+				if (left(ph,6)=="+99412") then begin
+					CUr.Phone = ph;
+					if (ReadFirstKey("Phone",CUr,1,true)) then begin
+						if (CUr.blockedFlag==0) then begin
+							ORr.CustCode = CUr.Code;
+							PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+							IdentClientf = true;
+						end else begin
+							CUr.Phone = ph;
+							TrHs2 = true;
+							while (loopkey("Phone",CUr,1,TrHs2)) begin
+								if (CUr.Phone!=ph) then begin TrHs2 = false; end;
+								if (TrHs2 and CUr.blockedFlag==0) then begin
+									ORr.CustCode = CUr.Code;
+									PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+									IdentClientf = true;
+									TrHs2 = false;
+								end;
+							end;
+							ResetLoop(CUr);
+						end;
+					end;
+				end;
+			end;
+			if (!IdentClientf) then begin
+				if (left(ph,6)=="+99450" or left(ph,6)=="+99451" or left(ph,6)=="+99455" or left(ph,6)=="+99470" or left(ph,6)=="+99477") then begin
+					CUr.Mobile = ph;
+					if (ReadFirstKey("Mobile",CUr,1,true)) then begin
+						if (CUr.blockedFlag==0) then begin
+							ORr.CustCode = CUr.Code;
+							PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+							IdentClientf = true;
+						end else begin
+							CUr.Mobile = ph;
+							TrHs2 = true;
+							while (loopkey("Mobile",CUr,1,TrHs2)) begin
+								if (CUr.Mobile!=ph) then begin TrHs2 = false; end;
+								if (TrHs2 and CUr.blockedFlag==0) then begin
+									ORr.CustCode = CUr.Code;
+									PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+									IdentClientf = true;
+									TrHs2 = false;
+								end;
+							end;
+							ResetLoop(CUr);
+						end;
+					end;
+				end;
+			end;
+			if (!IdentClientf) then begin
+				if (left(ph,6)=="+99450" or left(ph,6)=="+99451" or left(ph,6)=="+99455" or left(ph,6)=="+99470" or left(ph,6)=="+99477") then begin
+					CUr.AltPhone = ph;
+					if (ReadFirstKey("AltPhone",CUr,1,true)) then begin
+						if (CUr.blockedFlag==0) then begin
+							ORr.CustCode = CUr.Code;
+							PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+							IdentClientf = true;
+						end else begin
+							CUr.AltPhone = ph;
+							TrHs2 = true;
+							while (loopkey("AltPhone",CUr,1,TrHs2)) begin
+								if (CUr.AltPhone!=ph) then begin TrHs2 = false; end;
+								if (TrHs2 and CUr.blockedFlag==0) then begin
+									ORr.CustCode = CUr.Code;
+									PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+									IdentClientf = true;
+									TrHs2 = false;
+								end;
+							end;
+							ResetLoop(CUr);
+						end;
+					end;
+				end;
+			end;
+			if (!IdentClientf) then begin
+				CUr.eMail = em;
+				if (ReadFirstKey("eMail",CUr,1,true)) begin
+					if (CUr.blockedFlag==0) then begin
+						ORr.CustCode = CUr.Code;
+						PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+						IdentClientf = true;
+					end else begin
+						CUr.eMail = em;
+						TrHs2 = true;
+						while (loopkey("eMail",CUr,1,TrHs2)) begin
+							if (CUr.eMail!=em) then begin TrHs2 = false; end;
+							if (TrHs2 and CUr.blockedFlag==0) then begin
+								ORr.CustCode = CUr.Code;
+								PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+								IdentClientf = true;
+								TrHs2 = false;
+							end;
+						end;
+						ResetLoop(CUr);
+					end;
+				end;
+			end;
+			if (!IdentClientf) then begin
+				recordNew(CUr);
+				CUr.Code =  "MT_" & ph;
+				CUr.Name = namesname;
+				if (left(ph,6)=="+99412") then begin
+					CUr.Phone = ph;
+				end;
+				if (left(ph,6)=="+99450" or left(ph,6)=="+99451" or left(ph,6)=="+99455" or left(ph,6)=="+99470" or left(ph,6)=="+99477") then begin
+					CUr.Mobile = ph;
+				end;
+				CUr.eMail = em;
+				CUr.CRMLName = sn;
+				CUr.CRMName = uname;
+				CUr.DelAddr0 = city;
+				CUr.DelAddr1 = street;
+				CUr.DelAddr2 = house;
+				CUr.DelAddr3 = apart;
+				CUr.CreateLocation = stockcode;
+				CUr.PLCode = "RRP";
+				CUr.PayDeal = "PP";
+				CUr.RebCode = "0%";
+				recordStore(CUr,true);
+				ORr.CustCode = CUr.Code;
+				PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
+			end;
+			ORr.PayDeal = pay;
+			ORr.Location = stockcode;
+			Locr.Code = stockcode;
+			if (ReadFirstMain(Locr,1,true)) then begin
+				if (nonblank(Locr.Objects)) then begin
+					GetObjs("STORE",ORr.Objects,affobj);
+					if (nonblank(affobj)) then begin
+						ORr.Objects = StrReplace(ORr.Objects,Locr.Objects,affobj);
+					end else begin
+						if (nonblank(ORr.Objects)) then begin ORr.Objects = ORr.Objects & ","; end;
+						ORr.Objects = ORr.Objects & Locr.Objects;
+					end;
+				end;
+			end;
+			ORVc_PasteLocation(ORr,-1);
+			ORr.InvBeforeShip = 1;
+			ORr.SalesMan = "ECOMMERCE";
+			ORr.CustOrdNr = bitrono;
+			RecordInsert(ORr,true);
+			RecordCopy(OldORr,ORr);
+			if(stat==USetStr(36215))then begin
+				ORr.Closed = 1;
+			end;
+			ORSumup(ORr);
+			ORr.Reserved = 1;
+			RecordUpdate(OldORr,ORr,true);
+			WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
+		end else begin
+			ORr.SerNr = ORSerNr;
+			if(ReadFirstMain(ORr,1,true))then begin
+				RecordCopy(OldORr,ORr);
+				ORr.Reserved = 0;
+				RecordUpdate(OldORr,ORr,true);
+				RecordCopy(OldORr,ORr);
+				ORr.PayDeal = pay;
+				
+				
+				
 				IdentClientf = false;
-				if (blank(ORr.CustCode) and nonblank(loyaltycard)) then begin
+				if (nonblank(loyaltycard)) then begin
 					LoyCardr.CustCode = loyaltycard;
 					if (ReadFirstKey("CustCode",LoyCardr,1,true)) then begin
 						ORr.CustCode = LoyCardr.CustCode;
@@ -5872,7 +6092,7 @@ begin
 						end;
 					end;	
 				end;
-				if (blank(ORr.CustCode) and nonblank(custcode)) then begin
+				if (nonblank(custcode)) then begin
 					CUr.Code = custcode;
 					if (ReadFirstMain(CUr,1,true)) then begin
 						ORr.CustCode = CUr.Code;
@@ -5880,30 +6100,19 @@ begin
 						IdentClientf = true;
 					end;
 				end;
-				GetVectorTags(codequant,aCodes);
-				for (i=0;i<aCodes.length;i=i+1) begin
-					ORrw.stp = 1;
-					ORrw.ArtCode = aCodes[i];
-					ORrw.Quant = codequant[aCodes[i]];
-					ORrw.Location = stockcode;
-					
-					MatRowPut(ORr,i,ORrw);
-					ORVc_PasteArtCode(ORr,i,inwarning,warning,false)
-					MatRowGet(ORr,i,ORrw);
-				end;
 				
 				if (!IdentClientf) then begin
-					CUr.Code = "EC_" & ph;
+					CUr.Code = "MT_" & ph;
 					if (ReadFirstMain(CUr,1,true)) then begin
 						if (CUr.blockedFlag==0) then begin
 							ORr.CustCode = CUr.Code;
 							PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
 							IdentClientf = true;
 						end else begin
-							CUr.Code = "EC_" & ph;
+							CUr.Code = "MT_" & ph;
 							TrHs2 = true;
 							while (loopmain(CUr,1,TrHs2)) begin
-								if (CUr.Code!="EC_" & ph) then begin TrHs2 = false; end;
+								if (CUr.Code!="MT_" & ph) then begin TrHs2 = false; end;
 								if (TrHs2 and CUr.blockedFlag==0) then begin
 									ORr.CustCode = CUr.Code;
 									PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
@@ -6015,7 +6224,7 @@ begin
 				end;
 				if (!IdentClientf) then begin
 					recordNew(CUr);
-					CUr.Code =  "EC_" & ph;
+					CUr.Code =  "MT_" & ph;
 					CUr.Name = namesname;
 					if (left(ph,6)=="+99412") then begin
 						CUr.Phone = ph;
@@ -6030,7 +6239,7 @@ begin
 					CUr.DelAddr1 = street;
 					CUr.DelAddr2 = house;
 					CUr.DelAddr3 = apart;
-					CUr.CreateLocation = "MAIN";
+					CUr.CreateLocation = stockcode;
 					CUr.PLCode = "RRP";
 					CUr.PayDeal = "PP";
 					CUr.RebCode = "0%";
@@ -6038,63 +6247,42 @@ begin
 					ORr.CustCode = CUr.Code;
 					PasteCustInOrder(ORr,ORr.CustCode,ORr.CustCode,inwarning,warning);
 				end;
-				
-			
-				if(pay=="false")then begin
-					ORr.PayDeal = "PP";
-				end else begin
-					ORr.PayDeal = "O";
-				end;
-				ORr.Location = stockcode;
-				Locr.Code = stockcode;
-				if (ReadFirstMain(Locr,1,true)) then begin
-					if (nonblank(Locr.Objects)) then begin
-						GetObjs("STORE",ORr.Objects,affobj);
-						if (nonblank(affobj)) then begin
-							ORr.Objects = StrReplace(ORr.Objects,Locr.Objects,affobj);
-						end else begin
-							if (nonblank(ORr.Objects)) then begin ORr.Objects = ORr.Objects & ","; end;
-							ORr.Objects = ORr.Objects & Locr.Objects;
+				for (i=matrowcnt(ORr)-1;i>=0;i=i-1) begin
+					matrowget(ORr,i,ORrw);
+					if (codequant[ORrw.ArtCode]>0) then begin
+						ORrw.Quant = codequant[ORrw.ArtCode];
+						MatRowPut(ORr,i,ORrw);
+						ORVc_PasteArtCode(ORr,i,inwarning,warning,false)
+						MatRowGet(ORr,i,ORrw);
+						codequant[ORrw.ArtCode] = 0;
+					end else begin
+						if (codequant[ORrw.ArtCode]==blankval or codequant[ORrw.ArtCode]==0) then begin
+							matrowdelete(ORr,i);
 						end;
 					end;
 				end;
-				ORVc_PasteLocation(ORr,-1);
-				ORr.InvBeforeShip = 1;
-				ORr.SalesMan = "ECOMMERCE";
-				ORr.CustOrdNr = bitrono;
-				RecordInsert(ORr,true);
-			end;
-			RecordCopy(OldORr,ORr);
-			ORr.Comment = stat;
-			switch(stat) begin
-				case "CA": ORr.Comment = "Отменен";
-				case "CN": ORr.Comment = "Подтвержден";
-				case "DF": ORr.Comment = "Доставлен";
-				case "DN": ORr.Comment = "В обработке";
-				case "F": ORr.Comment = "Выполнен";
-				case "N": ORr.Comment = "Новый";
-				case "P": ORr.Comment = "Оплачен, формируется к отправке";
-				case "PP": ORr.Comment = "Выкуплен частично";
-			end;
-			ORr.WEBReservOnStock = 1;
-			if(stat==USetStr(36214))then begin
-				if(pay=="false")then begin
-					ORr.PayDeal = "PP";
-					ORr.OrderConfirmed = 1;
-				end else begin
-					ORr.PayDeal = "O";
-					ORVc_PastePayDeal(ORr);
-					ORr.OrderConfirmed = 1;
+				GetVectorTags(codequant,aCodes);
+				for (i=0;i<aCodes.length;i=i+1) begin
+					mtrw = matrowcnt(ORr);
+					if (codequant[aCodes[i]]>0) then begin
+						ORrw.stp = 1;
+						ORrw.ArtCode = aCodes[i];
+						ORrw.Quant = codequant[aCodes[i]];
+						ORrw.Location = stockcode;
+						
+						MatRowPut(ORr,mtrw,ORrw);
+						ORVc_PasteArtCode(ORr,mtrw,inwarning,warning,false)
+						MatRowGet(ORr,mtrw,ORrw);
+					end;
 				end;
+				if(stat==USetStr(36215))then begin
+					ORr.Closed = 1;
+				end;
+				ORSumup(ORr);
+				ORr.Reserved = 1;
+				RecordUpdate(OldORr,ORr,true);
+				WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
 			end;
-			if(stat==USetStr(36215))then begin
-				ORr.Closed = 1;
-			end;
-			ORSumup(ORr);
-			RecordUpdate(OldORr,ORr,true);
-			WebOutString("{\"result\":\"ok\"}");
-		end else begin
-			WebOutString("{\"result\":\"error: blank order id\"}");
 		end;
 	end;
 return;
