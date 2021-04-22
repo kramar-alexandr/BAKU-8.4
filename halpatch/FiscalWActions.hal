@@ -5,6 +5,7 @@ remote procedure APIv2SendSale_Remote(string,var area, record IVVc,record RcVc);
 remote procedure APIv2SendReturnAuto_Remote(string,var area,record IVVc,record IVVc);
 remote procedure APIv2Deposit_Remote(var area, val);  //  by Ira
 remote procedure APIv2Withdraw_Remote(var area, val);  //  by Ira
+remote procedure APIv2RollBack_Remote(string,var area,string);
 remote procedure WriteCustomLogOnServer(area,string);
 remote function string 255 NormalizeStrToJson (string);
 external procedure IVDClass_RefreshStringList(Integer,record IVVc);
@@ -55,6 +56,25 @@ begin
 		if(IVr.OKFlag==1)then begin
 			RepSpec.long1 = IVr.SerNr;
 			nwn = OpenWindow("APIv2AutoReturnVClass",1,wn,"","",RepSpec);
+		end else begin
+			messagebox(0,"Печать доступнатолько из утвержденной сч/ф");
+		end;
+	end;
+return;
+end;
+
+
+global updating procedure Fiscal_Rollback()  // by Ira
+begin
+	Integer wn,nwn,i;
+	record IVVc IVr;
+	record RcVc RepSpec;
+	wn = CurWindow;
+	getwindowrecord(wn,IVr);
+	if(ReadFirstMain(IVr,1,true))then begin
+		if(IVr.OKFlag==1)then begin
+			RepSpec.long1 = IVr.SerNr;
+			nwn = OpenWindow("APIv2RollbackVClass",1,wn,"","",RepSpec);
 		end else begin
 			messagebox(0,"Печать доступнатолько из утвержденной сч/ф");
 		end;
@@ -717,6 +737,36 @@ begin
 				messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
 				goto LAPIv2SendReturnAutoDsm;
 			end;
+			
+			if(nonblank(JSONGet(jsresponse,"short_id")))then begin
+        transactionId = JSONGet(jsresponse,"short_id");
+        IVr.TaxTransactionCode = transactionId;
+        IVr.TaxTransactionDate=CurrentDate;
+        parentDocument = JSONGet(jsresponse,"long_id");
+        IVr.TaxParentDocument = parentDocument;
+  
+        IVTaxTr.SerNr = IVr.SerNr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:41:19 PM
+        if(readfirstmain(IVTaxTr,1,true))then begin
+          IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+          IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+          IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+          IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+          IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
+          recordstore(IVTaxTr,true);
+        end else begin
+          IVTaxTr.SerNr = IVr.SerNr;
+          IVTaxTr.TaxTransactionCode = IVr.TaxTransactionCode;
+      
+          IVTaxTr.document_number = JSONGet(jsresponse,"document_number");
+          IVTaxTr.long_id = JSONGet(jsresponse,"long_id");
+          IVTaxTr.short_id = JSONGet(jsresponse,"short_id");
+          IVTaxTr.shift_document_nubber = JSONGet(jsresponse,"shift_document_number");
+           recordstore(IVTaxTr,true);
+        end;
+  
+        RecordStore(IVr,true);
+			end;
+			
 		end else begin
 		end;
 	end else begin
@@ -1051,5 +1101,90 @@ begin
   DeselectWindow(wn,true);
   CloseWindow(wn);
 
+  return;
+end;
+
+
+
+global
+updating procedure APIv2SendRollBackDsm()//отмена
+begin
+  Integer wn,mwn,rownr,mtrw,i,loopcount,quant,sum,rwcnt,j;
+  record RcVc RepSpec;
+  record IVVc IVr,IV2r;
+  record UserVc Userr;
+  row IVVc IVrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId,parentDocument;
+  json jsresponse;
+  val cash,terminal,discount,summary,loyalty,bonus,vatsum;
+  array string 50 artCode;
+	record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 7:01:40 PM
+	area logarea,tmpar1,tmpar2,biglogarea;
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	string 255 orTaxTransactionCode,orTaxParentDocument;
+	record CassaIDBlock CIDb;
+	boolean isnewrec;
+	
+  wn = CurWindow;
+	
+  DeselectWindow(wn,true);
+	getwindowrecord(wn,RepSpec);
+  closewindow(wn);
+	if(RepSpec.long1<0)then begin
+		goto LAPIv2SendRollBackDsm;
+	end;
+	
+  IVr.SerNr = RepSpec.long1;
+  ReadFirstMain(IVr,1,true);
+  //getwindowrecord(wn,IVr);
+	
+  if(true)then begin
+		if(true)then begin	
+			blockload(CIDb);
+			if(IVr.SerNr<0) then begin
+				goto APIv2SendRollBackDsm;
+			end;
+			blockload(PMb);
+			host = "10.12.11.11"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+			page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+			port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+			//http://192.168.5.236:8989
+	
+			Userr.Code = CurrentUser;
+			if (ReadFirstMain(Userr,1,true)) then begin
+				host = Userr.KassaIPAddr;
+			end;
+
+			APIv2RollBack_Remote(CIDb.CassaToken,req,IVr.TaxParentDocument);
+			writeareatofile(req,"SendTAXRequest.txt",1);
+	
+			SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+
+			jsresponse = ParseJSONArea(reply);
+			writeareatofile(reply,"SendTAXResponse.txt",1);
+			SendFiscalLogToServer(IVr.SerNr,"RETURN",req,reply);
+			if(nonblank(JSONGet(jsresponse,"code")))then begin
+				if(JSONGet(jsresponse,"code")=="0")then begin
+
+				end else begin
+					messagebox(0,JSONGet(jsresponse,"message"));
+					goto LAPIv2SendRollBackDsm;
+				end;
+			end else begin
+				messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
+				goto LAPIv2SendRollBackDsm;
+			end;
+		end else begin
+		end;
+	end else begin
+	end;
+	
+LAPIv2SendRollBackDsm:;
+ 
   return;
 end;
