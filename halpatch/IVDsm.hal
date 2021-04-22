@@ -3145,117 +3145,135 @@ val price,rebate,sum,qty;
 array string 100 params;
 string 255 inwarning,warning;
 Integer sernrf,k,curcom;
-Boolean chsum, testf;
-string 20 tstr,transnr,rowstr,oldpd; 
+Boolean chsum, testf, TrTaxCodef;
+string 20 tstr,transnr,rowstr,oldpd,oldTaxTrCode; 
 	logtext(0,"2");
   wn = curwindow;
   testf = true;
   mwn = motherwindow(wn);
   getwindowrecord(mwn,IVr);
+	TrTaxCodef = true;
+	if (matrowcnt(IVr)>0) then begin
+		matrowget(IVr,matrowcnt(IVr)-1,IVrw);
+		sourceIVr.SerNr = IVrw.IVForRetNr;
+		if (ReadFirstMain(sourceIVr,1,true)) then begin
+			oldTaxTrCode = sourceIVr.TaxTransactionCode;
+		end;
+	end;
   if(IVr.OKFlag==0 and IVr.Invalid==0)then begin
     
     rn = WindowActiveRow(wn);
     if (rn>-1) then begin
       getwindowrecord(wn,SHr);
       MatRowGet(SHr,rn,SHrw);
-	  if(blank(SHrw.ArtCode))then begin testf = false; end;//Edit_-_-_-_-_-_-_-_-Anton 14:50 10.05.2018
-	  if(blank(-AbsoluteVal(SHrw.Ship)))then begin testf = false; end;
-	  if(blank(SHrw.BasePrice))then begin testf = false; end;
-	  if(blank(-AbsoluteVal(SHrw.TAX2Reb)))then begin testf = false; end;
-	  if(blank(SHrw.OrdRow))then begin testf = false; end;
-	  if(blank(SHrw.Source))then begin testf = false; end;
-	  if(testf)then begin
-		  mtrw = matrowcnt(IVr);
-		  ClearRow(IVr,IVrw,1);
-		  
-		  if(SHrw.OrdRow>-1)then begin
-				if(stringtoint(SHrw.Source)==currentcompany)then begin
-					sourceIVr.SerNr = SHrw.OrdRow;
-					if(readfirstmain(sourceIVr,1,true))then begin
-						if(sourceIVr.CurncyCode!=IVr.CurncyCode)then begin
-							oldcur = IVr.CurncyCode;
-							IVr.CurncyCode = sourceIVr.CurncyCode;
-							IVVc_PasteCurncyCode(IVr,oldcur,-1,true,true);
-							IVr.PayDeal = sourceIVr.PayDeal;
-							oldpd = IVr.PayDeal;
-							IVr.PayDeal = sourceIVr.PayDeal;
-							IVVc_PastePayDeal(IVr,oldpd,IVr.Location);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 27 May 2019 17:21:45
-		
-						end;
-					end;
-				end else begin
-					curcom = currentcompany;
-					setcompany(stringtoint(SHrw.Source),false);
-					sourceIVr.SerNr = SHrw.OrdRow;
-					if(readfirstmain(sourceIVr,1,true))then begin
-						if(sourceIVr.CurncyCode!=IVr.CurncyCode)then begin
-							oldcur = IVr.CurncyCode;
-							IVr.CurncyCode = sourceIVr.CurncyCode;
-							IVVc_PasteCurncyCode(IVr,oldcur,-1,true,true);
-							oldpd = IVr.PayDeal;
-							IVr.PayDeal = sourceIVr.PayDeal;
-							IVVc_PastePayDeal(IVr,oldpd,IVr.Location);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 27 May 2019 17:21:45
-						end;
-					end;
-					resetcompanY(curcom);
+			sourceIVr.SerNr = SHrw.OrdRow;
+			if(readfirstmain(sourceIVr,1,true))then begin
+				matrowget(sourceIVr,SHrw.stp,IVrw);
+				if (oldTaxTrCode!=sourceIVr.TaxTransactionCode) then begin
+					TrTaxCodef = false;
 				end;
-		  end;
-		  
-		  IVrw.ArtCode = SHrw.ArtCode;
-		  matrowput(IVr,mtrw,IVrw);
-		  IVVc_PasteArtCode(IVr,mtrw,inwarning,warning,false,sernrf);
-		  matrowget(IVr,mtrw,IVrw);
-		  IVrw.Quant = -AbsoluteVal(SHrw.Ship);
-		  IVrw.Price = SHrw.BasePrice;
-		  
-		  IVrw.Sum = -AbsoluteVal(SHrw.TAX2Reb);
-		  matrowput(IVr,mtrw,IVrw);
-		  IVVc_PasteSum(IVr,mtrw,chsum,1);
-		  
-		  matrowget(IVr,mtrw,IVrw);
-		  IVrw.vRebate = evaltoval(mid(SHrw.PosCode,0,len(SHrw.PosCode)-1));
-		  matrowput(IVr,mtrw,IVrw);
-		  
-		  matrowget(IVr,mtrw,IVrw);
-		  IVrw.FIFO = AbsoluteVal(SHrw.FIFO/SHrw.Ship);
-		  IVrw.FIFORowVal = SHrw.FIFO;
-		  IVrw.FIFOCur = AbsoluteVal(SHrw.FIFORowVal/SHrw.Ship);
-		  IVrw.FIFORowValCur = SHrw.FIFORowVal;
-		  IVrw.CurncyCodeCur = SHrw.TAX2Code;
-		  IVrw.IVForRetNr = SHrw.OrdRow;
-		  IVrw.RetFromComp = SHrw.Source;
-		  IV2r.SerNr = SHrw.OrdRow;
-			if(left(SHrw.CustArtCode,13)=="FOBE_COMMERCE")then begin
-				IVr.Addr0 = mid(SHrw.CustArtCode,14,(len(SHrw.CustArtCode)-15));
-				IVr.CustCode = "NOFULLNAME";
-				IVr.PriceList = "RRP";
 			end;
-		  IVrw.ProdLoyltPoints = 0;
-		  if(readfirstmain(IV2r,1,true))then begin
-				mtrw2 = matrowcnt(IV2r);
-				for(i=0;i<mtrw2;i=i+1) begin
-					matrowget(IV2r,i,IV2rw);
-					if(IV2rw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
-						IVrw.ProdLoyltPoints = 1;
-						MessageBox(0,"Товар был продан за накопленные баллы");
+			if (TrTaxCodef) then begin
+				if(blank(SHrw.ArtCode))then begin testf = false; end;//Edit_-_-_-_-_-_-_-_-Anton 14:50 10.05.2018
+				if(blank(-AbsoluteVal(SHrw.Ship)))then begin testf = false; end;
+				if(blank(SHrw.BasePrice))then begin testf = false; end;
+				if(blank(-AbsoluteVal(SHrw.TAX2Reb)))then begin testf = false; end;
+				if(blank(SHrw.Source))then begin testf = false; end;
+				if(testf)then begin
+					mtrw = matrowcnt(IVr);
+					ClearRow(IVr,IVrw,1);
+					
+					if(SHrw.OrdRow>-1)then begin
+						if(stringtoint(SHrw.Source)==currentcompany)then begin
+							sourceIVr.SerNr = SHrw.OrdRow;
+							if(readfirstmain(sourceIVr,1,true))then begin
+								if(sourceIVr.CurncyCode!=IVr.CurncyCode)then begin
+									oldcur = IVr.CurncyCode;
+									IVr.CurncyCode = sourceIVr.CurncyCode;
+									IVVc_PasteCurncyCode(IVr,oldcur,-1,true,true);
+									IVr.PayDeal = sourceIVr.PayDeal;
+									oldpd = IVr.PayDeal;
+									IVr.PayDeal = sourceIVr.PayDeal;
+									IVVc_PastePayDeal(IVr,oldpd,IVr.Location);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 27 May 2019 17:21:45
+				
+								end;
+							end;
+						end else begin
+							curcom = currentcompany;
+							setcompany(stringtoint(SHrw.Source),false);
+							sourceIVr.SerNr = SHrw.OrdRow;
+							if(readfirstmain(sourceIVr,1,true))then begin
+								if(sourceIVr.CurncyCode!=IVr.CurncyCode)then begin
+									oldcur = IVr.CurncyCode;
+									IVr.CurncyCode = sourceIVr.CurncyCode;
+									IVVc_PasteCurncyCode(IVr,oldcur,-1,true,true);
+									oldpd = IVr.PayDeal;
+									IVr.PayDeal = sourceIVr.PayDeal;
+									IVVc_PastePayDeal(IVr,oldpd,IVr.Location);// Edit ************************** BPI Ukraine - KramarAlexandr - Monday, 27 May 2019 17:21:45
+								end;
+							end;
+							resetcompanY(curcom);
+						end;
 					end;
+					
+					IVrw.ArtCode = SHrw.ArtCode;
+					matrowput(IVr,mtrw,IVrw);
+					IVVc_PasteArtCode(IVr,mtrw,inwarning,warning,false,sernrf);
+					matrowget(IVr,mtrw,IVrw);
+					IVrw.Quant = -AbsoluteVal(SHrw.Ship);
+					IVrw.Price = SHrw.BasePrice;
+					
+					IVrw.Sum = -AbsoluteVal(SHrw.TAX2Reb);
+					matrowput(IVr,mtrw,IVrw);
+					IVVc_PasteSum(IVr,mtrw,chsum,1);
+					
+					matrowget(IVr,mtrw,IVrw);
+					IVrw.vRebate = evaltoval(mid(SHrw.PosCode,0,len(SHrw.PosCode)-1));
+					matrowput(IVr,mtrw,IVrw);
+					
+					matrowget(IVr,mtrw,IVrw);
+					IVrw.FIFO = AbsoluteVal(SHrw.FIFO/SHrw.Ship);
+					IVrw.FIFORowVal = SHrw.FIFO;
+					IVrw.FIFOCur = AbsoluteVal(SHrw.FIFORowVal/SHrw.Ship);
+					IVrw.FIFORowValCur = SHrw.FIFORowVal;
+					IVrw.CurncyCodeCur = SHrw.TAX2Code;
+					IVrw.IVForRetNr = SHrw.OrdRow;
+					IVrw.RetFromComp = SHrw.Source;
+					IV2r.SerNr = SHrw.OrdRow;
+					if(left(SHrw.CustArtCode,13)=="FOBE_COMMERCE")then begin
+						IVr.Addr0 = mid(SHrw.CustArtCode,14,(len(SHrw.CustArtCode)-15));
+						IVr.CustCode = "NOFULLNAME";
+						IVr.PriceList = "RRP";
+					end;
+					IVrw.ProdLoyltPoints = 0;
+					if(readfirstmain(IV2r,1,true))then begin
+						mtrw2 = matrowcnt(IV2r);
+						for(i=0;i<mtrw2;i=i+1) begin
+							matrowget(IV2r,i,IV2rw);
+							if(IV2rw.stp==kInvoiceRowTypeLoyaltyPointsPayment)then begin
+								IVrw.ProdLoyltPoints = 1;
+								MessageBox(0,"Товар был продан за накопленные баллы");
+							end;
+						end;
+					end;
+					if(sourceIVr.SerNr>-1)then begin
+						matrowget(sourceIVr,SHrw.stp,IV2rw);
+						if(IV2rw.ArtCode==IVrw.ArtCode)then begin
+							IVrw.Objects = IV2rw.Objects;
+						end;
+					end;
+					
+					matrowput(IVr,mtrw,IVrw);
+					putwindowrecord(mwn,IVr);
+					updatebrowses(mwn);
+					IVDClass_RefreshStringList(mwn,IVr);
+					ReRunWindowDef(mwn);
+				end else begin
+					messagebox(0,"Все поля должны быть заполнены:" & rn+1);
 				end;
-		  end;
-		  if(sourceIVr.SerNr>-1)then begin
-				matrowget(sourceIVr,SHrw.stp,IV2rw);
-				if(IV2rw.ArtCode==IVrw.ArtCode)then begin
-					IVrw.Objects = IV2rw.Objects;
-				end;
-		  end;
-			
-		  matrowput(IVr,mtrw,IVrw);
-		  putwindowrecord(mwn,IVr);
-		  updatebrowses(mwn);
-		  IVDClass_RefreshStringList(mwn,IVr);
-			ReRunWindowDef(mwn);
-		end else begin
-			messagebox(0,"Все поля должны быть заполнены:" & rn+1);
-		end;
+			end else begin
+				messagebox(0,"Нельзя добавлять товары с отличающимися фискальными кодами в ориг. сч/ф!" & rn+1);
+			end;
     end;
   end;
   
