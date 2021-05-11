@@ -130,16 +130,18 @@ begin
 	boolean extpayment;
 	val delta,coef,discount;
 	record ShopCoef2Vc SCr;
-	val absrebate;
-	vector val vPrice,vRebate,vSum;
 	
 	if(RepSpec.vals3>0 or RepSpec.vals4>0)then begin
 		extpayment = true;
+		logtext(0,"RepSpec.vals3 " & RepSpec.vals3);
+		logtext(0,"RepSpec.vals4 " & RepSpec.vals4);
 	end;
 	blockload(PMb);
 	
 	
 	rwcnt = matrowcnt(IVr);
+	logtext(0,"extpayment " & extpayment);
+	logtext(0,"rwcnt " & rwcnt);
 	if(extpayment==false)then begin
 		For(i=0;i<rwcnt;i=i+1) begin
 			matrowget(IVr,i,IVrw);
@@ -187,6 +189,9 @@ begin
 	end;
 	
 	credperc = 1;	
+	logtext(0,"terminal " & terminal);	
+	logtext(0,"cash " & cash);	
+	logtext(0,"loyalty " & loyalty);	
 	if(IVr.InvType==kInvoiceTypeNormal)then begin
 		credit = IVr.BaseSum4 - terminal - cash;
 		if(credit>0)then begin
@@ -199,27 +204,19 @@ begin
 			credperc = (terminal + cash)/IVr.BaseSum4;
 		end;
 	end;
-
+	logtext(0,"credperc " & credperc);
+	logtext(0,"credperc*100 " & credperc*100);
+	
 	mtrw = matrowcnt(IVr);
 	For(i=0;i<mtrw;i=i+1) begin
 		matrowget(IVr,i,IVrw);	
 		
 		if(IVrw.stp==kInvoiceRowTypeNormal and nonblank(IVrw.ArtCode) and IVrw.Quant>0 and IVrw.Price>0) then begin
 			if(IVr.CurncyCode!="AZN")then begin
-				vPrice[i] = MulRateToBase1(IVr.CurncyCode,IVrw.Sum/IVrw.Quant,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
-			end else begin
-			  vPrice[i] = IVrw.Sum/IVrw.Quant;
+				IVrw.Sum = MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
 			end;
-
-      vPrice[i] =  round(vPrice[i]*credperc,SetRoundModeD(2));
-			vRebate[i] = vPrice[i] - round(vPrice[i]*(100-IVrw.vRebate)/100,SetRoundModeD(2));
-			vPrice[i] = round(vPrice[i] - vRebate[i],SetRoundModeD(0));
-			vRebate[i] = 0;
-			vSum[i] = (vPrice[i] - vRebate[i]) * IVrw.Quant;
-			vatsum = vatsum + round(vSum[i],SetRoundModeD(2));
-		end else begin
-      vSum[i] = 0;
-      vPrice[i] = 0;
+			vatsum = vatsum + round(IVrw.Sum*credperc,SetRoundModeD(2));
+			logtext(0,i & " i vatsum " & vatsum);
 		end;
 		
 		if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
@@ -233,13 +230,14 @@ begin
 			if(Left(IVr.PriceList,3)=="FOB") then begin				
 				IVrw.Sum = round((IVrw.Sum/coef) * 1.36,SetRoundModeD(2));
 			end;
-			vPrice[i] =  round(IVrw.Sum*credperc,SetRoundModeD(2));
-			vSum[i] =  round(IVrw.Sum*credperc,SetRoundModeD(2));
-			vatsum = vatsum + vSum[i];
+			vatsum = vatsum + round(IVrw.Sum*credperc,SetRoundModeD(2));
 		end;	
 	end; 
-
-	//delta = vatsum - terminal - cash;
+	
+	
+	logtext(0,"vatsum " & vatsum);
+	delta = vatsum - terminal - cash;
+	logtext(0,"delta " & delta);
 	if(delta>0.5  or delta<-0.5)then begin
 		delta = 0;
 	end;
@@ -262,13 +260,13 @@ begin
 					For(i=0;i<mtrw;i=i+1) begin
 						matrowget(IVr,i,IVrw);	
 						if(IVrw.stp==1 and nonblank(IVrw.ArtCode) and IVrw.Quant>0) then begin
-
+						
+							if(IVr.CurncyCode!="AZN")then begin
+								IVrw.Sum = MulRateToBase1(IVr.CurncyCode,IVrw.Sum,IVr.FrRate,IVr.ToRateB1,IVr.ToRateB2,IVr.BaseRate1,IVr.BaseRate2,DefaultCurRoundOff);
+							end;
+						
 							if(ii>0) then begin
 								addtexttoarea(",",req);
-							end;
-							if(delta!=0)then begin
-							  vSum[i] = vSum[i] + delta;
-							  delta = 0;
 							end;
 							ii = ii + 1;
 							addtexttoarea("{",req);
@@ -278,15 +276,17 @@ begin
 							addtexttoarea("\"itemQuantityType\":0,",req);
 							tstr = ValToString(IVrw.Quant,M45Val,"",".",0);
 							addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
-							tstr = ValToString(vPrice[i],M45Val,"",".",0);
+							tstr = ValToString(round(IVrw.Sum/IVrw.Quant*credperc-delta,SetRoundModeD(2)),M45Val,"",".",0);
 							addtexttoarea("\"itemPrice\":" & tstr & ",",req);
-							tstr = ValToString(vSum[i],M45Val,"",".",0);
+							tstr = ValToString(round(IVrw.Sum*credperc-delta,SetRoundModeD(2)),M45Val,"",".",0);
 							addtexttoarea("\"itemSum\":" & tstr & ",",req);
-							tstr = ValToString(vRebate[i],M45Val,"",".",0);
+							discount = 0;
+							//discount = (round((IVrw.Sum/IVrw.Quant*credperc-delta),SetRoundModeD(2)) * IVrw.Quant) - round((IVrw.Sum*credperc-delta),SetRoundModeD(2));
+							tstr = ValToString(round(discount,SetRoundModeD(2)),M45Val,"",".",0);
 							addtexttoarea("\"discount\":" & tstr & ",",req);
 							addtexttoarea("\"itemVatPercent\":18",req);
 							addtexttoarea("}",req);
-							vatsum = vatsum + vSum[i];
+							vatsum = vatsum + round(IVrw.Sum*credperc-delta,SetRoundModeD(2));
 							vatperc["18.00"] = vatsum;
 							delta = 0;
 						end;
@@ -294,10 +294,6 @@ begin
 						if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold) then begin
 							if(ii>0) then begin
 								addtexttoarea(",",req);
-							end;
-							if(delta!=0)then begin
-							  vSum[i] = vSum[i] + delta;
-							  delta = 0;
 							end;
 							ii = ii + 1;
 							addtexttoarea("{",req);
@@ -307,14 +303,14 @@ begin
 							addtexttoarea("\"itemQuantityType\":0,",req);
 							tstr = ValToString(1,M45Val,"",".",0);
 							addtexttoarea("\"itemQuantity\":" & tstr & ",",req);
-							tstr = ValToString(vPrice[i],M45Val,"",".",0);
+							tstr = ValToString(IVrw.Sum*credperc-delta,M45Val,"",".",0);
 							addtexttoarea("\"itemPrice\":" & tstr & ",",req);
-							tstr = ValToString(vSum[i],M45Val,"",".",0);
+							tstr = ValToString(IVrw.Sum*credperc-delta,M45Val,"",".",0);
 							addtexttoarea("\"itemSum\":" & tstr & ",",req);
 							addtexttoarea("\"discount\":0.0,",req);
 							addtexttoarea("\"itemVatPercent\":18",req);
-							addtexttoarea("}" & chr(13) & chr(10),req);
-							vatsum = vatsum + vSum[i];
+							addtexttoarea("}",req);
+							vatsum = vatsum + round(IVrw.Sum*credperc-delta,SetRoundModeD(2));
 							vatperc["18.0"] = vatsum;
 							delta = 0;
 						end;	
@@ -322,7 +318,9 @@ begin
 					
 					cash = vatsum - terminal;
 					
+					
 					cash = AbsoluteVal(cash);
+					//loyalty = AbsoluteVal(loyalty);
 					bonus = AbsoluteVal(bonus);
 					terminal = AbsoluteVal(terminal);	
 					
