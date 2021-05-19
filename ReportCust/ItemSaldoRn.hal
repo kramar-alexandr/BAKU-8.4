@@ -119,16 +119,16 @@ begin
 return;
 end;
 
-procedure ItemStockIHSerch(record RcVc RepSpec,string item,string location,date sd,date ed,var val qty_start,var val cost_start,var val pu_qty,var val pu_cost,
+procedure ItemStockIHSerch(record RcVc RepSpec,string item,string location,date sd,date ed,var val qty_start,var val cost_start,var val pu_qty,var val oth_comp_pu_qty,var val pu_cost,
                            var val sm_poz_qty,var val sm_neg_qty,var val sm_poz_cost,var val sm_neg_cost,var array val iv_poz_qty,
-                           var array val iv_neg_qty,var array val iv_poz_sum,var array val iv_poz_cost,var array val iv_neg_sum,var val gp,var array val iv_neg_cost,var val sd_qty,var val sd_cost,var val cost_end,var val qty_end,var val srval,var val rpu_qty,var val rpu_cost)
+                           var array val iv_neg_qty,var array val iv_poz_sum,var array val iv_poz_cost,var array val iv_neg_sum,var val gp,var array val iv_neg_cost,var val sd_qty,var val oth_comp_sd_qty,var val sd_cost,var val cost_end,var val qty_end,var val srval,var val rpu_qty,var val rpu_cost)
 begin
-  record ItemHistVc IHr,IHrinvr;
+  record ItemHistVc IHr,IHrinvr,SourceIHr;
   record StockMovVc SMr;
   row StockMovVc SMrw;  
   record IVVc IVr;
   row IVVc IVrw;
-  Boolean TrHs,testf,testf1;
+  Boolean TrHs,testf,testf1,otherCompCCItemf;
   string 100 oldartcode,oldfilename;
 	longint oldsernr;
   integer oldrow,oldinvalid,promoOrEC;
@@ -137,7 +137,7 @@ begin
 	Array string 50 acrncy;// Edit ************************** Tuesday, 19 March 2013 15:48:06
   Array Boolean achangecrncyf;// Edit ************************** Tuesday, 19 March 2013 15:48:52
   Integer acrncnt;// Edit ************************** Tuesday, 19 March 2013 15:48:51
-  val sign,brandfifo,fifob1;
+  val sign,brandfifo,fifob1,otherCompCCItemQty;
   boolean updst;
   record INVc INr;
   vector val currencyBalances; //Edit***************************Sasha2,15:49 13.09.2017
@@ -147,6 +147,10 @@ begin
   row SHVc SHrw;
   record RetVc Retr;
   row RetVc Retrw;
+	record PUVc SourcePUr;
+	row PUVc SourcePUrw;
+	record SDVc SDr;
+  row SDVc SDrw;
   
   acrncy[0] = "";
 	CntPOSCurrencies(acrncy,achangecrncyf,acrncnt);// Edit ************************** Wednesday, 19 June 2013 13:59:15
@@ -175,7 +179,7 @@ begin
     
     testf1 = true;   
     if(testf)then begin
-    
+			
     	if(qty_start==0)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - Friday, 18 May 2018 10:21:49
     		cost_start = 0;
     	end;
@@ -349,7 +353,19 @@ begin
 						qty_start = qty_start + IHr.Qty;
 						cost_start = cost_start + IHr.TotCostPrice;
 					end else begin
-						pu_qty = pu_qty + IHr.Qty;
+						otherCompCCItemQty = 0;
+						SourcePUr.SerNr = IHr.TransNr;
+						if (ReadFirstMain(SourcePUr,1,true)) then begin
+							matrowget(SourcePUr,IHr.Row,SourcePUrw);
+							if (left(SourcePUr.VECode,3)=="FOB" and SourcePUr.VECode!="FOB_SKLAD") then begin
+								otherCompCCItemQty = IHr.Qty;
+							end;
+							if (SourcePUr.VECode=="FOB_SKLAD") then begin
+								otherCompCCItemQty = SourcePUrw.OtherCompCCQty;
+							end;
+						end;
+						pu_qty = pu_qty + IHr.Qty - otherCompCCItemQty;
+						oth_comp_pu_qty = oth_comp_pu_qty + otherCompCCItemQty;
 						pu_cost = pu_cost + IHr.TotCostPrice;
 						cost_end = cost_end + IHr.TotCostPrice;
 						qty_end = qty_end + IHr.Qty;
@@ -403,6 +419,13 @@ begin
 						cost_start = cost_start - IHr.TotCostPrice;
 					end else begin
 						sd_qty = sd_qty + (-IHr.Qty);
+						SDr.SerNr = IHr.TransNr;
+						if (ReadFirstMain(SDr,1,true)) then begin
+							if (SetInSet("CENTRAL_RETURN",SDr.Objects)) then begin
+								oth_comp_sd_qty = oth_comp_sd_qty + (-IHr.Qty);
+								sd_qty = sd_qty - (-IHr.Qty);
+							end;
+						end;
 						sd_cost = sd_cost + IHr.TotCostPrice;
 						cost_end = cost_end - IHr.TotCostPrice;
 						qty_end = qty_end + IHr.Qty;
@@ -478,7 +501,7 @@ begin
   record INVc INr,dupINr;
   Boolean TrHs,testf,TrHs1;
   integer i,reprownr,mark,gi,pos;
-  val rate,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,gp,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost;
+  val rate,qty_start,cost_start,pu_qty,oth_comp_pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,gp,sd_qty,oth_comp_sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost;
   array val iv_neg_qty,iv_neg_sum,iv_neg_cost,iv_poz_sum,iv_poz_qty,iv_poz_cost;
   array val totals;
   record PLVc PLr;
@@ -538,6 +561,7 @@ begin
       qty_start = 0;
       cost_start = 0;
       pu_qty = 0;
+			oth_comp_pu_qty = 0;
       pu_cost = 0;
       sd_qty = 0;
       sd_cost = 0;
@@ -545,6 +569,7 @@ begin
       sm_neg_qty = 0;
       sm_poz_cost = 0;
       sm_neg_cost = 0;
+			oth_comp_sd_qty = 0;
       iv_poz_qty[0] = 0;
       iv_poz_qty[1] = 0;
 			iv_poz_qty[2] = 0;
@@ -582,7 +607,7 @@ begin
 				ResetLoop(dupINr);
 			end;
 			if(!dublikateItem) then begin 
-				ItemStockIHSerch(RepSpec,INr.Code,location,sd,ed,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost);
+				ItemStockIHSerch(RepSpec,INr.Code,location,sd,ed,qty_start,cost_start,pu_qty,oth_comp_pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,oth_comp_sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost);
 				IDr.OrigCode = INr.Code;
 				TrHs1 = true;
 				while(LoopKey("OrigCode",IDr,1,TrHs1)) begin
@@ -599,7 +624,7 @@ begin
 							
 							if(testf2)then begin
 								if(IDr.DupBrandCode==dupINr.BPIBrand) then begin
-									ItemStockIHSerch(RepSpec,dupINr.Code,location,sd,ed,qty_start,cost_start,pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost);
+									ItemStockIHSerch(RepSpec,dupINr.Code,location,sd,ed,qty_start,cost_start,pu_qty,oth_comp_pu_qty,pu_cost,sm_poz_qty,sm_neg_qty,sm_poz_cost,sm_neg_cost,iv_poz_qty,iv_neg_qty,iv_poz_sum,iv_poz_cost,iv_neg_sum,gp,iv_neg_cost,sd_qty,oth_comp_sd_qty,sd_cost,cost_end,qty_end,srval,rpu_qty,rpu_cost);
 								end;
 							end;
 						end;
@@ -607,7 +632,7 @@ begin
 				end;
 				resetloop(IDr);
 			end;
-			if (dublikateItem or (qty_start==0 and pu_qty==0 and sd_qty==0 and sm_poz_qty==0 and sm_neg_qty==0 and iv_poz_qty[0]==0  and iv_poz_qty[1]==0 and iv_poz_qty[2]==0 and iv_neg_qty[0]==0 and iv_neg_qty[1]==0 and iv_neg_qty[2]==0 and rpu_qty==0 and cost_start==0 and cost_end==0)) then begin
+			if (dublikateItem or (qty_start==0 and pu_qty==0 and oth_comp_pu_qty==0 and sd_qty==0 and sm_poz_qty==0 and sm_neg_qty==0 and iv_poz_qty[0]==0  and iv_poz_qty[1]==0 and iv_poz_qty[2]==0 and iv_neg_qty[0]==0 and iv_neg_qty[1]==0 and iv_neg_qty[2]==0 and rpu_qty==0 and cost_start==0 and cost_end==0)) then begin
         reprownr = reprownr - 1;
       end else begin
         StartFormat(15);
@@ -667,9 +692,10 @@ begin
             totals[1] = totals[1] + cost_start;
           end;
           //  Поступило
-          OutString(90,0,pu_qty,false);//Поступило кол-во
-          totals[2] = totals[2] + pu_qty;
-          
+          OutString(90,0,pu_qty,false);//Поступило от Поставщика кол-во
+					OutString(90,0,oth_comp_pu_qty,false);//Поступило от другого магазина кол-во 
+          totals[2] = totals[2] + pu_qty + oth_comp_pu_qty;
+          OutString(90,0,oth_comp_sd_qty,false);//Отгружено в другой магазин
           OutString(100,0,sm_poz_qty,false);//Поступило кол-во внутр
           totals[3] = totals[3] + sm_poz_qty;
           
@@ -762,7 +788,7 @@ begin
           totals[21] = totals[21] + sd_qty;
 		      if(RepSpec.flags[0]==0)then begin
             OutVal(206,0,sd_cost,M4Val,false);//Списание сумма
-            totals[22] = totals[22] + sd_cost;
+            totals[22] = totals[22] + sd_cost + oth_comp_sd_qty;
           end;
           if(RepSpec.flags[0]==0)then begin// Edit ************************** Thursday, July 3, 2014 at 16:50:19
             OutVal(210,0,gp,M4Val,false);//Прибыль
@@ -1084,7 +1110,9 @@ begin
                 OutString(80,0,USetStr(31122),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:52
 							end;
 							//  Поступило
-							OutString(90,0,USetStr(31121),false);
+							OutString(90,0,USetStr(36406),false);
+							OutString(90,0,USetStr(36407),false);
+							OutString(90,0,USetStr(36408),false);
 							OutString(100,0,USetStr(31092),false);
 							if(RepSpec.flags[0]==0)then begin
                 OutString(110,0,USetStr(31122),false);// Edit ************************** Thursday, July 3, 2014 at 16:26:36

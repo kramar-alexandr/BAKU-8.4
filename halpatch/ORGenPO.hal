@@ -6,7 +6,7 @@ external procedure CurValToOtherCur(Date,string,val,string,var val,roundmode);
 remote function boolean CompanyIsJWLikeCompany(Integer);
 external updating procedure ECPUFromPODsm(var record POVc,var record PUVc);
 external updating procedure CCPUFromPODsm(var record POVc,var record PUVc, vector val, vector boolean,  vector boolean);
-external updating procedure CCPUFromLocalPODsm(var record POVc,var record PUVc, vector val, vector val,  vector boolean);
+external updating procedure CCPUFromLocalPODsm(var record POVc,var record PUVc, vector val, vector val,  vector boolean, vector val);
 external updating function Integer CreateVIFromPO(LongInt,record RcVc,var record VIVc);
 remote procedure CreatePufromIVforPLHandle(record RcVc,integer,var string);
 remote updating function LongInt RecordAction_raPastePUInVI(record PUVc,var record VIVc,var string);
@@ -3180,7 +3180,7 @@ end; // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-
 
 global updating procedure Create2POfromCCSH(record SHVc SHr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:43 02.07.2019
 begin
-	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c,vimtrw,vii,ecvcnt,v,cmpnmb,VIOFFCnt,lcnt,ccnt,FIFOcnt,keys;
+	integer mtrw,i,j,k,pos,rownum,OldComp,shmtrw,orn,cucnt,c,vimtrw,vii,ecvcnt,v,cmpnmb,VIOFFCnt,lcnt,ccnt,FIFOcnt,keys,fOthCompPosQty;
 	record ORVc ORr, ECORr;
 	row ORVc ORrw, ECORrw;
 	record SHVc SH2r;
@@ -3199,24 +3199,24 @@ begin
 	row CompaniesBlock CBrw;
 	vector boolean vArtCodeRepeat, shOutItems, ShippdI, INCOdef, consItems;
 	vector integer vArtCodeQTY,priceinorcnt;
-	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant, vItemHTotCostPr, ItemORPriseWRebate, vItemHTotCostPrSH, vPOQty, ECArt, vOutItems, vCurCval;
+	vector val ItemPrice, ItemRebate, vItemPrice, vItemFifo, vItemRowCostCurrPrice, vItemRowQuant, vItemHTotCostPr, ItemORPriseWRebate, vItemHTotCostPrSH, vPOQty, ECArt, vOutItems, vCurCval, vIHPUFromOtherCompQTY;
 	record VIVc VIr, OldVIr, offVIr;
 	row VIVc VIrw, OldVIrw;
 	record RcVc RepSpec;
 	longint r, shLnkN, POComp, PONr;
 	record IVVc IVr;
 	record RLinkVc RLinkr;
-	record PUVc PUr, OldPUr;
+	record PUVc PUr, OldPUr, SourcePUr;
 	row PUVc PUrw;
 	val ct, SumFO, itemtotcost, SumIHQty;
 	val fr,to1,to2,br1,br2,totivsum;
-	record ItemHistVc IHr;
+	record ItemHistVc IHr, IH2r;
 	record ActVc Actr;
 	record ECVendFobSetBlaock ECVFSBb;
 	row ECVendFobSetBlaock ECVFSBrw;
-	integer ItQty, it, smtrw;
+	integer ItQty;
 	record RLinkVc RLr;
-	record ORVc LORr, GORr;
+	record ORVc LORr;
 	record ECCasierDocSetBlock ECCDSb;
 	row ECCasierDocSetBlock ECCDSrw;
 	record ConsItemVc CIr;
@@ -3276,6 +3276,7 @@ begin
 			CIr.Code = SHrw.ArtCode;
 			if(ReadFirstMain(CIr,1,true))then begin 
 				SumIHQty = 0;
+				fOthCompPosQty = 0;
 				while (LoopBackKey("FNTransNr",IHr,3,TrHs)) begin
 					if(IHr.FileName!="SHVc")then begin TrHs = false; end;
 					if(IHr.TransNr!=SHr.SerNr)then begin TrHs = false; end;
@@ -3283,6 +3284,17 @@ begin
 					if(IHr.ArtCode==SHrw.ArtCode and TrHs)then begin
 							FIFOcnt = FIFOcnt + 1;
 							SumIHQty = SumIHQty + (IHr.Qty * -1);
+							IH2r.SerNr = IHr.Source;
+							if (ReadFirstMain(IH2r,1,true)) then begin
+								if (IH2r.FileName=="PUVc") then begin
+									SourcePUr.SerNr = IH2r.TransNr;
+									if (ReadFirstMain(SourcePUr,1,true)) then begin
+										if (left(SourcePUr.VECode,4)=="FOB_") then begin
+											fOthCompPosQty = fOthCompPosQty + (IHr.Qty * -1);
+										end;
+									end;
+								end;
+							end;
 							vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemFifo[CIr.LocCode & "_" & SHrw.LCPOrowNr] + IHr.TotCostPriceCurncy;
 							vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr] + IHr.TotCostPrice;
 							vCurrRowCode[IHr.ArtCode] = IHr.CurncyCode;
@@ -3297,6 +3309,7 @@ begin
 				end else begin
 					ECArt[CIr.LocCode & "_" & i + 1 - j] = SHrw.Ship;
 					vItemHTotCostPrSH[CIr.LocCode & "_" & i + 1 - j] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr];
+					vIHPUFromOtherCompQTY[CIr.LocCode & "_" & i + 1 - j] = fOthCompPosQty;
 					if (nonblank(SHrw.Location)) then begin
 						Locr.Code = SHrw.Location;
 						if (ReadFirstMain(Locr,1,true)) then begin
@@ -3306,6 +3319,7 @@ begin
 						end;
 					end;
 					vItemHTotCostPrSH[CIr.Code & "_" & i + 1 - j] = vItemHTotCostPr[CIr.LocCode & "_" & SHrw.LCPOrowNr];
+					vIHPUFromOtherCompQTY[CIr.Code & "_" & i + 1 - j] = vIHPUFromOtherCompQTY[CIr.LocCode & "_" & SHrw.LCPOrowNr];
 				end;
 			end;
 		end;
@@ -3484,7 +3498,7 @@ begin
 				CreateRecordLink(POr,CurrentCompany,SHr,18);  
 				CreateRecordLink(SHr,18,POr,CurrentCompany);  
 			end;
-			CCPUFromLocalPODsm(POr,PUr,vItemHTotCostPrSH,ECArt,consItems);
+			CCPUFromLocalPODsm(POr,PUr,vItemHTotCostPrSH,ECArt,consItems,vIHPUFromOtherCompQTY);
 			logtext(0,"Save PU");
 			PUr.Comment=SHr.Comment;
 			if(RecordStore(PUr,true))then begin 
@@ -3643,7 +3657,7 @@ begin
 					CreateRecordLink(POr,CurrentCompany,SHr,18);  
 					CreateRecordLink(SHr,18,POr,CurrentCompany);  
 				end;
-				CCPUFromLocalPODsm(POr,PUr,vItemHTotCostPrSH,ECArt,consItems);
+				CCPUFromLocalPODsm(POr,PUr,vItemHTotCostPrSH,ECArt,consItems,vIHPUFromOtherCompQTY);
 				POr.FrRate = PUr.FrRate;
 				POr.ToRateB1 = PUr.ToRateB1;
 				PUr.Comment=SHr.Comment;
