@@ -1108,13 +1108,13 @@ begin
 		
 		WriteCustomLogOnServer(biglogarea,"FiscalPrinterAllLog.log");
 	
-	if(nonblank(JSONGet(jsresponse,"transactionId")))then begin
+	if(nonblank(JSONGet(jsresponse,"short_id")))then begin
 		if(RepSpec.flags[1]>-1)then begin
 			matrowget(IPr,RepSpec.flags[1],IPrw);
-			transactionId=JSONGet(jsresponse,"transactionId");
+			transactionId=JSONGet(jsresponse,"short_id");
 			IPrw.TaxTransactionCode = transactionId;
 			IPrw.TaxTransactionDate=CurrentDate;
-			parentDocument = JSONGet(jsresponse,"parentDocument");
+			parentDocument = JSONGet(jsresponse,"long_id");
 			IPrw.TaxParentDocument = parentDocument;
 		end;
 		
@@ -1203,6 +1203,72 @@ begin
   end;
 	
 LAPIv2SendRollBackDsm:;
+ 
+  return;
+end;
+
+
+global
+updating procedure APIv2SendRollBackIPDsm()//отмена
+begin
+  Integer wn,mwn,rownr,mtrw,i,loopcount,quant,sum,rwcnt,j;
+  record RcVc RepSpec;
+  record IPVc IPr;
+  record UserVc Userr;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId,parentDocument;
+  json jsresponse;
+  val cash,terminal,discount,summary,loyalty,bonus,vatsum;
+  array string 50 artCode;
+	record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 7:01:40 PM
+	area logarea,tmpar1,tmpar2,biglogarea;
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	string 255 orTaxTransactionCode,orTaxParentDocument;
+	record CassaIDBlock CIDb;
+	boolean isnewrec;
+	
+  wn = CurWindow;
+	
+  DeselectWindow(wn,true);
+	getwindowrecord(wn,IPr);
+	
+  blockload(CIDb);
+  blockload(PMb);
+  host = "10.12.11.11"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  page = "/"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  //http://192.168.5.236:8989
+
+  Userr.Code = CurrentUser;
+  if (ReadFirstMain(Userr,1,true)) then begin
+    host = Userr.KassaIPAddr;
+  end;
+
+  APIv2RollBack_Remote(CIDb.CassaToken,req,IPr.TaxParentDocument);
+  writeareatofile(req,"SendTAXRequest.txt",1);
+
+  SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+
+  jsresponse = ParseJSONArea(reply);
+  writeareatofile(reply,"SendTAXResponse.txt",1);
+  SendFiscalLogToServer(IPr.SerNr,"RollBackIP",req,reply);
+  if(nonblank(JSONGet(jsresponse,"code")))then begin
+    if(JSONGet(jsresponse,"code")=="0")then begin
+
+    end else begin
+      messagebox(0,JSONGet(jsresponse,"message"));
+      goto LAPIv2SendRollBackIPDsm;
+    end;
+  end else begin
+    messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
+    goto LAPIv2SendRollBackIPDsm;
+  end;
+	
+LAPIv2SendRollBackIPDsm:;
  
   return;
 end;
