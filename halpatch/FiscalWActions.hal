@@ -908,6 +908,17 @@ BEGIN
 	record UserVc Userr;
 	record ZREpVc ZREpr;
 	Integer cnt, i;
+	boolean issecond;
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	
 	logtext(0,"ZReportDsm");
 	
@@ -915,7 +926,15 @@ BEGIN
   page = "/v2"; 
   port = 8989; 
 	blockload(CIDb);
-	
+	if(blank(CIDb.CassaToken))then begin
+		LbeginLogin2:;
+		LoginToKassaDsm(false);
+		blockload(CIDb);
+		if(blank(CIDb.CassaToken))then begin
+			messagebox(0,"Залогинтесь в кассу");
+			goto LZReportDsm;
+		end;
+	end;
 	Userr.Code = CurrentUser;
 	if (ReadFirstMain(Userr,1,true)) then begin
 		host = Userr.KassaIPAddr;
@@ -934,72 +953,90 @@ BEGIN
 //	SetAreaZeroSize(reply);
 //	AddFileToArea("zAnswer.txt",reply,false);
 //
+
 	jsresponse = ParseJSONArea(reply);
-  if(JSONGet(jsresponse,"message") == USetStr(36405))then begin
-	
-		ZREpr.SerNr = NextSerNr("ZREpVc",CurrentDate,-1,false,"");
-		ZREpr.Code = JSONGet(jsresponse,"code");
-		ZREpr.TransDate = CurrentDate;
-		ZREpr.TransTime = CurrentTime;
-		if(nonblank(JSONGet(jsresponse,"data"))) then begin
-			ZREpr.createdAtUtc = JSONGet(jsresponse,"data/createdAtUtc");
-			cnt = JSONCountChildren(jsresponse,"data/currencies");
-			for(i=0;i<cnt;i=i+1) begin
-				ZREpr.correctionBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionBonusSum"),M4Val);
-				ZREpr.correctionCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCashSum"),M4Val);
-				ZREpr.correctionCashlessSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCashlessSum"),M4Val);
-				ZREpr.correctionCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCount"));
-				ZREpr.correctionCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCreditSum"),M4Val);
-				ZREpr.correctionPrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionPrepaymentSum"),M4Val);
-				ZREpr.correctionSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionSum"),M4Val);
-				//messagebox(0,ZREpr.correctionSum);
-				ZREpr.currency = JSONGet(jsresponse,"data/currencies/["  & i & "]/currency");
-				ZREpr.depositCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/depositCount"));
-				ZREpr.depositSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/depositSum"),M4Val);
-				ZREpr.moneyBackBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackBonusSum"),M4Val);
-				//messagebox(0,ZREpr.moneyBackBonusSum);
-				ZREpr.moneyBackCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCashSum"),M4Val);
-				ZREpr.moneyBackCashlessSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCashlessSum"),M4Val);
-				ZREpr.moneyBackCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCount"));
-				ZREpr.moneyBackCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCreditSum"),M4Val);
-				ZREpr.moneyBackPrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackPrepaymentSum"),M4Val);
-				ZREpr.moneyBackSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackSum"),M4Val);
-				ZREpr.rollbackBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackBonusSum"),M4Val);
-				ZREpr.rollbackCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCashSum"),M4Val);
-				ZREpr.rollbackCashlessSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCashlessSum"),M4Val);
-				ZREpr.rollbackCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCount"));
-				ZREpr.rollbackCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCreditSum"),M4Val);
-				ZREpr.rollbackPrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackPrepaymentSum"),M4Val);
-				ZREpr.rollbackSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackSum"),M4Val);
-				ZREpr.saleBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleBonusSum"),M4Val);
-				ZREpr.saleCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleCashSum"),M4Val);
-				ZREpr.saleCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleCount"));
-				ZREpr.saleCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleCreditSum"),M4Val);
-				ZREpr.salePrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/salePrepaymentSum"),M4Val);
-				ZREpr.saleSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleSum"),M4Val);
-				ZREpr.withdrawCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/withdrawCount"));
-				ZREpr.withdrawSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/withdrawSum"),M4Val);
-				//messagebox(0,ZREpr.withdrawSum);
+	if(nonblank(JSONGet(jsresponse,"code")))then begin
+		if(JSONGet(jsresponse,"code")=="0")then begin
+			ZREpr.SerNr = NextSerNr("ZREpVc",CurrentDate,-1,false,"");
+			ZREpr.Code = JSONGet(jsresponse,"code");
+			ZREpr.TransDate = CurrentDate;
+			ZREpr.TransTime = CurrentTime;
+			if(nonblank(JSONGet(jsresponse,"data"))) then begin
+				ZREpr.createdAtUtc = JSONGet(jsresponse,"data/createdAtUtc");
+				cnt = JSONCountChildren(jsresponse,"data/currencies");
+				for(i=0;i<cnt;i=i+1) begin
+					ZREpr.correctionBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionBonusSum"),M4Val);
+					ZREpr.correctionCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCashSum"),M4Val);
+					ZREpr.correctionCashlessSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCashlessSum"),M4Val);
+					ZREpr.correctionCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCount"));
+					ZREpr.correctionCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCreditSum"),M4Val);
+					ZREpr.correctionPrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionPrepaymentSum"),M4Val);
+					ZREpr.correctionSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionSum"),M4Val);
+					//messagebox(0,ZREpr.correctionSum);
+					ZREpr.currency = JSONGet(jsresponse,"data/currencies/["  & i & "]/currency");
+					ZREpr.depositCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/depositCount"));
+					ZREpr.depositSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/depositSum"),M4Val);
+					ZREpr.moneyBackBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackBonusSum"),M4Val);
+					//messagebox(0,ZREpr.moneyBackBonusSum);
+					ZREpr.moneyBackCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCashSum"),M4Val);
+					ZREpr.moneyBackCashlessSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCashlessSum"),M4Val);
+					ZREpr.moneyBackCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCount"));
+					ZREpr.moneyBackCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCreditSum"),M4Val);
+					ZREpr.moneyBackPrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackPrepaymentSum"),M4Val);
+					ZREpr.moneyBackSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackSum"),M4Val);
+					ZREpr.rollbackBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackBonusSum"),M4Val);
+					ZREpr.rollbackCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCashSum"),M4Val);
+					ZREpr.rollbackCashlessSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCashlessSum"),M4Val);
+					ZREpr.rollbackCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCount"));
+					ZREpr.rollbackCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCreditSum"),M4Val);
+					ZREpr.rollbackPrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackPrepaymentSum"),M4Val);
+					ZREpr.rollbackSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackSum"),M4Val);
+					ZREpr.saleBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleBonusSum"),M4Val);
+					ZREpr.saleCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleCashSum"),M4Val);
+					ZREpr.saleCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleCount"));
+					ZREpr.saleCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleCreditSum"),M4Val);
+					ZREpr.salePrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/salePrepaymentSum"),M4Val);
+					ZREpr.saleSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleSum"),M4Val);
+					ZREpr.withdrawCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/withdrawCount"));
+					ZREpr.withdrawSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/withdrawSum"),M4Val);
+					//messagebox(0,ZREpr.withdrawSum);
+				end;
+				ZREpr.docCountToSend = StringToLongInt(JSONGet(jsresponse,"data/docCountToSend"));
+				//messagebox(0,ZREpr.docCountToSend);
+				ZREpr.document_id = JSONGet(jsresponse,"data/document_id");
+				ZREpr.firstDocNumber = StringToLongInt(JSONGet(jsresponse,"data/firstDocNumber"));
+				ZREpr.lastDocNumber = StringToLongInt(JSONGet(jsresponse,"data/lastDocNumber"));
+				ZREpr.reportNumber = StringToLongInt(JSONGet(jsresponse,"data/reportNumber"));
+				ZREpr.shiftOpenAtUtc = JSONGet(jsresponse,"data/shiftOpenAtUtc");
+				//messagebox(0,ZREpr.shiftOpenAtUtc);
+				messagebox(0,"Ок!");
 			end;
-			ZREpr.docCountToSend = StringToLongInt(JSONGet(jsresponse,"data/docCountToSend"));
-			//messagebox(0,ZREpr.docCountToSend);
-			ZREpr.document_id = JSONGet(jsresponse,"data/document_id");
-			ZREpr.firstDocNumber = StringToLongInt(JSONGet(jsresponse,"data/firstDocNumber"));
-			ZREpr.lastDocNumber = StringToLongInt(JSONGet(jsresponse,"data/lastDocNumber"));
-			ZREpr.reportNumber = StringToLongInt(JSONGet(jsresponse,"data/reportNumber"));
-			ZREpr.shiftOpenAtUtc = JSONGet(jsresponse,"data/shiftOpenAtUtc");
-			//messagebox(0,ZREpr.shiftOpenAtUtc);
-			messagebox(0,"Ок!");
+			
+			if(recordstore(ZREpr,true)) then begin
+				ZReportReq2(reply,ZREpr.SerNr);
+			end;
+		end else begin
+			if(JSONGet(jsresponse,"code")=="401")then begin
+				if(issecond)then begin
+					messagebox(0,JSONGet(jsresponse,"message"));
+					goto LZReportDsm;
+				end else begin
+					issecond = true;
+					goto LbeginLogin2;
+				end;
+			end else begin
+				messagebox(0,JSONGet(jsresponse,"message"));
+				goto LZReportDsm;
+			end;
 		end;
-		
-		recordstore(ZREpr,true);
-		
 	end else begin
 		messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
-	end;
+		goto LZReportDsm;
+	end;	
+
+
+	LZReportDsm:;
 	
-	
-	ZReportReq2(reply,JSONGet(jsresponse,"code"));
 	
 return;
 END;
