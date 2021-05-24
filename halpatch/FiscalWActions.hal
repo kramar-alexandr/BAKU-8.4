@@ -1,4 +1,6 @@
 remote procedure RemoteAPI2CloseShift(record CassaIDBlock,var area); // by Ira
+remote procedure ZReportReq(var area,string);// Edit ********************** Ihor Trubachov 17*05*2021
+remote procedure ZReportReq2(area,string);// Edit ********************** Ihor Trubachov 19*05*2021
 remote procedure RemoteAPI2Login(var area,string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 20 01 2021 y. at 11:43:00 AM
 remote procedure RemoteAPI2OpenShift(record CassaIDBlock,var area);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 20 01 2021 y. at 11:43:00 AM
 remote procedure APIv2SendSale_Remote(string,var area, record IVVc,record RcVc);
@@ -892,6 +894,182 @@ return;
 end;
 
 
+
+
+
+global updating procedure ZReportDsm() // Edit ********************** Ihor Trubachov 17*05*2021
+BEGIN
+
+	string 255 host,page,token;
+	Area req,reply;
+	LongInt port;
+	json jsresponse;
+	record CassaIDBlock CIDb;
+	record UserVc Userr;
+	record ZREpVc ZREpr;
+	row ZREpVc ZREprw;
+	Integer cnt,i,j,cnt2,ZREpcnt;
+	boolean issecond;
+	
+	
+	
+	
+	logtext(0,"ZReportDsm");
+	
+  host = "10.12.11.11"; 
+  page = "/v2"; 
+  port = 8989; 
+	blockload(CIDb);
+	if(blank(CIDb.CassaToken))then begin
+		LbeginLogin2:;
+		LoginToKassaDsm(false);
+		blockload(CIDb);
+		if(blank(CIDb.CassaToken))then begin
+			messagebox(0,"Залогинтесь в кассу");
+			goto LZReportDsm;
+		end;
+	end;
+	Userr.Code = CurrentUser;
+	if (ReadFirstMain(Userr,1,true)) then begin
+		host = Userr.KassaIPAddr;
+	end;
+
+	if(nonblank(CIDb.APILogin))then begin
+	  	token = CIDb.CassaToken;
+	end;
+	//token = "7dOF7HlXb/uG2J/FD+GtjA==";
+
+	ZReportReq(req,token);
+  
+  SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5);
+
+//
+//	SetAreaZeroSize(reply);
+//	AddFileToArea("zAnswer.txt",reply,false);
+//
+
+	jsresponse = ParseJSONArea(reply);
+	if(nonblank(JSONGet(jsresponse,"code")))then begin
+		if(JSONGet(jsresponse,"code")=="0")then begin
+			ZREpr.SerNr = NextSerNr("ZREpVc",CurrentDate,-1,false,"");
+			ZREpr.Code = JSONGet(jsresponse,"code");
+			ZREpr.TransDate = CurrentDate;
+			ZREpr.TransTime = CurrentTime;
+			if(nonblank(JSONGet(jsresponse,"data"))) then begin
+				ZREpr.createdAtUtc = JSONGet(jsresponse,"data/createdAtUtc");
+				cnt = JSONCountChildren(jsresponse,"data/currencies");
+				for(i=0;i<cnt;i=i+1) begin
+					ZREpr.correctionBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionBonusSum"),M4Val);
+					ZREpr.correctionCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCashSum"),M4Val);
+					ZREpr.correctionCashlessSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCashlessSum"),M4Val);
+					ZREpr.correctionCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCount"));
+					ZREpr.correctionCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionCreditSum"),M4Val);
+					ZREpr.correctionPrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionPrepaymentSum"),M4Val);
+					ZREpr.correctionSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionSum"),M4Val);
+					//messagebox(0,ZREpr.correctionSum);
+					ZREpr.currency = JSONGet(jsresponse,"data/currencies/["  & i & "]/currency");
+					ZREpr.depositCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/depositCount"));
+					ZREpr.depositSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/depositSum"),M4Val);
+					ZREpr.moneyBackBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackBonusSum"),M4Val);
+					//messagebox(0,ZREpr.moneyBackBonusSum);
+					ZREpr.moneyBackCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCashSum"),M4Val);
+					ZREpr.moneyBackCashlessSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCashlessSum"),M4Val);
+					ZREpr.moneyBackCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCount"));
+					ZREpr.moneyBackCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackCreditSum"),M4Val);
+					ZREpr.moneyBackPrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackPrepaymentSum"),M4Val);
+					ZREpr.moneyBackSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackSum"),M4Val);
+					ZREpr.rollbackBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackBonusSum"),M4Val);
+					ZREpr.rollbackCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCashSum"),M4Val);
+					ZREpr.rollbackCashlessSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCashlessSum"),M4Val);
+					ZREpr.rollbackCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCount"));
+					ZREpr.rollbackCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackCreditSum"),M4Val);
+					ZREpr.rollbackPrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackPrepaymentSum"),M4Val);
+					ZREpr.rollbackSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackSum"),M4Val);
+					ZREpr.saleBonusSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleBonusSum"),M4Val);
+					ZREpr.saleCashSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleCashSum"),M4Val);
+					ZREpr.saleCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleCount"));
+					ZREpr.saleCreditSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleCreditSum"),M4Val);
+					ZREpr.salePrepaymentSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/salePrepaymentSum"),M4Val);
+					ZREpr.saleSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleSum"),M4Val);
+					ZREpr.withdrawCount = StringToLongInt(JSONGet(jsresponse,"data/currencies/["  & i & "]/withdrawCount"));
+					ZREpr.withdrawSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/withdrawSum"),M4Val);
+					cnt2 = JSONCountChildren(jsresponse,"data/currencies/["  & i & "]/correctionVatAmounts");
+					for(j=0;j<cnt2;j=j+1) begin
+						ZREpcnt = matrowcnt(ZREpr);
+						ZREprw.Type = "correctionVatAmounts";
+						ZREprw.VatPercent = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionVatAmounts/["  & j & "]/VatPercent"),M4Val);
+						ZREprw.VatSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/correctionVatAmounts/["  & j & "]/VatSum"),M4Val);
+						matrowput(ZREpr,ZREpcnt,ZREprw);
+					end;
+					cnt2 = JSONCountChildren(jsresponse,"data/currencies/["  & i & "]/moneyBackVatAmounts");
+					for(j=0;j<cnt2;j=j+1) begin
+						ZREpcnt = matrowcnt(ZREpr);
+						ZREprw.Type = "moneyBackVatAmounts";
+						ZREprw.VatPercent = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackVatAmounts/["  & j & "]/VatPercent"),M4Val);
+						ZREprw.VatSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/moneyBackVatAmounts/["  & j & "]/VatSum"),M4Val);
+						matrowput(ZREpr,ZREpcnt,ZREprw);
+					end;
+					cnt2 = JSONCountChildren(jsresponse,"data/currencies/["  & i & "]/rollbackVatAmounts");
+					for(j=0;j<cnt2;j=j+1) begin
+						ZREpcnt = matrowcnt(ZREpr);
+						ZREprw.Type = "rollbackVatAmounts";
+						ZREprw.VatPercent = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackVatAmounts/["  & j & "]/VatPercent"),M4Val);
+						ZREprw.VatSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/rollbackVatAmounts/["  & j & "]/VatSum"),M4Val);
+						matrowput(ZREpr,ZREpcnt,ZREprw);
+					end;
+					cnt2 = JSONCountChildren(jsresponse,"data/currencies/["  & i & "]/saleVatAmounts");
+					for(j=0;j<cnt2;j=j+1) begin
+						ZREpcnt = matrowcnt(ZREpr);
+						ZREprw.Type = "saleVatAmounts";
+						ZREprw.VatPercent = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleVatAmounts/["  & j & "]/VatPercent"),M4Val);
+						ZREprw.VatSum = StringToVal(JSONGet(jsresponse,"data/currencies/["  & i & "]/saleVatAmounts/["  & j & "]/VatSum"),M4Val);
+						matrowput(ZREpr,ZREpcnt,ZREprw);
+					end;
+					//messagebox(0,ZREpr.withdrawSum);
+				end;
+				ZREpr.docCountToSend = StringToLongInt(JSONGet(jsresponse,"data/docCountToSend"));
+				//messagebox(0,ZREpr.docCountToSend);
+				ZREpr.document_id = JSONGet(jsresponse,"data/document_id");
+				ZREpr.firstDocNumber = StringToLongInt(JSONGet(jsresponse,"data/firstDocNumber"));
+				ZREpr.lastDocNumber = StringToLongInt(JSONGet(jsresponse,"data/lastDocNumber"));
+				ZREpr.reportNumber = StringToLongInt(JSONGet(jsresponse,"data/reportNumber"));
+				ZREpr.shiftOpenAtUtc = JSONGet(jsresponse,"data/shiftOpenAtUtc");
+				//messagebox(0,ZREpr.shiftOpenAtUtc);
+				messagebox(0,"Ок!");
+			end;
+			
+			if(recordstore(ZREpr,true)) then begin
+				ZReportReq2(reply,ZREpr.SerNr);
+			end;
+		end else begin
+			if(JSONGet(jsresponse,"code")=="401")then begin
+				if(issecond)then begin
+					messagebox(0,JSONGet(jsresponse,"message"));
+					goto LZReportDsm;
+				end else begin
+					issecond = true;
+					goto LbeginLogin2;
+				end;
+			end else begin
+				messagebox(0,JSONGet(jsresponse,"message"));
+				goto LZReportDsm;
+			end;
+		end;
+	end else begin
+		messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
+		goto LZReportDsm;
+	end;	
+
+
+	LZReportDsm:;
+	
+	
+return;
+END;
+
+
+
+
 global updating procedure Fiscal_DepositToKassa()   // by Ira
 begin
 	DepositToKassaDsm;
@@ -917,6 +1095,16 @@ begin
 	messagebox(0,"FiscalOpenShift");
 return;
 end;
+
+global updating procedure CloseShiftZReport()    // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 16:34 20.05.2021
+begin
+	ZReportDsm;
+return;
+end;
+
+
+
+
 
 
 global updating procedure POSButtonsToAllDsm()
@@ -1116,6 +1304,7 @@ begin
 			IPrw.TaxTransactionDate=CurrentDate;
 			parentDocument = JSONGet(jsresponse,"long_id");
 			IPrw.TaxParentDocument = parentDocument;
+			matrowput(IPr,RepSpec.flags[1],IPrw);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:16 21.05.2021
 		end;
 		
 		RecordStore(IPr,true);
@@ -1214,6 +1403,7 @@ begin
   Integer wn,mwn,rownr,mtrw,i,loopcount,quant,sum,rwcnt,j;
   record RcVc RepSpec;
   record IPVc IPr;
+	row IPVc IPrw;
   record UserVc Userr;
   Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
   string 255 host,page,tstr; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
@@ -1234,7 +1424,14 @@ begin
   wn = CurWindow;
 	
   DeselectWindow(wn,true);
-	getwindowrecord(wn,IPr);
+	getwindowrecord(wn,RepSpec);
+	
+  IPr.SerNr = RepSpec.long1;
+  ReadFirstMain(IPr,1,true);
+  
+  if(RepSpec.flags[1]>-1)then begin
+  	matrowget(IPr,RepSpec.flags[1],IPrw);
+  end;
 	
   blockload(CIDb);
   blockload(PMb);
@@ -1248,7 +1445,7 @@ begin
     host = Userr.KassaIPAddr;
   end;
 
-  APIv2RollBack_Remote(CIDb.CassaToken,req,IPr.TaxParentDocument);
+  APIv2RollBack_Remote(CIDb.CassaToken,req,IPrw.TaxParentDocument);
   writeareatofile(req,"SendTAXRequest.txt",1);
 
   SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
@@ -1272,3 +1469,5 @@ LAPIv2SendRollBackIPDsm:;
  
   return;
 end;
+
+
