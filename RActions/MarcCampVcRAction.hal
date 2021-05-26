@@ -4515,47 +4515,51 @@ begin
 		end;
 		SHr.OrderNr = ORr.SerNr;
 		if (readfirstkey("OrderKey",SHr,1,true)) then begin
-			recordCopy(OldSHr,SHr);
-			SHr.Location = "MAIN";
-			SHr.OKFlag = 1;
-			error = RecordUpdate(OldSHr,SHr,true);
-			if (error==0) then begin
-				for (i=0;i<matrowcnt(SHr);i=i+1) begin
-					matrowget(SHr,i,SHrw);
-					for (j=0;j<itemCode.length;j=j+1) begin
-						if (SHrw.ArtCode==itemCode[j]) then begin
-							logtext(0,"12345");
-							if (SHrw.Ship!=StringToVal(itemQuantity[j],M45Val)) then begin
-								Retf = true;
-								logtext(0,"Retf " & Retf);
-								ArtCodeRetQty[SHrw.ArtCode] = SHrw.Ship - StringToVal(itemQuantity[j],M45Val);
+			if (SHr.OKFlag != 1) then begin
+				recordCopy(OldSHr,SHr);
+				SHr.Location = "MAIN";
+				SHr.OKFlag = 1;
+				error = RecordUpdate(OldSHr,SHr,true);
+				if (error==0) then begin
+					for (i=0;i<matrowcnt(SHr);i=i+1) begin
+						matrowget(SHr,i,SHrw);
+						for (j=0;j<itemCode.length;j=j+1) begin
+							if (SHrw.ArtCode==itemCode[j]) then begin
+								logtext(0,"12345");
+								if (SHrw.Ship!=StringToVal(itemQuantity[j],M45Val)) then begin
+									Retf = true;
+									logtext(0,"Retf " & Retf);
+									ArtCodeRetQty[SHrw.ArtCode] = SHrw.Ship - StringToVal(itemQuantity[j],M45Val);
+								end;
 							end;
 						end;
 					end;
+					if (!Retf) then begin weboutstring("{\"result\":\"OK\"}"); end;
+				end else begin
+					weboutstring("{\"result\":\"" & error & "\"}");
 				end;
-				if (!Retf) then begin weboutstring("{\"result\":\"OK\"}"); end;
-			end else begin
-				weboutstring("{\"result\":\"" & error & "\"}");
-			end;
-			if (Retf) then begin
-				logtext(0,"1");
-				BlockLoad(LMb);
-				r = PasteSHInRet(SHr,Retr,LMb.DefReturnLocation);
-				mtrw = matrowcnt(Retr);
-				for (i=mtrw-1;i>=0;i=i-1) begin
-					logtext(0,"2");
-					matrowget(Retr,i,Retrw);
-					if (ArtCodeRetQty[Retrw.ArtCode]>0) then begin
-						Retrw.Quant = ArtCodeRetQty[Retrw.ArtCode];
-						matrowput(Retr,i,Retrw);
-					end else begin
-						matrowdelete(Retr,i);
+				if (Retf) then begin
+					logtext(0,"1");
+					BlockLoad(LMb);
+					r = PasteSHInRet(SHr,Retr,LMb.DefReturnLocation);
+					mtrw = matrowcnt(Retr);
+					for (i=mtrw-1;i>=0;i=i-1) begin
+						logtext(0,"2");
+						matrowget(Retr,i,Retrw);
+						if (ArtCodeRetQty[Retrw.ArtCode]>0) then begin
+							Retrw.Quant = ArtCodeRetQty[Retrw.ArtCode];
+							matrowput(Retr,i,Retrw);
+						end else begin
+							matrowdelete(Retr,i);
+						end;
 					end;
+					if(RecordStore(Retr,true))then begin
+						weboutstring("{\"result\":\"OK\"}");
+					end;
+					logtext(0,"3");
 				end;
-				if(RecordStore(Retr,true))then begin
-					weboutstring("{\"result\":\"OK\"}");
-				end;
-				logtext(0,"3");
+			end else begin
+				weboutstring("{\"result\":\"ERROR: SH OK = 1!\"}");
 			end;
 		end else begin
 			weboutstring("{\"result\":\"ERROR: SH not found!\"}");
