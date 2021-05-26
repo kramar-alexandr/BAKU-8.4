@@ -4474,7 +4474,7 @@ begin
 	string 255 orderNo,sum;
 	array string 255 itemCode,itemQuantity;
 	integer i,j, mtrw;
-	longint a,r;
+	longint a,r,error;
 	record SHVc SHr, OldSHr;
 	row SHVc SHrw;
 	record RetVc Retr;
@@ -4503,7 +4503,6 @@ begin
 		logtext(0,itemCode[i]);
 		logtext(0,itemQuantity[i]);
 	end;
-
 	ORr.SerNr = StringToLongInt(orderNo);
 	if (readfirstmain(ORr,1,true)) then begin
 		for (i=0;i<matrowcnt(ORr);i=i+1) begin
@@ -4519,7 +4518,8 @@ begin
 			recordCopy(OldSHr,SHr);
 			SHr.Location = "MAIN";
 			SHr.OKFlag = 1;
-			if (RecordUpdate(OldSHr,SHr,true)==0) then begin
+			error = RecordUpdate(OldSHr,SHr,true);
+			if (error==0) then begin
 				for (i=0;i<matrowcnt(SHr);i=i+1) begin
 					matrowget(SHr,i,SHrw);
 					for (j=0;j<itemCode.length;j=j+1) begin
@@ -4533,6 +4533,9 @@ begin
 						end;
 					end;
 				end;
+				if (!Retf) then begin weboutstring("{\"result\":\"OK\"}"); end;
+			end else begin
+				weboutstring("{\"result\":\"" & error & "\"}");
 			end;
 			if (Retf) then begin
 				logtext(0,"1");
@@ -4549,10 +4552,16 @@ begin
 						matrowdelete(Retr,i);
 					end;
 				end;
-				RecordStore(Retr,true);
+				if(RecordStore(Retr,true))then begin
+					weboutstring("{\"result\":\"OK\"}");
+				end;
 				logtext(0,"3");
 			end;
+		end else begin
+			weboutstring("{\"result\":\"ERROR: SH not found!\"}");
 		end;
+	end else begin
+		weboutstring("{\"result\":\"ERROR: OR not found!\"}");
 	end;
 return;
 end;
