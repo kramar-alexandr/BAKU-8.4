@@ -5196,3 +5196,64 @@ begin
 	end;
 return;
 end;
+
+
+
+global updating procedure SaveGIWithoutBrandSect(Record GlobalItemVc GIr)
+begin
+	
+	RecordStore(GIr,true);
+	logtext(0,GIr.Code & " SaveGIWithoutBrandSect");
+	
+return;
+end;
+
+
+global webpublic procedure WebFillBrandSectInGlItMn()
+begin
+	record GlobalItemVc GIr;
+	record BtrxSecondLevelCatVc BtrxSecondLevelCatr, OldBtrxSecondLevelCatr;
+	record BTRxBrandVc Brandr;
+	boolean TrHs;
+	string 255 WEBSSectStr, tmp;
+	integer pos;
+	
+	GIr.Code = "";
+	while (loopMain(GIr,1,true)) begin
+		if (nonblank(GIr.BPIBrand)) then begin
+			Brandr.Code = GIr.BPIBrand;
+			if (ReadFIrstMain(Brandr,1,true)) then begin
+				BtrxSecondLevelCatr.Name = Brandr.Name;
+				TrHs = true;
+				while (loopkey("Name",BtrxSecondLevelCatr,1,TrHs)) begin
+					if (BtrxSecondLevelCatr.Name != Brandr.Name) then begin TrHs = false; end;
+					if (TrHs and BtrxSecondLevelCatr.PathFrstCode=="BRANDS") then begin
+						TrHs = false;
+						WEBSSectStr = "";
+						pos = 0;
+						ExtractObj(GIr.BTRxGiftClass,pos,tmp);
+						while (nonblank(tmp)) begin
+							OldBtrxSecondLevelCatr.Code = tmp;
+							if (!ReadFirstMain(OldBtrxSecondLevelCatr,1,true)) then begin
+								if (nonblank(WEBSSectStr)) then begin WEBSSectStr = WEBSSectStr & ","; end;
+								WEBSSectStr = WEBSSectStr & tmp;
+							end;
+							ExtractObj(GIr.BTRxGiftClass,pos,tmp);
+						end;
+						GIr.BTRxGiftClass = WEBSSectStr;
+						if (nonblank(GIr.BTRxGiftClass)) then begin GIr.BTRxGiftClass = GIr.BTRxGiftClass & ","; end;
+						GIr.BTRxGiftClass = GIr.BTRxGiftClass & BtrxSecondLevelCatr.Code;
+						queued.SaveGIWithoutBrandSect(GIr);
+						MilliSleep(50);
+					end;
+				end;
+				resetloop(BtrxSecondLevelCatr);
+			end;
+		end;
+	end;
+	
+return;
+end;
+
+
+
