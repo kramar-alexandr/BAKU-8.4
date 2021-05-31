@@ -1,6 +1,8 @@
 remote procedure RemoteAPI2CloseShift(record CassaIDBlock,var area); // by Ira
 remote procedure ZReportReq(var area,string);// Edit ********************** Ihor Trubachov 17*05*2021
 remote procedure ZReportReq2(area,string);// Edit ********************** Ihor Trubachov 19*05*2021
+remote procedure TransactionHistoryReq(area,string,string,string);// Edit ********************** Ihor Trubachov 31*05*2021
+remote procedure TransactionHistoryAnsw(area);// Edit ********************** Ihor Trubachov 31*05*2021
 remote procedure RemoteAPI2Login(var area,string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 20 01 2021 y. at 11:43:00 AM
 remote procedure RemoteAPI2OpenShift(record CassaIDBlock,var area);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 20 01 2021 y. at 11:43:00 AM
 remote procedure APIv2SendSale_Remote(string,var area, record IVVc,record RcVc);
@@ -1089,6 +1091,86 @@ record IVVc IVr;
 return;
 END;
 
+global updating procedure TransactionHistoryDsm() // Edit ********************** Ihor Trubachov 31*05*2021
+BEGIN
+
+string 255 host,page,token;
+	Area req,reply;
+	LongInt port;
+	json jsresponse;
+	record CassaIDBlock CIDb;
+	record UserVc Userr;
+	Integer cnt,i,j,cnt2;
+	boolean issecond;
+	
+	
+	
+	
+	logtext(0,"TransactionHistoryDsm");
+	
+  host = "10.12.11.11"; 
+  page = "/v2"; 
+  port = 8989; 
+	blockload(CIDb);
+	if(blank(CIDb.CassaToken))then begin
+		LbeginLoginTransHist:;
+		LoginToKassaDsm(false);
+		blockload(CIDb);
+		if(blank(CIDb.CassaToken))then begin
+			messagebox(0,"Залогинтесь в кассу");
+			goto LTransactionHistoryDsm;
+		end;
+	end;
+	Userr.Code = CurrentUser;
+	if (ReadFirstMain(Userr,1,true)) then begin
+		host = Userr.KassaIPAddr;
+	end;
+
+	if(nonblank(CIDb.APILogin))then begin
+	  	token = CIDb.CassaToken;
+	end;
+	//token = "7dOF7HlXb/uG2J/FD+GtjA==";
+
+
+	TransactionHistoryReq(req,token,"2021-05-15 00:00:00","2021-04-15 23:59:59");/////////////////////////////////////////////////////////////
+  
+  SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5);
+
+//
+//	SetAreaZeroSize(reply);
+//	AddFileToArea("TrancHis.txt",reply,false);
+//
+
+	jsresponse = ParseJSONArea(reply);
+	if(nonblank(JSONGet(jsresponse,"message")) and nonblank(JSONGet(jsresponse,"code")))then begin
+		if(JSONGet(jsresponse,"message")=="success" and JSONGet(jsresponse,"code")=="0")then begin
+			TransactionHistoryAnsw(reply);
+		end else begin
+			if(JSONGet(jsresponse,"code")=="401")then begin
+				if(issecond)then begin
+					messagebox(0,JSONGet(jsresponse,"message"));
+					goto LTransactionHistoryDsm;
+				end else begin
+					issecond = true;
+					goto LbeginLoginTransHist;
+				end;
+			end else begin
+				messagebox(0,JSONGet(jsresponse,"message"));
+				goto LTransactionHistoryDsm;
+			end;
+		end;
+	end else begin
+		messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
+		goto LTransactionHistoryDsm;
+	end;	
+
+
+	LTransactionHistoryDsm:;
+
+return;
+END;
+
+
 
 global updating procedure ShiftZReportHandPr() // Edit ********************** Ihor Trubachov 27*05*2021
 BEGIN
@@ -1141,6 +1223,12 @@ end;
 global updating procedure ShiftZReportHand()   // Edit ********************** Ihor Trubachov 24*05*2021
 begin
 	ZReportHandDsm;
+return;
+end;
+
+global updating procedure TransactionHistory()   // Edit ********************** Ihor Trubachov 31*05*2021
+begin
+	TransactionHistoryDsm;
 return;
 end;
 
