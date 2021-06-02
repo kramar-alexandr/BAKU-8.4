@@ -3156,7 +3156,6 @@ begin
 			i=i+1;
 			if(i==10) then begin TrHs=false; end;
 			SendUpdateLoyaltyCardToCRM(LCr);
-			logtext(0,LCr.SerNr);
 			millisleep(1000);
 		end;	
 return;
@@ -4129,7 +4128,6 @@ ResetLoop(INr);
 	INr.Code = "";
 	While(LoopMain(INr,1,true)) begin
 		if(nonblank(INr.BPISubGroup)and(nonblank(INr.BPICollection) or nonblank(INr.BPICategory) or nonblank(INr.BPIMaterial) or nonblank(INr.BPIColor) or nonblank(INr.BPIShape) or nonblank(INr.BPISize)or nonblank(INr.BPIUse)or nonblank(INr.BPISex)or nonblank(INr.BPIPlating)or nonblank(INr.BPIClarity)or nonblank(INr.BPIWeight)) and diff[INr.Code & INr.BPIBrand]==false ) then begin
-			logtext(0,j);
 			j=j+1;
 			diff[INr.Code & INr.BPIBrand] = true;
 			StartFormat(15);
@@ -5388,6 +5386,91 @@ begin
 		
 end;	
 
+
+
+
+
+
+
+global procedure ZRepRn(record RcVc RepSpec)
+begin
+	record ZREpVc ZREpr;
+	boolean TrHs, testf;
+	Integer CompQty, comp;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record StoreGroupBlock SGb;
+	record AZHatZRepBlock AZHZPB;
+	record LocationVc Locr;
+	
+	
+	SetCompany (18,false);
+	blockload(Compb);
+	blockload(AZHZPB);
+	CompQty = matrowcnt(Compb);
+	
+	startreportnoheaderjob("Выгрузка данных по наличным приходам из Z-отчета");
+	
+	StartFormat(15);
+		OutString(0,0,AZHZPB.Hat1,false);
+		OutString(0,0,"",false);
+		OutString(0,0,AZHZPB.Hat2,false);
+	EndFormat;
+	
+	StartFormat(15);
+		OutString(0,0,AZHZPB.Hat3,false);
+		OutString(0,0,"",false);
+		OutString(0,0,AZHZPB.Hat4,false);
+		OutString(0,0,"",false);
+		OutString(0,0,AZHZPB.Hat5,false);
+	EndFormat;
+	
+	StartFormat(15);
+		OutString(0,0,AZHZPB.Hat6,false);
+		OutString(0,0,AZHZPB.Hat7,false);
+		OutString(0,0,AZHZPB.Hat6,false);
+		OutString(0,0,AZHZPB.Hat7,false);
+		OutString(0,0,AZHZPB.Hat6,false);
+		OutString(0,0,AZHZPB.Hat7,false);
+		OutString(0,0,AZHZPB.Hat8,false);
+		OutString(0,0,AZHZPB.Hat9,false);
+	EndFormat;
+	
+  for(comp=0;comp<CompQty;comp=comp+1) begin
+		matrowget(Compb,comp,Comprw);
+		if(Comprw.ActiveStatus==0) then begin
+			SetCompany(comp,false);
+			blockload(SGb);
+			if (SGb.StoreGroup==RepSpec.flags[0]) then begin
+				ZREpr.TransDate = RepSpec.sStartDate;
+				TrHs = true;
+				while (loopkey("TransDate",ZREpr,1,TrHs)) begin
+					testf = true;
+					if (ZREpr.TransDate>RepSpec.sEndDate) then begin TrHs = false; testf = false; end;
+					if (testf) then begin
+					
+						Locr.Code = ZREpr.ShopLocation;
+						if (ReadFirstMain(Locr,1,true)) then begin
+							
+						end;
+						StartFormat(15);
+							OutString(0,0,Locr.Entity1C,false);
+							OutString(0,0,Locr.EntityName1C,false);
+							OutString(0,0,Locr.Store1C,false);
+							OutString(0,0,Locr.StoreName1C,false);
+							OutString(0,0,"",false);
+							OutString(0,0,Locr.StoreName1C,false);
+							OutString(0,0,ZREpr.saleCashSum + ZREpr.correctionCashSum - ZREpr.moneyBackCashSum - ZREpr.rollbackCashSum,false);
+							OutString(0,0,ZREpr.reportNumber,false);
+						EndFormat;
+					end;
+				end;
+				ResetLoop(ZREpr);
+			end;
+		end;
+	end;
+	endjob;
+end;	
 
 
 
