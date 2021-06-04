@@ -5798,10 +5798,67 @@ end;
 
 
 
+global webpublic updating procedure WebCreateLocalOrderReserves()
+begin
+	area getpost;
+	string 255 filename;
+	json datajson;
+	record ORVc ORr,OldORr;
+	row ORVc ORrw,OldORrw;
+	string 255 uname,pn,ph,em,sn,bitrono,pay,stat,city,street,house,apart,custcode;
+	string 155 id,sum;
+	vector val codequant;
+	integer i,j,wn,y,compno;
+	longint a, ORSerNr, mtrw, error;
+	string 255 hex,out,warning,errstr,loyaltycard,namesname,inwarning,code,stockcode,affobj;
+	boolean UPDf,chsum, TrHs, IdentClientf,TrHs2;
+	record AccBlock ARb;
+	record CUVc CUr;
+	record ItemDuplicatesVc IDr;
+	record GlobalItemVc GIr, DupGIr;
+	row GlobalItemVc GIrw, DupGIrw;
+	record LoyaltyCardVc LoyCardr;
+	record GlobalItemSetVc GISr;
+	record LocationVc Locr;
+	array string 255 aCodes;
 
 
-
-
+	webgetpostdata(getpost);
+	if (!fileexists("getpost.txt")) then begin
+		CreateFile("getpost.txt");
+	end;
+	WriteAreaToFile(getpost,"getpost.txt",0);
+	CloseFile;
+	a = GetArealength(getpost);
+	datajson = ParseJsonArea(getpost);
+	filename = "Orders/Order" & datetostring(currentdate,"YYYYMMDD") & TimeToString(currenttime,"HHMMSS",false) & ".txt";
+	writeareatofile(getpost,filename,0);
+	ORSerNr = StringToLongInt(JSONGet(datajson,"orderId"));
+	if (blank(JSONGet(datajson,"orderId")) or JSONGet(datajson,"orderId")=="0") then begin
+		ORSerNr = -1;
+	end;
+	compno = StringToInt(JSONGet(datajson,"order[0]/compno"));
+	SetCompany(compno,false);
+	ORr.SerNr = ORSerNr;
+	if (ReadFirstMain(ORr,1,true)) then begin
+		RecordCopy(OldORr,ORr);
+		if(ORr.Closed==0) then begin
+			ORr.Reserved = 0;
+		end;
+		ORr.Closed = 0;
+		error = RecordUpdate(OldORr,ORr,true);
+		if (error==0) then begin
+			RecordDelete(ORr);
+			WebOutString("{\"result\":0,\"OrderId\":" & ORr.SerNr & "}");
+		end else begin
+			WebOutString("{\"result\":" & error & ",\"OrderId\":" & ORr.SerNr & "}");
+		end;
+	end else begin
+		WebOutString("{\"result\":1,\"OrderId\":" & ORr.SerNr & "}");
+	end;
+	
+	return;
+end;
 
 
 global webpublic updating procedure WebCreateLocalOrderReserves()
