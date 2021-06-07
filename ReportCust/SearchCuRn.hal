@@ -1038,3 +1038,179 @@ longint curtick;
 	LogProcTime("BlankObjInRn",getcurtick() - curtick);
 return;
 end;
+
+
+
+global procedure Credit_ReportRn(record RcVc RepSpec)   // Edit ********************** Ihor Trubachov 04*06*2021
+BEGIN
+	
+	record ORVc ORr;
+	row ORVc ORrw;
+	record RLinkVc RLr;
+	record SHVc SHr;
+	record ExpProvItemRegVc EPIRr;
+	record POVc POr;
+	row POVc POrw;
+	record PUVc PUr;
+	record VIVc VIr;
+	boolean TrHs, testf, testf1, testf2;
+	vector string 255 vPrefix; 
+	array string 255 tags;	
+	Integer i,j,k,iter, rwcnt, rwcnt2;
+	val sumAll;
+	date startDate, endDate;
+	
+	
+	StartReportNoHeaderJob("Отчет по кредиторскому долгу у внешнего поставщика");
+	StartFormat(15);
+		OutString(0,0,"№ счета клиента",false);
+		OutString(20,0,"Дата счета клиента",false);
+		OutString(40,0,"Дата отгрузки заказа",false);
+		OutString(60,0,"№ счет фактуры поставщика",false);
+		OutString(80,0,"Дата счет фактуры",false);
+		OutString(100,0,"Поставщик",false);
+		OutString(120,0,"Код товара",false);
+		OutString(140,0,"Наименование товара",false);
+		OutString(160,0,"Кол-во",false);
+		OutString(180,0,"Цена без НДС",false);
+		OutString(200,0,"НДС",false);
+		OutString(220,0,"Цена с НДС",false);
+		OutString(240,0,"Сумма без НДС",false);
+		OutString(260,0,"Сумма НДС",false);
+		OutString(280,0,"Сумма с НДС",false);
+	EndFormat;
+	
+	startDate = RepSpec.sStartDate;
+	endDate = RepSpec.sEndDate;
+
+	while(LoopKey("PrefCode",EPIRr,1,true))begin
+		vPrefix[EPIRr.Comment] = EPIRr.PrefCode;
+	end;
+	GetVectorTags(vPrefix,tags);
+	SortStringArray(tags);
+
+	TrHs = true;
+	ORr.OrderClass = "EXTPR";
+	while(LoopKey("OrderClass",ORr,1,TrHs))begin
+		testf = true;
+		sumAll = 0;
+		testf2 = true;//
+
+		if (ORr.OrderClass != "EXTPR") then begin
+			testf = false;
+			TrHs = false;
+		end;
+		
+		if(nonblank(ORr.OrdDate) and nonblank(startDate) and nonblank(endDate)) then begin
+			if(DateInRange(ORr.OrdDate, startDate, endDate) == false) then begin
+				testf = false;
+				TrHs = false;
+			end;
+		end;
+		
+		/*if(nonblank(RepSpec.f1)) then begin
+			iter = 1;
+			while(ReadRecordLink(ORr,iter,POr,RLr))begin
+				if(ReadRecordLink(POr,1,PUr,RLr))then begin
+					if(ReadRecordLink(PUr,1,VIr,RLr))then begin
+						if(VIr.VECode == RepSpec.f1 or blank(RepSpec.f1))then begin
+							testf2 = true;
+						end;
+					end;
+				end;
+				iter=iter+1;
+			end;
+		end else begin
+			testf2 = true;
+		end;*/
+		
+		
+		if(testf and testf2) then begin
+			StartFormat(15);
+			OutString(0,0,ORr.SerNr,false);
+			OutString(20,0,ORr.OrdDate,false);
+			
+			if(ReadRecordLink(ORr,1,SHr,RLr))then begin
+				OutString(40,0,SHr.ShipDate,false);
+			end;
+			//testf2 = false;
+			rwcnt = matrowcnt(ORr);
+			for(j = 0; j < rwcnt; j=j+1) begin
+				matrowget(ORr,j,ORrw);
+				for(i = 0; i < tags.length; i=i+1) begin
+					iter = 1;
+					if((left(ORrw.ArtCode,len(vPrefix[tags[i]])) == vPrefix[tags[i]]) and (vPrefix[tags[i]] != "IN")) then begin	
+						while(ReadRecordLink(ORr,iter,POr,RLr))begin
+							if(POr.VECode == tags[i])then begin 
+								if(ReadRecordLink(POr,1,PUr,RLr))then begin
+									if(ReadRecordLink(PUr,1,VIr,RLr))then begin
+										//if(VIr.VECode == RepSpec.f1 or blank(RepSpec.f1))then begin //
+											OutString(60,0,VIr.SerNr,false);
+											OutString(80,0,VIr.InvDate,false);
+											OutString(100,0,VIr.VECode,false);
+											//testf2 = true;
+										//end;
+									end;
+								end;
+							end;
+							iter=iter+1;
+						end;
+						//if(testf2) then begin	
+							OutString(120,0,ORrw.ArtCode,false);
+							OutString(140,0,ORrw.Spec,false);
+							OutString(160,0,ORrw.Quant,false);
+						
+							iter = 1;
+							while(ReadRecordLink(ORr,iter,POr,RLr))begin
+							//	if(POr.VECode == RepSpec.f1 or blank(RepSpec.f1))then begin //
+									rwcnt2 = matrowcnt(POr);
+									for(k = 0; k < rwcnt2; k=k+1) begin
+										matrowget(POr,k,POrw);
+										OutString(180,0, POrw.Price,false);
+										OutString(200,0,(POrw.Price / 100 * 18),false);
+										OutString(220,0,(POrw.Price + (POrw.Price / 100 * 18)),false);
+									end;
+									OutString(240,0,POr.Sum1,false);
+									OutString(260,0,POr.Sum3,false);
+									OutString(280,0,POr.Sum4,false);
+									sumAll = sumAll + POr.Sum4;
+									iter=iter+1;
+								//end;
+							end;
+							
+						//end;
+					end;
+					
+					
+
+				end;
+			end;
+			EndFormat;
+			
+			StartFormat(15);
+			
+			OutString(0,0,"",false);
+			OutString(20,0,"",false);
+			OutString(40,0,"",false);
+			OutString(60,0,"",false);
+			OutString(80,0,"",false);
+			OutString(100,0,"",false);
+			OutString(120,0,"",false);
+			OutString(140,0,"",false);
+			OutString(160,0,"",false);
+			OutString(180,0,"",false);
+			OutString(200,0,"",false);
+			OutString(220,0,"",false);
+			OutString(240,0,"",false);
+			OutString(260,0,"ИТОГО:",false);
+			OutString(280,0,sumAll,false);
+			
+			EndFormat;
+		end;
+	
+		
+	end;
+	
+EndJob;
+return;
+END;
