@@ -4,6 +4,7 @@ remote procedure ZReportReq2(area,string);// Edit ********************** Ihor Tr
 remote procedure TransactionHistoryReq(var area,string,string,string);// Edit ********************** Ihor Trubachov 31*05*2021
 remote procedure TransactionHistoryAnsw(area);// Edit ********************** Ihor Trubachov 31*05*2021
 remote procedure RemoteAPI2Login(var area,string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 20 01 2021 y. at 11:43:00 AM
+remote procedure RemoteAPI2Login2(var area,string,string); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:06 09.06.2021
 remote procedure RemoteAPI2OpenShift(record CassaIDBlock,var area);// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 20 01 2021 y. at 11:43:00 AM
 remote procedure APIv2SendSale_Remote(string,var area, record IVVc,record RcVc);
 remote procedure APIv2SendReturnAuto_Remote(string,var area,record IVVc,record IVVc);
@@ -245,6 +246,93 @@ begin
 	
 return;
 end;
+
+
+
+
+
+
+
+global updating procedure Login2ToKassaDsm(boolean autologin)
+begin
+	Integer wn,mwn,rownr,mtrw,i,j,k;
+  record RcVc RepSpec;
+  record IPVc IPr;
+  record UserVc Userr;
+  row IPVc IPrw;
+  Area req,reply; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 host,page,tstr,login,password; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  LongInt port; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  boolean status; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  string 255 category, transactionId, parentDocument;
+  json jsresponse;
+  val cash, terminal, discount,loyalty,bonus,vatsum;
+  record IVTaxTrVc IVTaxTr;// Edit ************************** BPI Ukraine - KramarAlexandr - 06, 24 10 2020 y. at 6:39:37 PM
+	record PMBlock PMb;
+  row PMBlock PMrw;
+	area logarea,biglogarea,tmpar1,tmpar2;
+	vector val vatperc;
+	array string 50 vtags;
+	record CassaIDVc CIDr;
+	
+	logtext(0,"LoginToKassaDsm");
+	
+  host = "10.12.11.11"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  page = "/v2"; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  port = 8989; // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+	
+	CIDr.User = CurrentUser;
+	if (!ReadFirstMain(CIDr,1,true)) then begin
+		recordnew(CIDr);
+		CIDr.User = CurrentUser;
+		recordstore(CIDr,true);
+	end;
+	
+	
+	// blockload(CIDb);
+	
+	Userr.Code = CurrentUser;
+	if (ReadFirstMain(Userr,1,true)) then begin
+		host = Userr.KassaIPAddr;
+	end;
+	
+	login = "SuperAPI";
+	password = "123";
+	/*if(nonblank(CIDb.APILogin))then begin
+	  login = CIDb.APILogin;
+    password = CIDb.APIPassword;
+	end;*/
+	RemoteAPI2Login2(req,login,password);	
+	
+	SendWebRequest(host,port,-1,false,"POST",page,"application/json","",false,req,reply,5); // Edit ************************** irkan - Wednesday, 21 January 2019 16:44:30
+  jsresponse = ParseJSONArea(reply);
+	writeareatofile(reply,"LogitReply.txt",1);
+	//access_token": "7dOF7HlXb/uG2J/FD+GtjA==", "code": 1,
+	if(nonblank(JSONGet(jsresponse,"access_token")))then begin
+		
+		CIDr.CassaToken = urldecode(ChekUnicode(JSONGet(jsresponse,"access_token")));
+		recordstore(CIDr,true);
+	end;
+	if(autologin)then begin
+		if(nonblank(JSONGet(jsresponse,"code")))then begin
+			if(JSONGet(jsresponse,"code")=="0")then begin
+				messagebox(0,"Операция успешна");
+			end else begin
+				messagebox(0,JSONGet(jsresponse,"message"));
+			end;
+		end else begin
+			messagebox(0,"Связь с кассой нарушена. Проверьте сообщения об ошибках");
+		end;
+	end;
+	SendFiscalLogToServer("","LOGIN",req,reply);
+	
+return;
+end;
+
+
+
+
+
 
 
 global updating procedure Fiscal_Login()   // by Ira
@@ -974,7 +1062,7 @@ BEGIN
 	// blockload(CIDb);
 	if(blank(CIDr.CassaToken))then begin
 		LbeginLogin2:;
-		LoginToKassaDsm(false);
+		Login2ToKassaDsm(false);
 		CIDr.User = CurrentUser;
 		if (!ReadFirstMain(CIDr,1,true)) then begin
 			recordnew(CIDr);
