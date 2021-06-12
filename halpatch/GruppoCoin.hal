@@ -448,7 +448,7 @@ begin
   area ames;
   string 20 curloc,datestring;
   integer pos,storenumber,sstoreID,rwcnt,i,intValue;
-  boolean TrHs,testf,foundf, testf1;
+  boolean TrHs,testf,foundf, testf1,foundfheader;
   LongInt count;
   string 5 nextline;
   record LocationVc  ToLocr;
@@ -483,17 +483,18 @@ begin
     count = 0;
 		
 		foundf = false;
+		foundfheader = false;
   	TrHs = true;
   	RetPUr.SerNr = 999999999999;
   	While(LoopBackKey("SerNr",RetPUr,1,TrHs)) begin
   		testf = true;
-		  
+
   		if (RetPUr.OKFlag==0) then begin testf = false; end;
   		if (RetPUr.SentCoin==0 or NonBlank(RetPUr.FileNameCoin) or Blank(RetPUr.TransBillCoin)) then begin testf = false; end;
-		Locr.Code = RetPUr.Location;
-		if(readfirstmain(Locr,1,true))then begin
-			if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
-		end;
+      Locr.Code = RetPUr.Location;
+      if(readfirstmain(Locr,1,true))then begin
+        if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
+      end;
   		if (testf) then begin
   		  CoinPackListHistr.TransportBill = RetPUr.TransBillCoin;
   		  testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
@@ -509,6 +510,7 @@ begin
   				if (testf) then begin
             if (foundf==false) then begin
   				    foundf = true;
+  				    foundfheader = true;
   	          AddTextToArea("**INIT**MERCTRAN" & datestring & sstoreID & nextline, ames);
   				  end;
   				  rowdata = "MERCTRAN" & sstoreID & datestring & "0303";
@@ -523,15 +525,64 @@ begin
   				end;
   			end; 
   			if (foundf) then begin
-  			  //count = count + 2;
-  			  //Footer
-  	      //AddTextToArea("**FINE**MERCTRAN" & datestring & sstoreID & Right("0000000" & count,7) & nextline, ames);
   	      RetPUr.FileNameCoin = filename;
   	      RetPUr.SentDateCoin = CurrentDate;
   	      RECORDSTORE(RetPUr,true);
   			end;
   		end;
   	end;	
+  	resetloop(RetPUr);
+  	
+  	setcompany(18,false);//расчет данных в КК компании
+      TrHs = true;
+      RetPUr.SerNr = 999999999999;
+      While(LoopBackKey("SerNr",RetPUr,1,TrHs)) begin
+        testf = true;
+
+        if (RetPUr.OKFlag==0) then begin testf = false; end;
+        if (RetPUr.SentCoin==0 or NonBlank(RetPUr.FileNameCoin) or Blank(RetPUr.TransBillCoin)) then begin testf = false; end;
+        Locr.Code = RetPUr.Location;
+        if(readfirstmain(Locr,1,true))then begin
+          if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
+        end;
+        if (testf) then begin
+          CoinPackListHistr.TransportBill = RetPUr.TransBillCoin;
+          testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
+        end;
+        if (testf) then begin
+          rwcnt = MatRowCnt(RetPUr);
+          for(i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(RetPUr,i,RetPUrw);
+            if (Blank(RetPUrw.VEItemCode) or Blank(RetPUrw.BarCode)) then begin testf = false; end;
+            if (testf) then begin
+              CoinEANCoder.EANNumber = RetPUrw.BarCode;
+            end;
+            if (testf) then begin
+              if (foundf==false) then begin
+                foundf = true;
+                foundfheader = true;
+                AddTextToArea("**INIT**MERCTRAN" & datestring & sstoreID & nextline, ames);
+              end;
+              rowdata = "MERCTRAN" & sstoreID & datestring & "0303";
+              intValue = RetPUrw.Quant;
+              rowdata = rowdata & RetPUrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
+              rowdata = rowdata & NewM4PadString(CoinPackListHistr.TransportBill,16,"0",true) & CoinPackListHistr.TransportBillDate;
+              rowdata = rowdata & "0000000000000" & "0000000000000" & "000000000" & "000000000" & " ";
+              intValue = Round(RetPUrw.FIFO,SetRoundModeD(2))*100;
+              rowdata = rowdata  &  Left(RetPUr.CurncyCode ,3) & NewM4PadString(intValue,15,"0",true) & "    " & NewM4PadString("",25," ",true);
+              AddTextToArea(rowdata & nextline, ames);
+              count = count + 1;
+            end;
+          end; 
+          if (foundf) then begin
+            RetPUr.FileNameCoin = filename;
+            RetPUr.SentDateCoin = CurrentDate;
+            RECORDSTORE(RetPUr,true);
+          end;
+        end;
+      end;	
+      resetloop(RetPUr);
+  	setcompany(25,false);
     //Edit-------------------Vitalii 14:33 27.07.2016 {
 
     TrHs = true;
@@ -544,30 +595,21 @@ begin
   			StockMovr.TransBillCoin = StockMovr.SerNr;
   		end;
 			
-			
 			if(StockMovr.TypeCoin==5 and blank(StockMovr.TransBillCoin))then begin
   			StockMovr.TransBillCoin = StockMovr.SerNr;
   			CoinPackListHistr.TransportBill = StockMovr.SerNr;
   			CoinPackListHistr.TransportBillDate = DateToString(StockMovr.OrdTransDate,"YYYYMMDD");
-  		end;
-				
-			
+  		end;			
   		if (StockMovr.SentCoin==0 or NonBlank(StockMovr.FileNameCoin) or Blank(StockMovr.TransBillCoin)) then begin testf = false; end;
-			
-			
 			Locr.Code = StockMovr.FrLocation;
 			if(readfirstmain(Locr,1,true))then begin
 				if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
 			end;
-		
-			
   		if (testf and StockMovr.TypeCoin!=3 and StockMovr.TypeCoin!=5) then begin
   		  CoinPackListHistr.TransportBill = StockMovr.TransBillCoin;
   		  testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
   		end;
-				
-			
-			
+  		
   		if (testf) then begin
   		  rwcnt = MatRowCnt(StockMovr);
   			for(i=0;i<rwcnt;i=i+1) begin
@@ -628,9 +670,99 @@ begin
 						RECORDSTORE(StockMovr,true);
   				end;
   			end; 
-        
   		end;
   	end;
+  	
+  	setcompany(18,false);
+  	  resetloop(StockMovr);
+  	  TrHs = true;
+      StockMovr.SerNr = 999999999999;
+      While(LoopBackKey("SerNr",StockMovr,1,TrHs)) begin
+        //foundf = false;
+        testf = true;
+        if (StockMovr.OrdFlag==0 and (StockMovr.TypeCoin!=3 and StockMovr.TypeCoin!=5)) then begin testf = false; end; // не пров
+        if(StockMovr.TypeCoin==3 and blank(StockMovr.TransBillCoin))then begin
+          StockMovr.TransBillCoin = StockMovr.SerNr;
+        end;
+      
+        if(StockMovr.TypeCoin==5 and blank(StockMovr.TransBillCoin))then begin
+          StockMovr.TransBillCoin = StockMovr.SerNr;
+          CoinPackListHistr.TransportBill = StockMovr.SerNr;
+          CoinPackListHistr.TransportBillDate = DateToString(StockMovr.OrdTransDate,"YYYYMMDD");
+        end;			
+        if (StockMovr.SentCoin==0 or NonBlank(StockMovr.FileNameCoin) or Blank(StockMovr.TransBillCoin)) then begin testf = false; end;
+        Locr.Code = StockMovr.FrLocation;
+        if(readfirstmain(Locr,1,true))then begin
+          if (Locr.CoinStoreNr!=RepSpec.f1)then begin testf = false; end;
+        end;
+        if (testf and StockMovr.TypeCoin!=3 and StockMovr.TypeCoin!=5) then begin
+          CoinPackListHistr.TransportBill = StockMovr.TransBillCoin;
+          testf = ReadFirstKey("TransportBill",CoinPackListHistr,1,true);
+        end;
+      
+        if (testf) then begin
+          rwcnt = MatRowCnt(StockMovr);
+          for(i=0;i<rwcnt;i=i+1) begin
+            MatRowGet(StockMovr,i,StockMovrw);
+            testf1 = true;
+            if (Blank(StockMovrw.ArtCode) or Blank(StockMovrw.BarCode)) then begin testf1 = false; end;
+          
+            if (testf1) then begin
+              CoinEANCoder.EANNumber = StockMovrw.BarCode;
+              testf1 = ReadFirstKey("EANNumber",CoinEANCoder,1,true);
+            end;
+          
+            if (testf1) then begin
+              if (foundf==false) then begin
+                foundf = true;
+                //Header
+                AddTextToArea("**INIT**MERCTRAN" & datestring & sstoreID & nextline, ames);
+              end;
+              rowdata = "MERCTRAN" & sstoreID & datestring;
+              switch (StockMovr.TypeCoin) begin
+                case 0:;
+                case 1:
+                  rowdata = rowdata & "0151";
+                case 2:
+                  rowdata = rowdata & "0105";
+                case 3:
+                  rowdata = rowdata & "0351";
+                case 4:
+                  rowdata = rowdata & "0105";
+                case 5:
+                  rowdata = rowdata & "0351";
+              end;
+              intValue = StockMovrw.Quant;
+              if(StockMovr.TypeCoin!=3 and StockMovr.TypeCoin!=5)then begin
+                if(StockMovr.TypeCoin!=2)then begin
+                  rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
+                end else begin
+                  rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "-" & "0000";
+                end;
+              end else begin
+                ToLocr.Code = StockMovr.ToLocation;
+                readfirstmain(ToLocr,1,true);
+                if(len(ToLocr.CoinStoreNr)!=4)then begin
+                  rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & "0000";
+                end else begin
+                  rowdata = rowdata & StockMovrw.BarCode & "+" & Right("000000" & intValue,6) & "+" & ToLocr.CoinStoreNr;
+                end;
+              end;
+            
+              rowdata = rowdata & NewM4PadString(CoinPackListHistr.TransportBill,16,"0",true) & CoinPackListHistr.TransportBillDate;
+              rowdata = rowdata & "0000000000000" & "0000000000000" & "000000000" & "000000000" & " ";
+              intValue = Round(StockMovrw.NewPrice,SetRoundModeD(2))*100;
+              rowdata = rowdata & Left(StockMovr.CurncyCode,3) & NewM4PadString(intValue,15,"0",true) & "0011" & NewM4PadString("Unsellable",25," ",true);
+              AddTextToArea(rowdata & nextline, ames);
+              count = count + 1;
+              StockMovr.FileNameCoin = filename;
+              StockMovr.SentDateCoin = CurrentDate;
+              RECORDSTORE(StockMovr,true);
+            end;
+          end; 
+        end;
+      end;
+  	setcompany(25,false);
   	
   	if (foundf) then begin
 			count = count + 2;
