@@ -53,6 +53,23 @@ external updating procedure CreateGlobalSet(string,string,val,string);  // _-_-_
 
 SetLangMode(LangRussian,"RUS",0); 
 
+
+
+
+
+global updating procedure SaveGI(Record GlobalItemVc GIr)
+begin
+	
+	RecordStore(GIr,true);
+	
+return;
+end;
+
+
+
+
+
+
 procedure PUVc_FillRow(var record PUVc PUr,Integer rownr)		//Edit-----------Dima 25.12.2014
 BEGIN
   Boolean res;
@@ -3452,6 +3469,107 @@ begin
 	end;
 return;
 end;
+
+
+
+
+
+
+
+
+
+global procedure SetInstockForExtProvItems()
+begin
+	record GlobalItemVc GIr;
+	row GlobalItemVc GIrw;
+	boolean crtdf, TrHs;
+	string 255 OldCode, ICODE;
+	vector boolean ICODEF;
+
+	SetCompany(29,false);
+	
+	
+	
+	while (TestEOF()==false) begin
+		ICODE = "";
+		ICODE = ImportField;
+		ICODEF[ICODE] = true;
+		if (NextImportLine(true)) then begin end;
+	end;
+	
+	
+	
+	
+
+	GIr.Code = "";
+	while (loopMain(GIr,1,true)) begin
+		if (ICODEF[GIr.Code]) then begin
+			matrowget(GIr,0,GIrw);
+			if (GIrw.Location=="MAIN") then begin
+				GIrw.Instock = 10;
+				matrowput(GIr,0,GIrw);
+				queued.SaveGI(GIr);
+			end;
+		end;
+	end;
+return;
+end;
+
+
+
+
+
+
+global updating procedure QueuedImportActBrendSectIn(string BrandrName,record GlobalItemVc GIr)
+begin
+	record BTRxBrandVc Brandr;
+	record BtrxSecondLevelCatVc BtrxSecondLevelCatr, BSLLastCoder;
+	boolean crtdf, TrHs;
+	string 255 OldCode, BName;
+	vector boolean vBName;
+
+	SetCompany(29,false);
+	
+	
+	crtdf = false;
+	BSLLastCoder.Name = BrandrName;
+	BSLLastCoder.Code = "BRST00000";
+	TrHs = true;
+	while (LoopKey("Name",BSLLastCoder,2,TrHs)) begin
+		if (left(BSLLastCoder.Code,4)!="BRST" or BSLLastCoder.Name!=BrandrName) then begin TrHs = false; end;
+		if (TrHs) then begin
+			TrHs = false;
+			crtdf = true;
+		end;
+	end;
+	OldCode = "";
+	ResetLoop(BSLLastCoder);
+	if (!crtdf) then begin
+		BSLLastCoder.Code = "BRST99999";
+		TrHs = true;
+		while (LoopBackKey("Code",BSLLastCoder,1,TrHs)) begin
+			if (left(BSLLastCoder.Code,4)=="BRST") then begin
+				OldCode = BSLLastCoder.Code;
+				TrHs = false;
+			end;
+		end;
+		ResetLoop(BSLLastCoder);
+		if(blank(OldCode))then begin OldCode = "BRST00000"; end;
+		NextM4SerialNumber(OldCode,BtrxSecondLevelCatr.Code);
+		BtrxSecondLevelCatr.Name = BrandrName;
+		BtrxSecondLevelCatr.NameRUS = BrandrName;
+		BtrxSecondLevelCatr.NameAZ = BrandrName;
+		BtrxSecondLevelCatr.PathFrstCode = "BRANDS";
+		recordstore(BtrxSecondLevelCatr,true);
+		GIr.BTRxGiftClass = GIr.BTRxGiftClass & BtrxSecondLevelCatr.Code;
+		recordstore(GIr,true);
+	end;
+return;
+end;
+
+
+
+
 
 
 
@@ -9855,6 +9973,9 @@ begin
 																	GIr.BTRxGiftClass = GIr.BTRxGiftClass & BtrxSecondLevelCatr.Code;
 																	res = true;
 																end;
+															end;
+															if (!res) then begin
+																QueuedImportActBrendSectIn(trim(params[i]),GIr);
 															end;
 														end;
 				// case"WebSSectDelete":	if(nonblank(params[i]))then begin
