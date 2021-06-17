@@ -1,0 +1,102 @@
+//Edit **********************************************Vas-P		16/06/2021
+SetLangMode(LangRussian,"RUS",0);
+
+global
+procedure ORfullReportRn()   
+BEGIN
+	record ORVc ORr;
+	record SHVc SHr;
+	record RetVc Retr;
+	record IVVc IVr;
+	row ORVc ORrw;
+	row SHVc SHrw;
+	row RetVc Retrw;
+	row IVVc IVrw;
+	boolean TrHs,TrHs1,testf,testf1,check;
+	Integer i,j,rwcnt;
+	vector val vitem;
+	array string 255 aitem;
+
+
+	startreportnoheaderjob("עקוע ןמ גסול סק/ךכ");
+	TrHs = true;
+	while(loopmain(ORr,1,TrHs))begin
+		ClearVector(vitem);
+		Resetloop(SHr);
+		SHr.OrderNr = ORr.SerNr;
+		TrHs1 = true;
+		while(loopkey("OrderKey",SHr,1,TrHs1))begin
+			testf1 = true;
+			if(SHr.OrderNr!=ORr.SerNr)then begin TrHs1 = false; testf1 = false; end;
+			if(SHr.OKFlag!=1)then begin testf1 = false; end;
+			if(testf1)then begin
+				rwcnt = MatRowCnt(SHr);
+				for(i=0;i<rwcnt;i=i+1)begin
+					matrowget(SHr,i,SHrw);
+					if(nonblank(SHrw.ArtCode))then begin
+						vitem[SHrw.ArtCode] = vitem[SHrw.ArtCode] + SHrw.Ship;
+					end;
+				end;
+			end;
+		end;
+		Resetloop(Retr);
+		Retr.OrdNr = ORr.SerNr;
+		TrHs1 = true;
+		while(loopkey("OrdNr",Retr,1,TrHs1))begin
+			testf1 = true;
+			if(Retr.OrdNr!=ORr.SerNr)then begin TrHs1 = false; testf1 = false; end;
+			if(Retr.OKFlag!=1)then begin testf1 = false; end;
+			if(testf1)then begin
+				rwcnt = MatRowCnt(Retr);
+				for(i=0;i<rwcnt;i=i+1)begin
+					matrowget(Retr,i,Retrw);
+					if(nonblank(Retrw.ArtCode))then begin
+						vitem[Retrw.ArtCode] = vitem[Retrw.ArtCode] - Retrw.Quant;
+					end;
+				end;
+			end;
+		end;
+
+		Resetloop(IVr);
+		IVr.OrderNr = ORr.SerNr;
+		TrHs1 = true;
+		while(loopkey("OrderNr",IVr,1,TrHs1))begin
+			testf1 = true;
+			if(IVr.OrderNr!=ORr.SerNr)then begin TrHs1 = false; testf1 = false; end;
+			if(IVr.OKFlag!=1)then begin testf1 = false; end;
+			if(testf1)then begin	
+				rwcnt = MatRowCnt(IVr);
+				for(i=0;i<rwcnt;i=i+1)begin
+					matrowget(IVr,i,IVrw);
+					if(nonblank(IVrw.ArtCode))then begin
+						if(IVr.InvType==1)then begin
+							vitem[IVrw.ArtCode] = vitem[IVrw.ArtCode] - IVrw.Quant;
+						end;
+						if(IVr.InvType==3)then begin
+							vitem[IVrw.ArtCode] = vitem[IVrw.ArtCode] + IVrw.Quant;
+						end;
+					end;
+				end;
+			end;
+		end;
+		ClearArray(aitem);
+		GetVectorTags(vitem,aitem);
+		check = true;
+		for(i=0;i<aitem.length;i=i+1)begin
+			if(vitem[aitem[i]]!=0)then begin
+				if(check)then begin
+					StartFormat(15);
+							OutString(0,"DblORVc",ORr.SerNr,false);
+							OutString(60,0,ORr.OrdDate,false);
+					EndFormat;
+				end;
+				if(ORr.SerNr==ORr.SerNr)then begin
+					check = false;
+				end;
+			end;
+		end;	
+	end;
+	
+	Endjob;
+return;
+end;
