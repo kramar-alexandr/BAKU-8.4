@@ -192,7 +192,7 @@ begin
 	record ItemHistVc IHr,IH2r;
 	record PUVc PUr;
 	row PUVc PUrw;
-	integer mtrw,i,j;
+	integer mtrw,i,j,keys;
 	record INVc INr;
 	string 20 artcode;
 	date ivdate;
@@ -260,7 +260,6 @@ begin
 				fifobase = fifobase + IHr.TotCostPrice;
 				cur = IHr.CurncyCode;
 				if (additionalCurF) then begin  //Edit***************************Sasha2,16:09 13.09.2017 {
-					logtext(0,"IHr.Qty");
   				for (j=0;j<addCurs.length;j=j+1) begin
   				  if (addCurs[j]==IHr.CurncyCode) then begin
   				    currencyBalances[addCurs[j]] = currencyBalances[addCurs[j]] + IHr.TotCostPriceCurncy;
@@ -287,8 +286,14 @@ begin
 		halt = 0;
 		TrHs = true;
 		SHr.OrderNr=IVr.OrderNr;
-		while(loopkey("OrderKey",SHr,1,TrHs)) begin
+		keys = 1;
+		if(IVrw.SHNr>-1)then begin
+		  SHr.SerNr = IVrw.SHNr;
+		  keys = 2;
+		end;
+		while(loopkey("OrderKey",SHr,keys,TrHs)) begin
 			if(SHr.OrderNr!=IVr.OrderNr)then begin TrHs=false; end;
+			if(IVrw.SHNr>-1 and SHr.SerNr!=IVrw.SHNr)then begin TrHs=false; end;
 			
 			if(TrHs)then begin
 				mtrw = matrowcnt(SHr);
@@ -1164,7 +1169,6 @@ begin
 								while(nonblank(tstr))begin
 									if(nonblank(tstr))then begin
 										vVisitName[tstr] = MCr.Name;
-										logtext(0,"REPOOROORROR " & tstr & "   mane  " & MCr.Name);
 										vVisitPhone[tstr] = MCr.Phone3 & " " & MCr.Phone2 & " " & MCr.Phone1;
 									end;
 									ExtractObj(MCr.InvNr,pos,tstr);
@@ -1699,7 +1703,11 @@ begin
 											
 											FindFIFOOrigValAndCurncyIV(IVr.SerNr,i,brandfifo,brandcur,fifob1,updst,addCurs,currencyBalances,additionalCurF,tmpbool); //Edit***************************Sasha2,16:02 13.09.2017
 											if(fifob1==0)then begin
-												fifob1 = INr.WeighedAvPrice * IVrw.Quant;
+											  if(IVrw.FIFORowVal==0)then begin
+											    fifob1 = IVrw.FIFORowVal;
+											  end else begin
+                          fifob1 = INr.WeighedAvPrice * IVrw.Quant;
+												end;
 											end;
 											if(brandfifo==0)then begin
 												brandfifo = INr.LastPurchPrice2 * IVrw.Quant;
@@ -1717,7 +1725,6 @@ begin
 												aznfr = 1; aznto = 1;
 											end;
 											fifoazn = fifob1*aznfr/aznto;
-											
 											if (modef) then begin
 												outstring(100,0,brandfifo,false);//brandcur
 												if (additionalCurF) then begin //additional currency cost //Edit***************************Sasha2,17:02 13.09.2017
