@@ -56,6 +56,7 @@ remote procedure PUVc_PasteTREO(var record PUVc,Integer);
 remote function Boolean PUVc_PasteVEItemCode(var record PUVc,Integer,var string,var string);
 
 forward function Boolean PUDClassSwitchRow(Integer,Integer);
+remote function Boolean remPUDClassTax15PercentSumEFAfter(var record PUVc,Integer);  // Edit ****************** Ihor Trubachov 18*06*2021
 
 function val UnitCalcQty(string Unittext,val UnitXval,val UnitYval,val UnitZval,val defqty)
 BEGIN
@@ -414,6 +415,7 @@ BEGIN
       goto LPUDClassDeleteRowTest;
     end;
   end;
+
 LPUDClassDeleteRowTest:;  
   PUDClassDeleteRowTest = res;
   RETURN;
@@ -884,36 +886,12 @@ global
 function Boolean PUDClassTax15PercentSumEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf) // Edit ****************** Ihor Trubachov 16*06*2021
 begin
  record PUVc PUr;
-  row PUVc PUrw;
-	integer mtrw,i;
-	val SumOfAll;
+
 
   if (changedf!=0) then begin
 		GetWindowRecord(wn,PUr);   
-		
-		if(nonblank(PUr.Tax15PercentSum)) then begin
-			mtrw = MatRowCnt(PUr);
-			
-			for(i=0;i<mtrw;i=i+1)begin
-				MatRowGet(PUr,i,PUrw); 
-				if(PUrw.Tax15Percentf == 1) then begin
-					SumOfAll = SumOfAll + PUrw.Sum;
-				end;
-			end;
-			
-			for(i=0;i<mtrw;i=i+1)begin
-				MatRowGet(PUr,i,PUrw); 
-				if(PUrw.Tax15Percentf == 1) then begin
-					PUrw.Tax15Percent = PUr.Tax15PercentSum * PUrw.Sum / SumOfAll;
-					MatRowPut(PUr,i,PUrw); 
-				end else begin
-					PUrw.Tax15Percent = 0;
-					MatRowPut(PUr,i,PUrw);
-				end;
-			end;
-			PutWindowRecord(wn,PUr);
-		end;
-		
+		remPUDClassTax15PercentSumEFAfter(PUr,wn);
+		PutWindowRecord(wn,PUr);
   end;
 	
   PUDClassTax15PercentSumEFAfter = true;
@@ -924,41 +902,35 @@ global
 function Boolean PUDClassTax15PercentfEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf) // Edit ****************** Ihor Trubachov 17*06*2021
 begin
  record PUVc PUr;
-  row PUVc PUrw;
-	integer mtrw,i;
-	val SumOfAll;
 
-  if (changedf!=0) then begin
+	 if (changedf!=0) then begin
 		GetWindowRecord(wn,PUr);   
-		
-		if(nonblank(PUr.Tax15PercentSum)) then begin
-			mtrw = MatRowCnt(PUr);
-			
-			for(i=0;i<mtrw;i=i+1)begin
-				MatRowGet(PUr,i,PUrw); 
-				if(PUrw.Tax15Percentf == 1) then begin
-					SumOfAll = SumOfAll + PUrw.Sum;
-				end;
-			end;
-			
-			for(i=0;i<mtrw;i=i+1)begin
-				MatRowGet(PUr,i,PUrw); 
-				if(PUrw.Tax15Percentf == 1) then begin
-					PUrw.Tax15Percent = PUr.Tax15PercentSum * PUrw.Sum / SumOfAll;
-					MatRowPut(PUr,i,PUrw); 
-				end else begin
-					PUrw.Tax15Percent = 0;
-					MatRowPut(PUr,i,PUrw);
-				end;
-			end;
-			PutWindowRecord(wn,PUr);
-		end;
-		
-  end;
-	
+		remPUDClassTax15PercentSumEFAfter(PUr,wn);
+		PutWindowRecord(wn,PUr);
+	 end;
+	 
   PUDClassTax15PercentfEFAfter = true;
   return;
 end;
+
+global 
+function Boolean newPUDClassQuantEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf) // Edit ****************** Ihor Trubachov 18*06*2021
+begin
+ record PUVc PUr;
+ Boolean res;
+
+		if (changedf!=0) then begin
+			res = PUDClassQuantEFAfter(wn,fn,rownr,changedf);
+			
+			GetWindowRecord(wn,PUr);   
+			remPUDClassTax15PercentSumEFAfter(PUr,wn);
+			PutWindowRecord(wn,PUr);
+	  end;
+	
+  newPUDClassQuantEFAfter = res;
+  return;
+end;
+
 
 
 global
@@ -981,7 +953,7 @@ BEGIN
 			case "UnitYval": res = PUDClassUnitYvalEFAfter(wn,fn,rownr,changed);
 			case "UnitXval": res = PUDClassUnitXvalEFAfter(wn,fn,rownr,changed);
 			case "ArtCode": res = PUDClassArtCodeEFAfter(wn,fn,rownr,changed);
-			case "Quant": res = PUDClassQuantEFAfter(wn,fn,rownr,changed);
+			case "Quant": res = newPUDClassQuantEFAfter(wn,fn,rownr,changed); // Edit ****************** Ihor Trubachov 18*06*2021
 			case "Sum": res = PUDClassSumEFAfter(wn,fn,rownr,changed);
 			case "UPrice": res = PUDClassUPriceEFAfter(wn,fn,rownr,changed);
 			case "ShipCost": res = PUDClassShipCostEFAfter(wn,fn,rownr,changed);
@@ -1018,6 +990,7 @@ BEGIN
   PUDClassAfterEditField = res;
   RETURN;
 END;
+
 
 global
 function Boolean PUDClassInclVATButtonAction(Integer wn,Integer value)
@@ -1314,5 +1287,90 @@ begin
   GetWindowRecord(wn,PUr);
   PUDClassOnOpenWindowRemote(PUr,AcceptanceStatusFlag);
   PutWindowString(wn,"AcceptanceStatusFlag",StringFromSet(443,AcceptanceStatusFlag));  
+  return;
+end;
+
+
+global 
+function Boolean remBPUDClassTax15PercentfEFAfter(var record BigPUVc BPUr,Integer wn) // Edit ****************** Ihor Trubachov 18*06*2021
+begin
+  row BigPUVc BPUrw;
+	integer mtrw,i;
+	val SumOfAll;
+	
+	if(nonblank(BPUr.Tax15PercentSum)) then begin
+		mtrw = MatRowCnt(BPUr);
+			
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(BPUr,i,BPUrw); 
+			if(BPUrw.Tax15Percentf == 1) then begin
+				SumOfAll = SumOfAll + BPUrw.Sum;
+			end;
+		end;
+		
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(BPUr,i,BPUrw); 
+			if(BPUrw.Tax15Percentf == 1) then begin
+				BPUrw.Tax15Percent = BPUr.Tax15PercentSum * BPUrw.Sum / SumOfAll;
+				MatRowPut(BPUr,i,BPUrw); 
+			end else begin
+				BPUrw.Tax15Percent = 0;
+				MatRowPut(BPUr,i,BPUrw);
+			end;
+		end;
+	end else begin
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(BPUr,i,BPUrw); 
+			BPUrw.Tax15Percent = 0;
+			MatRowPut(BPUr,i,BPUrw);
+		end;
+	end;
+	
+//////////////////////
+
+  remBPUDClassTax15PercentfEFAfter = true;
+  return;
+end;
+
+
+
+global 
+function Boolean remPODClassTax15PercentSumEFAfter(var record POVc POr,Integer wn) // Edit ****************** Ihor Trubachov 18*06*2021
+begin
+  row POVc POrw;
+	integer mtrw,i;
+	val SumOfAll;
+
+
+	if(nonblank(POr.Tax15PercentSum)) then begin
+		mtrw = MatRowCnt(POr);
+		
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(POr,i,POrw); 
+			if(POrw.Tax15Percentf == 1) then begin
+				SumOfAll = SumOfAll + POrw.Sum;
+			end;
+		end;
+		
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(POr,i,POrw); 
+			if(POrw.Tax15Percentf == 1) then begin
+				POrw.Tax15Percent = POr.Tax15PercentSum * POrw.Sum / SumOfAll;
+				MatRowPut(POr,i,POrw); 
+			end else begin
+				POrw.Tax15Percent = 0;
+				MatRowPut(POr,i,POrw);
+			end;
+		end;
+	end else begin
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(POr,i,POrw); 
+			POrw.Tax15Percent = 0;
+			MatRowPut(POr,i,POrw);
+		end;
+	end;
+////////////////////
+	
+  remPODClassTax15PercentSumEFAfter = true;
   return;
 end;
