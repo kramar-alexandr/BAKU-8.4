@@ -13,7 +13,7 @@ external function string 60 AddObjectToObjectList(string,string);
 external procedure ExtractObjectsByType(string, string, var array string, var integer);
 external function string 100 BPICodeToName(string);
 external procedure NextM4SerialNumber(string,var string);
-
+external function Boolean PasteCust2InInv(var record IVVc,record LocalMachineBlock,string,Boolean,var string,var string,var string,var string,var string);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -5368,6 +5368,93 @@ begin
 return;
 end;
 
+
+global webpublic updating procedure WebCorectCustInProductSoldIV18Mn()
+begin
+	record IVVc IVr, OldIVr;
+	row IVVc IVrw;
+	record VIVc VIr;
+	integer i;
+	boolean TrHs, ErrF;
+	record RLinkVc RLinkr;
+	record LocalMachineBlock LMb;
+	string 255 warning,errstr,prepstr,invdatewarn,transdatewarn;
+	
+	weboutstring("<table>");
+	SetCompany(18,false);
+	IVr.CustCode = "FOB_CASACOIN2";
+	TrHs = true;
+	while (loopKey("CustCode",IVr,1,TrHs)) begin
+		if (IVr.CustCode!="FOB_CASACOIN2") then begin TrHs = false; end;
+		if (TrHs) then begin
+			ErrF = false;
+			if (ReadRecordLink(IVr,1,VIr,RLinkr)) then begin
+				if (!SetInSet("COINCASA2",VIr.Objects)) then begin ErrF = true; end;
+				if (ErrF) then begin
+					RecordCopy(OldIVr,IVr);
+					IVr.OKFlag = 0;
+					if(RecordUpdate(OldIVr,IVr,true)==0)then begin
+						RecordCopy(OldIVr,IVr);
+						IVr.CustCode = "FOB_CASACOIN1";
+						IVr.Addr0 = "FOB_CasaCoin1";
+						if (SetInSet("AFF",IVr.Objects)) then begin 
+							IVr.Objects = RemoveObjectFromObjectList(IVr.Objects,"AFF"); 
+							for (i=0;i<matrowcnt(IVr);i=i+1) begin
+								matrowget(IVr,i,IVrw);
+								if (SetInSet("AFF",IVrw.Objects)) then begin
+									IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,"AFF"); 
+									matrowput(IVr,i,IVrw);
+								end;
+							end;
+						end;
+						Recordstore (IVr,true);
+						RecordCopy(OldIVr,IVr);
+						IVr.OKFlag = 1;
+						if(RecordUpdate(OldIVr,IVr,true)==0)then begin
+							weboutstring("<tr>");
+							weboutstring("<td>" & IVr.SerNr & "  - UPDTED" & "</td>");	
+							weboutstring("</tr>");
+						end else begin
+							weboutstring("<tr>");
+							weboutstring("<td>" & IVr.SerNr & "  - ERROR 2" & "</td>");	
+							weboutstring("</tr>");
+						end;
+					end else begin
+						weboutstring("<tr>");
+						weboutstring("<td>" & IVr.SerNr & "  - ERROR 1" & "</td>");	
+						weboutstring("</tr>");
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	resetloop(IVr);
+	
+	IVr.CustCode = "FOB_CASACOIN1";
+	TrHs = true;
+	while (loopKey("CustCode",IVr,1,TrHs)) begin
+		if (IVr.CustCode!="FOB_CASACOIN1") then begin TrHs = false; end;
+		if (TrHs and IVr.OKFlag==0) then begin
+			ErrF = false;
+			if (ReadRecordLink(IVr,1,VIr,RLinkr)) then begin
+				if (!SetInSet("COINCASA2",VIr.Objects)) then begin ErrF = true; end;
+				if (ErrF) then begin
+					RecordCopy(OldIVr,IVr);
+					IVr.OKFlag = 1;
+					if(RecordUpdate(OldIVr,IVr,true)==0)then begin
+						weboutstring("<tr>");
+						weboutstring("<td>" & IVr.SerNr & "  - UPDTED" & "</td>");	
+						weboutstring("</tr>");
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	
+return;
+end;
 
 
 
