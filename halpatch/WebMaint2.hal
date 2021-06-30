@@ -14,6 +14,7 @@ external procedure ExtractObjectsByType(string, string, var array string, var in
 external function string 100 BPICodeToName(string);
 external procedure TRSumup(var record TRVc,var val);
 external procedure SetORFlags(record ORVc);
+external procedure NextCode(string,var string); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 15:37 30.06.2021
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -1202,6 +1203,95 @@ begin
 	end;
 
 end;
+
+
+
+
+
+
+global 
+webpublic updating procedure WebRestoreWarnBrndsMn()
+begin
+	record BTRxBrandVc Brndr, oldBrandr;
+	record ItemDuplicatesVc IDr;
+	boolean testf;
+	array string 255 aBrNames;
+	integer pos;
+	string 255 warn,OldCode, ExistBRNdCode;
+	longint i, chcnt;
+	boolean TrHs;
+
+
+	setcompany(29,false);
+
+	Brndr.Code = "";
+	i = 0;
+	while(loopMain(Brndr,1,true))begin
+		if (left(Brndr.Code,4)=="ZOBR") then begin
+			testf = false;
+			pos = 0;
+			chcnt = 0;
+			ExtractObjWithSeparator(".",Brndr.Code,true,pos,warn);
+			while (nonblank(warn)) begin
+				if (chcnt>0) then begin
+					aBrNames[i] = Brndr.Name;
+					i=i+1;
+					pos = 1000;
+				end;
+				chcnt = chcnt + 1;
+				ExtractObjWithSeparator(".",Brndr.Code,true,pos,warn);
+			end;
+		end;
+	end;
+	ResetLoop(Brndr);
+
+	Brndr.Code = "";
+	while(loopMain(Brndr,1,true))begin
+		if (left(Brndr.Code,4)=="ZOBR") then begin
+			testf = false;
+			pos = 0;
+			chcnt = 0;
+			ExtractObjWithSeparator(".",Brndr.Code,true,pos,warn);
+			while (nonblank(warn)) begin
+				if (chcnt>0) then begin
+					pos = 1000;
+					Recorddelete(Brndr);
+					StepBack(Brndr);
+				end;
+				chcnt = chcnt + 1;
+				ExtractObjWithSeparator(".",Brndr.Code,true,pos,warn);
+			end;
+		end;
+	end;
+	ResetLoop(Brndr);
+	
+	for (i=0;i<aBrNames.length;i=i+1) begin
+		oldBrandr.Code = "ZOBR9999";
+		TrHs = true;
+		
+		if (blank(ExistBRNdCode)) then begin
+			while (LoopBackKey("Code",oldBrandr,1,TrHs)) begin
+				if (left(oldBrandr.Code,4)!="ZOBR") then begin TrHs = false; end;
+				if (TrHs) then begin
+					OldCode = oldBrandr.Code;
+					TrHs = false;
+				end;
+			end;
+		end else begin
+			OldCode = ExistBRNdCode;
+		end;
+		ResetLoop(oldBrandr);
+		if(blank(OldCode))then begin OldCode = "ZOBR0000"; end;
+		recordnew(Brndr);
+		NextCode(OldCode,Brndr.Code);
+		Brndr.Name = aBrNames[i];
+		RecordStore (Brndr,true);
+		ExistBRNdCode = Brndr.Code;
+	end;
+end;
+
+
+
 
 
 global 
