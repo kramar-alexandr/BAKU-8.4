@@ -57,6 +57,8 @@ remote function Boolean PUVc_PasteVEItemCode(var record PUVc,Integer,var string,
 
 forward function Boolean PUDClassSwitchRow(Integer,Integer);
 remote function Boolean remPUDClassTax15PercentSumEFAfter(var record PUVc,Integer);  // Edit ****************** Ihor Trubachov 18*06*2021
+remote function Boolean remPUDClassCons15PercentSumEFAfter(var record PUVc,Integer);  // Edit ****************** Ihor Trubachov 25*06*2021
+
 
 function val UnitCalcQty(string Unittext,val UnitXval,val UnitYval,val UnitZval,val defqty)
 BEGIN
@@ -470,6 +472,7 @@ BEGIN
     PURecalcCost(PUr);
     PUSumUp(PUr);
 		remPUDClassTax15PercentSumEFAfter(PUr,wn);	// Edit ****************** Ihor Trubachov 21*06*2021
+		remPUDClassCons15PercentSumEFAfter(PUr,wn); // Edit ****************** Ihor Trubachov 25*06*2021
     PutWindowRecord(wn,PUr);    
   end;
   PUDClassOnOverStrike = true;
@@ -907,6 +910,7 @@ begin
 	 if (changedf!=0) then begin
 		GetWindowRecord(wn,PUr);   
 		remPUDClassTax15PercentSumEFAfter(PUr,wn);
+		remPUDClassCons15PercentSumEFAfter(PUr,wn); // Edit ****************** Ihor Trubachov 25*06*2021
 		PutWindowRecord(wn,PUr);
 	 end;
 	 
@@ -925,6 +929,7 @@ begin
 			
 			GetWindowRecord(wn,PUr);   
 			remPUDClassTax15PercentSumEFAfter(PUr,wn);
+			remPUDClassCons15PercentSumEFAfter(PUr,wn); // Edit ****************** Ihor Trubachov 25*06*2021
 			PutWindowRecord(wn,PUr);
 	  end;
 	
@@ -943,10 +948,31 @@ begin
 			
 			GetWindowRecord(wn,PUr);   
 			remPUDClassTax15PercentSumEFAfter(PUr,wn);
+			remPUDClassCons15PercentSumEFAfter(PUr,wn); // Edit ****************** Ihor Trubachov 25*06*2021
 			PutWindowRecord(wn,PUr);
 	  end;
 	
   newPUDClassUPriceEFAfter = res;
+  return;
+end;
+
+
+
+global 
+function Boolean newPUDClassCost2EFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf) // Edit ****************** Ihor Trubachov 25*06*2021
+begin
+ record PUVc PUr;
+ Boolean res;
+
+		if (changedf!=0) then begin
+			res = PUDClassCost2EFAfter(wn,fn,rownr,changedf);
+			
+			GetWindowRecord(wn,PUr);   
+			remPUDClassCons15PercentSumEFAfter(PUr,wn);
+			PutWindowRecord(wn,PUr);
+	  end;
+	
+  newPUDClassCost2EFAfter = res;
   return;
 end;
 
@@ -1352,6 +1378,47 @@ begin
 end;
 
 
+global 
+function Boolean remBPUDClassCons15PercentfEFAfter(var record BigPUVc BPUr,Integer wn) // Edit ****************** Ihor Trubachov 25*06*2021
+begin
+  row BigPUVc BPUrw;
+	integer mtrw,i;
+	val SumOfAll;
+
+	if(nonblank(BPUr.Cost2)) then begin
+		mtrw = MatRowCnt(BPUr);
+		
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(BPUr,i,BPUrw); 
+			if(BPUrw.Tax15Percentf == 1 and BPUrw.CostAcc == "41/02") then begin
+				SumOfAll = SumOfAll + BPUrw.Sum;
+			end;
+		end;
+		
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(BPUr,i,BPUrw); 
+			if(BPUrw.Tax15Percentf == 1 and BPUrw.CostAcc == "41/02") then begin
+				BPUrw.RowCost2 = BPUr.Cost2 * BPUrw.Sum / SumOfAll;
+				MatRowPut(BPUr,i,BPUrw); 
+			end else begin
+				BPUrw.RowCost2 = 0;
+				MatRowPut(BPUr,i,BPUrw);
+			end;
+		end;
+	end else begin
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(BPUr,i,BPUrw); 
+			BPUrw.RowCost2 = 0;
+			MatRowPut(BPUr,i,BPUrw);
+		end;
+	end;
+	
+///////////////////
+
+  remBPUDClassCons15PercentfEFAfter = true;
+  return;
+end;
+
 
 global 
 function Boolean remPODClassTax15PercentSumEFAfter(var record POVc POr,Integer wn) // Edit ****************** Ihor Trubachov 18*06*2021
@@ -1391,5 +1458,49 @@ begin
 ////////////////////
 	
   remPODClassTax15PercentSumEFAfter = true;
+  return;
+end;
+
+
+
+
+global 
+function Boolean remPODClassCons15PercentSumEFAfter(var record POVc POr,Integer wn) // Edit ****************** Ihor Trubachov 25*06*2021
+begin
+  row POVc POrw;
+	integer mtrw,i;
+	val SumOfAll;
+
+
+	if(nonblank(POr.Cost2)) then begin
+		mtrw = MatRowCnt(POr);
+		
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(POr,i,POrw); 
+			if(POrw.Tax15Percentf == 1 and POrw.CostAcc == "41/02") then begin
+				SumOfAll = SumOfAll + POrw.Sum;
+			end;
+		end;
+		
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(POr,i,POrw); 
+			if(POrw.Tax15Percentf == 1 and POrw.CostAcc == "41/02") then begin
+				POrw.RowCost2 = POr.Cost2 * POrw.Sum / SumOfAll;
+				MatRowPut(POr,i,POrw); 
+			end else begin
+				POrw.RowCost2 = 0;
+				MatRowPut(POr,i,POrw);
+			end;
+		end;
+	end else begin
+		for(i=0;i<mtrw;i=i+1)begin
+			MatRowGet(POr,i,POrw); 
+			POrw.RowCost2 = 0;
+			MatRowPut(POr,i,POrw);
+		end;
+	end;
+////////////////////
+	
+  remPODClassCons15PercentSumEFAfter = true;
   return;
 end;
