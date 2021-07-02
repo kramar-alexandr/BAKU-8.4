@@ -25,6 +25,11 @@ remote function Boolean ORVc_PasteArtCode(var record ORVc,Integer,var string,var
 remote procedure ORVc_PasteLocation(var record ORVc,Integer);
 external procedure GetObjs(string,string,var string);
 external function string 255 StrReplace(string,string,string);
+remote procedure IPPastePayMode2(var record IPVc,string);
+remote function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean);
+remote function Boolean PasteOrdInInv(var record IVVc,record ORVc,Boolean,string,record RcVc,var val,Boolean,Boolean,Boolean,
+                               var Integer,Boolean,array record XSrsVc,var Integer);
+
 									
 SetLangMode(LangRussian,"RUS",0);
 
@@ -4496,7 +4501,12 @@ begin
 	boolean Retf;
 	vector val ArtCodeRetQty;
 	record LocalMachineBlock LMb;
-
+	record IVVc IVr, oldIVr;
+	record IPVc IPr, OldIPr;
+	row IPVc IPrw;
+	record ARVc ARr;
+	val tmpval;
+	boolean tmpbool;
 
 	SetCompany(29,false);
 	
@@ -4530,14 +4540,38 @@ begin
 				SHr.OKFlag = 1;
 				error = RecordUpdate(OldSHr,SHr,true);
 				if (error==0) then begin
+					IVr.OrderNr = ORr.SerNr;
+					if (ReadFirstKey("OrderNr",IVr,1,true)) then begin
+						RecordCopy(oldIVr,IVr);
+						IVr.OKFlag = 1;
+						RecordUpdate(oldIVr,IVr,true);
+						if (IVr.OKFlag==1) then begin
+							ARr.InvoiceNr = IVr.SerNr;
+							if (readfirstmain(ARr,1,true)) then begin
+								RecordNew(IPr);
+								IPr.PayMode = "T1";
+								IPPastePayMode2(IPr,"’1");
+								IPrw.InvoiceNr = IVr.SerNr;
+								MatRowPut(IPr,0,IPrw);
+								PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+								MatRowGet(IPr,0,IPrw);
+								IPr.MachineName = IVr.MachineName;
+								IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
+								RecordInsert(IPr,true);
+								RecordCopy(OldIPr,IPr);
+								IPr.OKFlag = 1;
+								RecordUpdate(OldIPr,IPr,true);
+							end;
+						end;
+					end;
 					for (i=0;i<matrowcnt(SHr);i=i+1) begin
 						matrowget(SHr,i,SHrw);
 						for (j=0;j<itemCode.length;j=j+1) begin
 							if (SHrw.ArtCode==itemCode[j]) then begin
-								logtext(0,"12345");
+								// logtext(0,"12345");
 								if (SHrw.Ship!=StringToVal(itemQuantity[j],M45Val)) then begin
 									Retf = true;
-									logtext(0,"Retf " & Retf);
+									// logtext(0,"Retf " & Retf);
 									ArtCodeRetQty[SHrw.ArtCode] = SHrw.Ship - StringToVal(itemQuantity[j],M45Val);
 								end;
 							end;
@@ -4548,12 +4582,12 @@ begin
 					weboutstring("{\"resultCode\":" & error & ",\"message\":\"Internal error\"}");
 				end;
 				if (Retf) then begin
-					logtext(0,"1");
+					// logtext(0,"1");
 					BlockLoad(LMb);
 					r = PasteSHInRet(SHr,Retr,LMb.DefReturnLocation);
 					mtrw = matrowcnt(Retr);
 					for (i=mtrw-1;i>=0;i=i-1) begin
-						logtext(0,"2");
+						// logtext(0,"2");
 						matrowget(Retr,i,Retrw);
 						if (ArtCodeRetQty[Retrw.ArtCode]>0) then begin
 							Retrw.Quant = ArtCodeRetQty[Retrw.ArtCode];
@@ -4565,7 +4599,7 @@ begin
 					if(RecordStore(Retr,true))then begin
 						weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}");
 					end;
-					logtext(0,"3");
+					// logtext(0,"3");
 				end;
 			end else begin
 				weboutstring("{\"resultCode\":1,\"message\":\"SH confirmed!\"}");
@@ -4579,7 +4613,31 @@ begin
 return;
 end;
 
-
+/*
+			RecordCopy(oldIVr,IVr);
+			IVr.OKFlag = 1;
+			RecordUpdate(oldIVr,IVr,true);
+			CreateRecordLink(IVr,CurrentCompany,ORr,CurrentCompany);  
+      CreateRecordLink(ORr,CurrentCompany,IVr,CurrentCompany);  
+			if (IVr.OKFlag==1) then begin
+				ARr.InvoiceNr = IVr.SerNr;
+				if (readfirstmain(ARr,1,true)) then begin
+					RecordNew(IPr);
+					IPr.PayMode = "T1";
+					IPPastePayMode2(IPr,"’1");
+					IPrw.InvoiceNr = IVr.SerNr;
+					MatRowPut(IPr,0,IPrw);
+					PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+					MatRowGet(IPr,0,IPrw);
+					IPr.MachineName = IVr.MachineName;
+					IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
+					RecordInsert(IPr,true);
+					RecordCopy(OldIPr,IPr);
+					IPr.OKFlag = 1;
+					RecordUpdate(OldIPr,IPr,true);
+				end;
+			end;
+*/
 
 
 
