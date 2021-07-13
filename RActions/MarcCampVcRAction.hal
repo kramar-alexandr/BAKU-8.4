@@ -4583,7 +4583,7 @@ begin
 	json datajson;
 	record ORVc ORr;
 	row ORVc ORrw;
-	string 255 orderNo,sum;
+	string 255 orderNo,sum,csum,clsum;
 	array string 255 itemCode,itemQuantity;
 	integer i,j, mtrw;
 	longint a,r,error;
@@ -4599,7 +4599,7 @@ begin
 	row IPVc IPrw;
 	record ARVc ARr;
 	val tmpval;
-	boolean tmpbool, cashf;
+	boolean tmpbool, cashf, clsumf;
 	vector boolean Itemf;
 
 	SetCompany(29,false);
@@ -4611,9 +4611,12 @@ begin
 	orderNo = JSONGet(datajson,"orderNo");
 	sum = JSONGet(datajson,"sum");
 	if (StringToVal(JSONGet(datajson,"cashlessSum"),M4Val)>0) then begin
-		cashf = false;
-	end else begin
+		clsumf = true;
+		clsum = JSONGet(datajson,"cashlessSum");
+	end;
+	if (StringToVal(JSONGet(datajson,"cashSum "),M4Val)>0) then begin
 		cashf = true;
+		csum = JSONGet(datajson,"cashSum");
 	end;
 	for(i=0;i<JSONCountChildren(datajson,"items");i=i+1) begin
 		itemCode[i] = JSONGet(datajson,"items[0]/[" & i & "]/itemCode");
@@ -4653,30 +4656,48 @@ begin
 						if (IVr.OKFlag==1) then begin
 							ARr.InvoiceNr = IVr.SerNr;
 							if (readfirstmain(ARr,1,true)) then begin
-								RecordNew(IPr);
-								if (!cashf) then begin
-									IPr.PayMode = "T1";
-									IPPastePayMode2(IPr,"’1");
-								end else begin
+								if (cashf) then begin
+									RecordNew(IPr);
 									IPr.PayMode = "C1";
 									IPPastePayMode2(IPr,"C1");
+									IPrw.InvoiceNr = IVr.SerNr;
+									MatRowPut(IPr,0,IPrw);
+									PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+									MatRowGet(IPr,0,IPrw);
+									IPrw.BankVal = StringToVal(csum,M4Val);
+									IPrw.RecVal = StringToVal(csum,M4Val);
+									MatRowPut(IPr,0,IPrw);
+									IPVc_PasteRecVal(IPr,0);
+									IPSumup(IPr);
+									IPr.MachineName = IVr.MachineName;
+									IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
+									IPr.Comment = csum;
+									RecordInsert(IPr,true);
+									RecordCopy(OldIPr,IPr);
+									IPr.OKFlag = 1;
+									RecordUpdate(OldIPr,IPr,true);
 								end;
-								IPrw.InvoiceNr = IVr.SerNr;
-								MatRowPut(IPr,0,IPrw);
-								PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
-								MatRowGet(IPr,0,IPrw);
-								IPrw.BankVal = StringToVal(sum,M4Val);
-								IPrw.RecVal = StringToVal(sum,M4Val);
-								MatRowPut(IPr,0,IPrw);
-								IPVc_PasteRecVal(IPr,0);
-								IPSumup(IPr);
-								IPr.MachineName = IVr.MachineName;
-								IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
-								IPr.Comment = sum;
-								RecordInsert(IPr,true);
-								RecordCopy(OldIPr,IPr);
-								IPr.OKFlag = 1;
-								RecordUpdate(OldIPr,IPr,true);
+								if (clsumf) then begin
+									RecordNew(IPr);
+									IPr.PayMode = "T4";
+									IPPastePayMode2(IPr,"’4");
+									IPrw.InvoiceNr = IVr.SerNr;
+									MatRowPut(IPr,0,IPrw);
+									PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+									MatRowGet(IPr,0,IPrw);
+									IPrw.BankVal = StringToVal(clsum,M4Val);
+									IPrw.RecVal = StringToVal(clsum,M4Val);
+									MatRowPut(IPr,0,IPrw);
+									IPVc_PasteRecVal(IPr,0);
+									IPSumup(IPr);
+									IPr.MachineName = IVr.MachineName;
+									IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
+									IPr.Comment = clsum;
+									RecordInsert(IPr,true);
+									RecordCopy(OldIPr,IPr);
+									IPr.OKFlag = 1;
+									RecordUpdate(OldIPr,IPr,true);
+								end;
 							end;
 						end;
 					end;
