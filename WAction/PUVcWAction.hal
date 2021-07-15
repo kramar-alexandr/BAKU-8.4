@@ -54,6 +54,11 @@ external function Integer GetUnitAllowDim(string);
 remote function Boolean PUDchrsum(record PUVc,Integer);
 remote procedure PUVc_PasteTREO(var record PUVc,Integer);
 remote function Boolean PUVc_PasteVEItemCode(var record PUVc,Integer,var string,var string);
+external procedure PUCalcCostPrice(string,val,Integer,Integer,string,string,
+                                   val,val,val,val,val,
+                                   val,val,val,val,val,val,
+                                   string,var val,val,var val,string,Integer);
+
 
 forward function Boolean PUDClassSwitchRow(Integer,Integer);
 remote function Boolean remPUDClassTax15PercentSumEFAfter(var record PUVc,Integer);  // Edit ****************** Ihor Trubachov 18*06*2021
@@ -907,6 +912,9 @@ global
 function Boolean PUDClassTax15PercentfEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf) // Edit ****************** Ihor Trubachov 17*06*2021
 begin
  record PUVc PUr;
+ row PUVc PUrw;
+ val p, s;
+ integer i;
 
 	 if (changedf!=0) then begin
 		GetWindowRecord(wn,PUr);   
@@ -966,12 +974,10 @@ begin
  Boolean res;
 
 		if (changedf!=0) then begin
-			res = PUDClassCost2EFAfter(wn,fn,rownr,changedf);
-			
 			GetWindowRecord(wn,PUr);   
 			remPUDClassCons15PercentSumEFAfter(PUr,wn);
 			PutWindowRecord(wn,PUr);
-	  end;
+		end;
 	
   newPUDClassCost2EFAfter = res;
   return;
@@ -1004,7 +1010,8 @@ BEGIN
 			case "UPrice": res = newPUDClassUPriceEFAfter(wn,fn,rownr,changed); // Edit ****************** Ihor Trubachov 21*06*2021
 			case "ShipCost": res = PUDClassShipCostEFAfter(wn,fn,rownr,changed);
 			case "Cost1": res = PUDClassCost1EFAfter(wn,fn,rownr,changed);
-			case "Cost2": res = PUDClassCost2EFAfter(wn,fn,rownr,changed);
+			// case "Cost2": res = PUDClassCost2EFAfter(wn,fn,rownr,changed);
+			case "Cost2": res = newPUDClassCost2EFAfter(wn,fn,rownr,changed);
 			case "Cost3": res = PUDClassCost3EFAfter(wn,fn,rownr,changed);
 			case "Cost4": res = PUDClassCost4EFAfter(wn,fn,rownr,changed);
 			case "Cost5": res = PUDClassCost5EFAfter(wn,fn,rownr,changed);
@@ -1344,33 +1351,31 @@ begin
 	integer mtrw,i;
 	val SumOfAll;
 	
-	if(nonblank(BPUr.Tax15PercentSum)) then begin
+	
 		mtrw = MatRowCnt(BPUr);
 			
 		for(i=0;i<mtrw;i=i+1)begin
 			MatRowGet(BPUr,i,BPUrw); 
+			BPUrw.CostPrice = BPUrw.CostPrice - BPUrw.Tax15Percent;
+			BPUrw.Sum = BPUrw.CostPrice * BPUrw.Quant;
 			if(BPUrw.Tax15Percentf == 1) then begin
 				SumOfAll = SumOfAll + BPUrw.Sum;
 			end;
+			MatRowPut(BPUr,i,BPUrw);
 		end;
 		
 		for(i=0;i<mtrw;i=i+1)begin
 			MatRowGet(BPUr,i,BPUrw); 
 			if(BPUrw.Tax15Percentf == 1) then begin
 				BPUrw.Tax15Percent = (BPUr.Tax15PercentSum * BPUrw.Sum / SumOfAll) / BPUrw.Quant;
+				BPUrw.CostPrice = BPUrw.CostPrice + BPUrw.Tax15Percent;
+				BPUrw.Sum = BPUrw.CostPrice * BPUrw.Quant;
 				MatRowPut(BPUr,i,BPUrw); 
 			end else begin
 				BPUrw.Tax15Percent = 0;
 				MatRowPut(BPUr,i,BPUrw);
 			end;
 		end;
-	end else begin
-		for(i=0;i<mtrw;i=i+1)begin
-			MatRowGet(BPUr,i,BPUrw); 
-			BPUrw.Tax15Percent = 0;
-			MatRowPut(BPUr,i,BPUrw);
-		end;
-	end;
 	
 //////////////////////
 

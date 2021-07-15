@@ -26,7 +26,11 @@ external procedure CalculatePURowSum(val,val,string,var val,val,
                                      val,val,val,val,val);
 external function Boolean GetFirstItem(var string,var record INVc);
 remote procedure BigPUSumUp(var record BigPUVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:38 22.07.2019
-
+external procedure PUVc_PasteCostPrice(var record PUVc,Integer);
+external procedure PUCalcCostPrice(string,val,Integer,Integer,string,string,
+                                   val,val,val,val,val,
+                                   val,val,val,val,val,val,
+                                   string,var val,val,var val,string,Integer); 
 
 global
 function Boolean  AllowCurChange(string curcode,Boolean base)
@@ -690,26 +694,24 @@ begin
 	res = true;
 	
 	mtrw = MatRowCnt(PUr);
-	if(nonblank(PUr.Tax15PercentSum)) then begin
-		for(i=0;i<mtrw;i=i+1)begin
-			MatRowGet(PUr,i,PUrw); 
-			if(PUrw.Tax15Percentf == 1) then begin
-				SumOfAll = SumOfAll + PUrw.Sum;
-			end;
+	for(i=0;i<mtrw;i=i+1)begin
+		MatRowGet(PUr,i,PUrw); 
+		PUrw.Sum = PUrw.Sum - PUrw.Tax15Percent * PUrw.Quant;
+		PUrw.CostPrice = PUrw.CostPrice - PUrw.Tax15Percent;
+		if(PUrw.Tax15Percentf == 1) then begin
+			SumOfAll = SumOfAll + PUrw.Sum;
 		end;
-		
-		for(i=0;i<mtrw;i=i+1)begin
-			MatRowGet(PUr,i,PUrw); 
-			if(PUrw.Tax15Percentf == 1) then begin
-				PUrw.Tax15Percent = (PUr.Tax15PercentSum * PUrw.Sum / SumOfAll)/PUrw.Quant;
-			end else begin
-				PUrw.Tax15Percent = 0;
-			end;
+		MatRowPut(PUr,i,PUrw);
+	end;
+	
+	for(i=0;i<mtrw;i=i+1)begin
+		MatRowGet(PUr,i,PUrw); 
+		if(PUrw.Tax15Percentf == 1) then begin
+			PUrw.Tax15Percent = (PUr.Tax15PercentSum * PUrw.Sum / SumOfAll)/PUrw.Quant;
+			PUrw.CostPrice = PUrw.CostPrice + PUrw.Tax15Percent;
 			MatRowPut(PUr,i,PUrw);
-		end;
-	end else begin
-		for(i=0;i<mtrw;i=i+1)begin
-			MatRowGet(PUr,i,PUrw); 
+			PUVc_PasteCostPrice(PUr,i);
+		end else begin
 			PUrw.Tax15Percent = 0;
 			MatRowPut(PUr,i,PUrw);
 		end;
@@ -727,36 +729,41 @@ function Boolean remPUDClassCons15PercentSumEFAfter(var record PUVc PUr,Integer 
 begin
   row PUVc PUrw;
 	integer mtrw,i;
-	val SumOfAll;
+	val SumOfAll, bas, s;
 
-
-	if(nonblank(PUr.Cost2)) then begin
-		mtrw = MatRowCnt(PUr);
-		
-		for(i=0;i<mtrw;i=i+1)begin
-			MatRowGet(PUr,i,PUrw); 
-			if(PUrw.Tax15Percentf == 1 and PUrw.CostAcc == "41/02") then begin
-				SumOfAll = SumOfAll + PUrw.Sum;
-			end;
+	logtext(0,"1");
+	mtrw = MatRowCnt(PUr);
+	logtext(0,"2");
+	for(i=0;i<mtrw;i=i+1)begin
+		MatRowGet(PUr,i,PUrw); 
+		PUrw.Sum = PUrw.Sum - PUrw.RowCost2 * PUrw.Quant;
+		PUrw.CostPrice = PUrw.CostPrice - PUrw.RowCost2;
+		if(PUrw.Tax15Percentf == 1) then begin
+			SumOfAll = SumOfAll + PUrw.Sum;
 		end;
-		
-		for(i=0;i<mtrw;i=i+1)begin
-			MatRowGet(PUr,i,PUrw); 
-			if(PUrw.Tax15Percentf == 1 and PUrw.CostAcc == "41/02") then begin
-				PUrw.RowCost2 = (PUr.Cost2 * PUrw.Sum / SumOfAll) / PUrw.Quant;
-				MatRowPut(PUr,i,PUrw); 
-			end else begin
-				PUrw.RowCost2 = 0;
-				MatRowPut(PUr,i,PUrw);
-			end;
-		end;
-	end else begin
-		for(i=0;i<mtrw;i=i+1)begin
-			MatRowGet(PUr,i,PUrw); 
+		MatRowPut(PUr,i,PUrw);
+	end;
+	
+	for(i=0;i<mtrw;i=i+1)begin
+		MatRowGet(PUr,i,PUrw); 
+		if(PUrw.Tax15Percentf == 1) then begin
+			PUrw.RowCost2 = (PUr.Cost2 * PUrw.Sum / SumOfAll) / PUrw.Quant;
+			logtext(0,PUrw.RowCost2);
+			PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
+                    PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+                    PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+                    PUrw.CustomsCost,bas,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+			PUrw.CostPrice = bas;
+			PUrw.Sum = s;
+			//PUrw.CostPrice = PUrw.CostPrice + PUrw.RowCost2;
+			MatRowPut(PUr,i,PUrw);
+			// PUVc_PasteCostPrice(PUr,i);
+		end else begin
 			PUrw.RowCost2 = 0;
 			MatRowPut(PUr,i,PUrw);
 		end;
 	end;
+	
 ////////////////////
 	
   remPUDClassCons15PercentSumEFAfter = true;
