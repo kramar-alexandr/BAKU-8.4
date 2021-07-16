@@ -692,11 +692,10 @@ begin
 	val SumOfAll, bas, s;
 	
 	res = true;
-	
 	mtrw = MatRowCnt(PUr);
 	for(i=0;i<mtrw;i=i+1)begin
 		MatRowGet(PUr,i,PUrw); 
-		
+		PUrw.RowCost2 = 0;
 		if (PUr.FrRate!=blankval and PUr.FrRate > 0) then begin
 			PUrw.CostPrice = round(PUrw.UPrice / PUr.FrRate * PUr.ToRateB1,SetROundModeD(5));
 		end else begin
@@ -720,9 +719,9 @@ begin
 			PUrw.Tax15Percent = (PUr.Tax15PercentSum * PUrw.Sum / SumOfAll)/PUrw.Quant;			
 			PUrw.RowCost2 = (PUr.Tax15PercentSum * PUrw.Sum / SumOfAll)/PUrw.Quant;
 			PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
-                    PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
-                    PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
-                    PUrw.CustomsCost,bas,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+										PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+										PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+										PUrw.CustomsCost,bas,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
 			PUrw.RowCost2 = 0;
 			PUrw.CostPrice = bas;
 			PUrw.Sum = s;
@@ -748,11 +747,13 @@ function Boolean remPUDClassCons15PercentSumEFAfter(var record PUVc PUr,Integer 
 begin
   row PUVc PUrw;
 	integer mtrw,i;
-	val SumOfAll, bas, s;
+	val SumOfAll, bas, s, tmpCost2;
 
 	logtext(0,"1");
 	mtrw = MatRowCnt(PUr);
 	logtext(0,"2");
+	logtext(0,PUr.Cost2);
+	PUr.Tax15PercentSum = 0;
 	for(i=0;i<mtrw;i=i+1)begin
 		MatRowGet(PUr,i,PUrw); 
 		if (PUr.FrRate!=blankval and PUr.FrRate > 0) then begin
@@ -760,9 +761,13 @@ begin
 		end else begin
 			PUrw.CostPrice = PUrw.UPrice;
 		end;
+		PUrw.Tax15Percent = 0;
 		MatRowPut(PUr,i,PUrw);
+		tmpCost2 = PUr.Cost2;
 		PUVc_PasteCostPrice(PUr,i);
 		MatRowGet(PUr,i,PUrw); 
+		PUr.Cost2 = tmpCost2;
+		logtext(0,PUr.Cost2);
 		// PUrw.Sum = PUrw.Sum - PUrw.RowCost2 * PUrw.Quant;
 		// PUrw.CostPrice = PUrw.CostPrice - PUrw.RowCost2;
 		if(PUrw.Tax15Percentf == 1) then begin
@@ -773,15 +778,37 @@ begin
 	
 	for(i=0;i<mtrw;i=i+1)begin
 		MatRowGet(PUr,i,PUrw); 
+		PUr.Cost2 = tmpCost2;
 		if(PUrw.Tax15Percentf == 1) then begin
-			PUrw.RowCost2 = (PUr.Cost2 * PUrw.Sum / SumOfAll) / PUrw.Quant;
-			logtext(0,PUrw.RowCost2);
-			PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
-                    PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
-                    PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
-                    PUrw.CustomsCost,bas,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
-			PUrw.CostPrice = bas;
-			PUrw.Sum = s;
+			if (tmpCost2!=0) then begin
+				PUrw.RowCost2 = (PUr.Cost2 * PUrw.Sum / SumOfAll) / PUrw.Quant;
+			end else begin
+				PUrw.RowCost2 = 0;
+				PUr.Cost2 = 0;
+			end;
+			// logtext(0,PUrw.RowCost2 & "RowCost2");
+			// logtext(0,PUr.Cost2 & "Cost2");
+			// logtext(0,PUrw.Sum & "Sum");
+			// logtext(0,SumOfAll & "SumOfAll");
+			// logtext(0,PUrw.Quant & "Quant");
+			if (PUr.Cost2!=0) then begin
+				PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
+											PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+											PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+											PUrw.CustomsCost,bas,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+				PUrw.CostPrice = bas;
+				PUrw.Sum = s;
+			end else begin
+				if (PUr.FrRate!=blankval and PUr.FrRate > 0) then begin
+					PUrw.CostPrice = round(PUrw.UPrice / PUr.FrRate * PUr.ToRateB1,SetROundModeD(5));
+				end else begin
+					PUrw.CostPrice = PUrw.UPrice;
+				end;
+				MatRowPut(PUr,i,PUrw);
+				PUVc_PasteCostPrice(PUr,i);
+				MatRowGet(PUr,i,PUrw); 
+			end;
+			PUr.Cost2 = tmpCost2;
 			//PUrw.CostPrice = PUrw.CostPrice + PUrw.RowCost2;
 			MatRowPut(PUr,i,PUrw);
 			// PUVc_PasteCostPrice(PUr,i);
