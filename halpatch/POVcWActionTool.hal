@@ -82,6 +82,8 @@ remote procedure ORSumup(var record ORVc);
 external procedure PUVc_PasteLocation(var record PUVc,Integer); //Edit***************************Sasha2,11:37 07.04.2015
 external function Boolean PUVc_PasteVECode(var record PUVc);
 remote updating procedure RecalcORMn(record RcVc);
+external procedure PUVc_PasteCostPrice(var record PUVc,Integer);
+
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -517,13 +519,14 @@ begin
   PUrw.RowCost1 = POrw.RowCost1;
 	if (POrw.Tax15Percent>0) then begin 
 		PUrw.RowCost2 = POrw.Tax15Percent;
-		logtext(0,PUrw.RowCost2);
+		logtext(0,PUrw.RowCost2 & " RowCost2");
 	end else begin
 		PUrw.RowCost2 = POrw.RowCost2;
 	end;
   PUrw.RowCost3 = POrw.RowCost3;
   PUrw.RowCost4 = POrw.RowCost4;
   PUrw.RowCost5 = POrw.RowCost5;
+	PUrw.Tax15Percent = POrw.Tax15Percent;
   // Edit Start ---------------------------------------------- Edit Start
 	//Thursday, 12 September 2013 10:07:12
   ORr.SerNr = POp.OrdNr;
@@ -734,7 +737,12 @@ begin
     PUrw.ShipCost = v2;
   end;
   PUrw.RowCost1 = POrw.RowCost1;
-  PUrw.RowCost2 = POrw.RowCost2;
+  if (POrw.Tax15Percent>0) then begin 
+		PUrw.RowCost2 = POrw.Tax15Percent;
+		logtext(0,PUrw.RowCost2 & " RowCost2");
+	end else begin
+		PUrw.RowCost2 = POrw.RowCost2;
+	end;
   PUrw.RowCost3 = POrw.RowCost3;
   PUrw.RowCost4 = POrw.RowCost4;
   PUrw.RowCost5 = POrw.RowCost5;
@@ -902,6 +910,11 @@ begin
   PUrw.RowCost5 = POrw.RowCost5;
 	PUrw.Tax15Percent = POrw.Tax15Percent;
 	PUrw.Tax15Percentf = POrw.Tax15Percentf;
+	if (PUrw.Tax15Percent==0 or PUrw.Tax15Percent==blankval) then begin
+		PUrw.Tax15Percent = BPUrw.Tax15Percent;
+		PUrw.Tax15Percentf = BPUrw.Tax15Percentf;
+	end;
+	PUp.Tax15PercentSum = PUp.Tax15PercentSum + PUrw.Tax15Percent;
   // Edit Start ---------------------------------------------- Edit Start
 	//Thursday, 12 September 2013 10:07:12
   ORr.SerNr = POp.OrdNr;
@@ -913,7 +926,15 @@ begin
 	PUrw.ShipCost = BPUrw.ShipCost;
 	PUrw.CustomsCost = BPUrw.CustomsCost;
 	PUrw.RowCost1 = BPUrw.RowCost1;
-	PUrw.RowCost2 = BPUrw.RowCost2;
+	if (POrw.Tax15Percent>0) then begin 
+		PUrw.RowCost2 = POrw.Tax15Percent;
+	end else begin
+		PUrw.RowCost2 = POrw.RowCost2;
+	end;
+  PUrw.RowCost3 = POrw.RowCost3;
+  PUrw.RowCost4 = POrw.RowCost4;
+  PUrw.RowCost5 = POrw.RowCost5;
+	PUrw.Tax15Percent = POrw.Tax15Percent;
 	if (POrw.RowCost3==0 or POrw.RowCost3==blankval) then begin
 		PUrw.RowCost3 = BPUrw.RowCost3;
 	end else begin
@@ -1728,6 +1749,12 @@ BEGIN
 						end;
 					end;
 				end else begin
+					for (j=0;j<matrowcnt(BPUr);j=j+1) begin
+						MatRowGet(BPUr,j,BPUrw);
+						if(i==BPUrw.FromOrdrowNr-1 and stringtolongint(BPUrw.FromOrdNr)==POp.SerNr) then begin 
+							j = matrowcnt(BPUr);
+						end;
+					end;
 					ClearRow(PUp,PUrw,1);
 					PUrw.VIReconComment = POrw.VEArtCode;
 					PUrw.StockType = POrw.StockType;
@@ -1741,6 +1768,13 @@ BEGIN
 					PUrw.InPrice = INr.InPrice;
 					PUrw.Tax15Percent = POrw.Tax15Percent;
 					PUrw.Tax15Percentf = POrw.Tax15Percentf;
+					logtext(0,PUrw.Tax15Percent & " 1");
+					if (PUrw.Tax15Percent==0 or PUrw.Tax15Percent==blankval) then begin
+						PUrw.Tax15Percent = BPUrw.Tax15Percent;
+						PUrw.Tax15Percentf = BPUrw.Tax15Percentf;
+						logtext(0,PUrw.Tax15Percent & " 2");
+					end;
+					PUp.Tax15PercentSum = BPUr.Tax15PercentSum;
 					if (POp.SetZeroPUQuant!=0) then begin
 						PUrw.Quant = 0;
 					end else begin
@@ -1853,6 +1887,9 @@ BEGIN
 								PUrw.CustomsCost = BPUrw.CustomsCost;
 								PUrw.RowCost1 = BPUrw.RowCost1;
 								PUrw.RowCost2 = BPUrw.RowCost2;
+								if (PUrw.RowCost2==0 or PUrw.RowCost2==blankval and PUrw.Tax15Percent>0) then begin
+									PUrw.RowCost2 = PUrw.Tax15Percent;
+								end;
 								if (POrw.RowCost3==0 or POrw.RowCost3==blankval) then begin
 									PUrw.RowCost3 = BPUrw.RowCost3;
 								end else begin
@@ -1872,9 +1909,15 @@ BEGIN
 						PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUp.InclVAT,PUp.NoTAXonVAT,PUrw.Extra,PUp.CurncyCode,
 														PUp.FrRate,PUp.ToRateB1,PUp.ToRateB2,PUp.BaseRate1,PUp.BaseRate2,
 														PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
-														PUrw.CustomsCost,pv,PUrw.Quant,sv,PUrw.VATCode,PUp.ExportFlag);									
-					PUrw.CostPrice = pv;                                        
-					PUrw.Sum = sv;
+														PUrw.CustomsCost,pv,PUrw.Quant,sv,PUrw.VATCode,PUp.ExportFlag);	
+						if (PUrw.RowCost2==PUrw.Tax15Percent) then begin
+							PUrw.RowCost2 = 0;
+						end;
+					PUrw.CostPrice = pv;   
+					matRowPut(PUp,nrwcnt,PUrw);
+					PUVc_PasteCostPrice(PUp,nrwcnt);
+					matRowGet(PUp,nrwcnt,PUrw);
+					//PUrw.Sum = sv;
 					PUrw.VEItemCode = POrw.VEArtCode;
 					PUrw.VARList = POrw.VARList;
 					if (POSetb.TransAccObjToPU!=0) then begin
