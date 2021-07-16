@@ -687,7 +687,7 @@ global
 function Boolean remPUDClassTax15PercentSumEFAfter(var record PUVc PUr, Integer wn) // Edit ****************** Ihor Trubachov 18*06*2021
 begin
 	Boolean res;
-  row PUVc PUrw, PU2rw;
+  row PUVc PUrw;
 	integer mtrw,i;
 	val SumOfAll, bas, s;
 	
@@ -696,21 +696,15 @@ begin
 	mtrw = MatRowCnt(PUr);
 	for(i=0;i<mtrw;i=i+1)begin
 		MatRowGet(PUr,i,PUrw); 
-		MatRowGet(PUr,i,PU2rw); 
-		PU2rw.RowCost1 = 0;
-		PU2rw.RowCost2 = 0;
-		PU2rw.RowCost3 = 0;
-		PU2rw.RowCost4 = 0;
-		PU2rw.RowCost5 = 0;
-		PU2rw.Tax15Percent = 0;
-		PU2rw.ShipCost = 0;
-		PU2rw.CustomsCost = 0;
-		PUCalcCostPrice(PU2rw.ArtCode,PU2rw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PU2rw.Extra,PUr.CurncyCode,
-									PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
-									PU2rw.ShipCost,PU2rw.RowCost1,PU2rw.RowCost2,PU2rw.RowCost3,PU2rw.RowCost4,PU2rw.RowCost5,
-									PU2rw.CustomsCost,bas,PU2rw.Quant,s,PU2rw.VATCode,PUr.ExportFlag);
-		PUrw.CostPrice = bas;
-		PUrw.Sum = s;
+		
+		if (PUr.FrRate!=blankval and PUr.FrRate > 0) then begin
+			PUrw.CostPrice = round(PUrw.UPrice / PUr.FrRate * PUr.ToRateB1,SetROundModeD(5));
+		end else begin
+			PUrw.CostPrice = PUrw.UPrice;
+		end;
+		MatRowPut(PUr,i,PUrw);
+		PUVc_PasteCostPrice(PUr,i);
+		
 		// PUrw.Sum = PUrw.Sum - PUrw.Tax15Percent * PUrw.Quant;
 		// PUrw.CostPrice = PUrw.CostPrice - PUrw.Tax15Percent;
 		if(PUrw.Tax15Percentf == 1) then begin
@@ -719,18 +713,27 @@ begin
 		MatRowPut(PUr,i,PUrw);
 	end;
 	
-	// for(i=0;i<mtrw;i=i+1)begin
-		// MatRowGet(PUr,i,PUrw); 
-		// if(PUrw.Tax15Percentf == 1) then begin
-			// PUrw.Tax15Percent = (PUr.Tax15PercentSum * PUrw.Sum / SumOfAll)/PUrw.Quant;
-			// PUrw.CostPrice = PUrw.CostPrice + PUrw.Tax15Percent;
-			// MatRowPut(PUr,i,PUrw);
-			// PUVc_PasteCostPrice(PUr,i);
-		// end else begin
-			// PUrw.Tax15Percent = 0;
-			// MatRowPut(PUr,i,PUrw);
-		// end;
-	// end;
+	for(i=0;i<mtrw;i=i+1)begin
+		MatRowGet(PUr,i,PUrw); 
+		if(PUrw.Tax15Percentf == 1) then begin
+			PUrw.Tax15Percent = (PUr.Tax15PercentSum * PUrw.Sum / SumOfAll)/PUrw.Quant;			
+			PUrw.RowCost2 = (PUr.Tax15PercentSum * PUrw.Sum / SumOfAll)/PUrw.Quant;
+			PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
+                    PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+                    PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+                    PUrw.CustomsCost,bas,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+			PUrw.RowCost2 = 0;
+			PUrw.CostPrice = bas;
+			PUrw.Sum = s;
+			
+			
+			MatRowPut(PUr,i,PUrw);
+			PUVc_PasteCostPrice(PUr,i);
+		end else begin
+			PUrw.Tax15Percent = 0;
+			MatRowPut(PUr,i,PUrw);
+		end;
+	end;
 	////
 
 	remPUDClassTax15PercentSumEFAfter = res;
@@ -742,7 +745,7 @@ end;
 global 
 function Boolean remPUDClassCons15PercentSumEFAfter(var record PUVc PUr,Integer wn) // Edit ****************** Ihor Trubachov 25*06*2021
 begin
-  row PUVc PUrw, PU2rw;
+  row PUVc PUrw;
 	integer mtrw,i;
 	val SumOfAll, bas, s;
 
@@ -751,22 +754,13 @@ begin
 	logtext(0,"2");
 	for(i=0;i<mtrw;i=i+1)begin
 		MatRowGet(PUr,i,PUrw); 
-		MatRowGet(PUr,i,PU2rw); 
-		PU2rw.RowCost1 = 0;
-		PU2rw.RowCost2 = 0;
-		PU2rw.RowCost3 = 0;
-		PU2rw.RowCost4 = 0;
-		PU2rw.RowCost5 = 0;
-		PU2rw.Tax15Percent = 0;
-		PU2rw.ShipCost = 0;
-		PU2rw.CustomsCost = 0;
-		PUCalcCostPrice(PU2rw.ArtCode,PU2rw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PU2rw.Extra,PUr.CurncyCode,
-									PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
-									PU2rw.ShipCost,PU2rw.RowCost1,PU2rw.RowCost2,PU2rw.RowCost3,PU2rw.RowCost4,PU2rw.RowCost5,
-									PU2rw.CustomsCost,bas,PU2rw.Quant,s,PU2rw.VATCode,PUr.ExportFlag);
-		PUrw.CostPrice = bas;
-		PUrw.Sum = s;
-		
+		if (PUr.FrRate!=blankval and PUr.FrRate > 0) then begin
+			PUrw.CostPrice = round(PUrw.UPrice / PUr.FrRate * PUr.ToRateB1,SetROundModeD(5));
+		end else begin
+			PUrw.CostPrice = PUrw.UPrice;
+		end;
+		MatRowPut(PUr,i,PUrw);
+		PUVc_PasteCostPrice(PUr,i);
 		// PUrw.Sum = PUrw.Sum - PUrw.RowCost2 * PUrw.Quant;
 		// PUrw.CostPrice = PUrw.CostPrice - PUrw.RowCost2;
 		if(PUrw.Tax15Percentf == 1) then begin
