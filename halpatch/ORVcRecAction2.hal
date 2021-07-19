@@ -1103,7 +1103,7 @@ begin
 	integer pos, pos2, p, maxp, qtyItpos, rownr, allitemqty, sbrqty, extPrCnt;
 	boolean testf,TrHs,Insertf,warf,chsum,ECStItf,LoyCardValidNrf,VATVendor,TrHs2;
 	record INVc INr;
-	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock, PriorityStock, vPrefExt, vExtProvLongGlCode;
+	vector string 255 vComdItemLocation, vstrlc, ResStockSet, DeSellStock, PriorityStock, vPrefExt, vExtProvLongGlCode, vExtProvLongGlCodeRev;
 	record GlobalItemVc GIr, GI2r, GI3r;
 	row GlobalItemVc GIrw, GI2rw;
 	record RLinkVc RLr;
@@ -1169,6 +1169,7 @@ begin
 		if (left(INr.Code,3)!="EXT") then begin TrHs2 = false; end;
 		if (TrHs2) then begin
 			vExtProvLongGlCode[INr.GlobalArtCode] = INr.Code;
+			vExtProvLongGlCodeRev[INr.Code] = INr.GlobalArtCode;
 		end;
 	end;
 	resetloop(INr);
@@ -1671,11 +1672,14 @@ begin
 		end;
 		ORSumup(ORr);
 	end;
-	
+	logtext(0,"1");
 	if(ECStItf and ORr.OrderConfirmed==1)then begin
+		logtext(0,"2");
 		mtrw = matrowcnt(ORr);
     if(mtrw>0 and nonblank(ORr.OrderClass) and ORr.Closed==0)then begin
+			logtext(0,"3");
 			for (j=0;j<extPrCnt;j=j+1) begin 
+				logtext(0,"4");
 				VATVendor = false;
 				EPIr.PrefCode = vPrefExt[j];
 				readfirstkey("PrefCode",EPIr,1,true);
@@ -1699,7 +1703,11 @@ begin
 							matrowdelete(POr,i);
 						end else begin
 							if (left(POrw.ArtCode,2)!="SB") then begin
-								GIr.Code = POrw.ArtCode;
+								if (left(POrw.ArtCode,3)=="EXT") then begin
+									GIr.Code = vExtProvLongGlCodeRev[POrw.ArtCode];
+								end else begin
+									GIr.Code = POrw.ArtCode;
+								end;
 								if(readfirstmain(GIr,1,true))then begin
 									if (VATVendor) then begin
 										if (GIr.DealPrice > 0) then begin
