@@ -610,11 +610,14 @@ begin
   boolean userbrandf,dublikateItem,testf2;
 	record ItemDuplicatesVc IDr;
 	integer compNumber, ecvcnt, maxNum,v;  // Edit ************** Ihor Trubachov 16*07*2021
-	vector string 255 warehouse_provider,CountProdFrom,CountProdTo;   // Edit ************** Ihor Trubachov 16*07*2021
+	vector string 255 warehouse_provider,CountProdFrom,CountProdTo,warehouse_provider_1c;   // Edit ************** Ihor Trubachov 16*07*2021
 	array string 255 Code_NameFrom, Code_NameTo;   // Edit ************** Ihor Trubachov 19*07*2021
 	record ECVendFobSetBlaock ECVFSBb;   // Edit ************** Ihor Trubachov 16*07*2021
 	row ECVendFobSetBlaock ECVFSBrw;   // Edit ************** Ihor Trubachov 16*07*2021
 	longint iter; // Edit ************** Ihor Trubachov 19*07*2021
+	record CompaniesBlock Compb;
+	record LocationVc Locationr;
+	blockload(Compb);
   
   userbrandf = CheckUserBrands(currentuser,userbrand);
   //SetLangMode(LangRussian,"RUS",0);
@@ -628,15 +631,31 @@ begin
   GetCurncyRateOnDate(basecur,CurrentDate,rate);//Edit----------------------Dima  28.01.2016
 	
 	compNumber = currentcompany;
+	
+	for (i=0;i<matrowcnt(Compb);i=i+1) begin
+		if(SetCompany(18,false)) then begin
+			Locationr.Code = "";
+			while (LoopMain(Locationr,1,true))begin
+				if (nonblank(Locationr.FOBSuplier)) then begin
+					warehouse_provider_1c[Locationr.FOBSuplier] = Locationr.StoreName1C;
+				end;
+			end;
+			ResetLoop(Locationr);
+		end;
+	end;
+	
 	if(SetCompany(18,false)) then begin
 			BlockLoad(ECVFSBb);
 			ecvcnt = matrowcnt(ECVFSBb);
 			for(v=0;v<ecvcnt;v=v+1)begin
 				matrowget (ECVFSBb,v,ECVFSBrw);
 				warehouse_provider[ECVFSBrw.VendName] = ECVFSBrw.LocCode;
+				if (nonblank(warehouse_provider_1c[ECVFSBrw.VendName])) then begin
+					warehouse_provider[ECVFSBrw.VendName] = warehouse_provider_1c[ECVFSBrw.VendName];
+				end;
 			end;
 	end;
-	SetCompany(compNumber,false);
+	ResetCompany(compNumber);
 	
   mark = 0;
   while (LoopKey("MyDispGroups",INr,1,TrHs)) begin// Edit ************************** Tuesday, 30 October 2012 15:53:4115:22 17.11.2015
