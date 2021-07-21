@@ -753,7 +753,7 @@ begin
   if (changedf!=0) then begin
 		GetWindowRecord(wn,BPUr); 
 		if (right(BPUr.Location,3)!="CSG") then begin
-			if (BPUr.Tax15PercentSum==blankval) then begin BPUr.Tax15PercentSum = 0; end;
+		if (BPUr.Tax15PercentSum==blankval) then begin BPUr.Tax15PercentSum = 0; end;
 			remBPUDClassTax15PercentfEFAfter(BPUr,wn);
 			BPUr.Cost2 = 0;
 			remBPUDClassCons15PercentfEFAfter(BPUr,wn);
@@ -820,6 +820,13 @@ BEGIN
   RETURN;
 END;
 
+
+
+
+
+
+
+
 global 
 updating procedure CollectItemsFromOrd()
 begin
@@ -834,10 +841,31 @@ record ConsCompBlock CCB;
 record INVc INr;
 record PosVc Posr;	
 val shipcostSum,CustomCostSum,RowCostSum1,RowCostSum2,RowCostSum3,RowCostSum4,RowCostSum5;
+boolean Consf, SecondPO;
+
   
   wn = curwindow;
 	DeselectWindow(wn,true);
 	getwindowrecord(wn,BPUr);
+	i=0;
+	ExtractObj(BPUr.FromOrds,i,ordNr);
+	while (nonblank(ordNr)) begin
+		POr.SerNr = ordNr;
+		if(ReadFirstMain(POr,1,true)) then begin
+			if (right(POr.Location,3)=="CSG" and !SecondPO) then begin
+				Consf = true;
+			end;
+			if (right(POr.Location,3)=="CSG" and SecondPO and !Consf) then begin
+				MessageBox (0,"Нельзя принимать консигнационные и обычные товары в одном конс. поступлении. Разделите по типам товаров!");
+			end;
+			
+			if (right(POr.Location,3)!="CSG" and SecondPO and Consf) then begin
+				MessageBox (0,"Нельзя принимать консигнационные и обычные товары в одном конс. поступлении. Разделите по типам товаров!");
+			end;
+			SecondPO = true;
+		end;
+		ExtractObj(BPUr.FromOrds,i,ordNr);
+	end;
 	CollectItemsFromDo(BPUr);
 	putwindowrecord(wn,BPUr);	
 return;
