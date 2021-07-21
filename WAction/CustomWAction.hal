@@ -402,10 +402,32 @@ begin
   integer i;
 	val total;
 	val FInBase;
+	integer j,BProw,cnt;
+	string 255 ordNr;
+	record POVc POr;
+	row POVc POrw;
+	record BPIBrandVc BBr;
+	record ConsCompBlock CCB;
+	record INVc INr;
+	record PosVc Posr;	
+	val shipcostSum,CustomCostSum,RowCostSum1,RowCostSum2,RowCostSum3,RowCostSum4,RowCostSum5;
+	boolean Consf, SecondPO, Errf;
   
 	total = 0;
 	GetWindowRecord(wn,BPUr);
-	if (right(BPUr.Location,3)=="CSG") then begin
+	i=0;
+	ExtractObj(BPUr.FromOrds,i,ordNr);
+	while (nonblank(ordNr)) begin
+		POr.SerNr = ordNr;
+		if(ReadFirstMain(POr,1,true)) then begin
+			if (right(POr.Location,3)!="CSG") then begin
+				Errf = true;
+			end;
+		end;
+		ExtractObj(BPUr.FromOrds,i,ordNr);
+	end;
+				
+	if (!Errf) then begin
 		remBPUDClassCons15PercentfEFAfter(BPUr,wn);
 		BPUr.Tax15PercentSum = 0;
 		remBPUDClassTax15PercentfEFAfter(BPUr,wn);
@@ -749,11 +771,37 @@ global
 function Boolean BPUDClassTax15PercentSumEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf) // Edit ****************** Ihor Trubachov 16*06*2021
 begin
  record BigPUVc BPUr;
+	row BigPUVc BPUrw;
+	integer i,j,BProw,cnt;
+	string 255 ordNr;
+	record POVc POr;
+	row POVc POrw;
+	record BPIBrandVc BBr;
+	record ConsCompBlock CCB;
+	record INVc INr;
+	record PosVc Posr;	
+	val shipcostSum,CustomCostSum,RowCostSum1,RowCostSum2,RowCostSum3,RowCostSum4,RowCostSum5;
+	boolean Consf, SecondPO, Errf;
+
 
   if (changedf!=0) then begin
 		GetWindowRecord(wn,BPUr); 
-		if (right(BPUr.Location,3)!="CSG") then begin
-		if (BPUr.Tax15PercentSum==blankval) then begin BPUr.Tax15PercentSum = 0; end;
+		
+		i=0;
+		ExtractObj(BPUr.FromOrds,i,ordNr);
+		while (nonblank(ordNr)) begin
+			POr.SerNr = ordNr;
+			if(ReadFirstMain(POr,1,true)) then begin
+				if (right(POr.Location,3)=="CSG") then begin
+					Errf = true;
+				end;
+			end;
+			ExtractObj(BPUr.FromOrds,i,ordNr);
+		end;
+		
+		
+		if (!Errf) then begin
+			if (BPUr.Tax15PercentSum==blankval) then begin BPUr.Tax15PercentSum = 0; end;
 			remBPUDClassTax15PercentfEFAfter(BPUr,wn);
 			BPUr.Cost2 = 0;
 			remBPUDClassCons15PercentfEFAfter(BPUr,wn);
@@ -841,7 +889,7 @@ record ConsCompBlock CCB;
 record INVc INr;
 record PosVc Posr;	
 val shipcostSum,CustomCostSum,RowCostSum1,RowCostSum2,RowCostSum3,RowCostSum4,RowCostSum5;
-boolean Consf, SecondPO;
+boolean Consf, SecondPO, Errf;
 
   
   wn = curwindow;
@@ -857,16 +905,20 @@ boolean Consf, SecondPO;
 			end;
 			if (right(POr.Location,3)=="CSG" and SecondPO and !Consf) then begin
 				MessageBox (36417,"");
+				Errf = true;
 			end;
 			
 			if (right(POr.Location,3)!="CSG" and SecondPO and Consf) then begin
 				MessageBox (36417,"");
+				Errf = true;
 			end;
 			SecondPO = true;
 		end;
 		ExtractObj(BPUr.FromOrds,i,ordNr);
 	end;
-	CollectItemsFromDo(BPUr);
+	if (!Errf) then begin
+		CollectItemsFromDo(BPUr);
+	end;
 	putwindowrecord(wn,BPUr);	
 return;
 end;
