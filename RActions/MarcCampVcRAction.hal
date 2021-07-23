@@ -11,6 +11,7 @@ external function Boolean GetItemPriceDiscount3CRM(string,val,var record INVc,st
                                                 var val,var string,var val,var string,var val,var string,Integer,var Boolean,Date,Time,
                                                 string,Boolean,var Boolean,string,var string,var val,string,string,var string,var string,var record MarcCampVc);
 remote procedure ORVc_PasteQuant(var record ORVc,Integer,Boolean,var Boolean);
+remote procedure ORVc_PasteSalesMan(var record ORVc,string);	//Edit **********************************************Vas-P	23/07/2021
 remote procedure ORSumup(var record ORVc);
 remote updating function longint CreateGlobalIVFromWebOR (var record ORVc);
 remote procedure ORVc_PastePayDeal(var record ORVc);
@@ -4284,7 +4285,10 @@ begin
 			if (SHr.OKFlag==1) then begin
 				Comletedf = false;
 			end;
+		end else begin
+			Comletedf = false;
 		end;
+		
 		
 		for (i=0;i<matrowcnt(ORr);i=i+1) begin
 			matrowget(ORr,i,ORrw);
@@ -4589,7 +4593,7 @@ begin
 	longint a,r,error;
 	record SHVc SHr, OldSHr;
 	row SHVc SHrw;
-	record RetVc Retr;
+	record RetVc Retr, OldRetr;
 	row RetVc Retrw;
 	boolean Retf;
 	vector val ArtCodeRetQty;
@@ -4734,7 +4738,14 @@ begin
 						end;
 					end;
 					if(RecordStore(Retr,true))then begin
-						weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}");
+						RecordCopy(OldRetr,Retr);
+						Retr.OKFlag = 1;
+						error = RecordUpdate(OldRetr,Retr,true);
+						if (error==0) then begin
+							weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}");
+						end else begin
+							weboutstring("{\"resultCode\":" & error & ",\"message\":\"Internal error\"}");
+						end;
 					end;
 					// logtext(0,"3");
 				end;
@@ -4798,8 +4809,9 @@ begin
 	record RetVc Retr, OldRetr;
 	row RetVc Retrw;
 	boolean Retf;
-	vector val ArtCodeRetQty;
+	vector val ArtCodeRetQty, ArtCodeSum;
 	record LocalMachineBlock LMb;
+	val OrdSum;
 
 
 	SetCompany(29,false);
@@ -4814,18 +4826,104 @@ begin
 	if (readfirstmain(ORr,1,true)) then begin
 		SHr.OrderNr = ORr.SerNr;
 		if (readfirstkey("OrderKey",SHr,1,true)) then begin
-			Retr.SHNr = SHr.SerNr;
-			if (readfirstkey("SHNr",Retr,1,true)) then begin
-				RecordCopy(OldRetr,Retr);
-				Retr.OKFlag = 1;
-				error = RecordUpdate(OldRetr,Retr,true);
-				if (error==0) then begin
-					weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}");
-				end else begin
-					weboutstring("{\"resultCode\":" & error & ",\"message\":\"Internal error\"}");
+			if (SHr.OKFlag==1) then begin
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					ArtCodeSum[ORrw.ArtCode] = ORrw.Price * ORrw.Shipd2;
+					OrdSum = OrdSum + ArtCodeSum[ORrw.ArtCode];
 				end;
-			end else begin
-				weboutstring("{\"resultCode\":4,\"message\":\"Return not found!\"}");
+				weboutstring("{" & chr(13) & chr(10));
+				weboutstring("\"orderNo\":\"" & ORr.SerNr & "\"," & chr(13) & chr(10));
+				if (ORr.PayDeal=="O") then begin
+					weboutstring("\"payDeal\":\"CARD\"," & chr(13) & chr(10));
+				end else begin
+					weboutstring("\"payDeal\":\"\"," & chr(13) & chr(10));
+				end;
+				weboutstring("\"loyCard\":\"" & ORr.ECLoyaltyCard & "\"," & chr(13) & chr(10));
+				weboutstring("\"custCode\":\"" & NormalizeStrToJson(ORr.CustCode) & "\"," & chr(13) & chr(10));
+				weboutstring("\"custName\":\"" & NormalizeStrToJson(ORr.Addr0) & "\"," & chr(13) & chr(10));
+				if (ORr.Sum4<50) then begin
+					weboutstring("\"sum\":\"" & OrdSum + 5 & "\"," & chr(13) & chr(10));
+				end else begin
+					weboutstring("\"sum\":\"" & OrdSum & "\"," & chr(13) & chr(10));
+				end;
+				if (ORr.PayDeal=="O") then begin
+					if (ORr.Sum4<50) then begin
+						weboutstring("\"cashless\":\"" & OrdSum + 5 & "\"," & chr(13) & chr(10));
+					end else begin
+						weboutstring("\"cashless\":\"" & OrdSum & "\"," & chr(13) & chr(10));
+					end;
+				end else begin
+					weboutstring("\"cashless\":\"" & "0" & "\"," & chr(13) & chr(10));
+				end;
+				// if (ORr.PayDeal!="O") then begin
+					// weboutstring("\"creditSum\":\"" & ORr.Sum4 & "\"," & chr(13) & chr(10));
+				// end else begin
+					weboutstring("\"creditSum\":\"" & "0" & "\"," & chr(13) & chr(10));
+				// end;
+				weboutstring("\"bonusSum\":\"" & "0" & "\"," & chr(13) & chr(10));
+				weboutstring("\"items\":");
+				weboutstring("[");
+				if (matrowcnt(ORr)>0) then begin
+					weboutstring("{" & chr(13) & chr(10));
+				end;
+				if (ORr.Sum4<50) then begin
+					for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						if (i<matrowcnt(ORr)) then begin
+							matrowget(ORr,i,ORrw);
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							if (ORrw.Shipd2==blankval) then begin
+								weboutstring("\"itemQuantity\":\"" & 0 & "\"," & chr(13) & chr(10));
+							end else begin
+								weboutstring("\"itemQuantity\":\"" & ORrw.Shipd2 & "\"," & chr(13) & chr(10));
+							end;
+							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ArtCodeSum[ORrw.ArtCode] & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ArtCodeSum[ORrw.ArtCode] * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
+						end;
+						if (i==matrowcnt(ORr)) then begin
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & 1 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & 0 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson("Доставка товара") & "\"" & chr(13) & chr(10));
+						end;
+						if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
+				end else begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						if (ORrw.Shipd2==blankval) then begin
+							weboutstring("\"itemQuantity\":\"" & 0 & "\"," & chr(13) & chr(10));
+						end else begin
+							weboutstring("\"itemQuantity\":\"" & ORrw.Shipd2 & "\"," & chr(13) & chr(10));
+						end;
+						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+						weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemSum\":\"" & ArtCodeSum[ORrw.ArtCode] & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemVatPercent\":\"" & round(ArtCodeSum[ORrw.ArtCode] * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
+						if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
+				end;
+				if (matrowcnt(ORr)>0) then begin
+					weboutstring("}");
+				end;
+				weboutstring("]" & chr(13) & chr(10));
+				weboutstring("}");
 			end;
 		end else begin
 			weboutstring("{\"resultCode\":2,\"message\":\"SH not found!\"}");
@@ -4835,6 +4933,184 @@ begin
 	end;
 return;
 end;
+
+
+
+
+
+
+
+
+global webpublic updating procedure WebConfirmReturnBTRxOrdersFromMobileCheckout() 
+begin
+	area getpost;
+	string 255 filename;
+	json datajson;
+	record ORVc ORr;
+	row ORVc ORrw;
+	string 255 orderNo,sum,clsum;
+	array string 255 itemCode,itemQuantity;
+	integer i,j, mtrw;
+	longint a,r,error;
+	record SHVc SHr, OldSHr;
+	row SHVc SHrw;
+	record RetVc Retr, OldRetr;
+	row RetVc Retrw;
+	boolean Retf;
+	vector val ArtCodeRetQty;
+	record LocalMachineBlock LMb;
+	record IVVc IVr, oldIVr;
+	record IPVc IPr, OldIPr;
+	row IPVc IPrw;
+	record ARVc ARr;
+	val tmpval,csum;
+	boolean tmpbool, cashf, clsumf;
+	vector boolean Itemf;
+
+	SetCompany(29,false);
+	
+	webgetpostdata(getpost);
+	//AddfiletoArea("WebConfirmBTRxOrdersFromMobileCheckout.txt",getpost,false);
+	a = GetArealength(getpost);
+	datajson = ParseJsonArea(getpost);
+	orderNo = JSONGet(datajson,"orderNo");
+	sum = JSONGet(datajson,"sum");
+	if (StringToVal(JSONGet(datajson,"cashlessSum"),M4Val)>0) then begin
+		clsumf = true;
+		clsum = JSONGet(datajson,"cashlessSum");
+	end;
+	if (StringToVal(sum,M4Val)-StringToVal(clsum,M4Val)>0) then begin
+		cashf = true;
+		csum = StringToVal(sum,M4Val)-StringToVal(clsum,M4Val);
+	end;
+	for(i=0;i<JSONCountChildren(datajson,"items");i=i+1) begin
+		itemCode[i] = JSONGet(datajson,"items[0]/[" & i & "]/itemCode");
+		itemQuantity[i] = JSONGet(datajson,"items[0]/[" & i & "]/itemQuantity");
+	end;
+	for (i=0;i<itemCode.length;i=i+1) begin
+	end;
+	ORr.SerNr = StringToLongInt(orderNo);
+	if (readfirstmain(ORr,1,true)) then begin
+		for (i=0;i<matrowcnt(ORr);i=i+1) begin
+			matrowget(ORr,i,ORrw);
+			Itemf[ORrw.GlobalItemArtCode] = false;
+			for (j=0;j<itemCode.length;j=j+1) begin
+				if (ORrw.GlobalItemArtCode==itemCode[j]) then begin
+					itemCode[j] = ORrw.ArtCode;
+					Itemf[ORrw.GlobalItemArtCode] = true;
+				end;
+			end;
+			if (!Itemf[ORrw.GlobalItemArtCode]) then begin
+				itemCode[itemCode.length] = ORrw.ArtCode;
+				itemQuantity[itemCode.length] = 0; 
+			end;
+		end;
+		SHr.OrderNr = ORr.SerNr;
+		if (readfirstkey("OrderKey",SHr,1,true)) then begin
+			if (SHr.OKFlag == 1) then begin
+				recordCopy(OldSHr,SHr);
+				IVr.OrderNr = ORr.SerNr;
+				if (ReadFirstKey("OrderNr",IVr,1,true)) then begin
+					if (IVr.OKFlag==1) then begin
+						ARr.InvoiceNr = IVr.SerNr;
+						if (readfirstmain(ARr,1,true)) then begin
+							if (cashf) then begin
+								RecordNew(IPr);
+								IPr.PayMode = "C1";
+								IPPastePayMode2(IPr,"C1");
+								IPrw.InvoiceNr = IVr.SerNr;
+								MatRowPut(IPr,0,IPrw);
+								PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+								MatRowGet(IPr,0,IPrw);
+								IPrw.BankVal = csum;
+								IPrw.RecVal = csum;
+								MatRowPut(IPr,0,IPrw);
+								IPVc_PasteRecVal(IPr,0);
+								IPSumup(IPr);
+								IPr.MachineName = IVr.MachineName;
+								IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
+								IPr.Comment = csum;
+								RecordInsert(IPr,true);
+								RecordCopy(OldIPr,IPr);
+								IPr.OKFlag = 1;
+								RecordUpdate(OldIPr,IPr,true);
+							end;
+							if (clsumf) then begin
+								RecordNew(IPr);
+								IPr.PayMode = "T4";
+								IPPastePayMode2(IPr,"Т4");
+								IPrw.InvoiceNr = IVr.SerNr;
+								MatRowPut(IPr,0,IPrw);
+								PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+								MatRowGet(IPr,0,IPrw);
+								IPrw.BankVal = StringToVal(clsum,M4Val);
+								IPrw.RecVal = StringToVal(clsum,M4Val);
+								MatRowPut(IPr,0,IPrw);
+								IPVc_PasteRecVal(IPr,0);
+								IPSumup(IPr);
+								IPr.MachineName = IVr.MachineName;
+								IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
+								IPr.Comment = clsum;
+								RecordInsert(IPr,true);
+								RecordCopy(OldIPr,IPr);
+								IPr.OKFlag = 1;
+								RecordUpdate(OldIPr,IPr,true);
+							end;
+						end;
+					end;
+				end;
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					for (j=0;j<itemCode.length;j=j+1) begin
+						if (ORrw.ArtCode==itemCode[j]) then begin
+							if (ORrw.Shipd2!=StringToVal(itemQuantity[j],M45Val)) then begin
+								Retf = true;
+								ArtCodeRetQty[ORrw.ArtCode] = ORrw.Shipd2 - StringToVal(itemQuantity[j],M45Val);
+							end;
+						end;
+					end;
+				end;
+				if (!Retf) then begin weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}"); end;
+				if (Retf) then begin
+					// logtext(0,"1");
+					BlockLoad(LMb);
+					r = PasteSHInRet(SHr,Retr,LMb.DefReturnLocation);
+					mtrw = matrowcnt(Retr);
+					for (i=mtrw-1;i>=0;i=i-1) begin
+						// logtext(0,"2");
+						matrowget(Retr,i,Retrw);
+						if (ArtCodeRetQty[Retrw.ArtCode]>0) then begin
+							Retrw.Quant = ArtCodeRetQty[Retrw.ArtCode];
+							matrowput(Retr,i,Retrw);
+						end else begin
+							matrowdelete(Retr,i);
+						end;
+					end;
+					if(RecordStore(Retr,true))then begin
+						RecordCopy(OldRetr,Retr);
+						Retr.OKFlag = 1;
+						error = RecordUpdate(OldRetr,Retr,true);
+						if (error==0) then begin
+							weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}");
+						end else begin
+							weboutstring("{\"resultCode\":" & error & ",\"message\":\"Internal error\"}");
+						end;
+					end;
+					// logtext(0,"3");
+				end;
+			end else begin
+				weboutstring("{\"resultCode\":1,\"message\":\"SH confirmed!\"}");
+			end;
+		end else begin
+			weboutstring("{\"resultCode\":2,\"message\":\"SH not found!\"}");
+		end;
+	end else begin
+		weboutstring("{\"resultCode\":3,\"message\":\"OR not found!\"}");
+	end;
+return;
+end;
+
+
 
 
 
@@ -6063,7 +6339,7 @@ begin
 	json datajson;
 	record ORVc ORr,OldORr;
 	row ORVc ORrw,OldORrw;
-	string 255 uname,pn,ph,em,sn,bitrono,pay,stat,city,street,house,apart,custcode;
+	string 255 uname,pn,ph,em,sn,bitrono,pay,stat,city,street,house,apart,custcode,salemanph;
 	string 155 id,sum;
 	vector val codequant;
 	integer i,j,wn,y,compno;
@@ -6078,17 +6354,19 @@ begin
 	record LoyaltyCardVc LoyCardr;
 	record GlobalItSetVc GISr;
 	record LocationVc Locr;
+	record UserVc USr;
 	array string 255 aCodes;
 	
 	BlockLoad(ARb);
 	
-	logtext(0,"WebCreateOrder");
+	logtext(0,"WebCreateLocalOrderReserves");
 	webgetpostdata(getpost);
 	AddfiletoArea("C:/Users/tohas/Desktop/BitrixOrderlast.txt",getpost,false);
-	if (!fileexists("getpost.txt")) then begin
-		CreateFile("getpost.txt");
+	addtexttoarea("TimeStamp " & CurrentDate & " / " & CurrentTime & chr(13) & chr(10),getpost);
+	if (!fileexists("getpostlocorder.txt")) then begin
+		CreateFile("getpostlocorder.txt");
 	end;
-	WriteAreaToFile(getpost,"getpost.txt",0);
+	WriteAreaToFile(getpost,"getpostlocorder.txt",0);
 	CloseFile;
 	a = GetArealength(getpost);
 	datajson = ParseJsonArea(getpost);
@@ -6107,6 +6385,8 @@ begin
 	if (blank(uname) and blank(ph) and blank(em) and blank(sn) and blank(custcode)) then begin  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 12:07 03.06.2021
 		custcode = "NONAME";
 	end;
+	
+	salemanph = JSONGet(datajson,"salesman/phone");	//Edit **********************************************Vas-P	23/07/2021
 	
 	ORSerNr = StringToLongInt(JSONGet(datajson,"order[0]/id"));
 	if (blank(JSONGet(datajson,"order[0]/id")) or JSONGet(datajson,"order[0]/id")=="0") then begin
@@ -6342,7 +6622,16 @@ begin
 				ORr.Closed = 1;
 			end;
 			ORSumup(ORr);
-			// ORr.Reserved = 1;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:51 03.06.2021
+			while(loopmain(USr,1,true))begin	//Edit **********************************************Vas-P	23/07/2021
+				if(USr.Closed==0)then begin
+					if(USr.Phone1==salemanph)then begin
+						ORr.SalesMan = USr.Code;
+						ORVc_PasteSalesMan(ORr,"");
+					end;
+				end;
+			end;
+			ResetLoop(USr);
+			ORr.Reserved = 1;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:51 03.06.2021
 			RecordUpdate(OldORr,ORr,true);
 			WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
 		end else begin
@@ -6559,7 +6848,18 @@ begin
 					ORr.Closed = 1;
 				end;
 				ORSumup(ORr);
-				// ORr.Reserved = 1;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:52 03.06.2021
+				
+				while(loopmain(USr,1,true))begin	//Edit **********************************************Vas-P	23/07/2021
+					if(USr.Closed==0)then begin
+						if(USr.Phone1==salemanph)then begin
+							ORr.SalesMan = USr.Code;
+							ORVc_PasteSalesMan(ORr,"");
+						end;
+					end;
+				end;
+				Resetloop(USr);
+				
+				ORr.Reserved = 1;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:52 03.06.2021
 				RecordUpdate(OldORr,ORr,true);
 				WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
 			end;
