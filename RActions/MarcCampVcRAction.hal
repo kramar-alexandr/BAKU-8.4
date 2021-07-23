@@ -4818,7 +4818,6 @@ begin
 	a = GetArealength(getpost);
 	datajson = ParseJsonArea(getpost);
 	orderNo = JSONGet(datajson,"order");
-	orderNo = WebGetArg("order");
 
 	ORr.SerNr = StringToLongInt(orderNo);
 	if (readfirstmain(ORr,1,true)) then begin
@@ -4840,13 +4839,13 @@ begin
 				weboutstring("\"loyCard\":\"" & ORr.ECLoyaltyCard & "\"," & chr(13) & chr(10));
 				weboutstring("\"custCode\":\"" & NormalizeStrToJson(ORr.CustCode) & "\"," & chr(13) & chr(10));
 				weboutstring("\"custName\":\"" & NormalizeStrToJson(ORr.Addr0) & "\"," & chr(13) & chr(10));
-				if (OrdSum<50) then begin
+				if (ORr.Sum4<50) then begin
 					weboutstring("\"sum\":\"" & OrdSum + 5 & "\"," & chr(13) & chr(10));
 				end else begin
 					weboutstring("\"sum\":\"" & OrdSum & "\"," & chr(13) & chr(10));
 				end;
 				if (ORr.PayDeal=="O") then begin
-					if (OrdSum<50) then begin
+					if (ORr.Sum4<50) then begin
 						weboutstring("\"cashless\":\"" & OrdSum + 5 & "\"," & chr(13) & chr(10));
 					end else begin
 						weboutstring("\"cashless\":\"" & OrdSum & "\"," & chr(13) & chr(10));
@@ -4865,7 +4864,7 @@ begin
 				if (matrowcnt(ORr)>0) then begin
 					weboutstring("{" & chr(13) & chr(10));
 				end;
-				if (OrdSum<50) then begin
+				if (ORr.Sum4<50) then begin
 					for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
 						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
 						if (i<matrowcnt(ORr)) then begin
@@ -4931,6 +4930,184 @@ begin
 	end;
 return;
 end;
+
+
+
+
+
+
+
+
+global webpublic updating procedure WebConfirmReturnBTRxOrdersFromMobileCheckout() 
+begin
+	area getpost;
+	string 255 filename;
+	json datajson;
+	record ORVc ORr;
+	row ORVc ORrw;
+	string 255 orderNo,sum,clsum;
+	array string 255 itemCode,itemQuantity;
+	integer i,j, mtrw;
+	longint a,r,error;
+	record SHVc SHr, OldSHr;
+	row SHVc SHrw;
+	record RetVc Retr, OldRetr;
+	row RetVc Retrw;
+	boolean Retf;
+	vector val ArtCodeRetQty;
+	record LocalMachineBlock LMb;
+	record IVVc IVr, oldIVr;
+	record IPVc IPr, OldIPr;
+	row IPVc IPrw;
+	record ARVc ARr;
+	val tmpval,csum;
+	boolean tmpbool, cashf, clsumf;
+	vector boolean Itemf;
+
+	SetCompany(29,false);
+	
+	webgetpostdata(getpost);
+	//AddfiletoArea("WebConfirmBTRxOrdersFromMobileCheckout.txt",getpost,false);
+	a = GetArealength(getpost);
+	datajson = ParseJsonArea(getpost);
+	orderNo = JSONGet(datajson,"orderNo");
+	sum = JSONGet(datajson,"sum");
+	if (StringToVal(JSONGet(datajson,"cashlessSum"),M4Val)>0) then begin
+		clsumf = true;
+		clsum = JSONGet(datajson,"cashlessSum");
+	end;
+	if (StringToVal(sum,M4Val)-StringToVal(clsum,M4Val)>0) then begin
+		cashf = true;
+		csum = StringToVal(sum,M4Val)-StringToVal(clsum,M4Val);
+	end;
+	for(i=0;i<JSONCountChildren(datajson,"items");i=i+1) begin
+		itemCode[i] = JSONGet(datajson,"items[0]/[" & i & "]/itemCode");
+		itemQuantity[i] = JSONGet(datajson,"items[0]/[" & i & "]/itemQuantity");
+	end;
+	for (i=0;i<itemCode.length;i=i+1) begin
+	end;
+	ORr.SerNr = StringToLongInt(orderNo);
+	if (readfirstmain(ORr,1,true)) then begin
+		for (i=0;i<matrowcnt(ORr);i=i+1) begin
+			matrowget(ORr,i,ORrw);
+			Itemf[ORrw.GlobalItemArtCode] = false;
+			for (j=0;j<itemCode.length;j=j+1) begin
+				if (ORrw.GlobalItemArtCode==itemCode[j]) then begin
+					itemCode[j] = ORrw.ArtCode;
+					Itemf[ORrw.GlobalItemArtCode] = true;
+				end;
+			end;
+			if (!Itemf[ORrw.GlobalItemArtCode]) then begin
+				itemCode[itemCode.length] = ORrw.ArtCode;
+				itemQuantity[itemCode.length] = 0; 
+			end;
+		end;
+		SHr.OrderNr = ORr.SerNr;
+		if (readfirstkey("OrderKey",SHr,1,true)) then begin
+			if (SHr.OKFlag == 1) then begin
+				recordCopy(OldSHr,SHr);
+				IVr.OrderNr = ORr.SerNr;
+				if (ReadFirstKey("OrderNr",IVr,1,true)) then begin
+					if (IVr.OKFlag==1) then begin
+						ARr.InvoiceNr = IVr.SerNr;
+						if (readfirstmain(ARr,1,true)) then begin
+							if (cashf) then begin
+								RecordNew(IPr);
+								IPr.PayMode = "C1";
+								IPPastePayMode2(IPr,"C1");
+								IPrw.InvoiceNr = IVr.SerNr;
+								MatRowPut(IPr,0,IPrw);
+								PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+								MatRowGet(IPr,0,IPrw);
+								IPrw.BankVal = csum;
+								IPrw.RecVal = csum;
+								MatRowPut(IPr,0,IPrw);
+								IPVc_PasteRecVal(IPr,0);
+								IPSumup(IPr);
+								IPr.MachineName = IVr.MachineName;
+								IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
+								IPr.Comment = csum;
+								RecordInsert(IPr,true);
+								RecordCopy(OldIPr,IPr);
+								IPr.OKFlag = 1;
+								RecordUpdate(OldIPr,IPr,true);
+							end;
+							if (clsumf) then begin
+								RecordNew(IPr);
+								IPr.PayMode = "T4";
+								IPPastePayMode2(IPr,"’4");
+								IPrw.InvoiceNr = IVr.SerNr;
+								MatRowPut(IPr,0,IPrw);
+								PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+								MatRowGet(IPr,0,IPrw);
+								IPrw.BankVal = StringToVal(clsum,M4Val);
+								IPrw.RecVal = StringToVal(clsum,M4Val);
+								MatRowPut(IPr,0,IPrw);
+								IPVc_PasteRecVal(IPr,0);
+								IPSumup(IPr);
+								IPr.MachineName = IVr.MachineName;
+								IPr.SerNr = NextSerNr("IPVc",IVr.TransDate,-1,false,"");
+								IPr.Comment = clsum;
+								RecordInsert(IPr,true);
+								RecordCopy(OldIPr,IPr);
+								IPr.OKFlag = 1;
+								RecordUpdate(OldIPr,IPr,true);
+							end;
+						end;
+					end;
+				end;
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					for (j=0;j<itemCode.length;j=j+1) begin
+						if (ORrw.ArtCode==itemCode[j]) then begin
+							if (ORrw.Shipd2!=StringToVal(itemQuantity[j],M45Val)) then begin
+								Retf = true;
+								ArtCodeRetQty[ORrw.ArtCode] = ORrw.Shipd2 - StringToVal(itemQuantity[j],M45Val);
+							end;
+						end;
+					end;
+				end;
+				if (!Retf) then begin weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}"); end;
+				if (Retf) then begin
+					// logtext(0,"1");
+					BlockLoad(LMb);
+					r = PasteSHInRet(SHr,Retr,LMb.DefReturnLocation);
+					mtrw = matrowcnt(Retr);
+					for (i=mtrw-1;i>=0;i=i-1) begin
+						// logtext(0,"2");
+						matrowget(Retr,i,Retrw);
+						if (ArtCodeRetQty[Retrw.ArtCode]>0) then begin
+							Retrw.Quant = ArtCodeRetQty[Retrw.ArtCode];
+							matrowput(Retr,i,Retrw);
+						end else begin
+							matrowdelete(Retr,i);
+						end;
+					end;
+					if(RecordStore(Retr,true))then begin
+						RecordCopy(OldRetr,Retr);
+						Retr.OKFlag = 1;
+						error = RecordUpdate(OldRetr,Retr,true);
+						if (error==0) then begin
+							weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}");
+						end else begin
+							weboutstring("{\"resultCode\":" & error & ",\"message\":\"Internal error\"}");
+						end;
+					end;
+					// logtext(0,"3");
+				end;
+			end else begin
+				weboutstring("{\"resultCode\":1,\"message\":\"SH confirmed!\"}");
+			end;
+		end else begin
+			weboutstring("{\"resultCode\":2,\"message\":\"SH not found!\"}");
+		end;
+	end else begin
+		weboutstring("{\"resultCode\":3,\"message\":\"OR not found!\"}");
+	end;
+return;
+end;
+
+
 
 
 
