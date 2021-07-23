@@ -4589,7 +4589,7 @@ begin
 	longint a,r,error;
 	record SHVc SHr, OldSHr;
 	row SHVc SHrw;
-	record RetVc Retr;
+	record RetVc Retr, OldRetr;
 	row RetVc Retrw;
 	boolean Retf;
 	vector val ArtCodeRetQty;
@@ -4734,7 +4734,14 @@ begin
 						end;
 					end;
 					if(RecordStore(Retr,true))then begin
-						weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}");
+						RecordCopy(OldRetr,Retr);
+						Retr.OKFlag = 1;
+						error = RecordUpdate(OldRetr,Retr,true);
+						if (error==0) then begin
+							weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}");
+						end else begin
+							weboutstring("{\"resultCode\":" & error & ",\"message\":\"Internal error\"}");
+						end;
 					end;
 					// logtext(0,"3");
 				end;
@@ -4798,8 +4805,9 @@ begin
 	record RetVc Retr, OldRetr;
 	row RetVc Retrw;
 	boolean Retf;
-	vector val ArtCodeRetQty;
+	vector val ArtCodeRetQty, ArtCodeSum;
 	record LocalMachineBlock LMb;
+	val OrdSum;
 
 
 	SetCompany(29,false);
@@ -4814,18 +4822,96 @@ begin
 	if (readfirstmain(ORr,1,true)) then begin
 		SHr.OrderNr = ORr.SerNr;
 		if (readfirstkey("OrderKey",SHr,1,true)) then begin
-			Retr.SHNr = SHr.SerNr;
-			if (readfirstkey("SHNr",Retr,1,true)) then begin
-				RecordCopy(OldRetr,Retr);
-				Retr.OKFlag = 1;
-				error = RecordUpdate(OldRetr,Retr,true);
-				if (error==0) then begin
-					weboutstring("{\"resultCode\":0,\"message\":\"Success operation\"}");
-				end else begin
-					weboutstring("{\"resultCode\":" & error & ",\"message\":\"Internal error\"}");
+			if (SHr.OKFlag==1) then begin
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					ArtCodeSum[ORrw.ArtCode] = ORrw.Price * ORrw.Shipd2;
+					OrdSum = OrdSum + ArtCodeSum[ORrw.ArtCode];
 				end;
-			end else begin
-				weboutstring("{\"resultCode\":4,\"message\":\"Return not found!\"}");
+				weboutstring("{" & chr(13) & chr(10));
+				weboutstring("\"orderNo\":\"" & ORr.SerNr & "\"," & chr(13) & chr(10));
+				if (ORr.PayDeal=="O") then begin
+					weboutstring("\"payDeal\":\"CARD\"," & chr(13) & chr(10));
+				end else begin
+					weboutstring("\"payDeal\":\"\"," & chr(13) & chr(10));
+				end;
+				weboutstring("\"loyCard\":\"" & ORr.ECLoyaltyCard & "\"," & chr(13) & chr(10));
+				weboutstring("\"custCode\":\"" & NormalizeStrToJson(ORr.CustCode) & "\"," & chr(13) & chr(10));
+				weboutstring("\"custName\":\"" & NormalizeStrToJson(ORr.Addr0) & "\"," & chr(13) & chr(10));
+				if (OrdSum<50) then begin
+					weboutstring("\"sum\":\"" & OrdSum + 5 & "\"," & chr(13) & chr(10));
+				end else begin
+					weboutstring("\"sum\":\"" & OrdSum & "\"," & chr(13) & chr(10));
+				end;
+				if (ORr.PayDeal=="O") then begin
+					if (OrdSum<50) then begin
+						weboutstring("\"cashless\":\"" & OrdSum + 5 & "\"," & chr(13) & chr(10));
+					end else begin
+						weboutstring("\"cashless\":\"" & OrdSum & "\"," & chr(13) & chr(10));
+					end;
+				end else begin
+					weboutstring("\"cashless\":\"" & "0" & "\"," & chr(13) & chr(10));
+				end;
+				// if (ORr.PayDeal!="O") then begin
+					// weboutstring("\"creditSum\":\"" & ORr.Sum4 & "\"," & chr(13) & chr(10));
+				// end else begin
+					weboutstring("\"creditSum\":\"" & "0" & "\"," & chr(13) & chr(10));
+				// end;
+				weboutstring("\"bonusSum\":\"" & "0" & "\"," & chr(13) & chr(10));
+				weboutstring("\"items\":");
+				weboutstring("[");
+				if (matrowcnt(ORr)>0) then begin
+					weboutstring("{" & chr(13) & chr(10));
+				end;
+				if (ORr.Sum4<50) then begin
+					for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						if (i<matrowcnt(ORr)) then begin
+							matrowget(ORr,i,ORrw);
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ArtCodeSum[ORrw.ArtCode] & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ArtCodeSum[ORrw.ArtCode] * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
+						end;
+						if (i==matrowcnt(ORr)) then begin
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & 1 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & 0 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson("Доставка товара") & "\"" & chr(13) & chr(10));
+						end;
+						if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
+				end else begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+						weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemSum\":\"" & ArtCodeSum[ORrw.ArtCode] & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemVatPercent\":\"" & round(ArtCodeSum[ORrw.ArtCode] * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
+						if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
+				end;
+				if (matrowcnt(ORr)>0) then begin
+					weboutstring("}");
+				end;
+				weboutstring("]" & chr(13) & chr(10));
+				weboutstring("}");
 			end;
 		end else begin
 			weboutstring("{\"resultCode\":2,\"message\":\"SH not found!\"}");
@@ -4833,6 +4919,8 @@ begin
 	end else begin
 		weboutstring("{\"resultCode\":3,\"message\":\"OR not found!\"}");
 	end;
+	weboutstring("]" & chr(13) & chr(10));
+	weboutstring("}");
 return;
 end;
 
