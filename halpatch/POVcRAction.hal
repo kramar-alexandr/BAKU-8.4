@@ -66,6 +66,7 @@ remote procedure ORSumup(var record ORVc); // Edit ********** Ihor Trubachov 26*
 remote function Boolean ORDchrsum(var record ORVc,Integer); // Edit ********** Ihor Trubachov 26*07*2021
 remote function Boolean IVVc_PasteQuantity2(var record IVVc,Integer,var Boolean,var record LSerialPortDeviceVc); // Edit ********** Ihor Trubachov 26*07*2021
 remote procedure DisplayIVItem2(record IVVc,Integer,var Boolean,var record LSerialPortDeviceVc); // Edit ********** Ihor Trubachov 26*07*2021
+remote function Integer CreateCreditNoteIV(record IVVc,Integer,var record IVVc,string,Boolean); // Edit ********** Ihor Trubachov 27*07*2021
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -988,16 +989,20 @@ updating  function LongInt POVcRecordUpdateAfter(var record POVc POr,record POVc
 begin
 	record ORVc ORr;
 	row ORVc ORrw;
-	record IVVc IVr;
-	row IVVc IVrw;
+	record IVVc IVr,IVCreditr;
+	row IVVc IVrw,IVCreditrw;
   LongInt res;
   val bc1v;
-	row POVc POrw;
+	row POVc POrw,PO2rw;
 	boolean endLoop;
-	integer i,j,counti,countj,CountIVr;
-	Boolean serportf;
+	integer i,j,counti,countj;
+	Boolean serportf, flagIV,IV_identic_Credit;
   record LSerialPortDeviceVc LSPDr;
   record RLinkVc RLr;
+	vector val POrwBefore, POrwAfter;
+	record LocalMachineBlock LMb;
+	record SHVc SHr;
+	row SHVc SHrw;
 		
 	logtext(0,"POVcRecordUpdateAfter start");
 	
@@ -1029,53 +1034,138 @@ begin
 		end;
 	end;
 	
-	// if(CurrentCompany==29)then begin // Edit ********** Ihor Trubachov 26*07*2021
-		// if(nonblank(POr.OrdNr) and POr.OKFlag==1 and PO2r.OKFlag==0)then begin 
-			// ORr.SerNr = POr.OrdNr;
-			// if(ReadFirstMain(ORr,1,true))then begin
-				// counti = matrowcnt(POr);
-				// for(i = 0; i < counti; i=i+1) begin
-					// matrowget(POr,i,POrw);
+	flagIV = false;
+	if(CurrentCompany==29)then begin // Edit ********** Ihor Trubachov 26*07*2021
+		if(nonblank(POr.OrdNr) and POr.OKFlag==1 and PO2r.OKFlag==0)then begin 
+			ORr.SerNr = POr.OrdNr;
+			if(ReadFirstMain(ORr,1,true))then begin
+				if(ReadRecordLink(ORr,1,IVr,RLr))then begin
+					flagIV = true;
+				end;
+				
+				counti = matrowcnt(POr);
+				for(i = 0; i < counti; i=i+1) begin
+					matrowget(POr,i,POrw);
+					matrowget(PO2r,i,PO2rw);
 					
-					// endLoop = true;
-					// countj = matrowcnt(ORr);
+					POrwBefore[POrw.ArtCode] = PO2rw.Quant;
+					POrwAfter[POrw.ArtCode] = POrw.Quant;
+				end;
+				
+				countj = matrowcnt(ORr);
+				for(j = 0; j < countj; j=j+1) begin
+					matrowget(ORr,j,ORrw);
+					if(nonblank(POrwAfter[ORrw.ArtCode]))then begin
+						ORrw.Quant = POrwAfter[ORrw.ArtCode];
+						MatRowPut(ORr,j,ORrw);
+						ORDchrsum(ORr,j);
+						ORDchsum(ORr,j);
+						ORSumup(ORr);
+						RecordStore(ORr,true);
+					end;
+				end;	
+
+				if(ReadRecordLink(ORr,1,SHr,RLr))then begin
+					countj = matrowcnt(SHr);
+					for(j = 0; j < countj; j=j+1) begin
+						matrowget(SHr,j,SHrw);
+						if(nonblank(POrwAfter[SHrw.ArtCode]))then begin
+							SHrw.Ordered = POrwAfter[SHrw.ArtCode];
+							MatRowPut(SHr,j,SHrw);
+							RecordStore(SHr,true);
+						end;
+					end;	
+				end;
+			end;
+			
+			
+			
+			
+			
+			IV_identic_Credit = false;
+			endLoop = true;
+			if(flagIV)then begin
+			
+				if(IVr.OKFlag==0)then begin
+					countj = matrowcnt(IVr);
+					for(j = 0; j < countj; j=j+1) begin
+						serportf = false;
+						matrowget(IVr,j,IVrw);
+						if(nonblank(POrwAfter[IVrw.ArtCode]))then begin
+							IVrw.Quant = POrwAfter[IVrw.ArtCode];
+							MatRowPut(IVr,j,IVrw);
+							IVVc_PasteQuantity2(IVr,j,serportf,LSPDr);
+							DisplayIVItem2(IVr,j,serportf,LSPDr);
+							RecordStore(IVr,true);
+						end;
+					end;
+
+					
+				end else begin
+					
+					// countj = matrowcnt(IVr);
 					// for(j = 0; j < countj and endLoop; j=j+1) begin
-						// matrowget(ORr,i,ORrw);
-						// if(POrw.ArtCode == ORrw.ArtCode)then begin
-							// ORrw.Quant = POrw.Quant;
-							// MatRowPut(ORr,j,ORrw);
-							// ORDchrsum(ORr,j);
-							// ORDchsum(ORr,j);
-							// ORSumup(ORr);
-							// RecordStore(ORr,true);
-							// endLoop = false;
-						// end;
-					// end;
-					
-					// CountIVr = 0;
-					// while(ReadRecordLink(ORr,CountIVr,IVr,RLr))begin
-						// if(IVr.OKFlag==0)then begin
-							// endLoop = true;
-							// countj = matrowcnt(IVr);
-							// for(j = 0; j < countj and endLoop; j=j+1) begin
-								// matrowget(IVr,i,IVrw);
-								// if(POrw.ArtCode == IVrw.ArtCode)then begin
-									// IVrw.Quant = POrw.Quant;
-									// MatRowPut(IVr,j,IVrw);
-									// IVVc_PasteQuantity2(IVr,j,serportf,LSPDr);
-									// DisplayIVItem2(IVr,j,serportf,LSPDr);
-									// RecordStore(IVr,true);
-									// endLoop = false;
-								// end;
+						// matrowget(IVr,j,IVrw);
+						// if(nonblank(POrwAfter[IVrw.ArtCode]))then begin
+							// if(POrwBefore[IVrw.ArtCode] - IVrw.Quant != 0)then begin
+								// IV_identic_Credit = true;
+								// endLoop = false;
 							// end;
 						// end;
-						// CountIVr=CountIVr+1;
 					// end;
+					IV_identic_Credit = true;
 					
-				// end;
-			// end;
-		// end;
-	// end;
+					if(IV_identic_Credit) then begin
+						BlockLoad(LMb);
+						RecordNew(IVCreditr);
+						CreateCreditNoteIV(IVr,kInvoiceTypeCredit,IVCreditr,LMb.DefReturnLocation,false);
+						IVCreditr.SerNr = NextSerNr("IVVc",CurrentDate,-1,false,"");
+						
+						//LogText(0,"|||||||||||||||||||||||||||||||____________________________________CreateNew");
+						
+						countj = matrowcnt(IVCreditr);
+						for(j = countj - 1; j >= 0; j=j-1) begin
+							serportf = false;
+							matrowget(IVCreditr,j,IVCreditrw);
+							if(nonblank(POrwAfter[IVCreditrw.ArtCode]))then begin
+								if(POrwBefore[IVCreditrw.ArtCode] - IVCreditrw.Quant == 0)then begin
+									IVCreditrw.Quant = POrwBefore[IVCreditrw.ArtCode] - POrwAfter[IVCreditrw.ArtCode];
+									MatRowPut(IVCreditr,j,IVCreditrw);
+									IVVc_PasteQuantity2(IVCreditr,j,serportf,LSPDr);
+									DisplayIVItem2(IVCreditr,j,serportf,LSPDr);
+									RecordStore(IVCreditr,true);
+									POrwBefore[IVCreditrw.ArtCode] = -1;
+								end;
+							end else begin
+								if(nonblank(IVCreditrw.ArtCode))then begin
+									MatRowDelete(IVCreditr,j);
+									RecordStore(IVCreditr,true);
+								end;
+							end;
+						end;
+
+						
+						CreateRecordLink(IVr,29,IVCreditr,29);
+						CreateRecordLink(IVCreditr,29,IVr,29);
+						CreateRecordLink(ORr,29,IVCreditr,29);
+						CreateRecordLink(IVCreditr,29,ORr,29);
+						
+						IVCreditr.OKFlag=1;
+						RecordStore(IVCreditr,true);
+						//LogText(0,"_________________________CreateRecordLink ");
+					end;
+					
+				end;
+				
+				
+				
+				
+			end;
+		end;
+		ClearVector(POrwBefore);
+		ClearVector(POrwAfter);
+	end;
+	
 	
 	logtext(0,"POVcRecordUpdateAfter finish");
   POVcRecordUpdateAfter = res;
