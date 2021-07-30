@@ -64,6 +64,9 @@ external procedure ExtractObj(string,var Integer,var string);
 remote function string 255 NormalizeStrToJson (string);
 remote function Boolean IVVc_PasteArtCode(var record IVVc,Integer,var string,var string,Boolean,var Integer); //edited by BPI
 external function Boolean IVVc_PasteQuantity(var record IVVc,Integer);
+remote function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean); // Edit ********** Ihor Trubachov 29*07*2021
+remote procedure IPVc_PasteRecVal(var record IPVc,Integer); // Edit ********** Ihor Trubachov 30*07*2021
+remote procedure IVVc_PasteTransDate(var record IVVc,var Integer,var Integer); // Edit ********** Ihor Trubachov 30*07*2021
 
 global
 procedure GetItemSalesAccFromOR(record ORVc ORr,var string salesacc)
@@ -4709,3 +4712,156 @@ begin
   IDCreateIPfromORwhithAdvanceIV = res;
   return;
 end;
+
+
+
+global 	// Edit ********** Ihor Trubachov 29*07*2021
+updating procedure Add_FAST_SHIPPING(var record IVVc IVr)
+BEGIN
+	record IVVc OldIVr;
+	record IPrsVc IPrsr;
+	record IPVc IPr, OldIPr;
+	row IPVc IPrw,IP2rw;
+	row IVVc IVrw;
+	Integer i,countIVrw,countIPrw, NumIPrw,mtrw,sernrf,err1,err2;
+	Boolean checkIPr, endLoop, installmentf, IsOkIPr;
+	string 255 inwarning,warning;
+	val chk;
+	//record LSerialPortDeviceVc LSPDr;
+	
+	RecordCopy(OldIVr,IVr);
+
+	if(IVr.OKFlag==0)then begin
+		countIVrw = matrowcnt(IVr);
+		matrowget(IVr,countIVrw-1,IVrw);
+		if(IVrw.ArtCode == "DELIVERY" or IVrw.ArtCode == "FAST_SHIPPING")then begin
+			matrowdelete(IVr,countIVrw-1);
+			//RecordStore(IVr,true);
+			RecordUpdate(oldIVr,IVr,true);
+			RecordCopy(OldIVr,IVr);
+		end;
+		
+		countIVrw = matrowcnt(IVr);
+
+		IVrw.ArtCode = "FAST_SHIPPING";
+		IVrw.Quant = 1;
+		IVrw.SerialNr = "";
+		IVrw.OrdRow = countIVrw;
+		matrowinsert(IVr,countIVrw,IVrw);
+		IVVc_PasteArtCode(IVr,countIVrw,inwarning,warning,false,sernrf);
+		MatRowGet(IVr,countIVrw,IVrw);
+		IVrw.vRebate = 0;
+		MatRowPut(IVr,countIVrw,IVrw);
+		IVVc_PasteQuantity(IVr,countIVrw);
+		MatRowGet(IVr,countIVrw,IVrw);
+		
+		// IVVc_PasteQuantity2(IVr,j,serportf,LSPDr);
+		// DisplayIVItem2(IVr,j,serportf,LSPDr);
+		
+		IVr.OKFlag=0;
+		//RecordStore(IVr,true);
+		RecordUpdate(oldIVr,IVr,true);
+		RecordCopy(oldIVr,IVr);
+	end else begin
+		
+		endLoop = false;
+		checkIPr=false;
+		IPrsr.IVNr = IVr.SerNr;
+		IPrsr.TransType = 1;
+		if(ReadFirstKey("IVKey",IPrsr,2,true))then begin
+			IPr.SerNr = IPrsr.TransNr;
+			if(readfirstmain(IPr,1,true))then begin
+				mtrw = matrowcnt(IPr);
+				for(i=0;i<mtrw and !endLoop;i=i+1) begin
+	  			matrowget(IPr,i,IPrw);
+	  			if(IPrw.InvoiceNr==IVr.SerNr)then begin
+						checkIPr = true;
+						NumIPrw = i;
+						endLoop = true;
+						RecordCopy(OldIPr,IPr);
+					end;
+				end;
+			end;
+		end;
+		
+		if(checkIPr)then begin
+			if(IPr.OKFlag==1)then begin
+				IsOkIPr = true;
+				IPr.OKFlag=0; 
+				
+				RecordUpdate(oldIPr,IPr,true);
+				RecordCopy(oldIPr,IPr);
+			end;
+			matrowdelete(IPr,NumIPrw);
+			//RecordStore(IPr,true);
+		end;
+		
+		ReadFirstMain(IVr,1,true);
+		RecordCopy(OldIVr,IVr);
+		
+		IVr.OKFlag=0;
+		//RecordStore(IVr,true);
+		RecordUpdate(oldIVr,IVr,true);
+		RecordCopy(OldIVr,IVr);
+		
+		countIVrw = matrowcnt(IVr);
+		matrowget(IVr,countIVrw-1,IVrw);
+		if(IVrw.ArtCode == "DELIVERY" or IVrw.ArtCode == "FAST_SHIPPING")then begin
+			matrowdelete(IVr,countIVrw-1);
+			//RecordStore(IVr,true);
+			//RecordUpdate(oldIVr,IVr,true);
+		end;
+		
+		countIVrw = matrowcnt(IVr);
+		
+		IVrw.ArtCode = "FAST_SHIPPING";
+		IVrw.Quant = 1;
+		IVrw.SerialNr = "";
+		IVrw.OrdRow = countIVrw;
+		matrowinsert(IVr,countIVrw,IVrw);
+		IVVc_PasteArtCode(IVr,countIVrw,inwarning,warning,false,sernrf);
+		MatRowGet(IVr,countIVrw,IVrw);
+		IVrw.vRebate = 0;
+		MatRowPut(IVr,countIVrw,IVrw);
+		IVVc_PasteQuantity(IVr,countIVrw);
+		MatRowGet(IVr,countIVrw,IVrw);
+		
+		// IVr.TransDate = currentdate;
+		// IVVc_PasteTransDate(IVr,err1,err2);//
+		
+		// RecordUpdate(oldIVr,IVr,true);
+		// RecordCopy(oldIVr,IVr);
+		
+		
+		
+		IVr.OKFlag=1;
+		//RecordStore(IVr,true);
+		RecordUpdate(oldIVr,IVr,true);
+		
+		if(checkIPr)then begin
+			countIPrw =  matrowcnt(IPr);
+			IP2rw.InvoiceNr = IVr.SerNr;
+			MatRowPut(IPr,countIPrw,IP2rw);
+			PasteInvIn2IPr(IPr,countIPrw,IPr.TransDate,chk,false,installmentf);
+			MatRowGet(IPr,countIPrw,IP2rw);
+			IP2rw.RecVal = IVr.Sum4;
+			MatRowPut(IPr,countIPrw,IP2rw);
+			IPVc_PasteRecVal(IPr,countIPrw);
+			MatRowGet(IPr,countIPrw,IP2rw);
+			
+		  //RecordStore(IPr,true);
+			RecordUpdate(oldIPr,IPr,true);
+			RecordCopy(oldIPr,IPr);
+			if(IsOkIPr)then begin
+				IPr.OKFlag=1;
+				//RecordStore(IPr,true);
+				RecordUpdate(oldIPr,IPr,true);
+				RecordCopy(oldIPr,IPr);
+			end;
+		end;
+		
+	end;
+	
+	
+	return;
+END;
