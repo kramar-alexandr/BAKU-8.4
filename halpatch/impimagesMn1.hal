@@ -1,5 +1,28 @@
 external procedure TRSumup(var record TRVc,var val);
 external function Integer GetIntYc(Date);
+external procedure ExtractObj(string,var Integer,var string);
+external function string 60 RemoveObjectFromObjectList(string,string);
+external procedure GIWasUpdated(record GlobalItemVc,record GlobalItemVc,string);	
+external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
+
+
+
+
+
+
+
+global updating procedure SaveGIClearAdditCat(Record GlobalItemVc GIr)
+begin
+	record GlobalItemVc LogGIr;
+
+	recordcopy(LogGIr,GIr);
+	GIWasUpdated(GIr,LogGIr," GIWasUpdatedlog 102");
+	RecordStore(GIr,true);
+	
+return;
+end;
+
+
 
 global updating procedure AddNevComissionMn(record RcVc RepSpec)
 begin
@@ -83,3 +106,102 @@ begin
   
 return;
 end;
+
+
+
+
+
+global 
+updating procedure ImportResetAdditionalCatGIIn()
+begin
+	record GlobalItemVc GIr,LogGIr;
+	string 255 code, cat, ostr, FinSTr;
+	record BtrxThirdLevelCatVc BtrxThirdLevelCatr;
+	record BtrxFourthLevelCatVc BtrxFourthLevelCatr;
+	boolean res, TrHs;
+	integer pos;
+	
+	logtext(0,"ImportRebateGIIn");
+	
+	while (TestEOF()==false) begin
+		code = "";
+		cat = "";
+		code = ImportField;
+		cat = ImportField;
+		GIr.Code = code;
+		if (ReadFirstMain(GIr,1,true)) then begin
+			recordcopy(LogGIr,GIr);
+			
+			BtrxThirdLevelCatr.Name = trim(cat);
+			TrHs = true;
+			res = false;
+			while(loopkey("Name",BtrxThirdLevelCatr,1,TrHs))begin
+				if(BtrxThirdLevelCatr.Name!=trim(cat))then begin TrHs = false; end;
+				if(TrHs and SetInSet(BtrxThirdLevelCatr.Code,GIr.BTRxGiftClass))then begin
+					GIr.BTRxGiftClass = RemoveObjectFromObjectList(GIr.BTRxGiftClass,BtrxThirdLevelCatr.Code); 
+					res = true;
+					TrHs = false;
+				end;
+			end;
+			ResetLoop(BtrxThirdLevelCatr);
+			if (!res) then begin
+				BtrxFourthLevelCatr.Name = trim(cat);
+				TrHs = true;
+				while(loopkey("Name",BtrxFourthLevelCatr,1,TrHs))begin
+					if(BtrxFourthLevelCatr.Name!=trim(cat))then begin TrHs = false; end;
+					if(TrHs and SetInSet(BtrxFourthLevelCatr.Code,GIr.BTRxGiftClass))then begin
+						GIr.BTRxGiftClass = RemoveObjectFromObjectList(GIr.BTRxGiftClass,BtrxFourthLevelCatr.Code); 
+						res = true;
+						TrHs = false;
+					end;
+				end;
+				ResetLoop(BtrxFourthLevelCatr);
+			end;
+			if (!res) then begin
+				pos = 0;
+				FinSTr = GIr.BTRxGiftClass;
+				ExtractObjWithSeparator(",",GIr.BTRxGiftClass,true,pos,ostr);
+				while (nonblank(ostr)) begin
+					BtrxThirdLevelCatr.Code = ostr;
+					res = false;
+					if(ReadFirstMain(BtrxThirdLevelCatr,1,true))begin
+						if(BtrxThirdLevelCatr.Name==trim(cat))then begin
+							FinSTr = RemoveObjectFromObjectList(GIr.BTRxGiftClass,BtrxThirdLevelCatr.Code); 
+							res = true;
+							TrHs = false;
+						end;
+					end;
+					if (!res) then begin
+						FinSTr = ostr;
+						res = false;
+						if(ReadFirstMain(BtrxFourthLevelCatr,1,true))begin
+							if(BtrxFourthLevelCatr.Name==trim(cat))then begin
+								FinSTr = RemoveObjectFromObjectList(GIr.BTRxGiftClass,BtrxFourthLevelCatr.Code); 
+								res = true;
+								TrHs = false;
+							end;
+						end;
+					end else begin
+						GIr.BTRxGiftClass = FinSTr;
+					end;
+					ExtractObjWithSeparator(",",GIr.BTRxGiftClass,true,pos,ostr);
+				end;
+			end;
+			if (res) then begin
+				GIWasUpdated(GIr,LogGIr," GIWasUpdatedlog 58");
+				RecordStore (GIr,true);
+			end;
+		end;
+		NextImportLine(true);
+	end;
+
+return;
+end;
+
+
+
+
+
+
+
+
