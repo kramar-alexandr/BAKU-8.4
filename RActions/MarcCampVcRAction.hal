@@ -6932,6 +6932,84 @@ return;
 end;
 
 
+//Edit ******************************Vas-P	04/08/2021
+global webpublic updating procedure WebGetSendClientPrices()
+begin
+	string 100 artcode,brand,client,invid,code,warning;
+	record ORVc ORr;
+	record CUVc CUr;
+	row ORVc ORrw;
+	area getpost;
+	json jobj;
+	integer i,j,rwcnt,compno;
+	boolean isfirst;
+	vector val codeprice;
+	array string 255 aCodes;
+	
+	// setcompany(1,false);
+	
+	logtext(0,"WebGetSendClientPrices");
+	
+	WebSetContentType("application/json");		
+	
+	webgetpostdata(getpost);
+	jobj = parsejsonarea(getpost);
+	client = JSONGet(jobj,"client");
+	compno = StringToInt(JSONGet(jobj,"compno"));
+	
+	if(blank(client))then begin
+		client = "NONAME";
+	end;
+	if(compno>0) then begin
+		for(i=0;i<JSONCountChildren(jobj,"basket_items");i=i+1) begin
+			code = JSONGet(jobj,"basket_items/["  & i & "]");
+			vcode[code] = StringToVal(JSONGet(jobj,"basket_items/["  & i & "]/quantity"),M4Val);
+		end;
+		weboutstring("{\"result\":");
+		weboutstring("{" & chr(13) & chr(10));
+		
+		RecordNew(ORr);
+		CUr.Code = client;
+		if(readfirstmain(CUr,1,true)then begin
+			ORr.PriceList = CUr.PLCode;
+		end;
+		ORr.CustCode = client;
+		
+		weboutstring("\"client\":{" & chr(13) & chr(10));
+		weboutstring("\"custcode\":\"" & ORr.CustCode & "\"," & chr(13) & chr(10));
+		weboutstring("\"compno\":\"" & compno & "\"" & chr(13) & chr(10));
+		weboutstring("}," & chr(13) & chr(10));
+		weboutstring("{" & chr(13) & chr(10));
+		weboutstring("\"basket_items\":{" & chr(13) & chr(10));
+		
+		ORr.PayDeal = "T";
+		GetVectorTags(vcode,aCodes);
+		for(j=0;j<=aCodes.length;j=j+1)begin
+			rwcnt = MatRowCnt(ORr);
+			if(vcode[aCodes[j]]>0)then begin
+				ORrw.ArtCode = aCodes[i];
+				ORrw.Quant = vcode[aCodes[i]];
+				
+				MatRowPut(ORr,rwcnt,ORrw);
+				ORVc_PasteArtCode(ORr,rwcnt,warning,warning,false);
+				MatRowGet(ORr,rwcnt,ORrw);
+				if(isfirst)then begin
+					WebOutString(",");
+				end;
+				isfirst = true;
+				weboutstring("\"" & ORrw.ArtCode & "\":{" & chr(13) & chr(10));
+				weboutstring("\"quantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+				weboutstring("\"sum\":\"" & ORrw.Sum & chr(13) & chr(10));
+				weboutstring("}" & chr(13) & chr(10));
+			end;
+		end;
+		weboutstring("}" & chr(13) & chr(10));
+		weboutstring("}");
+	end else begin
+		weboutstring("{\"result\":\"something wrong\"}");
+	end;
+return;
+end;
 
 
 
