@@ -8959,6 +8959,93 @@ end;
 
 
 
+
+
+
+
+
+
+
+
+
+global procedure CollectXMLNovasItems()
+begin
+	record ORVc ORr;
+	area text,replyPr;
+	string 255 tstr,code,brand,price,name,paramName,parseString,coding,qty,PrefCode,rebate;
+	integer i,posa,cnt,paramCnt,j,countstr,s;
+	xml xmlreply;
+	boolean codeCheck, TrHs;
+	vector boolean CodeInstf;
+	record GlobalItemVc GIr;
+	val quant;
+	record ExpProvItemRegVc EPIRr;
+	
+	if (FileExists("NovasHomeOzzi.xml")) then begin
+		addfiletoarea("NovasHomeOzzi.xml",replyPr,0);
+		xmlreply = ParseXMLArea(replyPr);
+		posa = 0;
+		cnt = XmlCountChildren(xmlreply,"offers");
+		// cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
+		EPIRr.PrefCode = "NOVAS";
+		if (readfirstKey("PrefCode",EPIRr,1,true)) then begin
+			PrefCode = EPIRr.PrefCode;
+		end;
+		for(i=0;i<cnt;i=i+1) begin
+			// brand = XmlGetAttribute(xmlreply,"company/products/product[" & i & "]/brand[" & 0 &"]","name");
+			// brand = ConvertStringFromCodePage("CP-1251",brand); 
+			brand = XmlGet(xmlreply,"offer[" & i & "]/Brand");
+			price = XmlGet(xmlreply,"offer[" & i & "]/price");
+			name = XmlGet(xmlreply,"offer[" & i & "]/Name");
+			code = XmlGet(xmlreply,"offer[" & i & "]/ArtCode");
+			qty = XmlGet(xmlreply,"offer[" & i & "]/InStock");
+			rebate = XmlGet(xmlreply,"offer[" & i & "]/discount");
+			if(nonblank(code)) then begin 
+				queued.CreateExtProvGlobalItem(PrefCode & code,brand,price,name,true,0,false,rebate,true,qty,true,EPIRr.SerNr);
+				MilliSleep(50);
+				// logtext(0,brand & " brand");
+				// logtext(0,price & " price");
+				// logtext(0,name & " name");
+				// logtext(0,code & " code");
+				// logtext(0,qty & " qty");
+				MilliSleep(50);
+				if (StringToVal(qty,M4Val)>0) then begin
+					CodeInstf[PrefCode & code] = true;
+				end;
+			end;
+		end;
+		GIr.Code = PrefCode;
+		TrHs = true;
+		while (loopMain(Gir,1,TrHs)) begin
+			if (left(GIr.Code,4)!=PrefCode) then begin TrHs = false; end;
+			if (TrHs and !CodeInstf[GIr.Code]) then begin
+				queued.Instock0(GIr.Code);
+				MilliSleep(50);
+			end;
+		end;
+		CloseFile;
+		delete_file("/mnt/database/Ecommerce/ExtItemOUT/NovasHomeOzzi.xml");
+		MoveFile("NovasHomeOzzi.xml","","/mnt/database/Ecommerce/ExtItemOUT");
+		delete_file("NovasHomeOzzi.xml");
+		runprogram("chmod","-R a+rw Ecommerce");
+		logtext(0,"CollectXMLNovasItems end");
+		writeareatofile(text,"areafromrequest.txt",0);
+	end;
+
+return;
+end;
+
+
+
+
+
+
+
+
+
+
+
+
 global webpublic updating procedure WebCollectXMLZOOMagItems()
 begin
 	CollectXMLZOOMagItems;
