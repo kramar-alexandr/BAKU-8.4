@@ -1436,19 +1436,20 @@ begin
 return;
 end;
 
-//Edit ******************************Vas-P	05/08/2021
+///Edit ******************************Vas-P	05/08/2021
 global webpublic procedure WebFillItemsInfoInFile()
 begin
 	area fillitems;
 	string 150 fn;
 	record INVc INr;
-	integer CompQty,i,startCompany;
+	integer CompQty,i,j,startCompany;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
-	boolean TrHs,testf,isfirstcomp,isfirst,isfirst2;
+	boolean TrHs,testf,testf2,isfirstcomp,isfirst,isfirst2,isfirst3;
 	val ITRebate,price;
 	vector val ItemPriceComp,ItemRebComp;
-	vector string 255 ItemCompname,ItemLocations,ItemInstock,ItemName;
+	vector string 255 vloc,vinstock;
+	array string 255 aloc,ainstock;
 	record ItemStatusVc ISr;
 	string 255 obj,crn,tpcurrency;
 	val fr,to1,to2,br1,br2,TempItemPrice,tprice;  
@@ -1485,10 +1486,11 @@ begin
 						end;
 						isfirst = true;
 						addtexttoarea("\"" & Locr.Code & "\"",fillitems);	
+						vloc[Locr.Code] = Locr.Code;
 					end;
 				end;
-				ResetLoop(Locr);
 				addtexttoarea("]," & chr(13) & chr(10),fillitems);
+				ResetLoop(Locr);
 				price = blankval;
 				tprice = blankval;
 				TrHs = true;
@@ -1504,6 +1506,18 @@ begin
 						end;
 						isfirst2 = true;
 						addtexttoarea("\"" & INr.Code & "\"",fillitems);
+						GetVectorTags(vloc,aloc);
+						for(j=0;j<=aloc.length;j=j+1)begin
+							ISr.Code = INr.Code;
+							ISr.Location = aloc[j];
+							testf2 = true;
+							if(ReadFirstKey("Location",ISr,2,testf2)) then begin 
+								if(ISr.Location==";;;")then begin testf2 = false; end;
+								if(ISr.Instock>0) then begin
+									vinstock[ISr.Code & "(" & ISr.Instock & ")"] = ISr.Code & "(" & ISr.Instock & ")";
+								end;
+							end;
+						end;
 						// GetPriceItem(INr.Code,price,ITRebate);
 						// tdp = currentdate;
 						// if (GetTempItemPrice(TempItemPrice,INr.Code,tpcurrency,tdp,obj)) then begin
@@ -1543,6 +1557,17 @@ begin
 						// end;	
 					end;	
 				end;
+				addtexttoarea("]," & chr(13) & chr(10),fillitems);
+				addtexttoarea("\"instock\":\[" & chr(13) & chr(10),fillitems);
+				isfirst3 = false;
+				GetVectorTags(vinstock,ainstock);
+				for(j=0;j<=ainstock.length;j=j+1)begin
+					if(isfirst3)then begin
+						addtexttoarea(",",fillitems);
+					end;
+					isfirst3 = true;
+					addtexttoarea("\"" & ainstock[j] & "\"",fillitems);
+				end;
 				addtexttoarea("]" & chr(13) & chr(10),fillitems);
 				addtexttoarea("}",fillitems);
 				resetloop(INr);
@@ -1554,6 +1579,8 @@ begin
 		delete_file(fn);
 	end;
 	WriteAreaToFile(fillitems,fn,1);
+	
+	logtext(0,"WebFillItemsInfoInFile");
 	
 return;
 end;
