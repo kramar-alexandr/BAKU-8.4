@@ -91,7 +91,7 @@ external procedure NextCode(string,var string);
 remote procedure TRVc_PasteDebVal(var record TRVc,Integer);	  //  by Ira
 remote procedure TRVc_PasteCredVal(var record TRVc,Integer);	  //  by Ira
 external procedure TRSumup(var record TRVc,var val);	   //  by Ira
-external updating procedure updateGIrAuto(record GlobalItemVc);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:33 15.03.2021
+external updating procedure updateGIrAuto(record GlobalItemVc,vector val);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:33 15.03.2021
 external function Boolean FindStringInString(string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 02, 16 03 2021 y. at 1:26:03 PM
 external function Integer FindFirstPosStringInString( string, string); //Edit----------------------Dima  02.03.2015
 external procedure TimeStamps(var row GlobalItemVc,val,string); //Edit **********************************************Vas-P	06/07/2021
@@ -4229,7 +4229,8 @@ end;
 
 global updating procedure GlobalItemVcRecStPrMn(record RcVc RepSpec) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger10:31 21.08.2018
 begin
- record GlobalItemVc GIr,mainGIr,DupGir,OldGir,LogGIr;
+	area fillitems;
+	record GlobalItemVc GIr,mainGIr,DupGir,OldGir,LogGIr;
 	row GlobalItemVc GIrw, DupGIrw,OldGirw;
 	record INVc INr,oldINr;
 	record DIVc DIr;
@@ -4245,17 +4246,19 @@ begin
 	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
 	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
 	integer flcnt,flushcnt,li;
-	array string 20 aloc;
+	array string 20 aloc,alocation;
 	integer aloccnt;
 	vector boolean vbrandcode;
-	vector string 255 vbrandname;
+	vector string 255 vbrandname,vcomp,vloc,vlocname;
+	vector val vlocinst,vpricereb;
 	record BPIBrandVc BPIBr;
 	record WEBReservStock WRSb;
 	boolean entf,locfnd;
 	record ItemDuplicatesVc IDr;
 	vector boolean OrigCodes;
 	vector string 255 OrigBrandCodes;
-	array string 255 aOrigGlobalCodes;
+	array string 255 aOrigGlobalCodes,acomp;
+	string 150 fn;
 	
 	CompQty = 35;
 	OldComp = CurrentCompany;
@@ -4285,9 +4288,9 @@ begin
 	while (loopmain(GIr,1,TrHs1)) begin
 		testf = true;
 		if(nonblank(RepSpec.f1) and GIr.Code!=RepSpec.f1)then begin TrHs1 = false; testf = false; end;
-		if (OrigCodes[GIr.Code]) then begin testf = false; end;
+		if(OrigCodes[GIr.Code]) then begin testf = false; end;
 		if(testf)then begin
-			updateGIrAuto(GIr);
+			updateGIrAuto(GIr,vpricereb);
 			recordcopy(OldGir,GIr);
 			for (j=matrowcnt(GIr)-1;j>=0;j=j-1) begin
 				matrowdelete(GIr,j);
@@ -4295,8 +4298,10 @@ begin
 			for (i=0;i<CompQty;i=i+1)begin
 				matrowget(Compb,i,Comprw);
 				if(Comprw.ActiveStatus==0 and i+1!=29)then begin
+					
 					entf = false;
 					SetCompany(i+1,false);
+
 					INr.Code = GIr.HansaCode;
 					if (ReadFirstMain(INr,1,true)) then begin
 						if (left(GIr.Code,8)==INr.BPIBrand) then begin
@@ -4311,7 +4316,7 @@ begin
 							
 							TrHs = true;
 							
-							For(li=0;li<aloccnt;li=li+1) begin
+							for(li=0;li<aloccnt;li=li+1) begin
 								locfnd = false;
 								if(setinset(aloc[li],WRSb.ResStockSet))then begin
 									ISr.Code = GIr.HansaCode;
@@ -4331,6 +4336,10 @@ begin
 														// GIrw.Instock = 0;
 													// end;
 													MatRowPut(GIr,j,GIrw);
+													vcomp[i+1] = Comprw.CompName;
+													vloc[GIrw.Location] = i+1;
+													// vlocname[GIrw.Location] = ISr.Name;
+													vlocinst[GIrw.Location] = GIrw.Instock;
 													entf = true;
 												end;
 											end;	
@@ -4368,6 +4377,36 @@ begin
 						end;
 					end;
 				end;
+			end;
+			if(matrowcnt(GIr)>0)then begin
+				GetVectorTags(vcomp,acomp);
+				GetVectorTags(vloc,alocation);
+				addtexttoarea("{\"items\":\{" & chr(13) & chr(10),fillitems);
+				
+				addtexttoarea("\"" & GIr.Code & "\":{" & chr(13) & chr(10),fillitems);
+				addtexttoarea("\"productName\":\"" & GIr.HansaName & "\"," & chr(13) & chr(10),fillitems);
+				for(i=0;i<acomp.length;i=i+1)begin
+					addtexttoarea("\"" & acomp[i] & "\":{" & chr(13) & chr(10),fillitems);
+					// addtexttoarea("\"productPrice\":\"" & GIr.Price & "\"," & chr(13) & chr(10),fillitems);
+					// addtexttoarea("\"productDiscount\":\"" & GIr.Discount & "\"," & chr(13) & chr(10),fillitems);
+					addtexttoarea("\"stocks\":\"{" & chr(13) & chr(10),fillitems);
+					for(j=0;j<aloc.length;j=j+1)begin
+						addtexttoarea("\"" & aloc[i] & "\":{" & chr(13) & chr(10),fillitems);
+						addtexttoarea("\"stockname\":\"" & vlocname[aloc[i]] & "\"," & chr(13) & chr(10),fillitems);
+						addtexttoarea("\"instock\":\"" & vlocinst[aloc[i]] & "\"," & chr(13) & chr(10),fillitems);
+						addtexttoarea("}" & chr(13) & chr(10),fillitems);
+					end;
+					addtexttoarea("}" & chr(13) & chr(10),fillitems);
+					addtexttoarea("}" & chr(13) & chr(10),fillitems);
+				end;
+				addtexttoarea("}" & chr(13) & chr(10),fillitems);
+				addtexttoarea("}" & chr(13) & chr(10),fillitems);
+				fn = "fillitems.txt";
+				if (fileexists(fn)) then begin
+					delete_file(fn);
+				end;
+				WriteAreaToFile(fillitems,fn,1);
+				
 			end;
 		end;
 	end;	
