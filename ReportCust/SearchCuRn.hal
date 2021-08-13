@@ -1045,6 +1045,7 @@ global procedure Credit_ReportRn(record RcVc RepSpec)   // Edit ****************
 BEGIN
 	
 	record ORVc ORr;
+	record INVc INr;
 	row ORVc ORrw;
 	record RLinkVc RLr;
 	record SHVc SHr;
@@ -1055,7 +1056,7 @@ BEGIN
 	record VIVc VIr;
 	record APVc APr;
 	boolean TrHs, testf, testf1, testf2;
-	vector string 255 vPrefix; 
+	vector string 255 vPrefix, vRegCode; 
 	array string 255 tags;	
 	Integer i,j,k,iter, rwcnt, rwcnt2;
 	val sumAll;
@@ -1086,6 +1087,7 @@ BEGIN
 
 	while(LoopKey("PrefCode",EPIRr,1,true))begin
 		vPrefix[EPIRr.Comment] = EPIRr.PrefCode;
+		vRegCode[EPIRr.Comment] = EPIRr.SerNr;
 	end;
 	GetVectorTags(vPrefix,tags);
 	SortStringArray(tags);
@@ -1131,85 +1133,86 @@ BEGIN
 			for(j = 0; j < rwcnt; j=j+1) begin
 				matrowget(ORr,j,ORrw);
 				for(i = 0; i < tags.length; i=i+1) begin
-				
-					iter = 1;
-					if((left(ORrw.ArtCode,len(vPrefix[tags[i]])) == vPrefix[tags[i]]) and (vPrefix[tags[i]] != "IN")) then begin	
-						while(ReadRecordLink(ORr,iter,POr,RLr))begin
-							if(POr.VECode == tags[i])then begin 
-								if(POr.VECode == RepSpec.f1 or blank(RepSpec.f1))then begin
-									if(ReadRecordLink(POr,1,PUr,RLr))then begin
-										if(ReadRecordLink(PUr,1,VIr,RLr))then begin
-											//if(VIr.VECode == RepSpec.f1 or blank(RepSpec.f1))then begin //
-											
-											
-											
-												APr.SerNr = VIr.SerNr;
-												if(ReadFirstMain(APr,1,true))then begin
-													if(APr.RVal > 0)then begin
-														rwcnt2 = matrowcnt(POr);
-														for(k = 0; k < rwcnt2; k=k+1) begin
-															matrowget(POr,k,POrw);
-															if(ORrw.ArtCode == POrw.ArtCode)then begin
-																StartFormat(15);
-																OutString(0,0,ORr.SerNr,false);
-																OutString(20,0,ORr.OrdDate,false);
-																if(ReadRecordLink(ORr,1,SHr,RLr))then begin
-																	if (SHr.OKFlag == 1)then begin
-																		OutString(40,0,SHr.ShipDate,false);
+					INr.Code = ORrw.ArtCode;
+					if (ReadFIrstMain(INr,1,true)) then begin
+						iter = 1;
+						if((left(ORrw.ArtCode,len(vPrefix[tags[i]])) == vPrefix[tags[i]]) and (vPrefix[tags[i]] != "IN") or INr.ExtProwItRegulations==StringToInt(vRegCode[tags[i]])) then begin	
+							while(ReadRecordLink(ORr,iter,POr,RLr))begin
+								if(POr.VECode == tags[i])then begin 
+									if(POr.VECode == RepSpec.f1 or blank(RepSpec.f1))then begin
+										if(ReadRecordLink(POr,1,PUr,RLr))then begin
+											if(ReadRecordLink(PUr,1,VIr,RLr))then begin
+												//if(VIr.VECode == RepSpec.f1 or blank(RepSpec.f1))then begin //
+												
+												
+												
+													APr.SerNr = VIr.SerNr;
+													if(ReadFirstMain(APr,1,true))then begin
+														if(APr.RVal > 0)then begin
+															rwcnt2 = matrowcnt(POr);
+															for(k = 0; k < rwcnt2; k=k+1) begin
+																matrowget(POr,k,POrw);
+																if(ORrw.ArtCode == POrw.ArtCode)then begin
+																	StartFormat(15);
+																	OutString(0,0,ORr.SerNr,false);
+																	OutString(20,0,ORr.OrdDate,false);
+																	if(ReadRecordLink(ORr,1,SHr,RLr))then begin
+																		if (SHr.OKFlag == 1)then begin
+																			OutString(40,0,SHr.ShipDate,false);
+																		end;
+																	end else begin
+																		OutString(40,0,"",false);
 																	end;
-																end else begin
-																	OutString(40,0,"",false);
-																end;
-															
-																OutString(60,0,VIr.SerNr,false);
-																OutString(80,0,VIr.InvDate,false);
-																OutString(100,0,VIr.VECode,false);
 																
-																OutString(120,0,ORrw.ArtCode,false);
-																OutString(140,0,ORrw.Spec,false);
-																OutString(160,0,ORrw.Quant,false);
-															
+																	OutString(60,0,VIr.SerNr,false);
+																	OutString(80,0,VIr.InvDate,false);
+																	OutString(100,0,VIr.VECode,false);
+																	
+																	OutString(120,0,ORrw.ArtCode,false);
+																	OutString(140,0,ORrw.Spec,false);
+																	OutString(160,0,ORrw.Quant,false);
+																
 
-																OutString(180,0, POrw.Price,false);
-																if (POrw.VATCode=="18%") then begin
-																	OutString(200,0,Round(POrw.Price / 100 * 18,SetRoundModeD(2)),false);
-																	OutString(220,0,Round(POrw.Price + (POrw.Price / 100 * 18),SetRoundModeD(2)),false);
-																end else begin
-																	OutString(200,0,Round(POrw.Price / 100 * 0,SetRoundModeD(2)),false);
-																	OutString(220,0,Round(POrw.Price + (POrw.Price / 100 * 0),SetRoundModeD(2)),false);
-																end;
-																
-																OutString(240,0, POrw.Sum,false);
-																if (POrw.VATCode=="18%") then begin
-																	OutString(260,0,Round(POrw.Sum / 100 * 18,SetRoundModeD(2)),false);
-																	OutString(280,0,Round(POrw.Sum + (POrw.Sum / 100 * 18),SetRoundModeD(2)),false);
+																	OutString(180,0, POrw.Price,false);
+																	if (POrw.VATCode=="18%") then begin
+																		OutString(200,0,Round(POrw.Price / 100 * 18,SetRoundModeD(2)),false);
+																		OutString(220,0,Round(POrw.Price + (POrw.Price / 100 * 18),SetRoundModeD(2)),false);
+																	end else begin
+																		OutString(200,0,Round(POrw.Price / 100 * 0,SetRoundModeD(2)),false);
+																		OutString(220,0,Round(POrw.Price + (POrw.Price / 100 * 0),SetRoundModeD(2)),false);
+																	end;
 																	
-																	EndFormat;
-																	sumAll = sumAll + Round((POrw.Sum + (POrw.Sum / 100 * 18)),SetRoundModeD(2));
-																end else begin
-																	OutString(260,0,Round(POrw.Sum / 100 * 0,SetRoundModeD(2)),false);
-																	OutString(280,0,Round(POrw.Sum + (POrw.Sum / 100 * 0),SetRoundModeD(2)),false);
-																	
-																	EndFormat;
-																	sumAll = sumAll + Round((POrw.Sum + (POrw.Sum / 100 * 0)),SetRoundModeD(2));
+																	OutString(240,0, POrw.Sum,false);
+																	if (POrw.VATCode=="18%") then begin
+																		OutString(260,0,Round(POrw.Sum / 100 * 18,SetRoundModeD(2)),false);
+																		OutString(280,0,Round(POrw.Sum + (POrw.Sum / 100 * 18),SetRoundModeD(2)),false);
+																		
+																		EndFormat;
+																		sumAll = sumAll + Round((POrw.Sum + (POrw.Sum / 100 * 18)),SetRoundModeD(2));
+																	end else begin
+																		OutString(260,0,Round(POrw.Sum / 100 * 0,SetRoundModeD(2)),false);
+																		OutString(280,0,Round(POrw.Sum + (POrw.Sum / 100 * 0),SetRoundModeD(2)),false);
+																		
+																		EndFormat;
+																		sumAll = sumAll + Round((POrw.Sum + (POrw.Sum / 100 * 0)),SetRoundModeD(2));
+																	end;
 																end;
-															end;
-														end;														
+															end;														
+														end;
 													end;
-												end;
-												
-												
+													
+													
 
-											//end;
+												//end;
+											end;
 										end;
 									end;
 								end;
+								
+								iter=iter+1;
 							end;
-							
-							iter=iter+1;
 						end;
 					end;
-					
 				end;
 			end;
 			
