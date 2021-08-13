@@ -8902,54 +8902,7 @@ end;
 
 global procedure CollectXMLZOOMagItems()
 begin
-	record ORVc ORr;
-	area text,replyPr;
-	string 255 tstr,code,brand,price,name,paramName,parseString,coding,qty;
-	integer i,posa,cnt,paramCnt,j,countstr,s;
-	xml xmlreply;
-	boolean codeCheck, TrHs;
-	vector boolean CodeInstf;
-	record GlobalItemVc GIr;
-	val quant;
 	
-	SendWebRequest("zoomagazin.az",443,-1,true,"GET","/index.php?route=product/xml","text/xml","",false,text,replyPr,10);
-	// SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
-	xmlreply = ParseXMLArea(replyPr);
-	posa = 0;
-	cnt = XmlCountChildren(xmlreply,"company/products");
-	// cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
-	for(i=0;i<cnt;i=i+1) begin
-		// brand = XmlGetAttribute(xmlreply,"company/products/product[" & i & "]/brand[" & 0 &"]","name");
-		// brand = ConvertStringFromCodePage("CP-1251",brand); 
-		brand = XmlGet(xmlreply,"company/products/product[" & i & "]/manufacturer");
-		price = XmlGet(xmlreply,"company/products/product[" & i & "]/SalePrice");
-		name =  XmlGet(xmlreply,"company/products/product[" & i & "]/name");
-		code = XmlGet(xmlreply,"company/products/product[" & i & "]/sku");
-		qty = XmlGet(xmlreply,"company/products/product[" & i & "]/quantity");
-		if(nonblank(code)) then begin 
-			queued.CreateZOOMagGlobalItem(code,brand,price,name,StringToVal(qty,M4Val));
-			// logtext(0,brand & " brand");
-			// logtext(0,price & " price");
-			// logtext(0,name & " name");
-			// logtext(0,code & " code");
-			// logtext(0,qty & " qty");
-			MilliSleep(50);
-			if (StringToVal(qty,M4Val)>0) then begin
-				CodeInstf["ZMAZ" & code] = true;
-			end;
-		end;
-	end;
-	GIr.Code = "ZMAZ";
-	TrHs = true;
-	while (loopMain(Gir,1,TrHs)) begin
-		if (left(GIr.Code,4)!="ZMAZ") then begin TrHs = false; end;
-		if (TrHs and !CodeInstf[GIr.Code]) then begin
-			queued.Instock0(GIr.Code);
-			MilliSleep(50);
-		end;
-	end;
-	logtext(0,"CollectXMLZOOMagItems end");
-	writeareatofile(text,"areafromrequest.txt",0);
 
 return;
 end;
@@ -9447,3 +9400,244 @@ begin
 	
 return;
 end;
+
+
+
+
+
+global webpublic updating procedure WebCollectXMLGeneralItem()
+begin
+	/// 1 - CollectXMLNovasItems, 2 - CollectXMLECAZMagItems, 3 - CollectXMLZOOMagItems, 4 - CollectXMLItems.
+	record ORVc ORr;
+	area text,replyPr, text2, replyPr2, text3, replyPr3, text4, replyPr4;
+	string 255 tstr,code,brand,price,name,paramName,parseString,coding,qty,PrefCode,rebate,normalprice;
+	integer i,posa,cnt,paramCnt,j,countstr,s;
+	xml xmlreply, xmlreply3, xmlreply4;
+	boolean codeCheck, TrHs;
+	vector boolean CodeInstf;
+	record GlobalItemVc GIr;
+	val quant;
+	record ExpProvItemRegVc EPIRr;
+	json jsresponse;
+	
+	
+	
+	// CollectXMLItems
+	logtext(0,"Web CollectXMLItems start");
+	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text4,replyPr4,1);
+	xmlreply4 = ParseXMLArea(replyPr4);
+
+	
+	// CollectXMLZOOMagItems
+	logtext(0,"Web CollectXMLZOOMagItems start");
+	SendWebRequest("zoomagazin.az",443,-1,true,"GET","/index.php?route=product/xml","text/xml","",false,text3,replyPr3,10);
+	xmlreply3 = ParseXMLArea(replyPr3);
+
+	
+	// CollectXMLECAZMagItems
+	logtext(0,"Web CollectXMLECAZMagItems start");
+	SendWebRequest("api.ecaz.az",443,-1,true,"GET","/services/product/list/","","",false,text2,replyPr2,5000);
+	jsresponse = ParseJSONArea(replyPr2);
+
+	
+	
+	
+//______________________________________________________________________________________________________ 1 - CollectXMLNovasItems
+
+	SetCompany(29,false);
+	if (FileExists("NovasHomeOzzi.xml")) then begin
+		addfiletoarea("NovasHomeOzzi.xml",replyPr,0);
+		logtext(0,"CollectXMLNovasItems start");
+		xmlreply = ParseXMLArea(replyPr);
+		posa = 0;
+		cnt = XmlCountChildren(xmlreply,"offers");
+		// cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
+		EPIRr.PrefCode = "NOVAS";
+		if (readfirstKey("PrefCode",EPIRr,1,true)) then begin
+			PrefCode = EPIRr.PrefCode;
+		end;
+		for(i=0;i<cnt;i=i+1) begin
+
+			brand = XmlGet(xmlreply,"offers/offer[" & i & "]/Brand");
+			price = XmlGet(xmlreply,"offers/offer[" & i & "]/price");
+			name = XmlGet(xmlreply,"offers/offer[" & i & "]/Name");
+			code = XmlGet(xmlreply,"offers/offer[" & i & "]/ArtCode");
+			qty = XmlGet(xmlreply,"offers/offer[" & i & "]/InStock");
+			rebate = XmlGet(xmlreply,"offers/offer[" & i & "]/discount");
+			if(nonblank(code)) then begin 
+				queued.CreateExtProvGlobalItem(PrefCode & code,brand,price,name,true,0,false,rebate,true,qty,true,EPIRr.SerNr);
+				MilliSleep(50);
+				if (StringToVal(qty,M4Val)>0) then begin
+					CodeInstf[PrefCode & code] = true;
+				end;
+			end;
+		end;
+		GIr.Code = PrefCode;
+		TrHs = true;
+		while (loopMain(Gir,1,TrHs)) begin
+			if (left(GIr.Code,5)!=PrefCode) then begin TrHs = false; end;
+			if (TrHs and !CodeInstf[GIr.Code]) then begin
+				queued.Instock0(GIr.Code);
+				MilliSleep(50);
+			end;
+		end;
+		CloseFile;
+		delete_file("/mnt/database/Ecommerce/ExtItemOUT/NovasHomeOzzi.xml");
+		MoveFile("NovasHomeOzzi.xml","","/mnt/database/Ecommerce/ExtItemOUT");
+		delete_file("NovasHomeOzzi.xml");
+		runprogram("chmod","-R a+rw Ecommerce");
+		logtext(0,"CollectXMLNovasItems end");
+		writeareatofile(text,"areafromrequest.txt",0);
+	end;
+	
+
+
+//______________________________________________________________________________________________________ 2 - CollectXMLECAZMagItems
+
+	// SendWebRequest("api.ecaz.az",443,-1,true,"GET","/services/product/list/","","",false,text,replyPr,5000);
+	// jsresponse = ParseJSONArea(replyPr2);
+	logtext(0,"CollectXMLECAZMagItems start");
+	posa = 0;
+	cnt = JSONCountChildren(jsresponse,"data");
+	for(i=0;i<cnt;i=i+1) begin
+		normalprice = "";
+		brand = JSONGet(jsresponse,"data[0]/["  & i & "]/model_name");
+		price = JSONGet(jsresponse,"data[0]/["  & i & "]/price");
+		for (j=0;j<len(price);j=j+1) begin
+			if(Mid(price,j,1)==",") then begin
+				normalprice = normalprice & ".";
+			end else begin
+				normalprice = normalprice & Mid(price,j,1);
+			end;
+		end;
+		price = normalprice;
+		name = JSONGet(jsresponse,"data[0]/["  & i & "]/type_ru");
+		code = JSONGet(jsresponse,"data[0]/["  & i & "]/code");
+		qty = JSONGet(jsresponse,"data[0]/["  & i & "]/stock");
+		if(nonblank(code) and  StringToVal(qty,M4Val) > 0) then begin 
+			queued.CreateECAZGlobalItem("ECAZ" & code,brand,price,name,StringToVal(qty,M4Val),1,"",0,"",0,16);
+			MilliSleep(50);
+			if (StringToVal(qty,M4Val)>0) then begin
+				CodeInstf["ECAZ" & code] = true;
+			end;
+		end;
+	end;
+	GIr.Code = "ECAZ";
+	TrHs = true;
+	while (loopMain(Gir,1,TrHs)) begin
+		if (left(GIr.Code,4)!="ECAZ") then begin TrHs = false; end;
+		if (TrHs and !CodeInstf[GIr.Code]) then begin
+			queued.Instock0(GIr.Code);
+			MilliSleep(50);
+		end;
+	end;
+	writeareatofile(text,"areafromrequest.txt",0);
+	
+	
+	
+
+//______________________________________________________________________________________________________ 3 - CollectXMLZOOMagItems
+
+	// SendWebRequest("zoomagazin.az",443,-1,true,"GET","/index.php?route=product/xml","text/xml","",false,text,replyPr,10);
+	//xmlreply3 = ParseXMLArea(replyPr3);
+	logtext(0,"CollectXMLZOOMagItems start");
+	posa = 0;
+	cnt = XmlCountChildren(xmlreply3,"company/products");
+	for(i=0;i<cnt;i=i+1) begin
+		// brand = XmlGetAttribute(xmlreply,"company/products/product[" & i & "]/brand[" & 0 &"]","name");
+		// brand = ConvertStringFromCodePage("CP-1251",brand); 
+		brand = XmlGet(xmlreply,"company/products/product[" & i & "]/manufacturer");
+		price = XmlGet(xmlreply,"company/products/product[" & i & "]/SalePrice");
+		name =  XmlGet(xmlreply,"company/products/product[" & i & "]/name");
+		code = XmlGet(xmlreply,"company/products/product[" & i & "]/sku");
+		qty = XmlGet(xmlreply,"company/products/product[" & i & "]/quantity");
+		if(nonblank(code)) then begin 
+			queued.CreateZOOMagGlobalItem(code,brand,price,name,StringToVal(qty,M4Val));
+			MilliSleep(50);
+			if (StringToVal(qty,M4Val)>0) then begin
+				CodeInstf["ZMAZ" & code] = true;
+			end;
+		end;
+	end;
+	GIr.Code = "ZMAZ";
+	TrHs = true;
+	while (loopMain(Gir,1,TrHs)) begin
+		if (left(GIr.Code,4)!="ZMAZ") then begin TrHs = false; end;
+		if (TrHs and !CodeInstf[GIr.Code]) then begin
+			queued.Instock0(GIr.Code);
+			MilliSleep(50);
+		end;
+	end;
+	writeareatofile(text,"areafromrequest.txt",0);
+
+
+
+
+//______________________________________________________________________________________________________ 4 - CollectXMLItems
+	
+	
+	// SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
+	logtext(0,"CollectXMLItems start");
+	//xmlreply4 = ParseXMLArea(replyPr4);
+	posa = 0;
+	cnt = XmlCountChildren(xmlreply4,"yml_catalog/shop/offers");
+	for(i=0;i<cnt;i=i+1) begin
+		brand = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
+		price = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/price");
+		name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/description");
+		if(blank(name)) then begin
+			name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/model");
+		end;
+		j = 0;
+		code = "";
+		paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		while(nonblank(paramName)) begin
+			coding = "";
+			coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
+			if(coding == "Реквизиты") then begin
+				parseString = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
+				posa = 0;
+				ExtractObj(parseString,posa,tstr);
+				while(nonblank(tstr)) begin
+					codeCheck = false;
+					tstr = Trim(tstr);
+					if (len(tstr) == 11) then begin
+						// logtext (0,tstr);
+						codeCheck = true;
+						for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
+							if((asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57) and asc(Mid(tstr,countstr,1))!=73 and asc(Mid(tstr,countstr,1))!=78)  then begin
+								codeCheck = false;
+							end;
+						end;
+					end;
+					if(codeCheck) then begin
+						code = tstr;
+					end;
+					ExtractObj(parseString,posa,tstr);
+				end;
+			end;
+			j = j + 1;
+			paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		end;
+		if(nonblank(code)) then begin 
+			queued.CreateGlobalItem(code,brand,price,name);
+			MilliSleep(50);
+			CodeInstf["ECMXA" & code] = true;
+		end;
+	end;
+	GIr.Code = "ECMXA";
+	TrHs = true;
+	while (loopMain(Gir,1,TrHs)) begin
+		if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
+		if (TrHs and !CodeInstf[GIr.Code]) then begin
+			queued.Instock0(GIr.Code);
+			MilliSleep(50);
+		end;
+	end;
+	writeareatofile(text,"areafromrequest.txt",0);
+
+
+return;
+end;
+
+
