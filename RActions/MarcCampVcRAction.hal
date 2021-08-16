@@ -6434,6 +6434,7 @@ begin
 	array string 255 aCodes;
 	array string 255 aORLocations;
 	Integer errcode,cscnt,ivmtrw;
+	boolean testf,testf1;
 	
 
 	
@@ -6713,7 +6714,7 @@ begin
 						j=j+1;
 					end;
 				end;
-				
+				k = 1;
 				for (i=0;i<j;i=i+1)begin
 
 					RecordAction_raPasteOrdInInv2(IVr,ORr.SerNr,false,errcode,aORLocations[i]);
@@ -6725,6 +6726,7 @@ begin
 					IVr.PriceList = "RRP";
 					IVr.OrderNr = ORr.SerNr;
 					IVr.Location = aORLocations[i];
+					IVr.Objects = ORr.Objects;
 					RecordUpdate(OldIVr,IVr,false);
 					
 					ivmtrw = matrowcnt(IVr);
@@ -6798,18 +6800,21 @@ begin
 							CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
 						end;
 					end;
-				
-					RecordAction_raPasteOrdInShip3(SHr,ORr.SerNr,warning,aORLocations[i]);
-					
-					while(ReadRecordLink(ORr,k,Actr,RLr)) begin
-						if(left(Actr.Comment,6)=="Создан")then begin
-							logtext(0,"LinkCreated");
-							RecordCopy(OldActr,Actr);
-							Actr.Comment = Actr.Comment & ", Отгрузка № " & SHr.SerNr;
-							CreateRecordLink(Actr,Currentcompany,SHr,Currentcompany);
-							CreateRecordLink(SHr,Currentcompany,Actr,Currentcompany);
-							if(RecordUpdate(OldActr,Actr,false)==0)then begin 
+					testf1 = true;
+					if(testf)then begin
+						RecordAction_raPasteOrdInShip3(SHr,ORr.SerNr,warning,aORLocations[i]);
+						
+						while(ReadRecordLink(ORr,k,Actr,RLr)) begin
+							if(left(Actr.Comment,6)=="Создан")then begin
+								RecordCopy(OldActr,Actr);
+								Actr.Comment = Actr.Comment & ", Отгрузка № " & SHr.SerNr;
+								CreateRecordLink(Actr,Currentcompany,SHr,Currentcompany);
+								CreateRecordLink(SHr,Currentcompany,Actr,Currentcompany);
+								if(RecordUpdate(OldActr,Actr,false)==0)then begin 
+									testf1 = false;
+								end;
 							end;
+							k = k + 1;
 						end;
 					end;
 				end;
@@ -7040,117 +7045,7 @@ begin
 				if(stat==USetStr(36215))then begin
 					ORr.Closed = 1;
 				end;
-				if(stat==USetStr(36214))then begin
-					mtrw = MatRowCnt(ORr);
-					j = 0;
-					for (i=0;i<mtrw;i=i+1)begin
-						matrowget(ORr,i,ORrw);
-						if(aORLocations[j-1]!=ORrw.Location)then begin
-							aORLocations[j] = ORrw.Location;
-							j=j+1;
-						end;
-					end;
-					
-					for (i=0;i<j;i=i+1)begin
 
-						RecordAction_raPasteOrdInInv2(IVr,ORr.SerNr,false,errcode,aORLocations[i]);
-						
-						RecordCopy(OldIVr,IVr);
-						
-						IVr.CustCode = ORr.CustCode;
-						IVr.Addr0 =  namesname;
-						IVr.PriceList = "RRP";
-						IVr.OrderNr = ORr.SerNr;
-						IVr.Location = aORLocations[i];
-						RecordUpdate(OldIVr,IVr,false);
-						
-						ivmtrw = matrowcnt(IVr);
-						for (k=0;k<ivmtrw;k=k+1) begin
-							matrowget(IVr,k,IVrw);
-							ISr.Code = IVrw.ArtCode;
-							ISr.Location = aORLocations[i];
-							if(ReadFIrstMain(ISr,2,true)) begin
-								if((ISr.Instock-ISr.RsrvQty)==0) then begin
-									if(!SetInSet(IVrw.ArtCode,items))then begin
-										items = items & IVrw.ArtCode & ",";
-									end;
-								end;	
-							end;
-						end;
-						
-						RecordNew(Actr);
-						ActVcRecordDefClient(Actr);
-						if (MakeActFromIV(IVr,Actr)) then begin 	
-							RecordCopy(oldActr,Actr);
-							Actr.Comment = "Товары: " & items & " нужно убрать с витрины";
-							cscnt = matrowcnt(ECCDSb);
-							for(c=0;c<cscnt;c=c+1)begin
-								matrowget(ECCDSb,c,ECCDSrw);
-								if(ECCDSrw.LocCode==aORLocations[i])then begin
-									Actr.MainPersons = ECCDSrw.CashierName;
-									j = cscnt;
-								end;
-							end;
-							if(blank(Actr.MainPersons))then begin
-								Actr.MainPersons = "SA";
-							end;
-							if(blank(Actr.TransDate))then begin
-								Actr.TransDate = CurrentDate;
-							end;
-							Actr.TodoFlag = 1;
-							Actr.CalTimeFlag = kCalTimeFlagTime;
-							Actr.AlarmType = 1;
-							Actr.SymbNr = 3;
-							if(RecordUpdate(oldActr,Actr,true)==0)then begin 
-								CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
-								CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
-							end;
-						end;
-						
-						RecordNew(Actr);
-						ActVcRecordDefClient(Actr);
-						if (MakeActFromIV(IVr,Actr)) then begin 	
-							RecordCopy(oldActr,Actr);
-							Actr.Comment = "Создан заказ на сборку " & ORr.SerNr;
-							cscnt = matrowcnt(ECCDSb);
-							for(c=0;c<cscnt;c=c+1)begin
-								matrowget(ECCDSb,c,ECCDSrw);
-								if(ECCDSrw.LocCode==aORLocations[i])then begin
-									Actr.MainPersons = ECCDSrw.CashierName;
-									j = cscnt;
-								end;
-							end;
-							if(blank(Actr.MainPersons))then begin
-								Actr.MainPersons = "SA";
-							end;
-							if(blank(Actr.TransDate))then begin
-								Actr.TransDate = CurrentDate;
-							end;
-							Actr.TodoFlag = 1;
-							Actr.CalTimeFlag = kCalTimeFlagTime;
-							Actr.AlarmType = 1;
-							Actr.SymbNr = 3;
-							if(RecordUpdate(oldActr,Actr,true)==0)then begin 
-								CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
-								CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
-							end;
-						end;
-					
-						RecordAction_raPasteOrdInShip3(SHr,ORr.SerNr,warning,aORLocations[i]);
-						
-						while(ReadRecordLink(ORr,k,Actr,RLr)) begin
-							if(left(Actr.Comment,6)=="Создан")then begin
-								logtext(0,"LinkCreated");
-								RecordCopy(OldActr,Actr);
-								Actr.Comment = Actr.Comment & ", Отгрузка № " & SHr.SerNr;
-								CreateRecordLink(Actr,Currentcompany,SHr,Currentcompany);
-								CreateRecordLink(SHr,Currentcompany,Actr,Currentcompany);
-								if(RecordUpdate(OldActr,Actr,false)==0)then begin 
-								end;
-							end;
-						end;
-					end;
-				end;
 				ORSumup(ORr);
 				
 				while(loopmain(USr,1,true))begin	//Edit **********************************************Vas-P	23/07/2021
