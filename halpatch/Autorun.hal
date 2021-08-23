@@ -411,7 +411,7 @@ begin
 	Xtravaganza = 16;
 
 	UpdateDBLockBlock;	
-	CleanStocksInGlobalItemMn;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger10:26 19.03.2019
+	//CleanStocksInGlobalItemMn;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger10:26 19.03.2019  Отключил // Edit ************************** BPI Ukraine - KramarAlexandr - 02, 17 08 2021 y. at 10:24:58 AM
 	
 	if(getday(currentdate)==1)then begin
 	  RecordNew(RepSpec);
@@ -443,9 +443,9 @@ begin
 		logtext(0,"CUUpdateLoyaltyRebCode start");
 		CUUpdateLoyaltyRebCode;
 		logtext(0,"CUUpdateLoyaltyRebCode end");
-		logtext(0,"PasteRebCodeLCVCMn start");
-		PasteRebCodeLCVCMn;
-		logtext(0,"PasteRebCodeLCVCMn end");
+		//logtext(0,"PasteRebCodeLCVCMn start");
+		//PasteRebCodeLCVCMn;
+		//logtext(0,"PasteRebCodeLCVCMn end");
 		ResetCompany(SWAROVSKI);  
   end;
   if (SetCompany(LLADRO,false)) then begin
@@ -1469,8 +1469,25 @@ begin
 	record ECAutoRetSMBlock ECARSMb;
   area text,replyPr;
   record RcVc RepSpec;
-   blockload(WRChb);
+  blockload(WRChb);
 	
+	
+	// Перечень регулярных операций. Комментарии выставлять согласно времени выполнения и указывать приблизительную продолжительность выполнения
+	
+	//TimeAutoRunAfterBackup Запуск в 2 часа ночи.
+	  //  UpdateDBLockBlock - закрытие периодов по финансам. Очень быстро
+	  //  CleanStocksInGlobalItemMn - очищает склады продаж в глобальных товарах. Отключил процедуру 17/08/21 так как остатки по складам продажи очищаются и так при каждом расчете остатков
+	  //  AddNevComissionMn - добавление коммисии по продажам в ID
+	  //  AutoCetRebCodeCU - пересчет скидок клиентов по стажу
+	  //  AutoUnGroupIV - обнуление группы продаж для кассиров в сч/ф 
+	  //  CUUpdateLoyaltyRebCode - обновление скидок контактов по накоплениям
+	  //  PasteRebCodeLCVCMn отключил // Edit ************************** BPI Ukraine - KramarAlexandr - 02, 17 08 2021 y. at 10:34:46 AM
+	  //  CreateTRCurDifMn - начисление курсовых разниц - долго
+	  //  ColelctPaymentsCCAndOthersMn - фин майтенанс для ID
+	  //  CollectVIDaySaleMn - // Создание ежедневных счетов-фактур поставщикам по обороту за день по всем магазинам.
+	  
+	  
+	  
 	
 	logtext(0,"BackgroundOperations");
 	//SyncAllIVtoCRM;
@@ -1505,7 +1522,7 @@ begin
 		end;
 		
 		
-		if(gethour(currenttime)==7 and getminute(currenttime)>=20 and getminute(currenttime)<=25/* and fileexists("demoserver")*/)then begin
+		if(gethour(currenttime)==7 and getminute(currenttime)>=50 and getminute(currenttime)<=55/* and fileexists("demoserver")*/)then begin
 			logtext(0,"GlobalItemClassInStock");
 			if (!fileexists("/mnt/database/Ecommerce/GlobalItemReports/GlobalItemClassInStockTMP")) then begin
 				CreateFile("/mnt/database/Ecommerce/GlobalItemReports/GlobalItemClassInStockTMP");
@@ -1636,20 +1653,35 @@ begin
 end;
 
 
-global updating procedure BrandTimeStampsMn()	//Edit **********************************************Vas-P	26/07/2021
+global updating procedure BrandTimeStampsMn(record RcVc RepSpec)	//Edit **********************************************Vas-P	26/07/2021
 begin
 	record GlobalItemVc GIr;
-  record RcVc RepSpec;
+	row GlobalItemVc Girw;
+  // record RcVc RepSpec;
 	string 150 brand;
+	integer i;
 
 	SetCompany(1,false);
 	logtext(0,"WebFillBrandTimeStamps");
 
 	brand = RepSpec.f1;
+	logtext(0,brand & "/" & RepSpec.flags[0] & "/" & RepSpec.flags[1]);
 	while(loopmain(GIr,1,true))begin
 		if(GIr.BPIBrand==brand)then begin
-			GIr.TimeStamp = StringToLongInt(DateToString(CurrentDate,"YYMMDD") & TimeToString(CurrentTime,"HHMM",false));
-			recordstore(GIr,true);
+			if(RepSpec.flags[0]!=0)then begin
+				GIr.TimeStamp = StringToLongInt(DateToString(CurrentDate,"YYMMDD") & TimeToString(CurrentTime,"HHMM",false));
+				recordstore(GIr,true);
+			end;
+			if(RepSpec.flags[1]!=0)then begin
+				for (i=0;i<matrowcnt(GIr);i=i+1) begin
+					matrowget(GIr,i,GIrw);
+					GIrw.CurrentDate = CurrentDate;
+					GIrw.CurrentTime = CurrentTime;
+					GIrw.TimeStamp = StringToLongInt(DateToString(CurrentDate,"YYMMDD") & TimeToString(CurrentTime,"HHMM",false));
+					matrowput(GIr,0,GIrw);
+					recordstore(GIr,true);
+				end;
+			end;
 		end;
 	end;
 	
