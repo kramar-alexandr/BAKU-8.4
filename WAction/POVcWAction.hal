@@ -433,9 +433,29 @@ BEGIN
   end else begin
     Beep;
   end;
+	
+	if(currentCompany == 29) then begin  // Edit ************* Ihor Trubachov 27*08*2021	
+		if(POr.OrdNr == -1 and blank(POr.InvAddr4)) then begin		
+			notenr = MatRowCnt(PUr);
+			for(i=0; i<notenr; i=i+1)begin
+				MatRowGet(PUr,i,PUrw);
+				INr.Code = PUrw.ArtCode;
+				if(ReadFirstMain(INr,1,true))then begin
+					INr.SerNrf = 0;
+					RecordStore(INr,true);
+				end;
+			end;
+		end;
+	end;
+	
+	
+	
 LPUFromPODsm:;  
   return;
 end;
+
+
+
 
 global
 updating function LongInt PUFromBigPUDsm(record BPUVc BPUr,var array longInt PUNr)
@@ -2640,7 +2660,12 @@ function Boolean PODClassArtCodeEFAfter(Integer wn,Integer rownr,Boolean changed
 BEGIN
   record POVc POr;
   row POVc POrw;
+	record GlobalItemVc GIr;
+	record ExpProvItemRegVc EPIr;
+	record CUVc CUr;
+	record INVc INr;
   string 200 art;
+	boolean VATVendor;
 
   GetWindowRecord(wn,POr);    
   MatRowGet(POr,rownr,POrw);
@@ -2661,6 +2686,44 @@ BEGIN
     end else begin
       Beep;
     end;
+		
+		
+		// Edit ************* Ihor Trubachov 30*08*2021
+		if(CurrentCompany == 29) then begin
+			VATVendor = false;
+			EPIr.SerNr = INr.ExtProwItRegulations;
+			if (ReadFirstMain(EPIr,1,true)) then begin
+				CUr.Code = EPIr.Comment;
+				if (ReadfirstMain(CUr,1,true)) then begin 
+					if (CUr.VEVATCode=="18%") then begin
+						VATVendor = true;
+					end;
+				end;
+			end;
+			
+			GIr.Code = POrw.ArtCode;
+			if(readfirstmain(GIr,1,true))then begin
+				if (VATVendor) then begin
+					if (GIr.DealPrice > 0) then begin
+						POrw.Price = round(GIr.DealPrice - GIr.DealPrice/118*18, defaultcurroundoff);
+					end else begin
+						POrw.Price = round(GIr.Price - GIr.Price/118*18, defaultcurroundoff);
+					end;
+					MatRowPut(POr,rownr,POrw);
+				end else begin
+					if (GIr.DealPrice > 0) then begin
+						POrw.Price = GIr.DealPrice;
+					end else begin
+						POrw.Price = GIr.Price;
+					end;
+					MatRowPut(POr,rownr,POrw);
+				end;
+				POVc_PastePrice(POr,rownr);
+				PutWindowRecord(wn,POr);
+			end;
+		end; // if(CurrentCompany == 29)
+		
+		
   end;
   PODClassArtCodeEFAfter = true;
   return;

@@ -453,13 +453,20 @@ begin
   string 5 nextline;
   record LocationVc  ToLocr;
 	longint curtick;
+	date startDatef;
 
 		curtick = getcurtick();
 		logtext(0,"GruppoCoinManageGoodsMn");
 		
     BlockLoad(CoinSb);
 
-    if(CoinSb.LastMNDate==currentdate and RepSpec.flags[19]==0)then begin
+		if(nonblankdate(RepSpec.d1))then begin
+			startDatef = RepSpec.d1;
+		end else begin
+			startDatef = currentDate;
+		end;
+		
+    if(CoinSb.LastMNDate==startDatef and RepSpec.flags[19]==0)then begin
     	logtext(0,"GruppoCoinManageGoodsMn goto LGruppoCoinManageGoods 1");
     	goto LGruppoCoinManageGoods;
     end;
@@ -474,7 +481,7 @@ begin
       LogText(0,"Check upload directory in CoinSettingsBlock");
       goto LGruppoCoinManageGoods;
     end;
-    datestring = DateToString(CurrentDate,"YYYYMMDD");
+    datestring = DateToString(startDatef,"YYYYMMDD");
     filename = "PAD" & "10000" & sstoreID & "_" & datestring & ".TXT";
   	//CreateFile(path & filename);
   	//CloseFile;
@@ -526,7 +533,7 @@ begin
   			end; 
   			if (foundf) then begin
   	      RetPUr.FileNameCoin = filename;
-  	      RetPUr.SentDateCoin = CurrentDate;
+  	      RetPUr.SentDateCoin = startDatef;
   	      RECORDSTORE(RetPUr,true);
   			end;
   		end;
@@ -576,7 +583,7 @@ begin
           end; 
           if (foundf) then begin
             RetPUr.FileNameCoin = filename;
-            RetPUr.SentDateCoin = CurrentDate;
+            RetPUr.SentDateCoin = startDatef;
             RECORDSTORE(RetPUr,true);
           end;
         end;
@@ -666,7 +673,7 @@ begin
     				AddTextToArea(rowdata & nextline, ames);
     				count = count + 1;
     				StockMovr.FileNameCoin = filename;
-						StockMovr.SentDateCoin = CurrentDate;
+						StockMovr.SentDateCoin = startDatef;
 						RECORDSTORE(StockMovr,true);
   				end;
   			end; 
@@ -764,7 +771,7 @@ begin
               AddTextToArea(rowdata & nextline, ames);
               count = count + 1;
               StockMovr.FileNameCoin = filename;
-              StockMovr.SentDateCoin = CurrentDate;
+              StockMovr.SentDateCoin = startDatef;
               RECORDSTORE(StockMovr,true);
             end;
           end; 
@@ -808,7 +815,7 @@ begin
         WriteAreaToFile(ames,backUpPath & filename,0);
       end;
     end;
-	  CoinSb.LastMNDate = currentdate;
+	  CoinSb.LastMNDate = startDatef;
 	  BlockStore(CoinSb);
 	  
 	  
@@ -832,9 +839,16 @@ begin
   LongInt count;
   string 5 nextline;
 	longint curtick;
+	date startDatef;
 	
 	curtick = getcurtick();
     
+		if(nonblankdate(RepSpec.d1))then begin
+			startDatef = RepSpec.d1;
+		end else begin
+			startDatef = currentDate;
+		end;
+		
     BlockLoad(CoinSb);
     sstoreID = CoinSb.ClientCode;
     if (sstoreID<=0 or len(sstoreID)!=4) then begin
@@ -847,7 +861,7 @@ begin
       goto LGruppoCoinMissingEANSMn;
     end;
     
-    datestring = DateToString(CurrentDate,"YYYYMMDD");
+    datestring = DateToString(startDatef,"YYYYMMDD");
     filename = "BMA" & "10000" & sstoreID & "_" & datestring & ".TXT";
     
     nextline = chr(13) & chr(10);
@@ -890,7 +904,7 @@ begin
     	  if (ReadFirstMain(CoinMissingEANr,1,true)) then begin
     	    CoinMissingEANr.FileName = filename;
     	    CoinMissingEANr.StoreID = sstoreID;
-    	    CoinMissingEANr.ImpDate = CurrentDate;
+    	    CoinMissingEANr.ImpDate = startDatef;
     	    CoinMissingEANr.ImpTime = CurrentTime;
     	    RECORDSTORE(CoinMissingEANr,true);
     	  end;
@@ -2144,21 +2158,34 @@ begin
   Integer i;
   string 255 tstr;
   boolean testf;
-  
+	date StartDateMtn; // Edit ************* Ihor Trubachov 20*08*2021
+
+	
   RECORDNEW(RepSpec);
   i = 0;
 	BlockLoad(CoinSb);
   ExtractObj(CoinSb.ClientCodeStr,i,tstr);
+	
+	StartDateMtn = AddDay(CoinSb.LastThinkDate,1);
+	
   while(nonblank(tstr)) begin
 		if(nonblank(tstr))then begin
 			RepSpec.f1 = tstr;
+			if(currentDate >= StartDateMtn) then begin // Edit ************* Ihor Trubachov 20*08*2021
+				RepSpec.d1 = StartDateMtn; 
+			end else begin
+				// StartDateMtn = currentDate;
+				// RepSpec.d1 = currentDate;
+				goto LGruppoCoinParseAndReplaceOutputFiles;
+			end;
+			
 			GruppoCoinManageGoodsMn(RepSpec);
 			GruppoCoinSalesMn(RepSpec);
 			testf = false;
-			if(currentdate==stringtodate("02/07/2019"))then begin
+			if(currentDate==stringtodate("02/07/2019"))then begin 
 				testf = true;
 			end;
-			if(currentdate==stringtodate("08/10/2019"))then begin
+			if(currentDate==stringtodate("08/10/2019"))then begin 
 				testf = true;
 			end;
 			if(testf)then begin
@@ -2169,9 +2196,11 @@ begin
 		end;
   end;
   
-  
+	
+  CoinSb.LastThinkDate = StartDateMtn;
+	BlockStore(CoinSb);
+	//LogText(0,"Done_Done_Done_Done_Done_Done_Done_Done_Done_Done_Done!!!");
 LGruppoCoinParseAndReplaceOutputFiles:;
-  
   return;
 end;
 
