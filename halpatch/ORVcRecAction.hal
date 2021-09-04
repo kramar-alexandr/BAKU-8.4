@@ -95,6 +95,13 @@ external procedure ActVcRecordDefClient(var record ActVc);
 remote updating procedure ORLClassGreenColour(longint); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger14:51 21.02.2019
 remote function val FindAdvCorrections(LongInt);
 remote function Boolean PasteCustInOrder(var record ORVc,string,string,var string,var string);	
+external function roundmode SetRoundModeD(Integer);// Edit ********* Ihor Trubachov 31*08*2021
+remote procedure ORVc_PastePrice(var record ORVc,Integer,var Boolean);	// Edit **************** Ihor Trubachov 01*09*2021
+remote procedure ORDchsum(var record ORVc,Integer);	// Edit **************** Ihor Trubachov 02*09*2021
+remote procedure ORSumup(var record ORVc);	// Edit **************** Ihor Trubachov 02*09*2021
+remote function Boolean ORDchrsum(var record ORVc,Integer);	// Edit **************** Ihor Trubachov 02*09*2021
+remote procedure UpdatePricesORDsm;	// Edit **************** Ihor Trubachov 03*09*2021
+remote procedure ORDUpdatePrices(var record ORVc,Boolean);	// Edit **************** Ihor Trubachov 03*09*2021
 
  SetLangMode(LangRussian,"RUS",0);
 
@@ -467,7 +474,7 @@ begin
 	record ORVc LocORr,OldORr;
 	record SHVc SHr;
 	record IVVc IVr;
-	boolean ecORcomlf, ecTestItemf, svCurrBrndf;
+	boolean ecORcomlf, ecTestItemf, svCurrBrndf,chsum;
 	record ObjVc Objr;
 	integer pos;
 	string 255 str,obj,set,barndCurr;
@@ -1921,6 +1928,39 @@ LORVcRecordRowCheck:;
 		if(blankdate(ORr.EndReserv) and ORr.Reserved>0) then begin
 			ORr.EndReserv = addday(ORr.OrdDate,7);
 		end;
+	end;
+	
+	if(ORr.VAT18Percent==1 and OR2r.VAT18Percent==0)then begin	// Edit ********* Ihor Trubachov 31*08*2021
+		// + 18%
+		
+		rwcnt = MatRowCnt(ORr);
+		for(i=0; i<rwcnt; i=i+1)begin
+			MatRowGet(ORr,i,ORrw);
+			ORrw.Price = Round(ORrw.Price + (ORrw.Price/100 * 18),SetRoundModeD(2));
+			MatRowPut(ORr,i,ORrw);
+			ORDchrsum(ORr,i);
+			ORDchsum(ORr,i);
+			ORSumup(ORr);
+
+		end;
+
+	end;
+	
+	if(ORr.VAT18Percent==0 and OR2r.VAT18Percent==1)then begin	// Edit ********* Ihor Trubachov 31*08*2021
+		// - 18%
+		
+		rwcnt = MatRowCnt(ORr);
+		for(i=0; i<rwcnt; i=i+1)begin
+			MatRowGet(ORr,i,ORrw);
+			// ORrw.Price = Round(ORrw.Price - (ORrw.Price/118 * 18),SetRoundModeD(2));
+			// MatRowPut(ORr,i,ORrw);
+			// ORDchrsum(ORr,i);
+			// ORDchsum(ORr,i);
+			// ORSumup(ORr);
+			ORDUpdatePrices(ORr,false);
+			
+		end;
+
 	end;
 	
 LORVcRecordCheck:;
