@@ -40,7 +40,7 @@ external procedure CheckFlush(var Integer,Integer);
 external procedure FillClassInM4Text(var record GlobalItemVc, string, string, string, string, 
 																																			string, string, string, area);
 external procedure FillClassInM4TextWithTP(var record GlobalItemVc, string, string, string, string, 
-																																			string, string, string, area, string);
+																																			string, string, string, area, longint, string);
 external updating procedure CreateChiccoGlobalItem(string, string, string, string, boolean);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:22 16.10.2020
 external updating procedure CreateExtProvGlobalItem(string, string, string, string, boolean, string, boolean, string, boolean, string, boolean, longint);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:22 16.10.2020
 external updating procedure Instock0(string);
@@ -3487,13 +3487,13 @@ end;
 
 
 
-global procedure SetInstockForExtProvItems()
+global updating procedure SetInstockForExtProvItems()
 begin
 	record GlobalItemVc GIr;
 	row GlobalItemVc GIrw;
 	boolean crtdf, TrHs;
-	string 255 OldCode, ICODE;
-	vector boolean ICODEF;
+	string 255 OldCode, ICODE, IQTY;
+	vector val ICODEF;
 
 	SetCompany(29,false);
 	
@@ -3502,23 +3502,35 @@ begin
 	while (TestEOF()==false) begin
 		ICODE = "";
 		ICODE = ImportField;
-		ICODEF[ICODE] = true;
+		IQTY = ImportField;
+		ICODEF[ICODE] = stringtoval(IQTY,M4Val);
+		GIr.Code = ICODE;
+		if (ReadFirstMain(GIr,1,true)) then begin
+			 TimeStamps(GIrw,stringtoval(IQTY,M4Val)," TimeStamplog 36");
+				GIrw.Instock = stringtoval(IQTY,M4Val);
+				GIrw.Code = GIr.Code;
+				matrowput(GIr,0,GIrw);
+				RecordStore(GIr,true);
+		end;
+		
 		if (NextImportLine(true)) then begin end;
 	end;
 	
-	GIr.Code = "";
-	while (loopMain(GIr,1,true)) begin
-		if (ICODEF[GIr.Code]) then begin
-			matrowget(GIr,0,GIrw);
-			if (GIrw.Location=="MAIN") then begin
-        TimeStamps(GIrw,10," TimeStamplog 36");
-				GIrw.Instock = 10;
-				GIrw.Code = GIr.Code;
-				matrowput(GIr,0,GIrw);
-				queued.SaveGI(GIr);
-			end;
-		end;
-	end;
+	// GIr.Code = "NOVAS";
+	// TrHs = true;
+	// while (loopMain(GIr,1,TrHs)) begin
+		// if (ICODEF[ICODE]!=blankval) then begin
+			// matrowget(GIr,0,GIrw);
+			// if (GIrw.Location=="MAIN") then begin
+        // TimeStamps(GIrw,ICODEF[ICODE]," TimeStamplog 36");
+				// GIrw.Instock = ICODEF[ICODE];
+				// GIrw.Code = GIr.Code;
+				// matrowput(GIr,0,GIrw);
+				// RecordStore(GIr,true);
+				// //queued.SaveGI(GIr);
+			// end;
+		// end;
+	// end;
 return;
 end;
 
@@ -9705,7 +9717,7 @@ end;
 
 
 global
-updating procedure SetItemBitrixClassVJSONQueued(var record GlobalItemVc GIr,array string headers,array string params, vector string ENGHeder, vector string RUSHeder, vector string AZEHeder,area ImportedFile, string maincode, var array string ErrAr, var integer ErrCnt,var array string ErrAr2,var vector string classCode, string finRow)
+updating procedure SetItemBitrixClassVJSONQueued(var record GlobalItemVc GIr,array string headers,array string params, vector string ENGHeder, vector string RUSHeder, vector string AZEHeder, area ImportedFile, longint clarea, string maincode, var array string ErrAr, var integer ErrCnt,var array string ErrAr2,var vector string classCode, string finRow)
 begin
 	record BTRxBrandVc BTRxBrandr;
 	record BTRxMaterialVc BTRxMaterialr;
@@ -9781,7 +9793,7 @@ begin
 						RecordStore(JCNr,true);
 					end;
 				end;
-				FillClassInM4TextWithTP(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,params[i],params[i+1],params[i+2],ImportedFile, maincode);
+				FillClassInM4TextWithTP(GIr,JCNr.Code,JCNr.Name,JCNr.NameRUS,JCNr.NameAZ,params[i],params[i+1],params[i+2],ImportedFile, clarea, maincode);
 				jParamfoundf[JCNr.Code] = true;
 			end;
 			i=i+2;
@@ -11772,8 +11784,8 @@ begin
 	logtext(0,"CheckItemBitrixClassQueued");
 	for(i=0;i<headers.length;i=i+1)begin
 		param = headers[i];
-		params[i] = trim(params[i]);
 		if (left(param,5)!="JSON_") then begin
+			params[i] = trim(params[i]);
 			switch(param)begin
 				case"Brand": 			if(nonblank(params[i]))then begin
 														BTRxBrandr.Name = params[i];
@@ -15138,7 +15150,7 @@ array string 255 Class;
 boolean INrf, ExtPrItemf, iportf;
 vector string 255 classCode;
 string 255 filename, FinRow, MainItemCode;
-LongInt rcnt, r, okend ;
+LongInt rcnt, r, okend, clarea;
 vector string 255 vparams, vartcode, vbrand, vorigartcode,vJSONParENG,vJSONParRUS,vJSONParAZE, vTPCodes;
 record JSONClassNamesVc JCNr;
 vector boolean vJSONClassf, vOldArtCode;
@@ -15152,62 +15164,64 @@ vector longint vTPCNt;
 	// SetImportCodePage("CP1251");
 	SetCompany(1,false);
 	iportf = true;
-	// if (ImportAddClassWithJSONFromFolderQueuedComIn and gethour(currenttime)>=9 and gethour(currenttime)<=23) then begin iportf = false; end;
-	// if (gethour(currenttime)==6 and getminute(currenttime)>=01 and getminute(currenttime)<=25) then begin
-		// for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN");i=i+1) begin
-			// if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i),4) == ".txt") then begin 
-				// filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i);
-				// i = CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN"); 
-			// end;
-		// end;
-		// MoveFile(filename,"/mnt/database/Ecommerce/ECommerceWJSONIN","/mnt/database/Ecommerce/ECommerceIN");
-		// delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
-	// end;
+	if (ImportAddClassWithJSONFromFolderQueuedComIn and gethour(currenttime)>=9 and gethour(currenttime)<=23) then begin iportf = false; end;
+	if (gethour(currenttime)==9 and getminute(currenttime)>=01 and getminute(currenttime)<=25) then begin
+		for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN");i=i+1) begin
+			if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i),4) == ".txt") then begin 
+				filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i);
+				i = CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN"); 
+			end;
+		end;
+		MoveFile(filename,"/mnt/database/Ecommerce/ECommerceWJSONIN","/mnt/database/Ecommerce/ECommerceIN");
+		delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
+	end;
 	
 	
 	if (iportf) then begin
 		okend = 0;
 		
-		// for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceIN");i=i+1) begin
-			// if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceIN",i),4) == ".txt") then begin 
-				// filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceIN",i);
-				// i = CountFilesInDir("/mnt/database/Ecommerce/ECommerceIN"); 
-			// end;
-		// end;
-		// if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/ECommerceIN/" & filename))then begin
-			// if (fileexists("/mnt/database/Ecommerce/ECommerceERRORS/" & filename)) then begin
-				// delete_file("/mnt/database/Ecommerce/ECommerceERRORS/" & filename);
-			// end;
-			// if (fileexists("/mnt/database/Ecommerce/ECommerceOUT/" & filename)) then begin
-				// delete_file("/mnt/database/Ecommerce/ECommerceOUT/" & filename);
-			// end;
-			// logtext(0,"start ImportAddClassFromFolderIn");
-			// SetImportCodePage("UTF-8");
-			// AddFileToArea("/mnt/database/Ecommerce/ECommerceIN/" & filename,ImportedFile,false);
-			// openfile("/mnt/database/Ecommerce/ECommerceIN/" & filename);
-		// _______________________________________________________________________
-		for (i=0;i<CountFilesInDir("ECommerceIN");i=i+1) begin
-			if (right(GetFileNameInDir("ECommerceIN",i),4) == ".txt") then begin 
-				filename = GetFileNameInDir("ECommerceIN",i);
-				i = CountFilesInDir("ECommerceIN"); 
+		for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceIN");i=i+1) begin
+			if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceIN",i),4) == ".txt") then begin 
+				filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceIN",i);
+				i = CountFilesInDir("/mnt/database/Ecommerce/ECommerceIN"); 
 			end;
 		end;
-		if(nonblank(filename) and fileexists("ECommerceIN/" & filename))then begin
-			if (fileexists("ECommerceERRORS/" & filename)) then begin
-				delete_file("ECommerceERRORS/" & filename);
+		if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/ECommerceIN/" & filename))then begin
+			if (fileexists("/mnt/database/Ecommerce/ECommerceERRORS/" & filename)) then begin
+				delete_file("/mnt/database/Ecommerce/ECommerceERRORS/" & filename);
 			end;
-			if (fileexists("ECommerceOUT/" & filename)) then begin
-				delete_file("ECommerceOUT/" & filename);
+			if (fileexists("/mnt/database/Ecommerce/ECommerceOUT/" & filename)) then begin
+				delete_file("/mnt/database/Ecommerce/ECommerceOUT/" & filename);
 			end;
-			logtext(0,"start ImportAddClassFromFolderQueueIn");
+			logtext(0,"start ImportAddClassFromFolderIn");
 			SetImportCodePage("UTF-8");
-			openfile("ECommerceIN/" & filename);
-			AddFileToArea(filename,ImportedFile,false);
+			AddFileToArea("/mnt/database/Ecommerce/ECommerceIN/" & filename,ImportedFile,false);
+			openfile("/mnt/database/Ecommerce/ECommerceIN/" & filename);
+		// _______________________________________________________________________
+		// for (i=0;i<CountFilesInDir("ECommerceIN");i=i+1) begin
+			// if (right(GetFileNameInDir("ECommerceIN",i),4) == ".txt") then begin 
+				// filename = GetFileNameInDir("ECommerceIN",i);
+				// i = CountFilesInDir("ECommerceIN"); 
+			// end;
+		// end;
+		// if(nonblank(filename) and fileexists("ECommerceIN/" & filename))then begin
+			// if (fileexists("ECommerceERRORS/" & filename)) then begin
+				// delete_file("ECommerceERRORS/" & filename);
+			// end;
+			// if (fileexists("ECommerceOUT/" & filename)) then begin
+				// delete_file("ECommerceOUT/" & filename);
+			// end;
+			// logtext(0,"start ImportAddClassFromFolderQueueIn");
+			// SetImportCodePage("UTF-8");
+			// openfile("ECommerceIN/" & filename);
+			// AddFileToArea("ECommerceIN/" & filename,ImportedFile,false);
 			// _______________________________________________________________________
+			clarea = countlinesinarea(ImportedFile);
 			tstr = importfield;
 			tstr = right(tstr,(len(tstr)-1));
 			ErrCnt1 = 2;
-			// logtext(0,USetStr(36229));
+			logtext(0,USetStr(36229));
+			logtext(0,tstr);
 			if(tstr!=USetStr(36229))then begin
 				logtext(0,"ImportAddClassIn codepage error");
 				ErrCnt1 = ErrCnt1 + 1;
@@ -15215,7 +15229,7 @@ vector longint vTPCNt;
 				while (TestEOF()==false) begin
 					if (NextImportLine(true)) then begin end;
 				end;
-				// // goto lImportAddClassWithJSONFromFolderQueuedIn;
+				goto lImportAddClassWithJSONFromFolderQueuedIn;
 			end;
 			if (NextImportLine(true)) then begin end;
 			tstr = importfield;
@@ -15508,34 +15522,34 @@ vector longint vTPCNt;
 
 
 
-			// AddAreaAfterArea(ErrAr2,ErrAr1);
-			// if (ErrCnt1 > 2) then begin
-				// WriteAreaToFile	(ErrAr1,"/mnt/database/Ecommerce/ECommerceERRORS/" & filename,0);
-			// end;
-			// lImportAddClassWithJSONFromFolderQueuedIn:;
-			// CloseFile;
-			// if (okend == 0) then begin
-				// MoveFile(filename,"/mnt/database/Ecommerce/ECommerceIN","/mnt/database/Ecommerce/ECommerceOUT");
-				// delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
-			// end;
-		// end;
-		// runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
-		
-		//_______________________________________________________________
 			AddAreaAfterArea(ErrAr2,ErrAr1);
 			if (ErrCnt1 > 2) then begin
-				WriteAreaToFile	(ErrAr1,"ECommerceERRORS" & filename,0);
+				WriteAreaToFile	(ErrAr1,"/mnt/database/Ecommerce/ECommerceERRORS/" & filename,0);
 			end;
-			lImportAddClassFromFolderIn:;
+			lImportAddClassWithJSONFromFolderQueuedIn:;
 			CloseFile;
 			if (okend == 0) then begin
-				MoveFile(filename,"ECommerceIN","ECommerceOUT");
-				delete_file("ECommerceIN/" & filename);
+				MoveFile(filename,"/mnt/database/Ecommerce/ECommerceIN","/mnt/database/Ecommerce/ECommerceOUT");
+				delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
 			end;
 		end;
-		runprogram("chmod","-R a+rw /usr/local/bin/ECommerceIN");
-		runprogram("chmod","-R a+rw /usr/local/bin/ECommerceERRORS");
-		runprogram("chmod","-R a+rw /usr/local/bin/ECommerceOUT");
+		runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
+		
+		//_______________________________________________________________
+			// AddAreaAfterArea(ErrAr2,ErrAr1);
+			// if (ErrCnt1 > 2) then begin
+				// WriteAreaToFile	(ErrAr1,"ECommerceERRORS" & filename,0);
+			// end;
+			// lImportAddClassFromFolderIn:;
+			// CloseFile;
+			// if (okend == 0) then begin
+				// MoveFile(filename,"ECommerceIN","ECommerceOUT");
+				// delete_file("ECommerceIN/" & filename);
+			// end;
+		// end;
+		// runprogram("chmod","-R a+rw /usr/local/bin/ECommerceIN");
+		// runprogram("chmod","-R a+rw /usr/local/bin/ECommerceERRORS");
+		// runprogram("chmod","-R a+rw /usr/local/bin/ECommerceOUT");
 		//_______________________________________________________________
 		
 		
@@ -15598,7 +15612,7 @@ vector longint vTPCNt;
 					artcode = BPIBrandr.Code & "_" & artcode;
 					GIr.Code = artcode;
 					if(readfirstmain(GIr,1,true))then begin
-						queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
+						queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,clarea,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
 						slipcont = slipcont + 1;
 						if(slipcont>10)then begin
 							millisleep(20);
@@ -15610,7 +15624,7 @@ vector longint vTPCNt;
 								if (nonblank(vTPCodes[MainItemCode & "_" & i])) then begin
 									GIr.Code = vTPCodes[MainItemCode & "_" & i];
 									if(readfirstmain(GIr,1,true))then begin
-										queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
+										queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,clarea,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
 										slipcont = slipcont + 1;
 										if(slipcont>10)then begin
 											millisleep(20);
@@ -15627,7 +15641,7 @@ vector longint vTPCNt;
 						artcode = BPIBrandr.Code & "_" & artcode;
 						GIr.Code = artcode;
 						if(readfirstmain(GIr,1,true))then begin
-							queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
+							queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,clarea,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
 							slipcont = slipcont + 1;					
 							if(slipcont>10)then begin
 								millisleep(30);
@@ -15639,7 +15653,7 @@ vector longint vTPCNt;
 									if (nonblank(vTPCodes[MainItemCode & "_" & i])) then begin
 										GIr.Code = vTPCodes[MainItemCode & "_" & i];
 										if(readfirstmain(GIr,1,true))then begin
-											queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
+											queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,clarea,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
 											slipcont = slipcont + 1;
 											if(slipcont>10)then begin
 												millisleep(20);
@@ -15655,7 +15669,7 @@ vector longint vTPCNt;
 			end else begin
 				GIr.Code = artcode;
 				if(readfirstmain(GIr,1,true))then begin
-					queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
+					queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,clarea,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
 					slipcont = slipcont + 1;					
 					if(slipcont>10)then begin
 						millisleep(30);
@@ -15667,7 +15681,7 @@ vector longint vTPCNt;
 							if (nonblank(vTPCodes[MainItemCode & "_" & i])) then begin
 								GIr.Code = vTPCodes[MainItemCode & "_" & i];
 								if(readfirstmain(GIr,1,true))then begin
-									queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
+									queued.SetItemBitrixClassVJSONQueued(GIr,headers,params,vJSONParENG,vJSONParRUS,vJSONParAZE,ImportedFile,clarea,MainItemCode,ErrArr,ErrCnt2,ErrAr3,classCode,FinRow);
 									slipcont = slipcont + 1;
 									if(slipcont>10)then begin
 										millisleep(20);
