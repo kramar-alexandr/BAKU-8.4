@@ -15013,7 +15013,7 @@ record GlobalItemVc GIr, ExtPrGIr;
 string 100 artcode,brand,newBrand,code,glCode,tstr,bltstr,cntstr,origartcode;
 record BPIBrandVc BPIBrandr;
 record BPIBrandVc BPIBrand1r;
-area ErrAr1, ErrAr2, reply;
+area ErrAr1, ErrAr2, reply, HDAr, fileArea;
 array string 255 abrand,anewbrand,ErrArr,ErrAr3;
 array string 100 headers,params;
 record CompaniesBlock Compb;
@@ -15022,7 +15022,7 @@ vector boolean Errf, Classf, vTPMainCodef;
 array string 255 Class;
 boolean INrf, ExtPrItemf, JSONf;
 vector string 255 classCode;
-string 255 filename, FinRow, MainItemCode;
+string 255 filename, FinRow, MainItemCode, mothfilename, filename1, header1,header2,header3;
 LongInt rcnt, r, okend ;
 vector string 255 vparams, vartcode, vbrand, vorigartcode,vJSONParENG,vJSONParRUS,vJSONParAZE, vTPCodes;
 record JSONClassNamesVc JCNr;
@@ -15107,7 +15107,46 @@ vector longint vTPCNt;
 		if (JSONf) then begin
 			MoveFile(filename,"/mnt/database/Ecommerce/ECommerceIN","/mnt/database/Ecommerce/ECommerceWJSONIN");
 			delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
+			
+			// split divi.txt -l 100
+			// RenameFile	(string fileA,string fileB)
+
+			
+			runprogram("split","/mnt/database/Ecommerce/ECommerceWJSONIN/" & filename & "-l 100");
+			
+			mothfilename = filename;
+			
+			if (fileexists("/mnt/database/Ecommerce/ECommerceWJSONIN/" & "xaa")) then begin
+				SetImportCodePage("UTF-8");
+				openfile("/mnt/database/Ecommerce/ECommerceWJSONIN/" & filename);
+				AddFileToArea("/mnt/database/Ecommerce/ECommerceWJSONIN/" & filename,ImportedFile,false);
+				header1 = GetLineFromArea(ImportedFile,0);
+				header2 = GetLineFromArea(ImportedFile,1);
+				header3 = GetLineFromArea(ImportedFile,2);
+				addtexttoarea(header1,HDAr);
+				addtexttoarea(header2,HDAr);
+				addtexttoarea(header3,HDAr);
+			end;
+			
+			
+			for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN");i=i+1) begin
+				if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i),4) != ".txt") then begin 
+					filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i);
+					
+					RenameFile ("/mnt/database/Ecommerce/ECommerceWJSONIN/" & filename,"/mnt/database/Ecommerce/ECommerceWJSONIN/" & filename & "_" & mothfilename);
+					if (filename!="xaa") then begin
+						AddFileToArea("/mnt/database/Ecommerce/ECommerceWJSONIN/"  & filename & "_" & mothfilename,fileArea,false);
+						WriteAreaToFile(HDAr,"/mnt/database/Ecommerce/ECommerceWJSONIN/" & filename & "_" & mothfilename,0);
+						WriteAreaToFile(fileArea,"/mnt/database/Ecommerce/ECommerceWJSONIN/" & filename & "_" & mothfilename,0);
+						SetAreaZeroSize(fileArea);
+						MoveFile(filename & "_" & mothfilename,"/mnt/database/Ecommerce/ECommerceIN","/mnt/database/Ecommerce/ECommerceWJSONIN");
+						delete_file("/mnt/database/Ecommerce/ECommerceWJSONIN/" & filename & "_" & mothfilename);
+						CloseFile;
+					end;
+				end;
+			end;
 			runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
+			delete_file("/mnt/database/Ecommerce/ECommerceWJSONIN/" & mothfilename);
 		end;
 	end;
 	CloseFile;
@@ -15167,18 +15206,18 @@ vector longint vTPCNt;
 	SetCompany(1,false);
 	iportf = true;
 	if (ImportAddClassWithJSONFromFolderQueuedComIn and gethour(currenttime)>=9 and gethour(currenttime)<=23) then begin iportf = false; end;
-	if (gethour(currenttime)==9 and getminute(currenttime)>=01 and getminute(currenttime)<=25) then begin
-		for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN");i=i+1) begin
-			if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i),4) == ".txt") then begin 
-				filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i);
-				i = CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN"); 
-			end;
-		end;
-		if (fileexists("/mnt/database/Ecommerce/ECommerceIN/" & filename)) then begin
-			MoveFile(filename,"/mnt/database/Ecommerce/ECommerceWJSONIN","/mnt/database/Ecommerce/ECommerceIN");
-			delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
-		end;
-	end;
+	// if (gethour(currenttime)==9 and getminute(currenttime)>=01 and getminute(currenttime)<=25) then begin
+		// for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN");i=i+1) begin
+			// if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i),4) == ".txt") then begin 
+				// filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i);
+				// i = CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN"); 
+			// end;
+		// end;
+		// if (fileexists("/mnt/database/Ecommerce/ECommerceIN/" & filename)) then begin
+			// MoveFile(filename,"/mnt/database/Ecommerce/ECommerceWJSONIN","/mnt/database/Ecommerce/ECommerceIN");
+			// delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
+		// end;
+	// end;
 	
 	
 	if (iportf) then begin
