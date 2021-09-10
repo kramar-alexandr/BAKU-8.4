@@ -7242,7 +7242,7 @@ begin
 	row APP2CollDocSetBlock APCDSrw;
 	array string 255 aCodes;
 	array string 255 aORLocations;
-	Integer errcode,cscnt,ivmtrw;
+	Integer errcode,cscnt,ivmtrw,rwcnt;
 	boolean testf,testf1;
 	longint lon;
 	
@@ -7477,13 +7477,15 @@ begin
 			ORr.PayDeal = "O";
 			ORr.OrdDate = CurrentDate;
 			ORr.Reserved = 1;
-			RecordUpdate(OldORr,ORr,false);
+			if(RecordUpdate(OldORr,ORr,false)!=0)then begin
+				WebOutString("{\"error\":\"Ошибка резервирования товаров""}");			
+			end else begin;
 			
-			if(stat==USetStr(36215))then begin	//36215 - Отменен
+			// if(stat==USetStr(36215))then begin	//36215 - Отменен
 				// if(ORr.OKFlag!=1 and IVr.OKFlag!=1)then begin
 					// RecordDelete(ORr);
 				// end;
-			end;
+			// end;
 			
 			// if(stat==USetStr(36214))then begin
 				// k = 1;
@@ -7558,7 +7560,8 @@ begin
 					// k = k + 1;
 				// end;
 			// end;
-			WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");			
+				WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
+			end;
 
 
 			// WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
@@ -7724,8 +7727,18 @@ begin
 				end;
 				Resetloop(USr);
 				
-				// RecordCopy(OldORr,ORr);
-				// ORr.Reserved = 1;
+				ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
+				if(readfirstkey("OfficialSerNr",ORr,1,true))then begin
+					ORr.CustCode = IVr.SalesMan;
+					rwcnt = MatRowCnt(ORr);
+					for(i=0;i<rwcnt;i=i+1) begin
+						MatRowGet(ORr,i,ORrw);
+						MatRowDelete(ORr,i);
+						ORrw.ArtCode = IVrw.ArtCode;
+						matrowput(ORr,i,ORrw);
+						ORVc_PasteArtCode(ORr,i,inwarning,warning,false);
+					end;
+				end;
 				// RecordUpdate(OldORr,ORr,false);
 				
 				if(stat==USetStr(36215))then begin	//36215 - Отменен
@@ -7751,8 +7764,6 @@ begin
 										end else begin
 											recorddelete(IVr);
 										end;
-										// IVVcRecordRemove(IVr,OldIVr,lon,lon);
-										// logtext(0,"IVVcRecordRemove(IVr,OldIVr,lon,lon) 1- " & IVVcRecordRemove(IVr,OldIVr,lon,lon));
 									end;
 								end;
 							end else begin
@@ -7768,14 +7779,9 @@ begin
 									end else begin
 										recorddelete(IVr);
 									end;
-									// logtext(0,"IVr.SerNr 2- " & IVr.SerNr);
-									// IVVcRecordRemove(IVr,OldIVr,lon,lon);
-									// logtext(0,"IVVcRecordRemove(IVr,OldIVr,lon,lon) 2- " & IVVcRecordRemove(IVr,OldIVr,lon,lon));
 								end;
 							end;
 						end;
-						// RE_CreateREORFormIV(ORr);
-						// IVVcRecordRemove(var record IVVc, record IVVc, LongInt, LongInt);
 					end;
 				end;
 				// RecordUpdate(OldORr,ORr,true);
