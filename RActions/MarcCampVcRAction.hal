@@ -7479,92 +7479,82 @@ begin
 			ORr.Reserved = 1;
 			if(RecordUpdate(OldORr,ORr,false)!=0)then begin
 				WebOutString("{\"error\":\"Ошибка резервирования товаров""}");			
-			end else begin;
-			
-			// if(stat==USetStr(36215))then begin	//36215 - Отменен
-				// if(ORr.OKFlag!=1 and IVr.OKFlag!=1)then begin
-					// RecordDelete(ORr);
-				// end;
-			// end;
-			
-			// if(stat==USetStr(36214))then begin
-				// k = 1;
-				// RecordAction_raPasteOrdInInv(IVr,ORr.SerNr,true,errcode);
-				
-				// RecordCopy(OldIVr,IVr);
-				
-				// IVr.CustCode = ORr.CustCode;
-				// IVr.Addr0 =  namesname;
-				// IVr.PriceList = ORr.PriceList;
-				// IVr.OrderNr = ORr.SerNr;
-				// IVr.Location = ORr.Location;
-				// IVr.Objects = ORr.Objects;
-				// RecordUpdate(OldIVr,IVr,false);
-				
-				// ivmtrw = matrowcnt(IVr);
-				// for (k=0;k<ivmtrw;k=k+1) begin
-					// matrowget(IVr,k,IVrw);
-					// ISr.Code = IVrw.ArtCode;
-					// ISr.Location = IVr.Location;
-					// if(ReadFIrstMain(ISr,2,true)) begin
-						// if((ISr.Instock-ISr.RsrvQty)==0) then begin
-							// if(!SetInSet(IVrw.ArtCode,items))then begin
-								// items = items & IVrw.ArtCode & ",";
-							// end;
-						// end;	
-					// end;
-				// end;
-								
-				// RecordNew(Actr);
-				// ActVcRecordDefClient(Actr);
-				// if (MakeActFromIV(IVr,Actr)) then begin 	
-					// RecordCopy(oldActr,Actr);
-					// Actr.Comment = "Создан заказ на сборку " & ORr.SerNr;
-					// cscnt = matrowcnt(APCDSb);
-					// for(c=0;c<cscnt;c=c+1)begin
-						// matrowget(APCDSb,c,APCDSrw);
-						// if(APCDSrw.LocCode==ORr.Location)then begin
-							// Actr.MainPersons = APCDSrw.CollectorName;
-						// end;
-					// end;
-					// if(blank(Actr.MainPersons))then begin
-						// Actr.MainPersons = "SA";
-					// end;
-					// if(blank(Actr.TransDate))then begin
-						// Actr.TransDate = CurrentDate;
-					// end;
-					// Actr.TodoFlag = 1;
-					// Actr.CalTimeFlag = kCalTimeFlagTime;
-					// Actr.AlarmType = 1;
-					// Actr.SymbNr = 3;
-					// if(RecordUpdate(oldActr,Actr,true)==0)then begin 
-						// CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
-						// CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
-					// end;
-				// end;
-				// testf1 = true;
-				// RecordAction_raPasteOrdInShip2(SHr,ORr.SerNr,warning);
-				
-				// if(recordstore(SHr,true))then begin end;
-				
-				// while(ReadRecordLink(ORr,k,Actr,RLr)) begin
-					// if(left(Actr.Comment,6)=="Создан")then begin
-						// RecordCopy(OldActr,Actr);
-						// Actr.Comment = Actr.Comment & ", Отгрузка № " & SHr.SerNr;
-						// CreateRecordLink(Actr,Currentcompany,SHr,Currentcompany);
-						// CreateRecordLink(SHr,Currentcompany,Actr,Currentcompany);
-						// if(RecordUpdate(OldActr,Actr,false)==0)then begin 
-							// testf1 = false;
-						// end;
-					// end;
-					// k = k + 1;
-				// end;
-			// end;
-				WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
+			end else begin
+				if(stat==USetStr(36215))then begin	//36215 - Отменен
+					ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
+					if(readfirstkey("OfficialSerNr",ORr,1,true))then begin
+						if(ORr.SerNr>0)then begin
+							if(ORr.Reserved==1)then begin
+								recordcopy(OldORr,ORr);
+								if(ORr.OKFlag==1)then begin
+									ORr.OKFlag = 0;
+								end;
+								ORr.Reserved = 0;
+								if(recordupdate(OldORr,ORr,true)==0)then begin
+									if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
+										ORVcRecordRemove(ORr,OldORr,lon,lon);
+										recorddelete(ORr);
+										if(IVr.OKFlag==1)then begin
+											recordcopy(OldIVr,IVr);
+											IVr.OKFlag = 0;
+											if(recordupdate(OldIVr,IVr,true)==0)then begin
+												recorddelete(IVr);
+											end;
+										end else begin
+											recorddelete(IVr);
+										end;
+									end;
+								end;
+							end else begin
+								if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
+									ORVcRecordRemove(ORr,OldORr,lon,lon);
+									recorddelete(ORr);
+									if(IVr.OKFlag==1)then begin
+										recordcopy(OldIVr,IVr);
+										IVr.OKFlag = 0;
+										if(recordupdate(OldIVr,IVr,true)==0)then begin
+											recorddelete(IVr);
+										end;
+									end else begin
+										recorddelete(IVr);
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+
+				if(stat==USetStr(36214))then begin  // 36214 - подтвержден
+					RecordNew(Actr);
+					ActVcRecordDefClient(Actr);
+					if (MakeActFromIV(IVr,Actr)) then begin 	
+						RecordCopy(oldActr,Actr);
+						Actr.Comment = "Создан заказ на сборку " & ORr.SerNr;
+						cscnt = matrowcnt(APCDSb);
+						for(c=0;c<cscnt;c=c+1)begin
+							matrowget(APCDSb,c,APCDSrw);
+							if(APCDSrw.LocCode==ORr.Location)then begin
+								Actr.MainPersons = APCDSrw.CollectorName;
+							end;
+						end;
+						if(blank(Actr.MainPersons))then begin
+							Actr.MainPersons = "SA";
+						end;
+						if(blank(Actr.TransDate))then begin
+							Actr.TransDate = CurrentDate;
+						end;
+						Actr.TodoFlag = 1;
+						Actr.CalTimeFlag = kCalTimeFlagTime;
+						Actr.AlarmType = 1;
+						Actr.SymbNr = 3;
+						if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+							CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
+							CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
+						end;
+					end;
+				end;
 			end;
-
-
-			// WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
+			WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
 		end else begin
 			IVr.SerNr = IVSerNr;
 			if(ReadFirstMain(IVr,1,true))then begin
@@ -7736,8 +7726,6 @@ begin
 					for(i=0;i<rwcnt;i=i+1)begin
 						MatRowDelete(ORr,0);
 					end;
-					// RecordUpdate(OldORr,ORr,true);
-					// RecordCopy(OldORr,ORr);
 					mtrw = matrowcnt(IVr);
 					for(i=0;i<mtrw;i=i+1)begin
 						MatRowGet(IVr,i,IVrw);
@@ -7757,6 +7745,7 @@ begin
 						end;
 					end;
 					ORSumup(ORr);
+					ORr.Reserved = 1;
 					RecordUpdate(OldORr,ORr,true);
 				end;
 				RecordUpdate(OldIVr,IVr,false);
@@ -7804,82 +7793,37 @@ begin
 						end;
 					end;
 				end;
-				// RecordUpdate(OldORr,ORr,true);
-				// if(stat==USetStr(36214))then begin
-					// k = 1;
-					// RecordAction_raPasteOrdInInv(IVr,ORr.SerNr,true,errcode);
-					
-					// RecordCopy(OldIVr,IVr);
-					
-					// IVr.CustCode = ORr.CustCode;
-					// IVr.Addr0 =  namesname;
-					// IVr.PriceList = ORr.PriceList;
-					// IVr.OrderNr = ORr.SerNr;
-					// IVr.Location = ORr.Location;
-					// IVr.Objects = ORr.Objects;
-					// RecordUpdate(OldIVr,IVr,false);
-					
-					// ivmtrw = matrowcnt(IVr);
-					// for (k=0;k<ivmtrw;k=k+1) begin
-						// matrowget(IVr,k,IVrw);
-						// ISr.Code = IVrw.ArtCode;
-						// ISr.Location = IVr.Location;
-						// if(ReadFIrstMain(ISr,2,true)) begin
-							// if((ISr.Instock-ISr.RsrvQty)==0) then begin
-								// if(!SetInSet(IVrw.ArtCode,items))then begin
-									// items = items & IVrw.ArtCode & ",";
-								// end;
-							// end;	
-						// end;
-					// end;
-					
-					// RecordNew(Actr);
-					// ActVcRecordDefClient(Actr);
-					// if (MakeActFromIV(IVr,Actr)) then begin 	
-						// RecordCopy(oldActr,Actr);
-						// Actr.Comment = "Создан заказ на сборку " & ORr.SerNr;
-						// cscnt = matrowcnt(APCDSb);
-						// for(c=0;c<cscnt;c=c+1)begin
-							// matrowget(APCDSb,c,APCDSrw);
-							// if(APCDSrw.LocCode==ORr.Location)then begin
-								// Actr.MainPersons = APCDSrw.CollectorName;
-							// end;
-						// end;
-						// if(blank(Actr.MainPersons))then begin
-							// Actr.MainPersons = "SA";
-						// end;
-						// if(blank(Actr.TransDate))then begin
-							// Actr.TransDate = CurrentDate;
-						// end;
-						// Actr.TodoFlag = 1;
-						// Actr.CalTimeFlag = kCalTimeFlagTime;
-						// Actr.AlarmType = 1;
-						// Actr.SymbNr = 3;
-						// if(RecordUpdate(oldActr,Actr,true)==0)then begin 
-							// CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
-							// CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
-						// end;
-					// end;
-					// testf1 = true;
-					// RecordAction_raPasteOrdInShip2(SHr,ORr.SerNr,warning);
-					
-					// if(recordstore(SHr,true))then begin end;
-					
-					// while(ReadRecordLink(ORr,k,Actr,RLr)) begin
-						// if(left(Actr.Comment,6)=="Создан")then begin
-							// RecordCopy(OldActr,Actr);
-							// Actr.Comment = Actr.Comment & ", Отгрузка № " & SHr.SerNr;
-							// CreateRecordLink(Actr,Currentcompany,SHr,Currentcompany);
-							// CreateRecordLink(SHr,Currentcompany,Actr,Currentcompany);
-							// if(RecordUpdate(OldActr,Actr,false)==0)then begin 
-								// testf1 = false;
-							// end;
-						// end;
-						// k = k + 1;
-					// end;
-				// end;
+
+				if(stat==USetStr(36214))then begin  // 36214 - подтвержден
+					RecordNew(Actr);
+					ActVcRecordDefClient(Actr);
+					if (MakeActFromIV(IVr,Actr)) then begin 	
+						RecordCopy(oldActr,Actr);
+						Actr.Comment = "Создан заказ на сборку " & ORr.SerNr;
+						cscnt = matrowcnt(APCDSb);
+						for(c=0;c<cscnt;c=c+1)begin
+							matrowget(APCDSb,c,APCDSrw);
+							if(APCDSrw.LocCode==ORr.Location)then begin
+								Actr.MainPersons = APCDSrw.CollectorName;
+							end;
+						end;
+						if(blank(Actr.MainPersons))then begin
+							Actr.MainPersons = "SA";
+						end;
+						if(blank(Actr.TransDate))then begin
+							Actr.TransDate = CurrentDate;
+						end;
+						Actr.TodoFlag = 1;
+						Actr.CalTimeFlag = kCalTimeFlagTime;
+						Actr.AlarmType = 1;
+						Actr.SymbNr = 3;
+						if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+							CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
+							CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
+						end;
+					end;
+				end;
 				WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
-				// WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
 			end;
 		end;
 	end;
