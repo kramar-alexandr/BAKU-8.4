@@ -43,8 +43,9 @@ remote procedure IVVc_PasteLocation(var record IVVc,Integer); //Added **********
 remote procedure IVSumup(var record IVVc,Boolean); //Added ******************************Vas-P 09/09/2021
 remote procedure IVVc_PasteSalesMan(var record IVVc,string);	//Added ******************************Vas-P	09/09/2021
 remote updating function boolean RE_CreateORFormIV(var record ORVc, record IVVc); //Added **********************************************Vas-P	10/09/2021
-remote updating function boolean RE_CreateREORFormIV(var record ORVc);	//Added **********************************************Vas-P	10/09/2021
 remote updating function LongInt IVVcRecordRemove(var record IVVc, record IVVc, LongInt, LongInt); //Added **********************************************Vas-P		10/09/2021
+external function LongInt ORVcRecordRemoveTest(var record ORVc,record ORVc,LongInt,LongInt);	//Added **********************************************Vas-P	10/09/2021
+external function LongInt ORVcRecordRemove(var record ORVc,record ORVc,LongInt,LongInt);	//Added **********************************************Vas-P	10/09/2021
 
 
 
@@ -7243,6 +7244,7 @@ begin
 	array string 255 aORLocations;
 	Integer errcode,cscnt,ivmtrw;
 	boolean testf,testf1;
+	longint lon;
 	
 
 	
@@ -7472,12 +7474,12 @@ begin
 			RE_CreateORFormIV(ORr,IVr);
 			
 			RecordCopy(OldORr,ORr);
+			ORr.PayDeal = "O";
 			ORr.OrdDate = CurrentDate;
 			ORr.Reserved = 1;
 			RecordUpdate(OldORr,ORr,false);
 			
 			if(stat==USetStr(36215))then begin	//36215 - ςμενεν
-				// RE_CreateREORFormIV(ORr);
 				// if(ORr.OKFlag!=1 and IVr.OKFlag!=1)then begin
 					// RecordDelete(ORr);
 				// end;
@@ -7721,7 +7723,6 @@ begin
 					end;
 				end;
 				Resetloop(USr);
-				// RE_CreateORFormIV(ORr,IVr);
 				
 				// RecordCopy(OldORr,ORr);
 				// ORr.Reserved = 1;
@@ -7730,15 +7731,28 @@ begin
 				if(stat==USetStr(36215))then begin	//36215 - ςμενεν
 					ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
 					if(readfirstkey("OfficialSerNr",ORr,1,true))then begin
-						// logtext(0,"ORr.SerNr - " & ORr.SerNr);
-						RE_CreateREORFormIV(ORr);
-						logtext(0,"RE_CreateREORFormIV(ORr) - " & RE_CreateREORFormIV(ORr));
+						if(ORr.SerNr>0)then begin
+							if(ORr.Reserved==1)then begin
+								recordcopy(OldORr,ORr);
+								ORr.Reserved = 0;
+								if(recordupdate(OldORr,ORr,true)==0)then begin
+									if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
+										ORVcRecordRemove(ORr,OldORr,lon,lon);
+										recorddelete(ORr);
+										IVVcRecordRemove(IVr,OldIVr,lon,lon);
+									end;
+								end;
+							end else begin
+								if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
+									ORVcRecordRemove(ORr,OldORr,lon,lon);
+									recorddelete(ORr);
+									IVVcRecordRemove(IVr,OldIVr,lon,lon);
+								end;
+							end;
+						end;
+						// RE_CreateREORFormIV(ORr);
 						// IVVcRecordRemove(var record IVVc, record IVVc, LongInt, LongInt);
-					// if(ORr.OKFlag!=1 and IVr.OKFlag!=1)then begin
-						// RecordDelete(ORr);
-					// end;
 					end;
-					logtext(0,"IVr.SerNr - " & IVr.SerNr);
 				end;
 				// RecordUpdate(OldORr,ORr,true);
 				// if(stat==USetStr(36214))then begin
