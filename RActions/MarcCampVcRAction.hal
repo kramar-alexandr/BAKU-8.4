@@ -37,12 +37,15 @@ remote updating function LongInt RecordAction_raPasteOrdInShip2(var record SHVc,
 external procedure ActVcRecordDefClient(var record ActVc);	//Edit **********************************************Vas-P	17/08/2021
 remote updating function Boolean MakeActFromOR(var record ORVc,var record ActVc);	//Edit **********************************************Vas-P	17/08/2021
 remote updating function Boolean MakeActFromIV(var record IVVc,var record ActVc);	//Edit **********************************************Vas-P	17/08/2021
-remote function Boolean PasteCustInInv(var record IVVc); //Edit ******************************Vas-P 09/09/2021
-remote function Boolean IVVc_PasteArtCode(var record IVVc,Integer,var string,var string,Boolean,var Integer); //Edit ******************************Vas-P	09/09/2021
-remote procedure IVVc_PasteLocation(var record IVVc,Integer); //Edit ******************************Vas-P 09/09/2021
-remote procedure IVSumup(var record IVVc,Boolean); //Edit ******************************Vas-P 09/09/2021
-remote procedure IVVc_PasteSalesMan(var record IVVc,string);	//Edit ******************************Vas-P	09/09/2021
-remote updating function boolean RE_CreateORFormIV(var record ORVc, record IVVc); //Edit **********************************************Vas-P	10/09/2021
+remote function Boolean PasteCustInInv(var record IVVc); //Added ******************************Vas-P 09/09/2021
+remote function Boolean IVVc_PasteArtCode(var record IVVc,Integer,var string,var string,Boolean,var Integer); //Added ******************************Vas-P	09/09/2021
+remote procedure IVVc_PasteLocation(var record IVVc,Integer); //Added ******************************Vas-P 09/09/2021
+remote procedure IVSumup(var record IVVc,Boolean); //Added ******************************Vas-P 09/09/2021
+remote procedure IVVc_PasteSalesMan(var record IVVc,string);	//Added ******************************Vas-P	09/09/2021
+remote updating function boolean RE_CreateORFormIV(var record ORVc, record IVVc); //Added **********************************************Vas-P	10/09/2021
+remote updating function LongInt IVVcRecordRemove(var record IVVc, record IVVc, LongInt, LongInt); //Added **********************************************Vas-P		10/09/2021
+external function LongInt ORVcRecordRemoveTest(var record ORVc,record ORVc,LongInt,LongInt);	//Added **********************************************Vas-P	10/09/2021
+external function LongInt ORVcRecordRemove(var record ORVc,record ORVc,LongInt,LongInt);	//Added **********************************************Vas-P	10/09/2021
 
 
 
@@ -6446,8 +6449,6 @@ begin
 	Integer errcode,cscnt,ivmtrw;
 	boolean testf,testf1;
 	
-
-	
 	BlockLoad(ARb);
 	BlockLoad(ECMUb);
 	BlockLoad(ECCDSb);
@@ -7241,8 +7242,9 @@ begin
 	row APP2CollDocSetBlock APCDSrw;
 	array string 255 aCodes;
 	array string 255 aORLocations;
-	Integer errcode,cscnt,ivmtrw;
+	Integer errcode,cscnt,ivmtrw,rwcnt;
 	boolean testf,testf1;
+	longint lon;
 	
 
 	
@@ -7457,9 +7459,7 @@ begin
 			IVVc_PasteLocation(IVr,-1);
 			RecordInsert(IVr,true);
 			RecordCopy(OldIVr,IVr);
-			if(stat==USetStr(36215))then begin
-				IVr.OKFlag = 1;
-			end;
+
 			IVSumup(IVr,true);
 			while(loopmain(USr,1,true))begin
 				if(USr.Closed==0)then begin
@@ -7474,9 +7474,18 @@ begin
 			RE_CreateORFormIV(ORr,IVr);
 			
 			RecordCopy(OldORr,ORr);
+			ORr.PayDeal = "O";
+			ORr.OrdDate = CurrentDate;
 			ORr.Reserved = 1;
-			RecordUpdate(OldORr,ORr,false);
+			if(RecordUpdate(OldORr,ORr,false)!=0)then begin
+				WebOutString("{\"error\":\"Ошибка резервирования товаров""}");			
+			end else begin;
 			
+			// if(stat==USetStr(36215))then begin	//36215 - Отменен
+				// if(ORr.OKFlag!=1 and IVr.OKFlag!=1)then begin
+					// RecordDelete(ORr);
+				// end;
+			// end;
 			
 			// if(stat==USetStr(36214))then begin
 				// k = 1;
@@ -7551,7 +7560,8 @@ begin
 					// k = k + 1;
 				// end;
 			// end;
-			WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");			
+				WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
+			end;
 
 
 			// WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
@@ -7683,7 +7693,7 @@ begin
 					if (codequant[IVrw.ArtCode]>0) then begin
 						IVrw.Quant = codequant[IVrw.ArtCode];
 						MatRowPut(IVr,i,IVrw);
-						ORVc_PasteArtCode(IVr,i,inwarning,warning,false)
+						IVVc_PasteArtCode(IVr,i,inwarning,warning,false,sernrf);
 						MatRowGet(IVr,i,IVrw);
 						codequant[IVrw.ArtCode] = 0;
 					end else begin
@@ -7706,9 +7716,6 @@ begin
 						MatRowGet(IVr,mtrw,IVrw);
 					end;
 				end;
-				if(stat==USetStr(36215))then begin
-					IVr.OKFlag = 1;
-				end;
 				IVSumup(IVr,true);				
 				while(loopmain(USr,1,true))begin
 					if(USr.Closed==0)then begin
@@ -7719,12 +7726,80 @@ begin
 					end;
 				end;
 				Resetloop(USr);
-				RE_CreateORFormIV(ORr,IVr);
 				
-				RecordCopy(OldORr,ORr);
-				ORr.Reserved = 1;
-				RecordUpdate(OldORr,ORr,false);
-
+				ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
+				if(readfirstkey("OfficialSerNr",ORr,1,true))then begin
+					RecordCopy(OldORr,ORr);
+					ORr.CustCode = IVr.SalesMan;
+					mtrw = matrowcnt(IVr);
+					for(i=0;i<mtrw;i=i+1) begin
+						MatRowGet(IVr,i,IVrw);
+						if(nonblank(IVrw.ArtCode))then begin
+							clearrow(ORr,ORrw,1);
+							MatRowDelete(ORr,k);
+							ORrw.ArtCode = IVrw.ArtCode;
+							MatRowPut(ORr,k,ORrw);
+							ORVc_PasteArtCode(ORr,k,inwarning,warning,false);
+							matrowget(ORr,k,ORrw);
+							ORrw.Quant = IVrw.Quant;
+							ORrw.vRebate = IVrw.vRebate;
+							ORrw.Price = IVrw.Price;
+							ORrw.Position = IVrw.PosCode;
+							ORrw.Location = IVrw.Location;
+							matrowput(ORr,k,ORrw);
+							ORVc_PasteQuant(ORr,k,true,chsum);
+							matrowget(ORr,k,ORrw);
+							ORSumup(ORr);
+							RecordUpdate(OldORr,ORr,true);
+							k = k + 1;
+						end;
+					end;
+				end;
+				RecordUpdate(OldIVr,IVr,false);
+				
+				if(stat==USetStr(36215))then begin	//36215 - Отменен
+					ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
+					if(readfirstkey("OfficialSerNr",ORr,1,true))then begin
+						if(ORr.SerNr>0)then begin
+							if(ORr.Reserved==1)then begin
+								recordcopy(OldORr,ORr);
+								if(ORr.OKFlag==1)then begin
+									ORr.OKFlag = 0;
+								end;
+								ORr.Reserved = 0;
+								if(recordupdate(OldORr,ORr,true)==0)then begin
+									if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
+										ORVcRecordRemove(ORr,OldORr,lon,lon);
+										recorddelete(ORr);
+										if(IVr.OKFlag==1)then begin
+											recordcopy(OldIVr,IVr);
+											IVr.OKFlag = 0;
+											if(recordupdate(OldIVr,IVr,true)==0)then begin
+												recorddelete(IVr);
+											end;
+										end else begin
+											recorddelete(IVr);
+										end;
+									end;
+								end;
+							end else begin
+								if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
+									ORVcRecordRemove(ORr,OldORr,lon,lon);
+									recorddelete(ORr);
+									if(IVr.OKFlag==1)then begin
+										recordcopy(OldIVr,IVr);
+										IVr.OKFlag = 0;
+										if(recordupdate(OldIVr,IVr,true)==0)then begin
+											recorddelete(IVr);
+										end;
+									end else begin
+										recorddelete(IVr);
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
 				// RecordUpdate(OldORr,ORr,true);
 				// if(stat==USetStr(36214))then begin
 					// k = 1;
@@ -7799,7 +7874,8 @@ begin
 						// k = k + 1;
 					// end;
 				// end;
-				WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
+				WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
+				// WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
 			end;
 		end;
 	end;
