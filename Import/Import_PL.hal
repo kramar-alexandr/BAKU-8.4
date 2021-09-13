@@ -9706,8 +9706,8 @@ begin
 	recordstore(GIr,true);
 	if (nonblank(finRow)) then begin
 		logtext(0,finRow & " FILENAME!!!");
-		MoveFile(finRow,"/mnt/database/Ecommerce/ECommerceIN","/mnt/database/Ecommerce/ECommerceOUT");
-		delete_file("/mnt/database/Ecommerce/ECommerceIN/" & finRow);
+		MoveFile(finRow,"/mnt/database/Ecommerce/TMP","/mnt/database/Ecommerce/ECommerceOUT");
+		delete_file("/mnt/database/Ecommerce/TMP/" & finRow);
 		runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
 	end;
 return;
@@ -11727,8 +11727,8 @@ begin
 	recordstore(GIr,true);
 	if (nonblank(finRow)) then begin
 		logtext(0,finRow & " FILENAME!!!");
-		MoveFile(finRow,"/mnt/database/Ecommerce/ECommerceIN","/mnt/database/Ecommerce/ECommerceOUT");
-		delete_file("/mnt/database/Ecommerce/ECommerceIN/" & finRow);
+		MoveFile(finRow,"/mnt/database/Ecommerce/TMP","/mnt/database/Ecommerce/ECommerceOUT");
+		delete_file("/mnt/database/Ecommerce/TMP/" & finRow);
 		runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
 	end;
 return;
@@ -15013,21 +15013,21 @@ record GlobalItemVc GIr, ExtPrGIr;
 string 100 artcode,brand,newBrand,code,glCode,tstr,bltstr,cntstr,origartcode;
 record BPIBrandVc BPIBrandr;
 record BPIBrandVc BPIBrand1r;
-area ErrAr1, ErrAr2, reply;
+area ErrAr1, ErrAr2, reply, HDAr, fileArea;
 array string 255 abrand,anewbrand,ErrArr,ErrAr3;
 array string 100 headers,params;
 record CompaniesBlock Compb;
 row CompaniesBlock Comprw;
 vector boolean Errf, Classf, vTPMainCodef;
 array string 255 Class;
-boolean INrf, ExtPrItemf, JSONf;
+boolean INrf, ExtPrItemf, JSONf, TrHs;
 vector string 255 classCode;
-string 255 filename, FinRow, MainItemCode;
+string 255 filename, FinRow, MainItemCode, mothfilename, filename1, header1,header2,header3;
 LongInt rcnt, r, okend ;
 vector string 255 vparams, vartcode, vbrand, vorigartcode,vJSONParENG,vJSONParRUS,vJSONParAZE, vTPCodes;
 record JSONClassNamesVc JCNr;
 vector boolean vJSONClassf, vOldArtCode;
-area ImportedFile;
+area ImportedFile, headerf;
 vector longint vTPCNt;
 		
 	BlockLoad(Compb);
@@ -15086,6 +15086,8 @@ vector longint vTPCNt;
 			while (TestEOF()==false) begin
 				if (NextImportLine(true)) then begin end;
 			end;
+			MoveFile(filename,"/mnt/database/Ecommerce/ECommerceIN/","/mnt/database/Ecommerce/TMP");
+			delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
 			goto lImportAddClassWithJSONFromFolderQueuedComIn;
 		end;
 		if (NextImportLine(true)) then begin end;
@@ -15103,14 +15105,73 @@ vector longint vTPCNt;
 		while (TestEOF()==false) begin
 			if (NextImportLine(true)) then begin end;
 		end;
+		CloseFile;
+		if (JSONf) then begin
+			MoveFile(filename,"/mnt/database/Ecommerce/ECommerceIN","ECommerceIN");
+			delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
+			
+			// split divi.txt -l 100
+			// RenameFile	(string fileA,string fileB)
+			
+			runprogram("split","ECommerceIN/" & filename & " -l 50 -d");
+			millisleep(500);
+			delete_file("ECommerceIN/" & filename);
+			mothfilename = filename;
+			
+			if (fileexists("x00")) then begin
+				logtext (0,"fileexists(x00)");
+				SetImportCodePage("UTF-8");
+				openfile("x00");
+				AddFileToArea("x00",headerf,false);
+				header1 = GetLineFromArea(headerf,0);
+				header2 = GetLineFromArea(headerf,1);
+				header3 = GetLineFromArea(headerf,2);
+				addtexttoarea(header1,HDAr);
+				addtexttoarea(header2,HDAr);
+				addtexttoarea(header3,HDAr);
+				if (NextImportLine(true)) then begin end;
+				while (TestEOF()==false) begin
+					if (NextImportLine(true)) then begin end;
+				end;
+				CloseFile;
+				RenameFile ("x00","x00" & "_" & mothfilename);
+				MoveFile("x00" & "_" & mothfilename,"","/mnt/database/Ecommerce/TMP");
+				delete_file("x00" & "_" & mothfilename);
+			end;
+			
+			i = 1;
+			TrHs = true;
+			runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
+			while (TrHs) begin
+				if (fileexists("x0" & i) or fileexists("x" & i)) then begin 
+					if (i < 10) then begin 
+						filename = "x0" & i;
+					end else begin
+						filename = "x" & i;
+					end;
+					logtext (0,"fileexists(filename) " & filename);
+					AddAreaAfterArea(HDAr,fileArea);
+					AddFileToArea(filename,fileArea,0);
+					createfile("/mnt/database/Ecommerce/TMP/" & filename & "_" & mothfilename);
+					WriteAreaToFile(fileArea,"/mnt/database/Ecommerce/TMP/" & filename & "_" & mothfilename,0);
+					SetAreaZeroSize(fileArea);
+					delete_file(filename);
+					CloseFile;
+				end else begin
+					TrHs = false;
+				end;
+				i = i + 1;
+			end;
+			runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
+		end else begin
+			MoveFile(filename,"/mnt/database/Ecommerce/ECommerceIN" ,"/mnt/database/Ecommerce/TMP");
+			delete_file("ECommerceIN/" & filename);
+		end;
 	end;
-	CloseFile;
-	if (JSONf) then begin
-		MoveFile(filename,"/mnt/database/Ecommerce/ECommerceIN","/mnt/database/Ecommerce/ECommerceWJSONIN");
-		delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
-		runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
-	end;
+
+
 	lImportAddClassWithJSONFromFolderQueuedComIn:;
+	CloseFile;
 	ImportAddClassWithJSONFromFolderQueuedComIn = JSONf;
 return;
 end;
@@ -15150,7 +15211,7 @@ array string 255 Class;
 boolean INrf, ExtPrItemf, iportf;
 vector string 255 classCode;
 string 255 filename, FinRow, MainItemCode;
-LongInt rcnt, r, okend, clarea;
+LongInt rcnt, r, okend, clarea, stwif;
 vector string 255 vparams, vartcode, vbrand, vorigartcode,vJSONParENG,vJSONParRUS,vJSONParAZE, vTPCodes;
 record JSONClassNamesVc JCNr;
 vector boolean vJSONClassf, vOldArtCode;
@@ -15164,29 +15225,31 @@ vector longint vTPCNt;
 	// SetImportCodePage("CP1251");
 	SetCompany(1,false);
 	iportf = true;
-	if (ImportAddClassWithJSONFromFolderQueuedComIn and gethour(currenttime)>=9 and gethour(currenttime)<=23) then begin iportf = false; end;
-	if (gethour(currenttime)==9 and getminute(currenttime)>=01 and getminute(currenttime)<=25) then begin
-		for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN");i=i+1) begin
-			if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i),4) == ".txt") then begin 
-				filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i);
-				i = CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN"); 
-			end;
-		end;
-		MoveFile(filename,"/mnt/database/Ecommerce/ECommerceWJSONIN","/mnt/database/Ecommerce/ECommerceIN");
-		delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
-	end;
+	if (ImportAddClassWithJSONFromFolderQueuedComIn) then begin iportf = false; end;
+	// if (gethour(currenttime)==9 and getminute(currenttime)>=01 and getminute(currenttime)<=25) then begin
+		// for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN");i=i+1) begin
+			// if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i),4) == ".txt") then begin 
+				// filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceWJSONIN",i);
+				// i = CountFilesInDir("/mnt/database/Ecommerce/ECommerceWJSONIN"); 
+			// end;
+		// end;
+		// if (fileexists("/mnt/database/Ecommerce/ECommerceIN/" & filename)) then begin
+			// MoveFile(filename,"/mnt/database/Ecommerce/ECommerceWJSONIN","/mnt/database/Ecommerce/ECommerceIN");
+			// delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
+		// end;
+	// end;
 	
 	
 	if (iportf) then begin
 		okend = 0;
 		
-		for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/ECommerceIN");i=i+1) begin
-			if (right(GetFileNameInDir("/mnt/database/Ecommerce/ECommerceIN",i),4) == ".txt") then begin 
-				filename = GetFileNameInDir("/mnt/database/Ecommerce/ECommerceIN",i);
-				i = CountFilesInDir("/mnt/database/Ecommerce/ECommerceIN"); 
+		for (i=0;i<CountFilesInDir("/mnt/database/Ecommerce/TMP");i=i+1) begin
+			if (right(GetFileNameInDir("/mnt/database/Ecommerce/TMP",i),4) == ".txt") then begin 
+				filename = GetFileNameInDir("/mnt/database/Ecommerce/TMP",i);
+				i = CountFilesInDir("/mnt/database/Ecommerce/TMP"); 
 			end;
 		end;
-		if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/ECommerceIN/" & filename))then begin
+		if(nonblank(filename) and fileexists("/mnt/database/Ecommerce/TMP/" & filename))then begin
 			if (fileexists("/mnt/database/Ecommerce/ECommerceERRORS/" & filename)) then begin
 				delete_file("/mnt/database/Ecommerce/ECommerceERRORS/" & filename);
 			end;
@@ -15195,8 +15258,8 @@ vector longint vTPCNt;
 			end;
 			logtext(0,"start ImportAddClassFromFolderIn");
 			SetImportCodePage("UTF-8");
-			AddFileToArea("/mnt/database/Ecommerce/ECommerceIN/" & filename,ImportedFile,false);
-			openfile("/mnt/database/Ecommerce/ECommerceIN/" & filename);
+			AddFileToArea("/mnt/database/Ecommerce/TMP/" & filename,ImportedFile,false);
+			openfile("/mnt/database/Ecommerce/TMP/" & filename);
 		// _______________________________________________________________________
 		// for (i=0;i<CountFilesInDir("ECommerceIN");i=i+1) begin
 			// if (right(GetFileNameInDir("ECommerceIN",i),4) == ".txt") then begin 
@@ -15233,9 +15296,10 @@ vector longint vTPCNt;
 			end;
 			if (NextImportLine(true)) then begin end;
 			tstr = importfield;
+			stwif = 0;
 			while(nonblank(tstr))begin
 				tstr = importfield;
-				if(nonblank(tstr))then begin
+				if(nonblank(tstr) and stwif<=250)then begin
 					StripEndingSpaces(tstr);
 					if (CheckClassNOJSONType(tstr)) then begin
 						headers[headers.length] = tstr;
@@ -15251,6 +15315,7 @@ vector longint vTPCNt;
 						headers[headers.length] = "JSON_" & tstr;
 					end;
 				end;
+				stwif = stwif + 1;
 			end;
 			
 			if (NextImportLine(true)) then begin end;
@@ -15529,8 +15594,8 @@ vector longint vTPCNt;
 			lImportAddClassWithJSONFromFolderQueuedIn:;
 			CloseFile;
 			if (okend == 0) then begin
-				MoveFile(filename,"/mnt/database/Ecommerce/ECommerceIN","/mnt/database/Ecommerce/ECommerceOUT");
-				delete_file("/mnt/database/Ecommerce/ECommerceIN/" & filename);
+				MoveFile(filename,"/mnt/database/Ecommerce/TMP","/mnt/database/Ecommerce/ECommerceOUT");
+				delete_file("/mnt/database/Ecommerce/TMP/" & filename);
 			end;
 		end;
 		runprogram("chmod","-R a+rw /mnt/database/Ecommerce");
@@ -15556,19 +15621,18 @@ vector longint vTPCNt;
 		
 		
 		
-		
-		GIr.Code = "";
-		while (loopMain(GIr,1,true)) begin
-			if (nonblank(GIr.MainCode)) then begin
-				vTPMainCodef[GIr.MainCode] = true;
-				if (vTPCNt[GIr.MainCode]<0) then begin
-					vTPCNt[GIr.MainCode] = 0;
-				end;
-				vTPCodes[GIr.MainCode & "_" & vTPCNt[GIr.MainCode]] = GIr.Code;
-				vTPCNt[GIr.MainCode] = vTPCNt[GIr.MainCode] + 1;
-			end;
-		end;
-		ResetLoop(GIr);
+		// GIr.Code = "";
+		// while (loopMain(GIr,1,true)) begin
+			// if (nonblank(GIr.MainCode)) then begin
+				// vTPMainCodef[GIr.MainCode] = true;
+				// if (vTPCNt[GIr.MainCode]<0) then begin
+					// vTPCNt[GIr.MainCode] = 0;
+				// end;
+				// vTPCodes[GIr.MainCode & "_" & vTPCNt[GIr.MainCode]] = GIr.Code;
+				// vTPCNt[GIr.MainCode] = vTPCNt[GIr.MainCode] + 1;
+			// end;
+		// end;
+		// ResetLoop(GIr);
 		
 		
 		
