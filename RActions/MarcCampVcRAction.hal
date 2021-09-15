@@ -4265,13 +4265,16 @@ begin
 	record ORVc ORr;
 	row ORVc ORrw;
 	integer i;
-	boolean Comletedf, firstOR, TrHs;
+	boolean Comletedf, firstOR, TrHs, FastShf;
 	record INVc INr;
 	record GlobalItemVc GIr;
 	record SHVc SHr;
 	row SHVc SHrw;
 	vector val ItemQTY;
 	record AZHatSHBlock AZHSHb;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record RLinkVc RLr;
 
 	BlockLoad(AZHSHb);
 	
@@ -4281,6 +4284,15 @@ begin
 	weboutstring("{\"orders\":[");
 	firstOR = true;
 	while (LoopKey("OrdDate",ORr,1,true)) begin
+		FastShf = false;
+		if(ReadRecordLink(ORr,1,IVr,RLr)) then begin
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if (IVrw.ArtCode=="FAST_SHIPPING") then begin
+					FastShf = true;
+				end;
+			end;
+		end;
 		ClearVector (ItemQTY);
 		Comletedf = true;
 		if (ORr.Closed==1) then begin
@@ -4383,7 +4395,7 @@ begin
 			if (matrowcnt(ORr)>0) then begin
 				weboutstring("{" & chr(13) & chr(10));
 			end;
-			if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+			if (FastShf) then begin
 				for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
 					if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
 					if (i<matrowcnt(ORr)) then begin
@@ -4408,27 +4420,59 @@ begin
 						weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
-						weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text20) & "\"" & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"FAST_SHIPPING\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text21) & "\"" & chr(13) & chr(10));
 					end;
 					if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
 				end;
 			end else begin
-				for (i=0;i<matrowcnt(ORr);i=i+1) begin
-					matrowget(ORr,i,ORrw);
-					GIr.Code = ORrw.GlobalItemArtCode;
-					ReadFirstMain(GIr,1,true);
-					if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
-					weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
-					weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
-					if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+				if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+					for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						if (i<matrowcnt(ORr)) then begin
+							matrowget(ORr,i,ORrw);
+							GIr.Code = ORrw.GlobalItemArtCode;
+							ReadFirstMain(GIr,1,true);
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+						end;
+						if (i==matrowcnt(ORr)) then begin
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & 1 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & 0 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text20) & "\"" & chr(13) & chr(10));
+						end;
+						if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
+				end else begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						GIr.Code = ORrw.GlobalItemArtCode;
+						ReadFirstMain(GIr,1,true);
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+						weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+						if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
 				end;
 			end;
 			if (matrowcnt(ORr)>0) then begin
@@ -4455,7 +4499,7 @@ begin
 	record ORVc ORr;
 	row ORVc ORrw;
 	integer i;
-	boolean Comletedf, firstOR, TrHs;
+	boolean Comletedf, firstOR, TrHs, FastShf;
 	record INVc INr;
 	record GlobalItemVc GIr;
 	record SHVc SHr;
@@ -4463,6 +4507,9 @@ begin
 	vector val ItemQTY;
 	longint ORSerNr;
 	record AZHatSHBlock AZHSHb;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record RLinkVc RLr;
 
 	BlockLoad(AZHSHb);
 	
@@ -4475,6 +4522,14 @@ begin
 	firstOR = true;
 	ORr.SerNr = ORSerNr;
 	if (ReadFirstMain(ORr,1,true)) begin
+		if(ReadRecordLink(ORr,1,IVr,RLr)) then begin
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if (IVrw.ArtCode=="FAST_SHIPPING") then begin
+					FastShf = true;
+				end;
+			end;
+		end;
 		Comletedf = true;
 		if (ORr.Closed==1) then begin
 			Comletedf = false;
@@ -4573,7 +4628,7 @@ begin
 			if (matrowcnt(ORr)>0) then begin
 				weboutstring("{" & chr(13) & chr(10));
 			end;
-			if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+			if (FastShf) then begin
 				for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
 					if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
 					if (i<matrowcnt(ORr)) then begin
@@ -4598,27 +4653,59 @@ begin
 						weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
-						weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text20) & "\"" & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"FAST_SHIPPING\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text21) & "\"" & chr(13) & chr(10));
 					end;
 					if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
 				end;
 			end else begin
-				for (i=0;i<matrowcnt(ORr);i=i+1) begin
-					matrowget(ORr,i,ORrw);
-					GIr.Code = ORrw.GlobalItemArtCode;
-					ReadFirstMain(GIr,1,true);
-					if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
-					weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
-					weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
-					if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+				if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+					for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						if (i<matrowcnt(ORr)) then begin
+							matrowget(ORr,i,ORrw);
+							GIr.Code = ORrw.GlobalItemArtCode;
+							ReadFirstMain(GIr,1,true);
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+						end;
+						if (i==matrowcnt(ORr)) then begin
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & 1 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & 0 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text20) & "\"" & chr(13) & chr(10));
+						end;
+						if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
+				end else begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						GIr.Code = ORrw.GlobalItemArtCode;
+						ReadFirstMain(GIr,1,true);
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+						weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+						if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
 				end;
 			end;
 			if (matrowcnt(ORr)>0) then begin
@@ -4883,12 +4970,15 @@ begin
 	row SHVc SHrw;
 	record RetVc Retr, OldRetr;
 	row RetVc Retrw;
-	boolean Retf;
+	boolean Retf, FastShf;
 	vector val ArtCodeRetQty, ArtCodeSum;
 	record LocalMachineBlock LMb;
 	val OrdSum;
 	record GlobalItemVc GIr;
 	record AZHatSHBlock AZHSHb;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record RLinkVc RLr;
 
 	BlockLoad(AZHSHb);
 	
@@ -4902,6 +4992,14 @@ begin
 
 	ORr.SerNr = StringToLongInt(orderNo);
 	if (readfirstmain(ORr,1,true)) then begin
+		if(ReadRecordLink(ORr,1,IVr,RLr)) then begin
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if (IVrw.ArtCode=="FAST_SHIPPING") then begin
+					FastShf = true;
+				end;
+			end;
+		end;
 		SHr.OrderNr = ORr.SerNr;
 		if (readfirstkey("OrderKey",SHr,1,true)) then begin
 			if (SHr.OKFlag==1) then begin
@@ -4953,7 +5051,7 @@ begin
 				if (matrowcnt(ORr)>0) then begin
 					weboutstring("{" & chr(13) & chr(10));
 				end;
-				if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+				if (FastShf) then begin
 					for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
 						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
 						if (i<matrowcnt(ORr)) then begin
@@ -4961,15 +5059,11 @@ begin
 							GIr.Code = ORrw.GlobalItemArtCode;
 							ReadFirstMain(GIr,1,true);
 							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
-							if (ORrw.Shipd2==blankval) then begin
-								weboutstring("\"itemQuantity\":\"" & 0 & "\"," & chr(13) & chr(10));
-							end else begin
-								weboutstring("\"itemQuantity\":\"" & ORrw.Shipd2 & "\"," & chr(13) & chr(10));
-							end;
+							weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
 							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
-							weboutstring("\"itemSum\":\"" & ArtCodeSum[ORrw.ArtCode] & "\"," & chr(13) & chr(10));
-							weboutstring("\"itemVatPercent\":\"" & round(ArtCodeSum[ORrw.ArtCode] * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
@@ -4982,31 +5076,59 @@ begin
 							weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-							weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
-							weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text20) & "\"" & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"FAST_SHIPPING\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text21) & "\"" & chr(13) & chr(10));
 						end;
 						if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
 					end;
 				end else begin
-					for (i=0;i<matrowcnt(ORr);i=i+1) begin
-						matrowget(ORr,i,ORrw);
-						GIr.Code = ORrw.GlobalItemArtCode;
-						ReadFirstMain(GIr,1,true);
-						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
-						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
-						if (ORrw.Shipd2==blankval) then begin
-							weboutstring("\"itemQuantity\":\"" & 0 & "\"," & chr(13) & chr(10));
-						end else begin
-							weboutstring("\"itemQuantity\":\"" & ORrw.Shipd2 & "\"," & chr(13) & chr(10));
+					if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+						for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
+							if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+							if (i<matrowcnt(ORr)) then begin
+								matrowget(ORr,i,ORrw);
+								GIr.Code = ORrw.GlobalItemArtCode;
+								ReadFirstMain(GIr,1,true);
+								weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+								weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+							end;
+							if (i==matrowcnt(ORr)) then begin
+								weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemQuantity\":\"" & 1 & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemPrice\":\"" & 5 & "\"," & chr(13) & chr(10));
+								weboutstring("\"rebate\":\"" & 0 & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
+								weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text20) & "\"" & chr(13) & chr(10));
+							end;
+							if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
 						end;
-						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
-						weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemSum\":\"" & ArtCodeSum[ORrw.ArtCode] & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemVatPercent\":\"" & round(ArtCodeSum[ORrw.ArtCode] * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
-						if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end else begin
+						for (i=0;i<matrowcnt(ORr);i=i+1) begin
+							matrowget(ORr,i,ORrw);
+							GIr.Code = ORrw.GlobalItemArtCode;
+							ReadFirstMain(GIr,1,true);
+							if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+							if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+						end;
 					end;
 				end;
 				if (matrowcnt(ORr)>0) then begin
@@ -7261,7 +7383,7 @@ begin
 	row ECCasierDocSetBlock ECCDSrw;
 	record APP2CollDocSetBlock APCDSb;
 	row APP2CollDocSetBlock APCDSrw;
-	array string 255 aCodes;
+	array string 255 aCodes,aitems;
 	array string 255 aORLocations;
 	Integer errcode,cscnt,ivmtrw,rwcnt;
 	boolean testf,testf1,isfirst,canceled;
@@ -7507,23 +7629,30 @@ begin
 					canceled = true;
 				end;
 				if(canceled==false)then begin
-					WebOutString("{\"error\":[{");
-					for(i=0;i<rwcnt;i=i+1)begin
-						MatRowGet(ORr,i,ORrw);
-						ISr.Code = ORrw.ArtCode;
-						ISr.Location = ORrw.Location;
-						if(ReadFirstMain(ISr,2,true))then begin
-							if(ISr.Instock-ISr.RsrvQty-ISr.OrddOut<0)then begin
+					if(nonblank(codequant[code]))then begin
+						for(i=0;i<rwcnt;i=i+1)begin
+							MatRowGet(ORr,i,ORrw);
+							ISr.Code = ORrw.ArtCode;
+							ISr.Location = ORrw.Location;
+							if(ReadFirstMain(ISr,2,true))then begin
+								if(ISr.Instock-ISr.RsrvQty-ISr.OrddOut<0)then begin
+									aitems[aitems.length] = ISr.Code;
+									rsrv = true;
+								end;
+							end;
+						end;
+						if(aitems.length>0)then begin
+							WebOutString("{\"error\":[{");
+							for(i=0;i<aitems.length;i=i+1)begin
 								if(isfirst)then begin
 									WebOutString("," & chr(13) & chr(10));
 								end;
 								WebOutString("\"" & ISr.Code & "\":\"Недостаточно товаров на складе, проверьте резерв товара""");
 								isfirst = true;
-								rsrv = true;
 							end;
+							WebOutString("}],");
 						end;
 					end;
-					WebOutString("}],");
 				end;
 				if(stat==USetStr(36215))then begin	//36215 - Отменен
 					ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
@@ -7829,23 +7958,30 @@ begin
 						canceled = true;
 					end;
 					if(canceled==false)then begin
-						WebOutString("{\"error\":[{");
-						for(i=0;i<rwcnt;i=i+1)begin
-							MatRowGet(ORr,i,ORrw);
-							ISr.Code = ORrw.ArtCode;
-							ISr.Location = ORrw.Location;
-							if(ReadFirstMain(ISr,2,true))then begin
-								if(ISr.Instock-ISr.RsrvQty-ISr.OrddOut<0)then begin
+						if(nonblank(codequant[code]))then begin
+							for(i=0;i<rwcnt;i=i+1)begin
+								MatRowGet(ORr,i,ORrw);
+								ISr.Code = ORrw.ArtCode;
+								ISr.Location = ORrw.Location;
+								if(ReadFirstMain(ISr,2,true))then begin
+									if(ISr.Instock-ISr.RsrvQty-ISr.OrddOut<0)then begin
+										aitems[aitems.length] = ISr.Code;
+										rsrv = true;
+									end;
+								end;
+							end;
+							if(aitems.length>0)then begin
+								WebOutString("{\"error\":[{");
+								for(i=0;i<aitems.length;i=i+1)begin
 									if(isfirst)then begin
 										WebOutString("," & chr(13) & chr(10));
 									end;
 									WebOutString("\"" & ISr.Code & "\":\"Недостаточно товаров на складе, проверьте резерв товара""");
 									isfirst = true;
-									rsrv = true;
 								end;
+								WebOutString("}],");
 							end;
 						end;
-						WebOutString("}],");
 					end;
 					if(stat==USetStr(36215))then begin	//36215 - Отменен
 						ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
