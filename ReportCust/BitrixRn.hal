@@ -7,16 +7,19 @@ global
 procedure ClientsRn(record RcVc RepSpec)  // Edit ****************************** Ihor Trubachov 14*09*2021 
 begin
 
-	record CUVc CUr;
+	record IVVc IVr;
+	record ARVc ARr;
+	record PUVc PUr;
 	record POVc POr;
-	row POVc POrw;
 	record ORVc ORr;
+	row ORVc ORrw;
 	record RLinkVc RLr;
-	Boolean TrHs,testf;
-	Integer i, j, quantity, cnrw;
-	val SUM;
-	String 255 collectionObj;
-	Date StDate, EDate;
+	Boolean TrHs,testf,testf1;
+	Integer i,j, cnrw;
+	vector val vSumOrders;
+	vector Date vSt_End_Order;
+	vector String 255 vFullName, vEmail;
+	array string 255 tags;
 
 	StartReportnoheaderjob("Отчет по клиентам Е-Коммерс");
 
@@ -31,114 +34,93 @@ begin
 		OutString(90,0,"Email",false);
 		OutString(100,0,"Телефон",false);
 	EndFormat;
-
+	
+	
 	TrHs = true;
-	while(LoopMain(CUr,1,TrHs))begin
+	while(LoopMain(ORr,1,TrHs))begin
 		testf = true;
+		testf1 = true;
 	
-	
-		if(CUr.CUType != 1) then begin
-			testf = false;
-		end;
-	
-	
-	
-	
-	
-	
-	
-		if(testf) then begin
+		if(nonblank(ORr.Phone))then begin
 		
-			if(nonblank(CUr.CRMLName))then begin
-				if(nonblank(collectionObj))then begin
-					collectionObj = collectionObj & ", " & CUr.CRMLName;
-				end else begin 	
-					collectionObj = CUr.CRMLName;
-				end;
-			end;
-			if(nonblank(CUr.CRMName))then begin
-				if(nonblank(collectionObj))then begin
-					collectionObj = collectionObj & ", " & CUr.CRMLName;
-				end else begin 	
-					collectionObj = CUr.CRMLName;
-				end;
-			end;
-			if(nonblank(CUr.CRMPatr))then begin
-				if(nonblank(collectionObj))then begin
-					collectionObj = collectionObj & ", " & CUr.CRMLName;
-				end else begin 	
-					collectionObj = CUr.CRMLName;
-				end;
-			end;
-			if(blank(collectionObj))then begin
-				collectionObj = CUr.Name;
-			end;
-			OutString(30,0,collectionObj,false);
-			ORr.CustCode = CUr.Name;
+			vFullName[ORr.Phone] = ORr.Addr0;
+			vEmail[ORr.Phone] = ORr.eMail;
+			vSumOrders[ORr.Phone & "Qty"] = vSumOrders[ORr.Phone & "Qty"] + 1;
 			
-			quantity = 0;
-			SUM = 0;
-			if(ReadFirstKey("CustCode",ORr,1,true))then begin
-				i = 0;
-				while(ReadRecordLink(ORr,i,POr,RLr))begin
-					if(BlankDate(StDate))then begin
-						StDate = POr.TransDate;
+			cnrw = MatRowCnt(ORr);
+			for(i=0;i<cnrw;i=i+1)begin
+				MatRowGet(ORr,i,ORrw);
+
+				if(blank(ORrw.ECReservStock))then begin
+					if(testf1)then begin
+						if(ReadRecordLink(ORr,1,POr,RLr))then begin
+							if(ReadRecordLink(POr,1,PUr,RLr))then begin
+								vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice;
+								testf1 = false;
+							end;
+						end;
 					end;
-					if(BlankDate(EDate))then begin
-						EDate = POr.TransDate;
-					end;
-				
-					if(POr.TransDate < StDate)then begin
-						StDate = POr.TransDate;
-					end;
-					if(POr.TransDate > EDate)then begin
-						EDate = POr.TransDate;
+				end else begin
+					if(testf)then begin
+						j=1;
+						while(ReadRecordLink(POr,j,PUr,RLr))begin
+							vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice;
+							j=j+1;
+							testf = false;
+						end;
 					end;
 					
-					cnrw = MatRowCnt(POr);
-					for(j=0;j<cnrw;j=j+1)begin
-						quantity = quantity + POrw.Quant;
-					end;
-					SUM = SUM + POr.Sum4;
-					
-					i=i+1;
 				end;
 				
 			end;
 			
-			
-			OutString(40,0,StDate,false);
-			OutString(50,0,EDate,false);
-			OutString(60,0,quantity,false);
-			OutString(70,0,SUM,false);
-			OutString(80,0,"Себестоимость заказа",false);
-			OutString(90,0,CUr.eMail,false);
-			
-			collectionObj = "";
-			collectionObj = CUr.Mobile;
-			if(nonblank(CUr.AltPhone))then begin
-				if(nonblank(collectionObj))then begin
-					collectionObj = collectionObj & ", " & CUr.AltPhone;
-				end else begin 	
-					collectionObj = CUr.AltPhone;
-				end;
+			if(blankDate(vSt_End_Order[ORr.Phone & "Str"])) then begin
+				vSt_End_Order[ORr.Phone & "Str"] = ORr.OrdDate;
 			end;
-			if(nonblank(CUr.Fax))then begin
-				if(nonblank(collectionObj))then begin
-					collectionObj = collectionObj & ", " & CUr.Fax;
-				end else begin 	
-					collectionObj = CUr.Fax;
-				end;
+			if(blankDate(vSt_End_Order[ORr.Phone & "End"])) then begin
+				vSt_End_Order[ORr.Phone & "End"] = ORr.OrdDate;
 			end;
-			OutString(100,0,collectionObj,false);
+		
+			if(vSt_End_Order[ORr.Phone & "Str"] > ORr.OrdDate) then begin
+				vSt_End_Order[ORr.Phone & "Str"] = ORr.OrdDate;
+			end;
+			if(vSt_End_Order[ORr.Phone & "End"] < ORr.OrdDate) then begin
+				vSt_End_Order[ORr.Phone & "End"] = ORr.OrdDate;
+			end;
+			
+			
+			if(ReadRecordLink(ORr,1,IVr,RLr))then begin
+				
+				ARr.InvoiceNr = IVr.SerNr;
+			
+				if(ReadFirstMain(ARr,1,true))then begin
+					vSumOrders[ORr.Phone & "Sum"] = vSumOrders[ORr.Phone & "Sum"] + ARr.RVal;
+				end;
+				
+			end;
+			
+			
 			
 		end;
+		
+	end;
 	
-	end; //while
+	
 
-
-
-
+	GetVectorTags(vFullName,tags);
+	SortStringArray(tags);
+	for(i=0;i<tags.length;i=i+1) begin
+	
+		OutString(30,0,vFullName[tags[i]],false);
+		OutString(40,0,vSt_End_Order[tags[i] & "Str"],false);
+		OutString(50,0,vSt_End_Order[tags[i] & "End"],false);
+		OutString(60,0,vSumOrders[tags[i] & "Qty"],false);
+		OutString(70,0,vSumOrders[tags[i] & "Sum"],false);
+		OutString(80,0,vSumOrders[tags[i] & "Cst"],false);
+		OutString(90,0,vEmail[tags[i]],false);
+		OutString(100,0,tags[i],false);
+	
+	end;
 
 
 
@@ -146,6 +128,8 @@ begin
 
 return;
 end;
+
+
 
 
 
@@ -161,81 +145,6 @@ begin
 
 	StartReportnoheaderjob("Отчет по продажам Е-Коммерс");
 
-
-	StartFormat(15);
-		OutString(30,0,"ФИО",false);
-		OutString(150,0,"Наим.",false);
-		OutString(240,0,"Кол-во ORr",false);
-	EndFormat;
-
-	TrHs = true;
-	while(LoopMain(CUr,1,TrHs))begin
-		testf = true;
-		i = 0;
-	
-		if(Left(CUr.Name,4)=="FOB_") then begin
-			testf = false;
-		end;
-	
-		collectionObj = "";
-		if(nonblank(CUr.CRMLName))then begin
-			if(nonblank(collectionObj))then begin
-				collectionObj = collectionObj & ", " & CUr.CRMLName;
-			end else begin 	
-				collectionObj = CUr.CRMLName;
-			end;
-		end;
-		if(nonblank(CUr.CRMName))then begin
-			if(nonblank(collectionObj))then begin
-				collectionObj = collectionObj & ", " & CUr.CRMLName;
-			end else begin 	
-				collectionObj = CUr.CRMLName;
-			end;
-		end;
-		if(nonblank(CUr.CRMPatr))then begin
-			if(nonblank(collectionObj))then begin
-				collectionObj = collectionObj & ", " & CUr.CRMLName;
-			end else begin 	
-				collectionObj = CUr.CRMLName;
-			end;
-		end;
-
-		if(blank(collectionObj)) then begin
-			testf = false;
-		end;
-	
-		if(testf) then begin
-			
-			ORr.CustCode = CUr.Name;
-			while(ReadFirstKey("CustCode",ORr,1,true)) begin
-				if(ORr.CustCode==CUr.Name)then begin
-					i=i+1;
-				end;
-			end;
-			
-			if(i>0) then begin
-			
-			
-			
-			StartFormat(15);
-				OutString(30,0,collectionObj,false);
-				OutString(150,0,CUr.Name,false);
-				OutString(240,0,i,false);
-			EndFormat;
-			
-			end;
-			
-			
-			
-			
-			
-			
-			
-			
-			
-			
-		end;
-	end;
 
 
 	EndJob;
