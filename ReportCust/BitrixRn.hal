@@ -1,0 +1,235 @@
+
+SetLangMode(LangRussian,"RUS",0);
+
+
+global
+procedure ClientsRn(record RcVc RepSpec)  // Edit ****************************** Ihor Trubachov 14*09*2021 
+begin
+
+	record IVVc IVr;
+	record ARVc ARr;
+	record PUVc PUr;
+	record POVc POr;
+	record ORVc ORr;
+	row ORVc ORrw;
+	record RLinkVc RLr;
+	Boolean TrHs,testf,testf1;
+	Integer i,j, cnrw;
+	vector val vSumOrders;
+	vector Date vSt_End_Order;
+	vector String 255 vFullName, vEmail;
+	array string 255 tags;
+
+	StartReportnoheaderjob("Отчет по клиентам Е-Коммерс");
+
+
+	StartFormat(15);
+		OutString(30,0,"ФИО",false);
+		OutString(40,0,"Дата первого заказа",false);
+		OutString(50,0,"Дата последнего заказа",false);
+		OutString(60,0,"Кол-во заказов",false);
+		OutString(70,0,"Сумма оплаченных заказов",false);
+		OutString(80,0,"Себестоимость заказа",false);
+		OutString(90,0,"Email",false);
+		OutString(100,0,"Телефон",false);
+	EndFormat;
+	
+	
+	TrHs = true;
+	while(LoopMain(ORr,1,TrHs))begin
+		testf = true;
+		testf1 = true;
+	
+		if(nonblank(ORr.Phone))then begin
+		
+			vFullName[ORr.Phone] = ORr.Addr0;
+			vEmail[ORr.Phone] = ORr.eMail;
+			vSumOrders[ORr.Phone & "Qty"] = vSumOrders[ORr.Phone & "Qty"] + 1;
+			
+			cnrw = MatRowCnt(ORr);
+			for(i=0;i<cnrw;i=i+1)begin
+				MatRowGet(ORr,i,ORrw);
+
+				if(blank(ORrw.ECReservStock))then begin
+					if(testf1)then begin
+						if(ReadRecordLink(ORr,1,POr,RLr))then begin
+							if(ReadRecordLink(POr,1,PUr,RLr))then begin
+								vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice;
+								testf1 = false;
+							end;
+						end;
+					end;
+				end else begin
+					if(testf)then begin
+						j=1;
+						while(ReadRecordLink(POr,j,PUr,RLr))begin
+							vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice;
+							j=j+1;
+							testf = false;
+						end;
+					end;
+					
+				end;
+				
+			end;
+			
+			if(blankDate(vSt_End_Order[ORr.Phone & "Str"])) then begin
+				vSt_End_Order[ORr.Phone & "Str"] = ORr.OrdDate;
+			end;
+			if(blankDate(vSt_End_Order[ORr.Phone & "End"])) then begin
+				vSt_End_Order[ORr.Phone & "End"] = ORr.OrdDate;
+			end;
+		
+			if(vSt_End_Order[ORr.Phone & "Str"] > ORr.OrdDate) then begin
+				vSt_End_Order[ORr.Phone & "Str"] = ORr.OrdDate;
+			end;
+			if(vSt_End_Order[ORr.Phone & "End"] < ORr.OrdDate) then begin
+				vSt_End_Order[ORr.Phone & "End"] = ORr.OrdDate;
+			end;
+			
+			
+			if(ReadRecordLink(ORr,1,IVr,RLr))then begin
+				
+				ARr.InvoiceNr = IVr.SerNr;
+			
+				if(ReadFirstMain(ARr,1,true))then begin
+					vSumOrders[ORr.Phone & "Sum"] = vSumOrders[ORr.Phone & "Sum"] + ARr.RVal;
+				end;
+				
+			end;
+			
+			
+			
+		end;
+		
+	end;
+	
+	
+
+	GetVectorTags(vFullName,tags);
+	SortStringArray(tags);
+	for(i=0;i<tags.length;i=i+1) begin
+		StartFormat(15);
+		OutString(30,0,vFullName[tags[i]],false);
+		OutString(40,0,vSt_End_Order[tags[i] & "Str"],false);
+		OutString(50,0,vSt_End_Order[tags[i] & "End"],false);
+		OutString(60,0,vSumOrders[tags[i] & "Qty"],false);
+		OutString(70,0,vSumOrders[tags[i] & "Sum"],false);
+		OutString(80,0,vSumOrders[tags[i] & "Cst"],false);
+		OutString(90,0,vEmail[tags[i]],false);
+		OutString(100,0,tags[i],false);
+		EndFormat;
+	end;
+
+
+	ClearVector(vFullName);
+	ClearVector(vSt_End_Order);
+	ClearVector(vSumOrders);
+	ClearVector(vEmail);
+	ClearArray(tags);
+	
+	EndJob;
+
+return;
+end;
+
+
+
+
+
+global
+procedure Clients1Rn(record RcVc RepSpec)  // Edit ****************************** Ihor Trubachov 14*09*2021 
+begin
+
+	record CUVc CUr;
+	record ORVc ORr;
+	String 255 collectionObj;
+	Boolean TrHs,testf;
+	Integer i;
+
+	StartReportnoheaderjob("Отчет по продажам Е-Коммерс");
+
+
+
+	EndJob;
+	
+
+return;
+end;
+
+
+//Edit ******************************Vas-P	15/09/2021
+global
+procedure GeneralRepRn(record RcVc RepSpec)  
+begin
+	record RcVc RepSpec1;
+	integer i,j,m,month,year;
+	date sd,td,tmpdate,enddate;
+	string 50 monthname;
+	record IVVc IVr;
+	boolean TrHs,testf;
+	array string 255 invquant;
+	
+
+	if(RepSpec.sEndDate>CurrentDate)then begin
+		RepSpec.sEndDate = CurrentDate;
+	end;
+	sd = RepSpec.sStartDate;
+	td = RepSpec.sEndDate;
+	
+	StartReportNoHeaderJob("GeneralReport");
+		Startformat(15);
+			OutString(0,0,"Год",false);
+			OutString(20,0,"Месяц",false);
+			OutString(55,0,"Всего заказов",false);
+			OutString(105,0,"Сумма всего",false);
+			OutString(155,0,"Куплено заказов",false);
+			OutString(200,0,"Куплено сумма",false);
+			OutString(240,0,"Купленые товары Italdizain",false);
+			OutString(280,0,"Купленые товары Сторонние",false);
+			OutString(335,0,"% от сторонних поставщиков",false);
+			OutString(430,0,"Средний чек",false);
+		EndFormat;
+		Black_Divider(0,1);
+		Startformat(15);
+			tmpdate = sd;
+			enddate = td;
+			while(tmpdate<=enddate)begin
+				month = GetMonth(tmpdate);
+				year = GetYear(tmpdate);
+				switch (month) begin
+					case 1: monthname = "Январь";
+					case 2: monthname = "Февраль";
+					case 3: monthname = "Март";
+					case 4: monthname = "Апрель";
+					case 5: monthname = "Май";
+					case 6: monthname = "Июнь";
+					case 7: monthname = "Июль";
+					case 8: monthname = "Август";
+					case 9: monthname = "Сентябрь";
+					case 10: monthname = "Октябрь";
+					case 11: monthname = "Ноябрь";
+					case 12: monthname = "Декабрь";
+				end;
+				OutString(0,0,year,false);
+				OutString(20,0,monthname,false);
+				
+				TrHs = true;
+				IVr.SerNr = "";
+				IVr.InvDate = tmpdate;
+				while(loopkey("InvDate",IVr,1,TrHs))begin
+					if(IVr.InvDate>enddate)then begin TrHs = false; end;
+					invquant[invquant.length] = IVr.SerNr;
+					// logtext(0,"IVr.SerNr - " & IVr.SerNr & "/" & IVr.InvDate);
+				end;
+				// ResetLoop(IVr);
+				if(month==GetMonth(IVr.InvDate))then begin
+					OutString(60,0,invquant.length,false);
+				end;
+				
+				tmpdate = AddMonth(tmpdate,1);
+			end;
+		EndFormat;
+	EndJob;
+return;
+end;

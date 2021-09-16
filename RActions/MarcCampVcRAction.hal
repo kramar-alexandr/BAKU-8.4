@@ -4265,12 +4265,18 @@ begin
 	record ORVc ORr;
 	row ORVc ORrw;
 	integer i;
-	boolean Comletedf, firstOR, TrHs;
+	boolean Comletedf, firstOR, TrHs, FastShf;
 	record INVc INr;
 	record GlobalItemVc GIr;
 	record SHVc SHr;
 	row SHVc SHrw;
 	vector val ItemQTY;
+	record AZHatSHBlock AZHSHb;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record RLinkVc RLr;
+
+	BlockLoad(AZHSHb);
 	
 	SetCompany(29,false);
 	
@@ -4278,6 +4284,15 @@ begin
 	weboutstring("{\"orders\":[");
 	firstOR = true;
 	while (LoopKey("OrdDate",ORr,1,true)) begin
+		FastShf = false;
+		if(ReadRecordLink(ORr,1,IVr,RLr)) then begin
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if (IVrw.ArtCode=="FAST_SHIPPING") then begin
+					FastShf = true;
+				end;
+			end;
+		end;
 		ClearVector (ItemQTY);
 		Comletedf = true;
 		if (ORr.Closed==1) then begin
@@ -4380,11 +4395,13 @@ begin
 			if (matrowcnt(ORr)>0) then begin
 				weboutstring("{" & chr(13) & chr(10));
 			end;
-			if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+			if (FastShf) then begin
 				for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
 					if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
 					if (i<matrowcnt(ORr)) then begin
 						matrowget(ORr,i,ORrw);
+						GIr.Code = ORrw.GlobalItemArtCode;
+						ReadFirstMain(GIr,1,true);
 						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
@@ -4393,7 +4410,7 @@ begin
 						weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
 					end;
 					if (i==matrowcnt(ORr)) then begin
 						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
@@ -4403,25 +4420,59 @@ begin
 						weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
-						weboutstring("\"itemName\":\"" & NormalizeStrToJson("Доставка товара") & "\"" & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"FAST_SHIPPING\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text21) & "\"" & chr(13) & chr(10));
 					end;
 					if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
 				end;
 			end else begin
-				for (i=0;i<matrowcnt(ORr);i=i+1) begin
-					matrowget(ORr,i,ORrw);
-					if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
-					weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
-					weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
-					if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+				if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+					for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						if (i<matrowcnt(ORr)) then begin
+							matrowget(ORr,i,ORrw);
+							GIr.Code = ORrw.GlobalItemArtCode;
+							ReadFirstMain(GIr,1,true);
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+						end;
+						if (i==matrowcnt(ORr)) then begin
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & 1 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & 0 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text20) & "\"" & chr(13) & chr(10));
+						end;
+						if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
+				end else begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						GIr.Code = ORrw.GlobalItemArtCode;
+						ReadFirstMain(GIr,1,true);
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+						weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+						if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
 				end;
 			end;
 			if (matrowcnt(ORr)>0) then begin
@@ -4448,13 +4499,19 @@ begin
 	record ORVc ORr;
 	row ORVc ORrw;
 	integer i;
-	boolean Comletedf, firstOR, TrHs;
+	boolean Comletedf, firstOR, TrHs, FastShf;
 	record INVc INr;
 	record GlobalItemVc GIr;
 	record SHVc SHr;
 	row SHVc SHrw;
 	vector val ItemQTY;
 	longint ORSerNr;
+	record AZHatSHBlock AZHSHb;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record RLinkVc RLr;
+
+	BlockLoad(AZHSHb);
 	
 	SetCompany(29,false);
 	
@@ -4465,6 +4522,14 @@ begin
 	firstOR = true;
 	ORr.SerNr = ORSerNr;
 	if (ReadFirstMain(ORr,1,true)) begin
+		if(ReadRecordLink(ORr,1,IVr,RLr)) then begin
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if (IVrw.ArtCode=="FAST_SHIPPING") then begin
+					FastShf = true;
+				end;
+			end;
+		end;
 		Comletedf = true;
 		if (ORr.Closed==1) then begin
 			Comletedf = false;
@@ -4563,11 +4628,13 @@ begin
 			if (matrowcnt(ORr)>0) then begin
 				weboutstring("{" & chr(13) & chr(10));
 			end;
-			if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+			if (FastShf) then begin
 				for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
 					if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
 					if (i<matrowcnt(ORr)) then begin
 						matrowget(ORr,i,ORrw);
+						GIr.Code = ORrw.GlobalItemArtCode;
+						ReadFirstMain(GIr,1,true);
 						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
@@ -4576,7 +4643,7 @@ begin
 						weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
 					end;
 					if (i==matrowcnt(ORr)) then begin
 						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
@@ -4586,25 +4653,59 @@ begin
 						weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
-						weboutstring("\"itemName\":\"" & NormalizeStrToJson("Доставка товара") & "\"" & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"FAST_SHIPPING\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text21) & "\"" & chr(13) & chr(10));
 					end;
 					if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
 				end;
 			end else begin
-				for (i=0;i<matrowcnt(ORr);i=i+1) begin
-					matrowget(ORr,i,ORrw);
-					if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
-					weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
-					weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
-					weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
-					if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+				if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+					for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						if (i<matrowcnt(ORr)) then begin
+							matrowget(ORr,i,ORrw);
+							GIr.Code = ORrw.GlobalItemArtCode;
+							ReadFirstMain(GIr,1,true);
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+						end;
+						if (i==matrowcnt(ORr)) then begin
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & 1 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & 0 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text20) & "\"" & chr(13) & chr(10));
+						end;
+						if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
+				end else begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						GIr.Code = ORrw.GlobalItemArtCode;
+						ReadFirstMain(GIr,1,true);
+						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+						weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+						weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+						if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end;
 				end;
 			end;
 			if (matrowcnt(ORr)>0) then begin
@@ -4869,12 +4970,18 @@ begin
 	row SHVc SHrw;
 	record RetVc Retr, OldRetr;
 	row RetVc Retrw;
-	boolean Retf;
+	boolean Retf, FastShf;
 	vector val ArtCodeRetQty, ArtCodeSum;
 	record LocalMachineBlock LMb;
 	val OrdSum;
+	record GlobalItemVc GIr;
+	record AZHatSHBlock AZHSHb;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record RLinkVc RLr;
 
-
+	BlockLoad(AZHSHb);
+	
 	SetCompany(29,false);
 	
 	webgetpostdata(getpost);
@@ -4885,6 +4992,14 @@ begin
 
 	ORr.SerNr = StringToLongInt(orderNo);
 	if (readfirstmain(ORr,1,true)) then begin
+		if(ReadRecordLink(ORr,1,IVr,RLr)) then begin
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if (IVrw.ArtCode=="FAST_SHIPPING") then begin
+					FastShf = true;
+				end;
+			end;
+		end;
 		SHr.OrderNr = ORr.SerNr;
 		if (readfirstkey("OrderKey",SHr,1,true)) then begin
 			if (SHr.OKFlag==1) then begin
@@ -4936,24 +5051,22 @@ begin
 				if (matrowcnt(ORr)>0) then begin
 					weboutstring("{" & chr(13) & chr(10));
 				end;
-				if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+				if (FastShf) then begin
 					for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
 						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
 						if (i<matrowcnt(ORr)) then begin
 							matrowget(ORr,i,ORrw);
+							GIr.Code = ORrw.GlobalItemArtCode;
+							ReadFirstMain(GIr,1,true);
 							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
-							if (ORrw.Shipd2==blankval) then begin
-								weboutstring("\"itemQuantity\":\"" & 0 & "\"," & chr(13) & chr(10));
-							end else begin
-								weboutstring("\"itemQuantity\":\"" & ORrw.Shipd2 & "\"," & chr(13) & chr(10));
-							end;
+							weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
 							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
-							weboutstring("\"itemSum\":\"" & ArtCodeSum[ORrw.ArtCode] & "\"," & chr(13) & chr(10));
-							weboutstring("\"itemVatPercent\":\"" & round(ArtCodeSum[ORrw.ArtCode] * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
-							weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
 						end;
 						if (i==matrowcnt(ORr)) then begin
 							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
@@ -4963,29 +5076,59 @@ begin
 							weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
 							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-							weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
-							weboutstring("\"itemName\":\"" & NormalizeStrToJson("Доставка товара") & "\"" & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"FAST_SHIPPING\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text21) & "\"" & chr(13) & chr(10));
 						end;
 						if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
 					end;
 				end else begin
-					for (i=0;i<matrowcnt(ORr);i=i+1) begin
-						matrowget(ORr,i,ORrw);
-						if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
-						weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
-						if (ORrw.Shipd2==blankval) then begin
-							weboutstring("\"itemQuantity\":\"" & 0 & "\"," & chr(13) & chr(10));
-						end else begin
-							weboutstring("\"itemQuantity\":\"" & ORrw.Shipd2 & "\"," & chr(13) & chr(10));
+					if (ORr.Sum4<50 and CurrentDate>=stringtodate("01/10/2021")) then begin
+						for (i=0;i<matrowcnt(ORr) + 1;i=i+1) begin
+							if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+							if (i<matrowcnt(ORr)) then begin
+								matrowget(ORr,i,ORrw);
+								GIr.Code = ORrw.GlobalItemArtCode;
+								ReadFirstMain(GIr,1,true);
+								weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+								weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+							end;
+							if (i==matrowcnt(ORr)) then begin
+								weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemQuantity\":\"" & 1 & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemPrice\":\"" & 5 & "\"," & chr(13) & chr(10));
+								weboutstring("\"rebate\":\"" & 0 & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemSum\":\"" & 5 & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemVatPercent\":\"" & round(5 * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+								weboutstring("\"itemCode\":\"DELIVERY\"," & chr(13) & chr(10));
+								weboutstring("\"itemName\":\"" & NormalizeStrToJson(AZHSHb.Text20) & "\"" & chr(13) & chr(10));
+							end;
+							if (i<matrowcnt(ORr)) then begin weboutstring("}," & chr(13) & chr(10)); end;
 						end;
-						weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
-						weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemSum\":\"" & ArtCodeSum[ORrw.ArtCode] & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemVatPercent\":\"" & round(ArtCodeSum[ORrw.ArtCode] * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
-						weboutstring("\"itemName\":\"" & NormalizeStrToJson(ORrw.Spec) & "\"" & chr(13) & chr(10));
-						if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+					end else begin
+						for (i=0;i<matrowcnt(ORr);i=i+1) begin
+							matrowget(ORr,i,ORrw);
+							GIr.Code = ORrw.GlobalItemArtCode;
+							ReadFirstMain(GIr,1,true);
+							if (i>0) then begin weboutstring("{" & chr(13) & chr(10)); end;
+							weboutstring("\"itemQuantityType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemQuantity\":\"" & ORrw.Quant & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemPrice\":\"" & ORrw.Price & "\"," & chr(13) & chr(10));
+							weboutstring("\"rebate\":\"" & ORrw.vRebate & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemSum\":\"" & ORrw.Sum & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemVatPercent\":\"" & round(ORrw.Sum * 18 / 118, defaultcurroundoff) & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCodeType\":\"" & "0" & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemCode\":\"" & ORrw.GlobalItemArtCode & "\"," & chr(13) & chr(10));
+							weboutstring("\"itemName\":\"" & NormalizeStrToJson(GIr.NameAZ) & "\"" & chr(13) & chr(10));
+							if (i<matrowcnt(ORr)-1) then begin weboutstring("}," & chr(13) & chr(10)); end;
+						end;
 					end;
 				end;
 				if (matrowcnt(ORr)>0) then begin
@@ -7219,7 +7362,7 @@ begin
 	integer i,j,wn,y,compno,k,c,sernrf;
 	longint a, ORSerNr, mtrw, IVSerNr;
 	string 255 hex,out,warning,errstr,loyaltycard,namesname,inwarning,code,stockcode,affobj;
-	boolean UPDf,chsum, TrHs, IdentClientf,TrHs2;
+	boolean UPDf,chsum, TrHs, IdentClientf,TrHs2,rsrv;
 	record AccBlock ARb;
 	record CUVc CUr;
 	record ActVc Actr,oldActr;
@@ -7240,10 +7383,10 @@ begin
 	row ECCasierDocSetBlock ECCDSrw;
 	record APP2CollDocSetBlock APCDSb;
 	row APP2CollDocSetBlock APCDSrw;
-	array string 255 aCodes;
+	array string 255 aCodes,aitems;
 	array string 255 aORLocations;
 	Integer errcode,cscnt,ivmtrw,rwcnt;
-	boolean testf,testf1;
+	boolean testf,testf1,isfirst,canceled;
 	longint lon;
 	
 
@@ -7255,16 +7398,16 @@ begin
 	
 	logtext(0,"WebCreateLocalInvoiceReserves");
 	webgetpostdata(getpost);
-	AddfiletoArea("C:/Users/tohas/Desktop/BitrixOrderlastTwo.txt",getpost,false);
+	AddfiletoArea("C:/Users/tohas/Desktop/BitrixOrderlast.txt",getpost,false);
 	addtexttoarea("TimeStamp " & CurrentDate & " / " & CurrentTime & chr(13) & chr(10),getpost);
-	if (!fileexists("getpostlocordertwo.txt")) then begin
-		CreateFile("getpostlocordertwo.txt");
+	if (!fileexists("getpostlocorder.txt")) then begin
+		CreateFile("getpostlocorder.txt");
 	end;
-	WriteAreaToFile(getpost,"getpostlocordertwo.txt",0);
+	WriteAreaToFile(getpost,"getpostlocorder.txt",0);
 	CloseFile;
 	a = GetArealength(getpost);
 	datajson = ParseJsonArea(getpost);
-	filename = "Invoices/Invoice" & datetostring(currentdate,"YYYYMMDD") & TimeToString(currenttime,"HHMMSS",false) & ".txt";
+	filename = "Orders/Order" & datetostring(currentdate,"YYYYMMDD") & TimeToString(currenttime,"HHMMSS",false) & ".txt";
 	writeareatofile(getpost,filename,0);
 	uname = JSONGet(datajson,"user[0]/name");
 	ph = JSONGet(datajson,"user[0]/phone");
@@ -7295,7 +7438,7 @@ begin
 	apart = ParseHEX(apart);
 	namesname = uname & " " & sn;
 	id = JSONGet(datajson,"order[0]/id");
-	pay = JSONGet(datajson,"order[0]/paydeal");
+	// pay = JSONGet(datajson,"order[0]/paydeal");
 	stat = JSONGet(datajson,"order[0]/status");
 	compno = StringToInt(JSONGet(datajson,"order[0]/compno"));
 	stockcode = JSONGet(datajson,"order[0]/stockcode");
@@ -7409,7 +7552,6 @@ begin
 					if (ReadFirstKey("eMail",CUr,1,true)) then begin
 						if (CUr.blockedFlag==0) then begin
 							IVr.CustCode = CUr.Code;
-							logtext(0,"CUr.Code - " & CUr.Code);
 							PasteCustInInv(IVr);
 							IdentClientf = true;
 						end else begin
@@ -7474,97 +7616,122 @@ begin
 			RE_CreateORFormIV(ORr,IVr);
 			
 			RecordCopy(OldORr,ORr);
+			ORr.CustOrdNr = "APP2_" & IVr.SerNr;
 			ORr.PayDeal = "O";
 			ORr.OrdDate = CurrentDate;
 			ORr.Reserved = 1;
+			
 			if(RecordUpdate(OldORr,ORr,false)!=0)then begin
 				WebOutString("{\"error\":\"Ошибка резервирования товаров""}");			
-			end else begin;
-			
-			// if(stat==USetStr(36215))then begin	//36215 - Отменен
-				// if(ORr.OKFlag!=1 and IVr.OKFlag!=1)then begin
-					// RecordDelete(ORr);
-				// end;
-			// end;
-			
-			// if(stat==USetStr(36214))then begin
-				// k = 1;
-				// RecordAction_raPasteOrdInInv(IVr,ORr.SerNr,true,errcode);
-				
-				// RecordCopy(OldIVr,IVr);
-				
-				// IVr.CustCode = ORr.CustCode;
-				// IVr.Addr0 =  namesname;
-				// IVr.PriceList = ORr.PriceList;
-				// IVr.OrderNr = ORr.SerNr;
-				// IVr.Location = ORr.Location;
-				// IVr.Objects = ORr.Objects;
-				// RecordUpdate(OldIVr,IVr,false);
-				
-				// ivmtrw = matrowcnt(IVr);
-				// for (k=0;k<ivmtrw;k=k+1) begin
-					// matrowget(IVr,k,IVrw);
-					// ISr.Code = IVrw.ArtCode;
-					// ISr.Location = IVr.Location;
-					// if(ReadFIrstMain(ISr,2,true)) begin
-						// if((ISr.Instock-ISr.RsrvQty)==0) then begin
-							// if(!SetInSet(IVrw.ArtCode,items))then begin
-								// items = items & IVrw.ArtCode & ",";
-							// end;
-						// end;	
-					// end;
-				// end;
-								
-				// RecordNew(Actr);
-				// ActVcRecordDefClient(Actr);
-				// if (MakeActFromIV(IVr,Actr)) then begin 	
-					// RecordCopy(oldActr,Actr);
-					// Actr.Comment = "Создан заказ на сборку " & ORr.SerNr;
-					// cscnt = matrowcnt(APCDSb);
-					// for(c=0;c<cscnt;c=c+1)begin
-						// matrowget(APCDSb,c,APCDSrw);
-						// if(APCDSrw.LocCode==ORr.Location)then begin
-							// Actr.MainPersons = APCDSrw.CollectorName;
-						// end;
-					// end;
-					// if(blank(Actr.MainPersons))then begin
-						// Actr.MainPersons = "SA";
-					// end;
-					// if(blank(Actr.TransDate))then begin
-						// Actr.TransDate = CurrentDate;
-					// end;
-					// Actr.TodoFlag = 1;
-					// Actr.CalTimeFlag = kCalTimeFlagTime;
-					// Actr.AlarmType = 1;
-					// Actr.SymbNr = 3;
-					// if(RecordUpdate(oldActr,Actr,true)==0)then begin 
-						// CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
-						// CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
-					// end;
-				// end;
-				// testf1 = true;
-				// RecordAction_raPasteOrdInShip2(SHr,ORr.SerNr,warning);
-				
-				// if(recordstore(SHr,true))then begin end;
-				
-				// while(ReadRecordLink(ORr,k,Actr,RLr)) begin
-					// if(left(Actr.Comment,6)=="Создан")then begin
-						// RecordCopy(OldActr,Actr);
-						// Actr.Comment = Actr.Comment & ", Отгрузка № " & SHr.SerNr;
-						// CreateRecordLink(Actr,Currentcompany,SHr,Currentcompany);
-						// CreateRecordLink(SHr,Currentcompany,Actr,Currentcompany);
-						// if(RecordUpdate(OldActr,Actr,false)==0)then begin 
-							// testf1 = false;
-						// end;
-					// end;
-					// k = k + 1;
-				// end;
-			// end;
-				WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
+			end else begin
+				rwcnt = matrowcnt(ORr);
+				if(stat==USetStr(36215))then begin
+					canceled = true;
+				end;
+				if(canceled==false)then begin
+					if(nonblank(codequant[code]))then begin
+						for(i=0;i<rwcnt;i=i+1)begin
+							MatRowGet(ORr,i,ORrw);
+							ISr.Code = ORrw.ArtCode;
+							ISr.Location = ORrw.Location;
+							if(ReadFirstMain(ISr,2,true))then begin
+								if(ISr.Instock-ISr.RsrvQty-ISr.OrddOut<0)then begin
+									aitems[aitems.length] = ISr.Code;
+									rsrv = true;
+								end;
+							end;
+						end;
+						if(aitems.length>0)then begin
+							WebOutString("{\"error\":[{");
+							for(i=0;i<aitems.length;i=i+1)begin
+								if(isfirst)then begin
+									WebOutString("," & chr(13) & chr(10));
+								end;
+								WebOutString("\"" & ISr.Code & "\":\"Недостаточно товаров на складе, проверьте резерв товара""");
+								isfirst = true;
+							end;
+							WebOutString("}],");
+						end;
+					end;
+				end;
+				if(stat==USetStr(36215))then begin	//36215 - Отменен
+					ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
+					if(readfirstkey("OfficialSerNr",ORr,1,true))then begin
+						if(ORr.SerNr>0)then begin
+							if(ORr.Reserved==1)then begin
+								recordcopy(OldORr,ORr);
+								if(ORr.OKFlag==1)then begin
+									ORr.OKFlag = 0;
+								end;
+								ORr.Reserved = 0;
+								if(recordupdate(OldORr,ORr,true)==0)then begin
+									if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
+										ORVcRecordRemove(ORr,OldORr,lon,lon);
+										recorddelete(ORr);
+										if(IVr.OKFlag==1)then begin
+											recordcopy(OldIVr,IVr);
+											IVr.OKFlag = 0;
+											if(recordupdate(OldIVr,IVr,true)==0)then begin
+												recorddelete(IVr);
+											end;
+										end else begin
+											recorddelete(IVr);
+										end;
+									end;
+								end;
+							end else begin
+								if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
+									ORVcRecordRemove(ORr,OldORr,lon,lon);
+									recorddelete(ORr);
+									if(IVr.OKFlag==1)then begin
+										recordcopy(OldIVr,IVr);
+										IVr.OKFlag = 0;
+										if(recordupdate(OldIVr,IVr,true)==0)then begin
+											recorddelete(IVr);
+										end;
+									end else begin
+										recorddelete(IVr);
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+				if(stat==USetStr(36214))then begin  // 36214 - подтвержден
+					RecordNew(Actr);
+					ActVcRecordDefClient(Actr);
+					if (MakeActFromIV(IVr,Actr)) then begin 	
+						RecordCopy(oldActr,Actr);
+						Actr.Comment = "Создан заказ на сборку " & ORr.SerNr;
+						cscnt = matrowcnt(APCDSb);
+						for(c=0;c<cscnt;c=c+1)begin
+							matrowget(APCDSb,c,APCDSrw);
+							if(APCDSrw.LocCode==ORr.Location)then begin
+								Actr.MainPersons = APCDSrw.CollectorName;
+							end;
+						end;
+						if(blank(Actr.MainPersons))then begin
+							Actr.MainPersons = "SA";
+						end;
+						if(blank(Actr.TransDate))then begin
+							Actr.TransDate = CurrentDate;
+						end;
+						Actr.TodoFlag = 1;
+						Actr.CalTimeFlag = kCalTimeFlagTime;
+						Actr.AlarmType = 1;
+						Actr.SymbNr = 3;
+						if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+							CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
+							CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
+						end;
+					end;
+				end;
 			end;
-
-
-			// WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
+			if(rsrv==false)then begin
+				WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
+			end else begin
+				WebOutString("\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
+			end;
 		end else begin
 			IVr.SerNr = IVSerNr;
 			if(ReadFirstMain(IVr,1,true))then begin
@@ -7727,47 +7894,121 @@ begin
 				end;
 				Resetloop(USr);
 				
+				testf1 = true;
+				
 				ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
 				if(readfirstkey("OfficialSerNr",ORr,1,true))then begin
 					RecordCopy(OldORr,ORr);
-					ORr.CustCode = IVr.SalesMan;
+					ORr.Reserved = 0;
+					ORr.SalesMan = IVr.SalesMan;
+					rwcnt = matrowcnt(ORr);
+					for(i=0;i<rwcnt;i=i+1)begin
+						MatRowDelete(ORr,0);
+					end;
 					mtrw = matrowcnt(IVr);
-					for(i=0;i<mtrw;i=i+1) begin
-						MatRowGet(IVr,i,IVrw);
-						if(nonblank(IVrw.ArtCode))then begin
-							clearrow(ORr,ORrw,1);
-							MatRowDelete(ORr,k);
-							ORrw.ArtCode = IVrw.ArtCode;
-							MatRowPut(ORr,k,ORrw);
-							ORVc_PasteArtCode(ORr,k,inwarning,warning,false);
-							matrowget(ORr,k,ORrw);
-							ORrw.Quant = IVrw.Quant;
-							ORrw.vRebate = IVrw.vRebate;
-							ORrw.Price = IVrw.Price;
-							ORrw.Position = IVrw.PosCode;
-							ORrw.Location = IVrw.Location;
-							matrowput(ORr,k,ORrw);
-							ORVc_PasteQuant(ORr,k,true,chsum);
-							matrowget(ORr,k,ORrw);
-							ORSumup(ORr);
-							RecordUpdate(OldORr,ORr,true);
-							k = k + 1;
+					// if(stat==USetStr(36215))then begin
+						// canceled = true;
+					// end;
+					// if(canceled==false)then begin
+						// WebOutString("{\"error\":[{");
+						for(i=0;i<mtrw;i=i+1)begin
+							MatRowGet(IVr,i,IVrw);
+							if(nonblank(IVrw.ArtCode))then begin
+								ORrw.ArtCode = IVrw.ArtCode;
+								MatRowPut(ORr,i,ORrw);
+								ORVc_PasteArtCode(ORr,i,inwarning,warning,false);
+								matrowget(ORr,i,ORrw);
+								ORrw.Quant = IVrw.Quant;
+								ORrw.vRebate = IVrw.vRebate;
+								ORrw.Price = IVrw.Price;
+								ORrw.Position = IVrw.PosCode;
+								ORrw.Location = IVrw.Location;
+								matrowput(ORr,i,ORrw);
+								ORVc_PasteQuant(ORr,i,true,chsum);
+								matrowget(ORr,i,ORrw);
+								// ISr.Code = ORrw.ArtCode;
+								// ISr.Location = ORrw.Location;
+								// if(ReadFirstMain(ISr,2,true))then begin
+									// if(ISr.Instock-ISr.RsrvQty-ISr.OrddOut<0)then begin
+										// if(isfirst)then begin
+											// WebOutString("," & chr(13) & chr(10));
+										// end;
+										// WebOutString("\"" & ISr.Code & "\":\"Недостаточно товаров на складе, проверьте резерв товара""");
+										// isfirst = true;
+										// rsrv = true;
+									// end;
+								// end;
+							end;
 						end;
+						// WebOutString("}],");
+					// end;
+					ORSumup(ORr);
+					ORr.Reserved = 1;
+					if(RecordUpdate(OldORr,ORr,false)!=0)then begin
+						WebOutString("{\"error\":\"Ошибка резервирования товаров""}");
+						testf1 = false;
+					end else begin
+						testf1 = true;
 					end;
 				end;
-				RecordUpdate(OldIVr,IVr,false);
-				
-				if(stat==USetStr(36215))then begin	//36215 - Отменен
-					ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
-					if(readfirstkey("OfficialSerNr",ORr,1,true))then begin
-						if(ORr.SerNr>0)then begin
-							if(ORr.Reserved==1)then begin
-								recordcopy(OldORr,ORr);
-								if(ORr.OKFlag==1)then begin
-									ORr.OKFlag = 0;
+				if(testf1)then begin
+					RecordUpdate(OldIVr,IVr,false);
+					rwcnt = matrowcnt(ORr);
+					if(stat==USetStr(36215))then begin
+						canceled = true;
+					end;
+					if(canceled==false)then begin
+						if(nonblank(codequant[code]))then begin
+							for(i=0;i<rwcnt;i=i+1)begin
+								MatRowGet(ORr,i,ORrw);
+								ISr.Code = ORrw.ArtCode;
+								ISr.Location = ORrw.Location;
+								if(ReadFirstMain(ISr,2,true))then begin
+									if(ISr.Instock-ISr.RsrvQty-ISr.OrddOut<0)then begin
+										aitems[aitems.length] = ISr.Code;
+										rsrv = true;
+									end;
 								end;
-								ORr.Reserved = 0;
-								if(recordupdate(OldORr,ORr,true)==0)then begin
+							end;
+							if(aitems.length>0)then begin
+								WebOutString("{\"error\":[{");
+								for(i=0;i<aitems.length;i=i+1)begin
+									if(isfirst)then begin
+										WebOutString("," & chr(13) & chr(10));
+									end;
+									WebOutString("\"" & ISr.Code & "\":\"Недостаточно товаров на складе, проверьте резерв товара""");
+									isfirst = true;
+								end;
+								WebOutString("}],");
+							end;
+						end;
+					end;
+					if(stat==USetStr(36215))then begin	//36215 - Отменен
+						ORr.OfficialSerNr = "RESFROM" & ":" & IVr.SerNr;
+						if(readfirstkey("OfficialSerNr",ORr,1,true))then begin
+							if(ORr.SerNr>0)then begin
+								if(ORr.Reserved==1)then begin
+									recordcopy(OldORr,ORr);
+									if(ORr.OKFlag==1)then begin
+										ORr.OKFlag = 0;
+									end;
+									ORr.Reserved = 0;
+									if(recordupdate(OldORr,ORr,true)==0)then begin
+										if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
+											ORVcRecordRemove(ORr,OldORr,lon,lon);
+											recorddelete(ORr);
+											if(IVr.OKFlag==1)then begin
+												recordcopy(OldIVr,IVr);
+												IVr.OKFlag = 0;
+												if(recordupdate(OldIVr,IVr,true)==0)then begin
+													recorddelete(IVr);
+												end;
+											end else begin
+												recorddelete(IVr);
+											end;
+										end;
+									end;
+								end else begin
 									if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
 										ORVcRecordRemove(ORr,OldORr,lon,lon);
 										recorddelete(ORr);
@@ -7782,100 +8023,44 @@ begin
 										end;
 									end;
 								end;
-							end else begin
-								if(ORVcRecordRemoveTest(ORr,OldORr,lon,lon)==1)then begin
-									ORVcRecordRemove(ORr,OldORr,lon,lon);
-									recorddelete(ORr);
-									if(IVr.OKFlag==1)then begin
-										recordcopy(OldIVr,IVr);
-										IVr.OKFlag = 0;
-										if(recordupdate(OldIVr,IVr,true)==0)then begin
-											recorddelete(IVr);
-										end;
-									end else begin
-										recorddelete(IVr);
-									end;
-								end;
 							end;
 						end;
 					end;
+					if(stat==USetStr(36214))then begin  // 36214 - подтвержден
+						RecordNew(Actr);
+						ActVcRecordDefClient(Actr);
+						if (MakeActFromIV(IVr,Actr)) then begin 	
+							RecordCopy(oldActr,Actr);
+							Actr.Comment = "Создан заказ на сборку " & ORr.SerNr;
+							cscnt = matrowcnt(APCDSb);
+							for(c=0;c<cscnt;c=c+1)begin
+								matrowget(APCDSb,c,APCDSrw);
+								if(APCDSrw.LocCode==ORr.Location)then begin
+									Actr.MainPersons = APCDSrw.CollectorName;
+								end;
+							end;
+							if(blank(Actr.MainPersons))then begin
+								Actr.MainPersons = "SA";
+							end;
+							if(blank(Actr.TransDate))then begin
+								Actr.TransDate = CurrentDate;
+							end;
+							Actr.TodoFlag = 1;
+							Actr.CalTimeFlag = kCalTimeFlagTime;
+							Actr.AlarmType = 1;
+							Actr.SymbNr = 3;
+							if(RecordUpdate(oldActr,Actr,true)==0)then begin 
+								CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
+								CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
+							end;
+						end;
+					end;
+					if(rsrv==false)then begin
+						WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
+					end else begin
+						WebOutString("\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
+					end;
 				end;
-				// RecordUpdate(OldORr,ORr,true);
-				// if(stat==USetStr(36214))then begin
-					// k = 1;
-					// RecordAction_raPasteOrdInInv(IVr,ORr.SerNr,true,errcode);
-					
-					// RecordCopy(OldIVr,IVr);
-					
-					// IVr.CustCode = ORr.CustCode;
-					// IVr.Addr0 =  namesname;
-					// IVr.PriceList = ORr.PriceList;
-					// IVr.OrderNr = ORr.SerNr;
-					// IVr.Location = ORr.Location;
-					// IVr.Objects = ORr.Objects;
-					// RecordUpdate(OldIVr,IVr,false);
-					
-					// ivmtrw = matrowcnt(IVr);
-					// for (k=0;k<ivmtrw;k=k+1) begin
-						// matrowget(IVr,k,IVrw);
-						// ISr.Code = IVrw.ArtCode;
-						// ISr.Location = IVr.Location;
-						// if(ReadFIrstMain(ISr,2,true)) begin
-							// if((ISr.Instock-ISr.RsrvQty)==0) then begin
-								// if(!SetInSet(IVrw.ArtCode,items))then begin
-									// items = items & IVrw.ArtCode & ",";
-								// end;
-							// end;	
-						// end;
-					// end;
-					
-					// RecordNew(Actr);
-					// ActVcRecordDefClient(Actr);
-					// if (MakeActFromIV(IVr,Actr)) then begin 	
-						// RecordCopy(oldActr,Actr);
-						// Actr.Comment = "Создан заказ на сборку " & ORr.SerNr;
-						// cscnt = matrowcnt(APCDSb);
-						// for(c=0;c<cscnt;c=c+1)begin
-							// matrowget(APCDSb,c,APCDSrw);
-							// if(APCDSrw.LocCode==ORr.Location)then begin
-								// Actr.MainPersons = APCDSrw.CollectorName;
-							// end;
-						// end;
-						// if(blank(Actr.MainPersons))then begin
-							// Actr.MainPersons = "SA";
-						// end;
-						// if(blank(Actr.TransDate))then begin
-							// Actr.TransDate = CurrentDate;
-						// end;
-						// Actr.TodoFlag = 1;
-						// Actr.CalTimeFlag = kCalTimeFlagTime;
-						// Actr.AlarmType = 1;
-						// Actr.SymbNr = 3;
-						// if(RecordUpdate(oldActr,Actr,true)==0)then begin 
-							// CreateRecordLink(Actr,Currentcompany,ORr,Currentcompany);
-							// CreateRecordLink(ORr,Currentcompany,Actr,Currentcompany);
-						// end;
-					// end;
-					// testf1 = true;
-					// RecordAction_raPasteOrdInShip2(SHr,ORr.SerNr,warning);
-					
-					// if(recordstore(SHr,true))then begin end;
-					
-					// while(ReadRecordLink(ORr,k,Actr,RLr)) begin
-						// if(left(Actr.Comment,6)=="Создан")then begin
-							// RecordCopy(OldActr,Actr);
-							// Actr.Comment = Actr.Comment & ", Отгрузка № " & SHr.SerNr;
-							// CreateRecordLink(Actr,Currentcompany,SHr,Currentcompany);
-							// CreateRecordLink(SHr,Currentcompany,Actr,Currentcompany);
-							// if(RecordUpdate(OldActr,Actr,false)==0)then begin 
-								// testf1 = false;
-							// end;
-						// end;
-						// k = k + 1;
-					// end;
-				// end;
-				WebOutString("{\"result\":\"ok\",\"invoiceId\":" & IVr.SerNr & "}");
-				// WebOutString("{\"result\":\"ok\",\"orderId\":" & ORr.SerNr & "}");
 			end;
 		end;
 	end;
