@@ -474,7 +474,7 @@ begin
 	record ORVc LocORr,OldORr;
 	record SHVc SHr;
 	record IVVc IVr;
-	boolean ecORcomlf, ecTestItemf, svCurrBrndf,chsum;
+	boolean ecORcomlf, ecTestItemf, svCurrBrndf,chsum,VATTESTf;
 	record ObjVc Objr;
 	integer pos;
 	string 255 str,obj,set,barndCurr;
@@ -490,35 +490,49 @@ begin
  	
 	
 	if (stat==insertmode and ORr.VAT18Percent==1) then begin 
-	
-		rwcnt = MatRowCnt(ORr);
-		for(i=0; i<rwcnt; i=i+1)begin
-			MatRowGet(ORr,i,ORrw);
-			ORrw.Price = Round(ORrw.Price + (ORrw.Price/100 * 18),SetRoundModeD(2));
-			MatRowPut(ORr,i,ORrw);
-			ORDchrsum(ORr,i);
-			ORDchsum(ORr,i);
+		VATTESTf = true;
+		if (left(ORr.OrderClass,2)!="IS" and CurrentCompany==28) then begin VATTESTf = false; end;
+		if (VATTESTf) then begin
+			rwcnt = MatRowCnt(ORr);
+			for(i=0; i<rwcnt; i=i+1)begin
+				MatRowGet(ORr,i,ORrw);
+				if (ORrw.stp==1) then begin
+					ORrw.Price = Round(ORrw.Price + (ORrw.Price/100 * 18),SetRoundModeD(2));
+					MatRowPut(ORr,i,ORrw);
+					ORVc_PastePrice(ORr,i,chsum);
+					ORDchrsum(ORr,i);
+					ORDchsum(ORr,i);
+				end;
+			end;
+			ORr.IDTotalCost = Round(ORr.IDTotalCost + (ORr.IDTotalCost/100 * 18),SetRoundModeD(2));
 			ORSumup(ORr);
 		end;
 		
 	end;
 	
-	if(ORr.VAT18Percent==1 and OR2r.VAT18Percent==0)then begin	// Edit ********* Ihor Trubachov 31*08*2021
-		// + 18%
-		
-		rwcnt = MatRowCnt(ORr);
-		for(i=0; i<rwcnt; i=i+1)begin
-			MatRowGet(ORr,i,ORrw);
-			ORrw.Price = Round(ORrw.Price + (ORrw.Price/100 * 18),SetRoundModeD(2));
-			MatRowPut(ORr,i,ORrw);
-			ORDchrsum(ORr,i);
-			ORDchsum(ORr,i);
-			ORSumup(ORr);
+	if(stat==updatemode)then begin
+    if(ORr.VAT18Percent==1 and OR2r.VAT18Percent==0)then begin	// Edit ********* Ihor Trubachov 31*08*2021
+      VATTESTf = true;
+      if (left(ORr.OrderClass,2)!="IS" and CurrentCompany==28) then begin VATTESTf = false; end;
+      if (VATTESTf) then begin
+        rwcnt = MatRowCnt(ORr);
+        for(i=0; i<rwcnt; i=i+1)begin
+          MatRowGet(ORr,i,ORrw);
+          if (ORrw.stp==1) then begin
+            ORrw.Price = Round(ORrw.Price + (ORrw.Price/100 * 18),SetRoundModeD(2));
+            MatRowPut(ORr,i,ORrw);
+            ORVc_PastePrice(ORr,i,chsum);
+            ORDchrsum(ORr,i);
+            ORDchsum(ORr,i);
+          end;
 
-		end;
-
-	end;
+        end;
+        ORr.IDTotalCost = Round(ORr.IDTotalCost + (ORr.IDTotalCost/100 * 18),SetRoundModeD(2));
+        ORSumup(ORr);
+      end;
+    end;
 	
+
 	if(ORr.VAT18Percent==0 and OR2r.VAT18Percent==1)then begin	// Edit ********* Ihor Trubachov 31*08*2021
 		// - 18%
 		
@@ -543,6 +557,21 @@ begin
 			
 		end;
 
+	
+    if(ORr.VAT18Percent==0 and OR2r.VAT18Percent==1)then begin	// Edit ********* Ihor Trubachov 31*08*2021
+      VATTESTf = true;
+      if (left(ORr.OrderClass,2)!="IS" and CurrentCompany==28) then begin VATTESTf = false; end;
+      if (VATTESTf) then begin
+        rwcnt = MatRowCnt(ORr);
+        for(i=0; i<rwcnt; i=i+1)begin
+          MatRowGet(ORr,i,ORrw);
+          ORDUpdatePrices(ORr,false);
+          ORVc_PastePrice(ORr,i,chsum);
+        end;
+        ORr.IDTotalCost = Round(ORr.IDTotalCost - (ORr.IDTotalCost/118 * 18),SetRoundModeD(2));
+        ORSumup(ORr);
+      end;
+    end;
 	end;
 
  	if(nonblankdate(ORr.PlanShipDate))then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 11 04 2018 y. î 19:12:04
