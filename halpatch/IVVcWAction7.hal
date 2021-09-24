@@ -120,6 +120,7 @@ external updating procedure Fiscal_Rollback();
 external updating procedure CloseShiftZReport(record IVVc); // Edit ********************** Ihor Trubachov 17*05*2021
 external updating procedure ShiftZReportHand(); // Edit ********************** Ihor Trubachov 24*05*2021
 external updating procedure TransactionHistory(); // Edit ********************** Ihor Trubachov 31*05*2021
+external function roundmode SetRoundModeD(Integer);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -1428,6 +1429,11 @@ begin
 	if(setinset("MINICARD",IVr.Objects))then begin
 		res = true;
 	end;
+	if(setinset("PROMOCODE",IVr.Objects))then begin
+		res = true;
+	end;
+	
+	
 	GetFlayerObjects = res;
 return;
 end;
@@ -1455,6 +1461,9 @@ begin
   record UsedRebateCardsVc URCr;
 	record VaucherVc Vr;
 	record VaucherProgVc VPr;
+	record IVVc IV2r;
+	vector val addreb;
+	val newrebate;
 		
 		
 		
@@ -1625,6 +1634,72 @@ begin
 			IVSumup(IVr,true);
 			res = true;
 		end;	
+		
+		
+		targetcard = "PROMOCODE";
+		if(firstinrange(code,10)==targetcard)then begin
+			Vr.BarCode = lastinrange(code,10);
+			if(ReadFirstMain(Vr,1,true)) then begin
+				if(nonblank(Vr.RebCode)) then begin
+					IVr.RebCode = Vr.RebCode;
+				end else begin
+					VPr.Code = Vr.VaucherProgCode;
+					if(ReadFirstMain(VPr,1,true)) then begin
+						IVr.RebCode = VPr.RebCode;
+					end;
+				end;	
+				if(nonblank(Vr.RebCode)) then begin
+					IVr.AddRebCode = Vr.AddRebCode;
+				end else begin
+					VPr.Code = Vr.VaucherProgCode;
+					if(ReadFirstMain(VPr,1,true)) then begin
+						IVr.AddRebCode = VPr.AddRebCode;
+					end;
+				end;
+				VPr.Code = Vr.VaucherProgCode;
+				if(ReadFirstMain(VPr,1,true)) then begin
+					if(nonblank(VPr.Objects)) then begin
+						if(blank(IVr.Objects)) then begin
+							IVr.Objects = VPr.Objects;
+						end else begin
+							IVr.Objects = IVr.Objects & "," & VPr.Objects;
+						end;
+					end;
+				end;
+			end else begin
+				MessageBox(0,"Ваучер с таким кодом не существует");
+			end;	
+			
+			recordcopy(IV2r,IVr);
+			IV2r.RebCode = IVr.AddRebCode;
+			IVVc_PasteRebCode(IV2r);
+			IVVc_PasteRebCode(IVr);
+			
+			
+			rwcnt = matrowcnt(IV2r);
+			for(i=0;i<rwcnt;i=i+1)begin
+			  matrowget(IV2r,i,IVrw);
+			  if(nonblank(IVrw.ArtCode) and IVrw.stp==1)then begin
+			    addreb[IVrw.ArtCode] = IVrw.vRebate;
+			  end;
+			end;
+			
+			rwcnt = matrowcnt(IVr);
+			for(i=0;i<rwcnt;i=i+1)begin
+			  matrowget(IVr,i,IVrw);
+			  if(nonblank(IVrw.ArtCode) and IVrw.stp==1 and addreb[IVrw.ArtCode]!=0)then begin
+          newrebate = round(1 - (100 - IVrw.vRebate) * (1-(100 - addreb[IVrw.ArtCode])/100)/100,SetRoundmodeD(2));
+          IVrw.vRebate = newrebate;
+          matrowput(IVr,i,IVrw);
+			  end;
+			end;
+			
+			
+			
+			IVSumup(IVr,true);
+			res = true;
+		end;	
+		
 lCheckFlayersInput:;
 
 	CheckFlayersInput = res;
