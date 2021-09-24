@@ -1,6 +1,9 @@
 //Edit **********************************************Vas-P	21/09/2021
+external function roundmode SetRoundModeD(Integer);
+external procedure ExtractObj(string,var Integer,var string);
 
 SetLangMode(LangRussian,"RUS",0);
+
 
 global
 function LongInt PUVcRecordCheckClient(LongInt wn,record PUVc PUr,record PUVc PU2r,LongInt stat,LongInt errorcheck)
@@ -8,99 +11,285 @@ begin
   LongInt res;
 	record POVc POr;
 	record VIVc VIr;
-	boolean TrHs,testf;
+	record RLinkVc RLr;
+	boolean TrHs,testf,partcheck;
 	row VIVc VIrw;
-	integer rwcnt,i;
+	integer rwcnt,i,pos;
 	boolean checksum;
 	roundmode rnd;
-	array string 255 aVIr;
-	vector boolean vVIr;
-	
-	
-	rnd = DefaultValRoundoff;
-	rnd.decimals = 0; 
-	rnd.mode = kRoundingModeTruncate;
-		
+	string 150 where,nameerror;
+	string 100 tstr,tstr1;
+	array string 255 aSum;
+	vector val vSum;
+	vector boolean vExist;
+	Integer notenr;
+
   logtext(0,"PUVcRecordCheckClient");
   
   res = 0;
 	if(PUr.OKFlag==1 and PU2r.OKFlag==0)then begin
-		TrHs = true;
-		VIr.POSerNr = PUr.PONr;
-		while(loopkey("POSerNr",VIr,1,TrHs))begin
+	
+		if(PUr.CustomsCost!=0) then begin vExist["customs"] = true; end;
+		if(PUr.ShipCost!=0) then begin vExist["freight"] = true; end;
+		if(PUr.Cost1!=0) then begin vExist["Cost1"] = true; end;
+		if(PUr.Cost2!=0) then begin vExist["Cost2"] = true; end;
+		if(PUr.Cost3!=0) then begin vExist["Cost3"] = true; end;
+		if(PUr.Cost4!=0) then begin vExist["Cost4"] = true; end;
+		if(PUr.Cost5!=0) then begin vExist["Cost5"] = true; end;
+		if(PUr.Tax15PercentSum!=0) then begin vExist["Tax15PercentSum"] = true; end;
+
+		notenr = 1;
+
+		while (ReadRecordLink(PUr,notenr,VIr,RLr)) begin
 			testf = true;
-			if(VIr.POSerNr!=PUr.PONr)then begin TrHs = false; testf = false; end;
+			logtext(0,"VIr.POSerNr / PUr.PONr - " & " / " & VIr.POSerNr & " / " & PUr.PONr);
+			logtext(0,"VIr.PartPUSerNr / PUr.SerNr - " & " / " & VIr.PartPUSerNr & " / " & PUr.SerNr);
+			if(VIr.POSerNr!=PUr.PONr)then begin testf = false; end;
+			if(VIr.PartPUSerNr!=PUr.SerNr)then begin testf = false; end;
 			if(testf)then begin
 				if(nonblank(VIr.ExtraCostObj))then begin
-					if(VIr.ExtraCostObj=="freight")then begin
-						vVIr[VIr.ExtraCostObj] = true;
-						// logtext(0,VIr.ExtraCostObj & " / " & VIr.SerNr & " / " & VIr.POSerNr & " / " & Round(VIr.PayVal * VIr.ToRateB1,rnd) & " / " & Round(PUr.ShipCost,rnd));
-						// if(Round((VIr.PayVal * VIr.ToRateB1),rnd)!=Round(PUr.ShipCost,rnd))then begin
-							// checksum = true;
-						// end;
-					end;
-					if(VIr.ExtraCostObj=="customs")then begin
-						vVIr[VIr.ExtraCostObj] = true;
-						// logtext(0,VIr.ExtraCostObj & " / " & VIr.SerNr & " / " & VIr.POSerNr & " / " & Round(VIr.PayVal,rnd) & " / " & Round(PUr.CustomsCost,rnd));
-						// if(Round(VIr.PayVal,rnd)!=Round(PUr.CustomsCost,rnd))then begin
-							// checksum = true;
-						// end;
-					end;
-					if(VIr.ExtraCostObj=="Cost1")then begin
-						// logtext(0,VIr.ExtraCostObj & " / " & VIr.SerNr & " / " & VIr.POSerNr & " / " & Round(VIr.PayVal * VIr.ToRateB1,rnd) & " / " & Round(PUr.Cost1,rnd));
-						// if(Round(VIr.PayVal,rnd)!=Round(PUr.Cost1,rnd))then begin
-							// checksum = true;
-						// end;
-						vVIr[VIr.ExtraCostObj] = true;
-					end;			
-					if(VIr.ExtraCostObj=="cost2")then begin
-						// logtext(0,VIr.ExtraCostObj & " / " & VIr.SerNr & " / " & VIr.POSerNr & " / " & Round(VIr.PayVal * VIr.ToRateB1,rnd) & " / " & Round(PUr.Cost2,rnd));
-						// if(Round(VIr.PayVal,rnd)!=Round(PUr.Cost2,rnd))then begin
-							// checksum = true;
-						// end;
-						vVIr[VIr.ExtraCostObj] = true;
-					end;			
-					if(VIr.ExtraCostObj=="cost3")then begin
-						// logtext(0,VIr.ExtraCostObj & " / " & VIr.SerNr & " / " & VIr.POSerNr & " / " & Round(VIr.PayVal * VIr.ToRateB1,rnd) & " / " & Round(PUr.Cost3,rnd));
-						// if(Round(VIr.PayVal,rnd)!=Round(PUr.Cost3,rnd))then begin
-							// checksum = true;
-						// end;
-						vVIr[VIr.ExtraCostObj] = true;
-					end;			
-					if(VIr.ExtraCostObj=="cost4")then begin
-						// logtext(0,VIr.ExtraCostObj & " / " & VIr.SerNr & " / " & VIr.POSerNr & " / " & Round(VIr.PayVal * VIr.ToRateB1,rnd) & " / " & Round(PUr.Cost4,rnd));
-						// if(Round(VIr.PayVal,rnd)!=Round(PUr.Cost4,rnd))then begin
-							// checksum = true;
-						// end;
-						vVIr[VIr.ExtraCostObj] = true;
-					end;			
-					if(VIr.ExtraCostObj=="cost5")then begin
-						// logtext(0,VIr.ExtraCostObj & " / " & VIr.SerNr & " / " & VIr.POSerNr & " / " & Round(VIr.PayVal * VIr.ToRateB1,rnd) & " / " & Round(PUr.Cost5,rnd));
-						// if(Round(VIr.PayVal,rnd)!=Round(PUr.Cost5,rnd))then begin
-							// checksum = true;
-						// end;
-						vVIr[VIr.ExtraCostObj] = true;
-					end;
-					if(VIr.ExtraCostObj=="Tax15PercentSum")then begin
-						// logtext(0,VIr.ExtraCostObj & " / " & VIr.SerNr & " / " & VIr.POSerNr & " / " & Round(VIr.PayVal * VIr.ToRateB1,rnd) & " / " & Round(PUr.Tax15PercentSum,rnd));
-						// if(Round(VIr.PayVal,rnd)!=Round(PUr.Tax15PercentSum,rnd))then begin
-							// checksum = true;
-						// end;
-						vVIr[VIr.ExtraCostObj] = true;
+					pos = 0;
+					tstr = "";
+					ExtractObj(VIr.ExtraCostObj,pos,tstr);
+					while(nonblank(tstr))begin
+						for(i=0;i<matrowcnt(VIr);i=i+1) begin
+							matrowget(VIr,i,VIrw);
+							if(nonblank(VIr.ToRateB1))then begin
+								vSum[tstr] = VIrw.Sum * VIr.ToRateB1;
+							end else begin
+								vSum[tstr] = VIrw.Sum;
+							end;
+							ExtractObj(VIr.ExtraCostObj,pos,tstr);
+						end;
 					end;
 				end;
+				notenr = notenr + 1;
 			end;
 		end;
-		getvectortags(vVir,aVIr);
-		for(i=0;i<aVIr.length;i=i+1)begin
-			logtext(0,"aVIr[i] - " & aVIr[i]);
+		logtext(0,"notenr - " & notenr);
+		
+		if(notenr==1)then begin
+			TrHs = true;
+			VIr.POSerNr = PUr.PONr;
+			while(loopkey("POSerNr",VIr,1,TrHs))begin
+				testf = true;
+				if(VIr.POSerNr!=PUr.PONr)then begin TrHs = false; testf = false; end;
+				if(testf)then begin
+					if(nonblank(VIr.ExtraCostObj))then begin
+						pos = 0;
+						tstr = "";
+						ExtractObj(VIr.ExtraCostObj,pos,tstr);
+						while(nonblank(tstr))begin
+							for(i=0;i<matrowcnt(VIr);i=i+1) begin
+								matrowget(VIr,i,VIrw);
+								if(nonblank(VIr.ToRateB1))then begin
+									vSum[tstr] = VIrw.Sum * VIr.ToRateB1;
+								end else begin
+									vSum[tstr] = VIrw.Sum;
+								end;
+								ExtractObj(VIr.ExtraCostObj,pos,tstr);
+							end;
+						end;
+					end;
+				end;
+			end;		
 		end;
-		if(checksum)then begin
-			MessageBox(0,"–Я—А–Њ–≤–µ—А—М—В–µ —Б—Г–Љ–Љ—Л –љ–∞–Ї–ї–∞–і–љ—Л—Е —А–∞—Б—Е–Њ–і–Њ–≤ –≤ —Б—З—С—В-—Д–∞–Ї—В—Г—А–∞—Е –њ–Њ—Б—В–∞–≤—Й–Є–Ї–∞");
+		
+		if(vSum["customs"]!=0 or vExist["customs"])then begin
+			logtext(0,"customs" & " / " & Round(vSum["customs"],SetRoundModeD(0)) & " / " & Round(PUr.CustomsCost,SetRoundModeD(0)));
+			if(Round(vSum["customs"],SetRoundModeD(0))!=Round(PUr.CustomsCost,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Таможня");
+			end;
+		end;
+		if(vSum["freight"]!=0 or vExist["freight"])then begin
+			logtext(0,"freight" & " / " & Round(vSum["freight"],SetRoundModeD(0)) & " / " & Round(PUr.ShipCost,SetRoundModeD(0)));
+			if(Round(vSum["freight"],SetRoundModeD(0))!=Round(PUr.ShipCost,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Фрахт");
+			end;
+		end;
+		if(vSum["cost1"]!=0 or vExist["cost1"])then begin
+			logtext(0,"cost1" & " / " & Round(vSum["cost1"],SetRoundModeD(0)) & " / " & Round(PUr.Cost1,SetRoundModeD(0)));
+			if(Round(vSum["cost1"],SetRoundModeD(0))!=Round(PUr.Cost1,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Доп.з по ТКОНС");
+			end;				
+		end;
+		if(vSum["cost2"]!=0 or vExist["cost2"])then begin
+			logtext(0,"cost2" & " / " & Round(vSum["cost2"],rnd) & " / " & Round(PUr.Cost2,SetRoundModeD(0)));
+			if(Round(vSum["cost2"],SetRoundModeD(0))!=Round(PUr.Cost2,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - 15% там ТКОНС");
+			end;				
+		end;
+		if(vSum["cost3"]!=0 or vExist["cost3"])then begin
+			logtext(0,"cost3" & " / " & Round(vSum["cost3"],rnd) & " / " & Round(PUr.Cost3,SetRoundModeD(0)));
+			if(Round(vSum["cost3"],SetRoundModeD(0))!=Round(PUr.Cost3,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Расходы от Бренда");
+			end;				
+		end;
+		if(vSum["cost4"]!=0 or vExist["cost4"])then begin
+			logtext(0,"cost4" & " / " & Round(vSum["cost4"],SetRoundModeD(0)) & " / " & Round(PUr.Cost4,SetRoundModeD(0)));
+			if(Round(vSum["cost4"],SetRoundModeD(0))!=Round(PUr.Cost4,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Акциз веса");
+			end;				
+		end;
+		if(vSum["cost5"]!=0 or vExist["cost5"])then begin
+			logtext(0,"cost5" & " / " & Round(vSum["cost5"],SetRoundModeD(0)) & " / " & Round(PUr.Cost5,SetRoundModeD(0)));
+			if(Round(vSum["cost5"],SetRoundModeD(0))!=Round(PUr.Cost5,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Акциз каратности");
+			end;				
+		end;
+		if(vSum["Tax15PercentSum"]!=0 or vExist["Tax15PercentSum"])then begin
+			logtext(0,"Tax15PercentSum" & " / " & Round(vSum["Tax15PercentSum"],SetRoundModeD(0)) & " / " & Round(PUr.Tax15PercentSum,SetRoundModeD(0)));
+			if(Round(vSum["Tax15PercentSum"],SetRoundModeD(0))!=Round(PUr.Tax15PercentSum,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Налог 15%");
+			end;				
 		end;
 	end;
 
 	logtext(0,"PUVcRecordCheckClient res " & res);  
   PUVcRecordCheckClient = res;
   return;
+end;
+
+
+global
+function LongInt BigPUVcRecordCheckClient(LongInt wn,record BigPUVc BPUr,record BigPUVc BPU2r,LongInt stat,LongInt errorcheck)
+begin
+  LongInt res;
+	record POVc POr;
+	record VIVc VIr;
+	record RLinkVc RLr;
+	boolean TrHs,testf,partcheck;
+	row VIVc VIrw;
+	integer rwcnt,i,pos;
+	boolean checksum;
+	roundmode rnd;
+	string 150 where,nameerror;
+	string 100 tstr,tstr1;
+	array string 255 aSum;
+	vector val vSum;
+	vector boolean vExist;
+	Integer notenr;
+		
+  logtext(0,"BigPUVcRecordCheckClient");
+	res = 0;
+	if(BPUr.OKFlag==1 and BPU2r.OKFlag==0)then begin
+	
+		if(BPUr.CustomsCost!=0) then begin vExist["customs"] = true; end;
+		if(BPUr.ShipCost!=0) then begin vExist["freight"] = true; end;
+		if(BPUr.Cost1!=0) then begin vExist["Cost1"] = true; end;
+		if(BPUr.Cost2!=0) then begin vExist["Cost2"] = true; end;
+		if(BPUr.Cost3!=0) then begin vExist["Cost3"] = true; end;
+		if(BPUr.Cost4!=0) then begin vExist["Cost4"] = true; end;
+		if(BPUr.Cost5!=0) then begin vExist["Cost5"] = true; end;
+		if(BPUr.Tax15PercentSum!=0) then begin vExist["Tax15PercentSum"] = true; end;
+
+		notenr = 1;
+		while (ReadRecordLink(BPUr,notenr,VIr,RLr)) begin
+			testf = true;
+			logtext(0,"VIr.POSerNr / BPUr.PONr - " & " / " & VIr.POSerNr & " / " & BPUr.PONr);
+			logtext(0,"VIr.PartPUSerNr / BPUr.SerNr - " & " / " & VIr.PartPUSerNr & " / " & BPUr.SerNr);
+			if(VIr.POSerNr!=BPUr.PONr)then begin testf = false; end;
+			if(VIr.PartPUSerNr!=BPUr.SerNr)then begin testf = false; end;
+			if(testf)then begin
+				if(nonblank(VIr.ExtraCostObj))then begin
+					pos = 0;
+					tstr = "";
+					ExtractObj(VIr.ExtraCostObj,pos,tstr);
+					while(nonblank(tstr))begin
+						for(i=0;i<matrowcnt(VIr);i=i+1) begin
+							matrowget(VIr,i,VIrw);
+							if(nonblank(VIr.ToRateB1))then begin
+								vSum[tstr] = VIrw.Sum * VIr.ToRateB1;
+							end else begin
+								vSum[tstr] = VIrw.Sum;
+							end;
+							ExtractObj(VIr.ExtraCostObj,pos,tstr);
+						end;
+					end;
+				end;
+				notenr = notenr + 1;
+			end;
+		end;
+		logtext(0,"notenr - " & notenr);
+		
+		if(notenr==1)then begin
+			TrHs = true;
+			VIr.POSerNr = BPUr.PONr;
+			while(loopkey("POSerNr",VIr,1,TrHs))begin
+				testf = true;
+				if(VIr.POSerNr!=BPUr.PONr)then begin TrHs = false; testf = false; end;
+				if(testf)then begin
+					if(nonblank(VIr.ExtraCostObj))then begin
+						pos = 0;
+						tstr = "";
+						ExtractObj(VIr.ExtraCostObj,pos,tstr);
+						while(nonblank(tstr))begin
+							for(i=0;i<matrowcnt(VIr);i=i+1) begin
+								matrowget(VIr,i,VIrw);
+								if(nonblank(VIr.ToRateB1))then begin
+									vSum[tstr] = VIrw.Sum * VIr.ToRateB1;
+								end else begin
+									vSum[tstr] = VIrw.Sum;
+								end;
+								ExtractObj(VIr.ExtraCostObj,pos,tstr);
+							end;
+						end;
+					end;
+				end;
+			end;		
+		end;
+		
+		if(vSum["customs"]!=0 or vExist["customs"])then begin
+			logtext(0,"customs" & " / " & Round(vSum["customs"],SetRoundModeD(0)) & " / " & Round(BPUr.CustomsCost,SetRoundModeD(0)));
+			if(Round(vSum["customs"],SetRoundModeD(0))!=Round(BPUr.CustomsCost,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Таможня");
+			end;
+		end;
+		if(vSum["freight"]!=0 or vExist["freight"])then begin
+			logtext(0,"freight" & " / " & Round(vSum["freight"],SetRoundModeD(0)) & " / " & Round(BPUr.ShipCost,SetRoundModeD(0)));
+			if(Round(vSum["freight"],SetRoundModeD(0))!=Round(BPUr.ShipCost,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Фрахт");
+			end;
+		end;
+		if(vSum["cost1"]!=0 or vExist["cost1"])then begin
+			logtext(0,"cost1" & " / " & Round(vSum["cost1"],SetRoundModeD(0)) & " / " & Round(BPUr.Cost1,SetRoundModeD(0)));
+			if(Round(vSum["cost1"],SetRoundModeD(0))!=Round(BPUr.Cost1,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Доп.з по ТКОНС");
+			end;				
+		end;
+		if(vSum["cost2"]!=0 or vExist["cost2"])then begin
+			logtext(0,"cost2" & " / " & Round(vSum["cost2"],rnd) & " / " & Round(BPUr.Cost2,SetRoundModeD(0)));
+			if(Round(vSum["cost2"],SetRoundModeD(0))!=Round(BPUr.Cost2,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - 15% там ТКОНС");
+			end;				
+		end;
+		if(vSum["cost3"]!=0 or vExist["cost3"])then begin
+			logtext(0,"cost3" & " / " & Round(vSum["cost3"],rnd) & " / " & Round(BPUr.Cost3,SetRoundModeD(0)));
+			if(Round(vSum["cost3"],SetRoundModeD(0))!=Round(BPUr.Cost3,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Расходы от Бренда");
+			end;				
+		end;
+		if(vSum["cost4"]!=0 or vExist["cost4"])then begin
+			logtext(0,"cost4" & " / " & Round(vSum["cost4"],SetRoundModeD(0)) & " / " & Round(BPUr.Cost4,SetRoundModeD(0)));
+			if(Round(vSum["cost4"],SetRoundModeD(0))!=Round(BPUr.Cost4,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Акциз веса");
+			end;				
+		end;
+		if(vSum["cost5"]!=0 or vExist["cost5"])then begin
+			logtext(0,"cost5" & " / " & Round(vSum["cost5"],SetRoundModeD(0)) & " / " & Round(BPUr.Cost5,SetRoundModeD(0)));
+			if(Round(vSum["cost5"],SetRoundModeD(0))!=Round(BPUr.Cost5,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Акциз каратности");
+			end;				
+		end;
+		if(vSum["Tax15PercentSum"]!=0 or vExist["Tax15PercentSum"])then begin
+			logtext(0,"Tax15PercentSum" & " / " & Round(vSum["Tax15PercentSum"],SetRoundModeD(0)) & " / " & Round(BPUr.Tax15PercentSum,SetRoundModeD(0)));
+			if(Round(vSum["Tax15PercentSum"],SetRoundModeD(0))!=Round(BPUr.Tax15PercentSum,SetRoundModeD(0)))then begin
+				MessageBox(0,"Проверьте суммы накладных расходов в счёт-фактурах поставщика по флагу - Налог 15%");
+			end;				
+		end;
+	end;
+	
+	logtext(0,"BigPUVcRecordCheckClient res " & res);  
+  BigPUVcRecordCheckClient = res;
+return;
 end;
