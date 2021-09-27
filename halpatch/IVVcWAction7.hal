@@ -121,6 +121,7 @@ external updating procedure CloseShiftZReport(record IVVc); // Edit ************
 external updating procedure ShiftZReportHand(); // Edit ********************** Ihor Trubachov 24*05*2021
 external updating procedure TransactionHistory(); // Edit ********************** Ihor Trubachov 31*05*2021
 external function roundmode SetRoundModeD(Integer);
+external function string 60 AddObjectToObjectList(string,string);
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -1444,10 +1445,10 @@ begin
 	Integer nwn,i;
   row IVVc IVrw;
   record UserVc Userr;
-  string 255 subset;
+  string 255 subset,tstr;
   integer mtrw,rwcnt;
   string 50 artcode;
-  Integer sernrf;
+  Integer sernrf,pos;
   string 255 inwarning,warning;
   record BirthdayRebateBlock BRb;
   date startdate,enddate;
@@ -1463,6 +1464,7 @@ begin
 	record VaucherProgVc VPr;
 	record IVVc IV2r;
 	vector val addreb;
+	vector string 200 addrebobjects;
 	val newrebate;
 		
 		
@@ -1673,8 +1675,6 @@ begin
 			end;	
 			
 			recordcopy(IV2r,IVr);
-			logtext(0,"IVr.AddRebCode - " & IVr.AddRebCode);
-			logtext(0,"IVr.RebCode - " & IVr.RebCode);
 			IV2r.RebCode = IVr.AddRebCode;
 			IVVc_PasteRebCode(IV2r);
 			IVSumup(IV2r,true);
@@ -1684,28 +1684,31 @@ begin
 			rwcnt = matrowcnt(IV2r);
 			for(i=0;i<rwcnt;i=i+1)begin
 			  matrowget(IV2r,i,IVrw);
-				logtext(0,"IVrw.ArtCode/IVrw.stp/addreb[IVrw.ArtCode]/IVrw.vRebate 1 - " & IVrw.ArtCode & " / " & IVrw.stp & " / " & addreb[IVrw.ArtCode] & " / " & IVrw.vRebate);
 			  if(nonblank(IVrw.ArtCode) and IVrw.stp==1)then begin
 			    addreb[IVrw.ArtCode] = IVrw.vRebate;
+			    addrebobjects[IVrw.ArtCode] = IVrw.Objects;
 			  end;
 			end;
 			
 			rwcnt = matrowcnt(IVr);
 			for(i=0;i<rwcnt;i=i+1)begin
 			  matrowget(IVr,i,IVrw);
-					logtext(0,"IVrw.ArtCode/IVrw.stp/addreb[IVrw.ArtCode]/IVrw.vRebate 2 - " & IVrw.ArtCode & " / " & IVrw.stp & " / " & addreb[IVrw.ArtCode] & " / " & IVrw.vRebate);
 			  if(nonblank(IVrw.ArtCode) and IVrw.stp==1 and addreb[IVrw.ArtCode]!=0)then begin
-          // newrebate = round(1 - (100 - IVrw.vRebate) * (1-(100 - addreb[IVrw.ArtCode])/100)/100,SetRoundmodeD(2));
+			    pos = 0;
+			    ExtractObj(addrebobjects[IVrw.ArtCode],pos,tstr);
+			    while(nonblank(tstr))begin
+			      if(nonblank(tstr))then begin
+			        if(!setinset(tstr,IVrw.Objects))then begin
+			          IVrw.Objects = AddObjectToObjectList(IVrw.Objects,tstr);
+			        end;
+			      end;
+			      ExtractObj(addrebobjects[IVrw.ArtCode],pos,tstr);
+			    end;
 					newrebate = round(100 - (100 * (100 - IVrw.vRebate)/100) * (100 - addreb[IVrw.ArtCode])/100,SetRoundModeD(2));
-					// logtext(0,"newrebate2 - " & 100 * (100 - IVrw.vRebate)/100);
-					// logtext(0,"newrebate - " & newrebate * (100 - addreb[IVrw.ArtCode])/100);
-					// logtext(0,"newrebate2 - " & 100 - (newrebate * (100 - addreb[IVrw.ArtCode])/100));
           IVrw.vRebate = newrebate;
           matrowput(IVr,i,IVrw);
 			  end;
 			end;
-			
-			
 			
 			IVSumup(IVr,true);
 			res = true;
