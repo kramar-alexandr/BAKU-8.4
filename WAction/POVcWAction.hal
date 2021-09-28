@@ -85,6 +85,63 @@ remote function Boolean remPODClassCons15PercentSumEFAfter(var record POVc,Integ
 
 
 SetLangMode(LangRussian,"RUS",0);
+
+global
+function Boolean VAT_Consg(var record POVc POr,integer rownr) // Edit ************************** Ihor Trubachov 24*09*2021
+BEGIN
+	row POVc POrw;
+	integer i;
+	val cost;
+
+	if(rownr>(-1))then begin
+		MatRowGet(POr,rownr,POrw);
+		if(POrw.ConsgType==1)then begin  // Edit ************************** Ihor Trubachov 24*09*2021
+			//POrw.Tax15Percentf=1;
+		
+			if(nonblank(POr.FrRate))then begin
+				POrw.RowCost2 = (POrw.Price * 0.15)/(POr.ToRateB1/POr.FrRate);
+			end else begin
+				POrw.RowCost2 = POrw.Price * 0.15;
+			end;
+		
+			MatRowPut(POr,rownr,POrw);
+		end;
+	end;
+	
+	
+	cost = 0;
+	for(i=0;i<MatRowCnt(POr);i=i+1)begin
+		MatRowGet(POr,i,POrw);
+		
+		// if(POrw.ConsgType==1 and rownr==(-2))then begin
+			// POrw.Tax15Percentf=1;
+			// MatRowPut(POr,i,POrw);
+		// end;
+		
+		if(POrw.ConsgType==1 and POrw.Tax15Percentf==1)then begin  // Edit ************************** Ihor Trubachov 24*09*2021
+			if(nonblank(POr.FrRate))then begin
+				POrw.RowCost2 = (POrw.Price * 0.15)/(POr.ToRateB1/POr.FrRate);
+			end else begin
+				POrw.RowCost2 = POrw.Price * 0.15;
+			end;
+			MatRowPut(POr,i,POrw);
+		
+			cost = cost + (POrw.RowCost2 * POrw.Quant);
+			
+		end else begin
+			POrw.RowCost2 = 0;
+			MatRowPut(POr,i,POrw);
+		end;
+	end;
+	if(cost!=0)then begin
+		POr.Cost2 = cost;
+	end;
+
+  RETURN;
+END;
+
+
+
 global
 procedure PrintOSDD(Integer wn,Boolean previewf)
 BEGIN
@@ -2554,6 +2611,8 @@ end;
 function Boolean PODClassLocationEFAfter(Integer wn,Boolean changedf)
 BEGIN
   record POVc POr;
+	row POVc POrw;
+	integer i;
 
   if (changedf) then begin
     GetWindowRecord(wn,POr);    
@@ -2561,7 +2620,19 @@ BEGIN
       Beep;
     end;
     PutWindowRecord(wn,POr);
+		
+		POr.Cost2 = 0;	  // Edit ************************** Ihor Trubachov 24*09*2021
+		for(i=0;i<MatRowCnt(POr);i=i+1)begin
+			MatRowGet(POr,i,POrw);
+			if(POrw.ConsgType==1 and POrw.Tax15Percentf==1)then begin
+				POr.Cost2 = POr.Cost2 + (POrw.RowCost2 * POrw.Quant);
+			end;
+		end;
+		PutWindowRecord(wn,POr);
+		
   end;
+	
+	
   PODClassLocationEFAfter = true;
   return;
 end;
@@ -2666,6 +2737,7 @@ BEGIN
 	record INVc INr;
   string 200 art;
 	boolean VATVendor;
+	integer i;
 
   GetWindowRecord(wn,POr);    
   MatRowGet(POr,rownr,POrw);
@@ -2725,6 +2797,12 @@ BEGIN
 		end; // if(CurrentCompany == 29)
 		
 		
+	
+		if(VAT_Consg(POr,rownr))then begin // Edit ************************** Ihor Trubachov 24*09*2021
+			PutWindowRecord(wn,POr);
+		end;
+		
+		
   end;
   PODClassArtCodeEFAfter = true;
   return;
@@ -2756,6 +2834,10 @@ BEGIN
 		// remPODClassTax15PercentSumEFAfter(POr,wn); // Edit ****************** Ihor Trubachov 18*06*2021
 		// remPODClassCons15PercentSumEFAfter(POr,wn); // Edit ****************** Ihor Trubachov 25*06*2021
     PutWindowRecord(wn,POr);
+		if(VAT_Consg(POr,rownr))then begin // Edit ************************** Ihor Trubachov 27*09*2021
+			PutWindowRecord(wn,POr);
+		end;
+		
   end;
   PODClassQuantEFAfter = true;
   return;
@@ -2784,6 +2866,11 @@ BEGIN
 		// remPODClassTax15PercentSumEFAfter(POr,wn);
 		// remPODClassCons15PercentSumEFAfter(POr,wn); // Edit ****************** Ihor Trubachov 25*06*2021
     PutWindowRecord(wn,POr);
+		
+		if(VAT_Consg(POr,rownr))then begin // Edit ************************** Ihor Trubachov 24*09*2021
+			PutWindowRecord(wn,POr);
+		end;
+		
   end;
   PODClassPriceEFAfter = true;
   return;
@@ -3540,13 +3627,31 @@ global
 function Boolean PODClassTax15PercentfEFAfter(Integer wn,Integer fn,Integer rownr,Integer changedf) // Edit ****************** Ihor Trubachov 17*06*2021
 begin
  record POVc POr;
+ row POVc POrw;
+ integer i;
+
+
 
   if (changedf!=0) then begin
-		GetWindowRecord(wn,POr);   
+		GetWindowRecord(wn,POr);
+		
 		remPODClassTax15PercentSumEFAfter(POr,wn);
-		remPODClassCons15PercentSumEFAfter(POr,wn); // Edit ****************** Ihor Trubachov 25*06*2021
+		
+		MatRowGet(POr,rownr,POrw);
+		if(POrw.ConsgType==1)then begin
+			VAT_Consg(POr,rownr); // Edit ************************** Ihor Trubachov 27*09*2021
+			LogText(0,"VAT_Consg");
+		end else begin
+			remPODClassCons15PercentSumEFAfter(POr,wn); // Edit ****************** Ihor Trubachov 25*06*2021
+			LogText(0,"remPODClassCons15PercentSumEFAfter");
+		end;
 		PutWindowRecord(wn,POr);
+		
+
+
   end;
+	
+	
 	
   PODClassTax15PercentfEFAfter = true;
   return;
