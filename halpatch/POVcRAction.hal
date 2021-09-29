@@ -72,6 +72,17 @@ remote updating procedure RecalcORMn(record RcVc);
 remote function Boolean VAT_Consg(var record POVc,integer); // Edit ********** Ihor Trubachov 27*09*2021
 remote function Boolean VAT_Consg_2(var record POVc,integer); // Edit ********** Ihor Trubachov 28*09*2021
 
+remote updating procedure PUFromPODsm; // Edit ********** Ihor Trubachov 28*09*2021
+remote updating function LongInt RecordAction_raPastePOInPU(var record POVc,var record PUVc); // Edit ************************** Ihor Trubachov 28*09*2021
+external procedure PUCalcCostPrice(string,val,Integer,Integer,string,string,
+                                   val,val,val,val,val,
+                                   val,val,val,val,val,val,
+                                   string,var val,val,var val,string,Integer); // Edit ************************** Ihor Trubachov 28*09*2021
+remote function Boolean PUDchrsum(record PUVc,Integer);  // Edit ************************** Ihor Trubachov 28*09*2021
+remote procedure PUSumUp(var record PUVc);  // Edit ************************** Ihor Trubachov 28*09*2021
+remote updating function LongInt RecordAction_raPastePUInVI(record PUVc,var record VIVc,var string); // Edit ************************** Ihor Trubachov 29*09*2021
+external procedure VIOpenPrepExists(string); // Edit ************************** Ihor Trubachov 29*09*2021
+
 SetLangMode(LangRussian,"RUS",0);
 
 //Edit***************************Sasha2,14:44 23.03.2016 {
@@ -999,7 +1010,7 @@ begin
   val bc1v;
 	row POVc POrw,PO2rw;
 	boolean endLoop;
-	integer i,j,counti,countj;
+	integer i,j,counti,countj,nwn;
 	Boolean serportf, flagIV,IV_identic_Credit;
   record LSerialPortDeviceVc LSPDr;
   record RLinkVc RLr;
@@ -1009,6 +1020,12 @@ begin
 	record SHVc SHr;
 	row SHVc SHrw;
 	record RcVc RepSpec;
+	val p, s;
+	LongInt r;
+	record PUVc PUr;
+	row PUVc PUrw;
+	record VIVc VIr;
+	string 255 errmsg;
 	
 	logtext(0,"POVcRecordUpdateAfter start");
 	
@@ -1191,6 +1208,51 @@ begin
 		ClearVector(POrwAfter);
 	end;
 	
+	
+	if(CurrentCompany==29)then begin		// Edit ************************** Ihor Trubachov 28*09*2021
+		if(nonblank(PO2r.InvAddr4) and Left(PO2r.InvAddr4,5)=="EXTPR")then begin
+			
+				r = RecordAction_raPastePOInPU(POr,PUr);
+						
+				switch (r) begin
+					case -1: Beep;
+					case -2: MessageBox(1281,"");
+					case 0:
+						for (i=0;i<matrowcnt(PUr);i=i+1) begin
+							matrowget(PUr,i,PUrw);
+							PUCalcCostPrice(PUrw.ArtCode,PUrw.UPrice,PUr.InclVAT,PUr.NoTAXonVAT,PUrw.Extra,PUr.CurncyCode,
+									PUr.FrRate,PUr.ToRateB1,PUr.ToRateB2,PUr.BaseRate1,PUr.BaseRate2,
+									PUrw.ShipCost,PUrw.RowCost1,PUrw.RowCost2,PUrw.RowCost3,PUrw.RowCost4,PUrw.RowCost5,
+									PUrw.CustomsCost,p,PUrw.Quant,s,PUrw.VATCode,PUr.ExportFlag);
+							PUrw.CostPrice = p;
+							PUrw.Sum = s;
+							MatRowPut(PUr,i,PUrw);
+							PUDchrsum(PUr,i);
+						end;
+						PUSumUp(PUr);
+						if (RecordStore(PUr,true)) then begin end;
+						nwn = OpenWindow("PUDClass",1,0,"","",PUr);
+					otherwise
+						MessageBox(r,"");
+				end;
+			
+			if(ReadRecordLink(POr,1,PUr,RLr))then begin
+				if(!ReadRecordLink(PUr,1,VIr,RLr))then begin
+					r = RecordAction_raPastePUInVI(PUr,VIr,errmsg);
+					switch (r) begin
+						case  0:
+							nwn = OpenWindow("VIDClass",1,0,"","",VIr);
+							VIOpenPrepExists(VIr.VECode);      
+						case -1: Beep;
+						case -2: MessageBox(1281,"");
+						otherwise
+							MessageBox(r,errmsg);
+					end;
+				end;
+			end;
+			
+		end;
+	end;
 	
 	logtext(0,"POVcRecordUpdateAfter finish");
   POVcRecordUpdateAfter = res;
