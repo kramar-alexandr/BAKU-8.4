@@ -40,7 +40,9 @@ external procedure GetFullCurncyRate (var string,Date,var val,var val,var val,va
 external function val CollectItemsQtyBySameCode(record IVVc,row IVVc ); //Edit----------------------Dima  02.03.2016
 remote function Boolean GetRebate2(record INVc,var val,var val,string,string,var val,var Boolean,Date,var string);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 17:20 26.06.2019
 external function string 60 AddObjectToObjectList(string,string);
-
+remote function Boolean GetTempItemPrice(var val,string,var string, date,var string); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- ABR 14:18 24.03.2020
+external function string 60 RemoveObjectFromObjectList(string,string);
+remote procedure GetObjs(string,string,var string);
 
 procedure NormalRowPasteSum(var record IVVc IVp,Integer rownr,var Boolean chsum)
 BEGIN
@@ -960,11 +962,12 @@ begin
   row IVVc IVrw;
   record INVc INr;
   Boolean calcprice;
-  string 255 tstr,obj;
+  string 255 tstr,obj,ItemCode,tpcurrency;
   val t,s,price,vreb,baseprice,temp,tax2prc;
-  string 255 curitemname,salesacc,vatcode,tax2code,location,taxtemplatecode;
+  string 255 curitemname,salesacc,vatcode,tax2code,location,taxtemplatecode,promoobj,custcat,rebcode;
   Boolean dummyf,foundstaff;
-  val sumQtyForDiscount,TPrice,tdisc; //edited by BPI
+  val sumQtyForDiscount,TPrice,tdisc,qty; //edited by BPI
+  date tdp;
 
   if (readf) then begin
     if (ReadFirstMain(IVr,0,true)) then begin end;  
@@ -996,11 +999,30 @@ begin
 //        IVrw.Spec = curitemname;//why item name?
         IVrw.vRebate = vreb;
         
-				if(GetRebate2(INr,TPrice,IVrw.Quant,IVr.CustCat,IVr.RebCode,tdisc,foundstaff,IVr.TransDate,obj)) then begin
-					if(nonblank(obj))then begin
-					  IVrw.Objects = AddObjectToObjectList(IVrw.Objects,obj);
-					end;
-				end;
+				if(GetTempItemPrice(TPrice,ItemCode,tpcurrency,tdp,obj) and IVr.PriceList=="RRP") then begin
+          if(nonblank(obj))then begin
+            promoobj = "";
+            GetObjs("PROMO",IVr.Objects,promoobj);
+            if(nonblank(promoobj))then begin
+              IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,promoobj);
+            end;
+            IVrw.Objects = AddObjectToObjectList(IVrw.Objects,obj); 
+          end;
+        end else begin
+          qty = IVrw.Quant;
+          custcat = IVr.CustCat;
+          rebcode = IVr.RebCode;
+          if(GetRebate2(INr,TPrice,qty,custcat,rebcode,tdisc,foundstaff,tdp,obj)) then begin
+            if(nonblank(obj))then begin
+              promoobj = "";
+              GetObjs("PROMO",IVr.Objects,promoobj);
+              if(nonblank(promoobj))then begin
+                IVrw.Objects = RemoveObjectFromObjectList(IVrw.Objects,promoobj);
+              end;
+              IVrw.Objects = AddObjectToObjectList(IVrw.Objects,obj); 
+            end;
+          end;
+        end;
         
         
         IVrw.SalesAcc = salesacc;
