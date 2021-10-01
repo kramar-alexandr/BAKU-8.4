@@ -13,12 +13,15 @@ begin
 	record ORVc ORr;
 	row ORVc ORrw;
 	record RLinkVc RLr;
-	Boolean TrHs,testf,testf1;
-	Integer i,j, cnrw;
+	record RetVc Retr;
+	row RetVc Retrw;
+	Boolean TrHs,TrHs1,testf,testf1;
+	Integer i,j,k, cnrw, cntRet,cntGet;
 	vector val vSumOrders;
 	vector Date vSt_End_Order;
 	vector String 255 vFullName, vEmail;
 	array string 255 tags;
+	val RetSum, Ret;
 
 	StartReportnoheaderjob("Отчет по клиентам Е-Коммерс");
 
@@ -39,6 +42,9 @@ begin
 	while(LoopMain(ORr,1,TrHs))begin
 		testf = true;
 		testf1 = true;
+		cntGet = 0;
+		cntRet = 0;
+	
 	
 		if(nonblank(ORr.Phone))then begin
 		
@@ -47,15 +53,39 @@ begin
 			vEmail[ORr.Phone] = ORr.eMail;
 			vSumOrders[ORr.Phone & "Qty"] = vSumOrders[ORr.Phone & "Qty"] + 1;
 			
+			
+			
 			cnrw = MatRowCnt(ORr);
 			for(i=0;i<cnrw;i=i+1)begin
 				MatRowGet(ORr,i,ORrw);
-
+				cntGet = cntGet + ORrw.Quant;
+				
+				RetSum = blankval;
+				Retr.OrdNr = ORr.SerNr;
+				TrHs1 = true;
+				Ret = blankval;
+				while(LoopKey("OrdNr",Retr,1,TrHs1))begin
+					if(Retr.OrdNr!=ORr.SerNr)then begin TrHs1 = false; end;
+					
+					if(TrHs1)then begin
+						for(k=0;k<MatRowCnt(Retr);k=k+1)begin
+							MatRowGet(Retr,k,Retrw);
+							
+							cntRet = cntRet + Retrw.Quant;
+							if(Retrw.ArtCode==ORrw.ArtCode)then begin
+								Ret = Retrw.BBCostPrice * Retrw.Quant;
+								RetSum = RetSum+Ret;
+								// TrHs1 = false;
+							end;
+						end;
+					end;
+				end;
+				
 				if(blank(ORrw.ECReservStock))then begin
 					if(testf1)then begin
 						if(ReadRecordLink(ORr,1,POr,RLr))then begin
-							if(ReadRecordLink(POr,1,PUr,RLr))then begin
-								vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice;
+							if(ReadRecordLink(POr,1,PUr,RLr) and PUr.OKFlag==1)then begin
+								vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice - Ret; ////
 								testf1 = false;
 							end;
 						end;
@@ -63,8 +93,8 @@ begin
 				end else begin
 					if(testf)then begin
 						j=1;
-						while(ReadRecordLink(ORr,j,PUr,RLr))begin
-							vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice;
+						while(ReadRecordLink(ORr,j,PUr,RLr) and PUr.OKFlag==1)begin
+							vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice - Ret; ////
 							j=j+1;
 							testf = false;
 						end;
@@ -94,17 +124,17 @@ begin
 				ARr.InvoiceNr = IVr.SerNr;
 			
 				if(ReadFirstMain(ARr,1,true))then begin
-					vSumOrders[ORr.Phone & "Sum"] = vSumOrders[ORr.Phone & "Sum"] + (IVr.Sum4 - ARr.RVal);
+					vSumOrders[ORr.Phone & "Sum"] = vSumOrders[ORr.Phone & "Sum"] + (IVr.Sum4 - ARr.RVal) - RetSum; ////
 				end;
 				
 			end;
-			
 			
 			
 		end;
 		
 	end;
 	
+
 	
 
 	GetVectorTags(vFullName,tags);
@@ -115,7 +145,16 @@ begin
 		OutString(40,0,vSt_End_Order[tags[i] & "Str"],false);
 		OutString(50,0,vSt_End_Order[tags[i] & "End"],false);
 		OutString(60,0,vSumOrders[tags[i] & "Qty"],false);
-		OutString(70,0,vSumOrders[tags[i] & "Sum"],false);
+		if((vSumOrders[tags[i] & "Sum"]==0 or vSumOrders[tags[i] & "Sum"]==blankval) and cntGet > cntRet)then begin
+			OutString(70,0,"",false);
+		end else begin
+			if(cntGet<=cntRet)then begin
+				OutString(70,0,0,false);
+			end else begin
+				OutString(70,0,vSumOrders[tags[i] & "Sum"],false);
+			end;
+			
+		end;
 		OutString(80,0,vSumOrders[tags[i] & "Cst"],false);
 		OutString(90,0,vEmail[tags[i]],false);
 		OutString(100,0,tags[i],false);
