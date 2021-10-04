@@ -117,6 +117,10 @@ BEGIN
 			POrw.Tax15Percentf=1;
 			MatRowPut(POr,i,POrw);
 		end;
+		if(POrw.ConsgType==1 and rownr==(-3))then begin
+			POrw.Tax15Percentf=0;
+			MatRowPut(POr,i,POrw);
+		end;
 		
 		if(POrw.ConsgType==1 and POrw.Tax15Percentf==1)then begin  // Edit ************************** Ihor Trubachov 24*09*2021
 			if(nonblank(POr.FrRate))then begin
@@ -178,6 +182,43 @@ BEGIN
 
   RETURN;
 END;
+
+
+global
+function Boolean VAT_Consg_3(var record POVc POr,integer rownr) // Edit ********** Ihor Trubachov 04*10*2021
+BEGIN
+	row POVc POrw;
+	integer i, cnrow;
+	val cost;
+
+	cnrow = MatRowCnt(POr);
+	
+	if(rownr < cnrow) then begin
+		for(i=rownr;i<cnrow;i=i+1)begin 
+			MatRowGet(POr,i,POrw);
+			if(POrw.ConsgType==1)then begin
+				POrw.Tax15Percentf=0;
+				POrw.RowCost2 = 0;
+				MatRowPut(POr,i,POrw);
+			end;
+		end;
+		
+		cost = 0;
+		for(i=0;i<MatRowCnt(POr);i=i+1)begin
+			MatRowGet(POr,i,POrw);
+			cost = cost + (POrw.RowCost2 * POrw.Quant);
+		end;
+		if(cost!=0)then begin
+			POr.Cost2 = cost;
+		end;
+		
+		// VAT_Consg(POr,-1);
+		
+	end;
+
+  RETURN;
+END;
+
 
 global
 procedure PrintOSDD(Integer wn,Boolean previewf)
@@ -335,6 +376,12 @@ BEGIN
         DropSHFromPODsm;
         goto LPUFromPODsm; 
     end;
+		
+		if(POr.Cost2==blankval or POr.Cost2<=0)then begin	// Edit ********** Ihor Trubachov 04*10*2021
+				MessageBox(0,"Поле 15% таможня на товары консигнации не заполнено!!!");
+			 goto LPUFromPODsm; 
+		end;
+		
     if (UserCanAction("POToPU",true)) then begin
       BlockLoad(POSb);
       if (POr.Closed==0) then begin
