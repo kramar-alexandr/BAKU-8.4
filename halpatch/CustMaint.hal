@@ -34,6 +34,8 @@ external updating procedure QdDel1LevCat(record BtrxFirstLevelCatVc); // _-_-_-_
 external updating procedure QdDel2LevCat(record BtrxSecondLevelCatVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:46 21.09.2021
 external updating procedure QdDel3LevCat(record BtrxThirdLevelCatVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:46 21.09.2021
 external updating procedure QdDel4LevCat(record BtrxFourthLevelCatVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:46 21.09.2021
+external function Boolean FindStringInString(string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 02, 16 03 2021 y. at 1:26:03 PM
+external function Integer FindFirstPosStringInString( string, string); //Edit----------------------Dima  02.03.2015
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -8830,78 +8832,174 @@ end;
 global webpublic procedure WebCollectXMLItems()
 begin
 	record ORVc ORr;
-	area text,replyPr;
-	string 255 tstr,code,brand,price,name,paramName,parseString,coding;
+	area text,replyPr, tmparea;
+	string 255 tstr,code,brand,price,name,model,paramName,parseString,coding,tstr2;
 	integer i,posa,cnt,paramCnt,j,countstr,s;
 	xml xmlreply;
 	boolean codeCheck, TrHs;
 	vector boolean CodeInstf;
+	vector string 255 vbrand,vprice,vname;
+	array string 255 acode;
 	record GlobalItemVc GIr;
+	longint cntl;
 	
-	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,5);
+	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,500);
 	logtext(0,"<><><><><><><><><><><><><><><><><>  CollectXMLItems start  <><><><><><><><><><><><><><><><><>");
-	// xmlreply = ParseXMLArea(replyPr);
-	logtext(0,cnt & " XmlCountChildren!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-	posa = 0;
-	cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
-	logtext(0,cnt & " XmlCountChildren");
-	for(i=0;i<cnt;i=i+1) begin
-		if (FileExists("stop")) then begin i = cnt; end;
-		brand = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
-		price = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/price");
-		name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/description");
-		if(blank(name)) then begin
-			name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/model");
+	writeareatofile(replyPr,"replyFile.txt",0);
+	
+	
+	cntl = 99000;
+	j = 0;
+	//for (i=cntl-1;i>0;i=i-1) begin
+	for (i=0;i<cntl;i=i+1) begin
+		tstr = "";
+		tstr = GetLineFromArea(replyPr,i);
+		code = "";
+		if (left(tstr,24)=="<param name=\"" & USetStr(36419) & "\">") then begin
+			tstr = mid (tstr,24,len(tstr) - 32);
+			posa = 0;
+			ExtractObj(tstr,posa,tstr2);
+			while(nonblank(tstr2)) begin
+				codeCheck = false;
+				tstr2 = Trim(tstr2);
+				if (len(tstr2) == 11) then begin
+					// logtext (0,tstr2);
+					codeCheck = true;
+					for(countstr=0;countstr<len(tstr2);countstr=countstr+1) begin
+						if((asc(Mid(tstr2,countstr,1))<48 or asc(Mid(tstr2,countstr,1))>57) and asc(Mid(tstr2,countstr,1))!=73 and asc(Mid(tstr2,countstr,1))!=78)  then begin
+							codeCheck = false;
+						end;
+					end;
+				end;
+				if(codeCheck) then begin
+					code = tstr2;
+				end;
+				ExtractObj(tstr,posa,tstr2);
+			end;
+			acode[j] = code;
+			// logtext(0,"acode " & acode[j]);
+			j = j + 1;
 		end;
-		j = 0;
-		code = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/productId");
-		// paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
-		// while(nonblank(paramName)) begin
-			// coding = "";
-			// coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
-			// if(coding == "Реквизиты") then begin
-				// parseString = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
-				// posa = 0;
-				// ExtractObj(parseString,posa,tstr);
-				// while(nonblank(tstr)) begin
-					// codeCheck = false;
-					// tstr = Trim(tstr);
-					// if (len(tstr) == 11) then begin
-						// logtext (0,tstr);
-						// codeCheck = true;
-						// for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
-							// if((asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57) and asc(Mid(tstr,countstr,1))!=73 and asc(Mid(tstr,countstr,1))!=78)  then begin
-								// codeCheck = false;
-							// end;
-						// end;
-					// end;
-					// if(codeCheck) then begin
-						// code = tstr;
-					// end;
-					// ExtractObj(parseString,posa,tstr);
-				// end;
-			// end;
-			// j = j + 1;
-			// paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
-		// end;
-		if(nonblank(code)) then begin 
-			queued.CreateGlobalItem(code,brand,price,name);
-			MilliSleep(50);
-			CodeInstf["ECMXA" & code] = true;
+		if (left(tstr,8)=="<vendor>" and blank(brand)) then begin
+			brand =  mid (tstr,8,len(tstr)-17);
+		end;
+		if (left(tstr,7)=="<price>" and blank(price)) then begin
+			price = mid (tstr,7,len(tstr)-15);
+		end;
+		if (left(tstr,13)=="<description>" and blank(name)) then begin
+			name = mid (tstr,13,len(tstr)-27);
+		end;
+		if (left(tstr,7)=="<model>" and blank(model)) then begin
+			model = mid (tstr,7,len(tstr)-15);
+		end;
+		if (nonblank(code)) then begin
+			if (blank(vbrand[code])) then begin
+				vbrand[code] =  brand;
+				// logtext(0,"vbrand " & vbrand[code]);
+			end;
+			if (blank(vprice[code])) then begin
+				vprice[code] = price;
+				// logtext(0,"vprice " & vprice[code]);
+			end;
+			if (blank(vname[code])) then begin
+				vname[code] = name;
+				// logtext(0,"vname " & vname[code]);
+			end;
+			if (blank(vname[code])) then begin
+				vname[code] = model;
+				// logtext(0,"vname " & vname[code]);
+			end;
+			brand = "";
+			price = "";
+			name = "";
+			model = "";
+			logtext(0,code);
 		end;
 	end;
-	// GIr.Code = "ECMXA";
-	// TrHs = true;
-	// while (loopMain(Gir,1,TrHs)) begin
-		// if (FileExists("stop")) then begin TrHs = false; end;
-		// if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
-		// if (TrHs and !CodeInstf[GIr.Code]) then begin
-			// queued.Instock0(GIr.Code);
-			// MilliSleep(50);
-		// end;
-	// end;
+	
+	for (i=0;i<j;i=i+1) begin
+		if (nonblank(acode[i])) then begin
+			queued.CreateGlobalItem(acode[i],vbrand[acode[i]],vbrand[acode[i]],vbrand[acode[i]]);
+			MilliSleep(50);
+			CodeInstf["ECMXA" & acode[i]] = true;
+		end;
+	end;
+	
+	
+	GIr.Code = "ECMXA";
+	TrHs = true;
+	while (loopMain(Gir,1,TrHs)) begin
+		if (FileExists("stop")) then begin TrHs = false; end;
+		if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
+		if (TrHs and !CodeInstf[GIr.Code]) then begin
+			queued.Instock0(GIr.Code);
+			MilliSleep(50);
+		end;
+	end;
 	logtext(0,"<><><><><><><><><><><><><><><><><>  CollectXMLItems finish  <><><><><><><><><><><><><><><><><>");
 	writeareatofile(text,"areafromrequest.txt",0);
+	
+	// xmlreply = ParseXMLArea(replyPr);
+	// posa = 0;
+	// cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
+	// logtext(0,cnt & " XmlCountChildren");
+	// for(i=0;i<cnt;i=i+1) begin
+		// if (FileExists("stop")) then begin i = cnt; end;
+		// brand = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
+		// price = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/price");
+		// name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/description");
+		// if(blank(name)) then begin
+			// name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/model");
+		// end;
+		// j = 0;
+		// code = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/productId");
+		// // paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		// // while(nonblank(paramName)) begin
+			// // coding = "";
+			// // coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
+			// // if(coding == "Реквизиты") then begin
+				// // parseString = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
+				// // posa = 0;
+				// // ExtractObj(parseString,posa,tstr);
+				// // while(nonblank(tstr)) begin
+					// // codeCheck = false;
+					// // tstr = Trim(tstr);
+					// // if (len(tstr) == 11) then begin
+						// // logtext (0,tstr);
+						// // codeCheck = true;
+						// // for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
+							// // if((asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57) and asc(Mid(tstr,countstr,1))!=73 and asc(Mid(tstr,countstr,1))!=78)  then begin
+								// // codeCheck = false;
+							// // end;
+						// // end;
+					// // end;
+					// // if(codeCheck) then begin
+						// // code = tstr;
+					// // end;
+					// // ExtractObj(parseString,posa,tstr);
+				// // end;
+			// // end;
+			// // j = j + 1;
+			// // paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		// // end;
+		// if(nonblank(code)) then begin 
+			// queued.CreateGlobalItem(code,brand,price,name);
+			// MilliSleep(50);
+			// CodeInstf["ECMXA" & code] = true;
+		// end;
+	// end;
+	// // GIr.Code = "ECMXA";
+	// // TrHs = true;
+	// // while (loopMain(Gir,1,TrHs)) begin
+		// // if (FileExists("stop")) then begin TrHs = false; end;
+		// // if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
+		// // if (TrHs and !CodeInstf[GIr.Code]) then begin
+			// // queued.Instock0(GIr.Code);
+			// // MilliSleep(50);
+		// // end;
+	// // end;
+	// logtext(0,"<><><><><><><><><><><><><><><><><>  CollectXMLItems finish  <><><><><><><><><><><><><><><><><>");
+	// writeareatofile(text,"areafromrequest.txt",0);
 
 return;
 end;
@@ -9470,10 +9568,16 @@ begin
 	val quant;
 	record ExpProvItemRegVc EPIRr;
 	json jsresponse;
+	area tmparea;
+	string 255 model,tstr2;
+	vector string 255 vbrand,vprice,vname;
+	array string 255 acode;
+	longint cntl;
 	
 	logtext(0,"|||	WebCollectXMLGeneralItem start	|||");
 	
-
+	
+	SetCompany(29,false);
 
 	
 	// CollectXMLZOOMagItems
@@ -9495,7 +9599,6 @@ begin
 	
 //______________________________________________________________________________________________________ 1 - CollectXMLNovasItems
 
-	SetCompany(29,false);
 	if (FileExists("NovasHomeOzzi.xml")) then begin
 		addfiletoarea("NovasHomeOzzi.xml",replyPr,0);
 		logtext(0,"CollectXMLNovasItems start");
@@ -9647,72 +9750,166 @@ begin
 
 //______________________________________________________________________________________________________ 4 - CollectXMLItems
 	
-	if (CountLinesInArea(replyPr4)>10) then begin
-		// SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
-		xmlreply4 = ParseXMLArea(replyPr4);
-		logtext(0,"CollectXMLItems start");
-		posa = 0;
-		cnt = XmlCountChildren(xmlreply4,"yml_catalog/shop/offers");
-		for(i=0;i<cnt;i=i+1) begin
-			if (FileExists("Stop.txt")) then begin
-				i=cnt;
-			end;
-			brand = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
-			price = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/price");
-			name = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/description");
-			if(blank(name)) then begin
-				name = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/model");
-			end;
-			j = 0;
+	if (true) then begin
+	
+	
+	
+	
+		cntl = 99000;
+		j = 0;
+		//for (i=cntl-1;i>0;i=i-1) begin
+		for (i=0;i<cntl;i=i+1) begin
+			tstr = "";
+			tstr = GetLineFromArea(replyPr4,i);
 			code = "";
-			paramName = XmlGetAttribute(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
-			while(nonblank(paramName)) begin
-				coding = "";
-				coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
-				if(coding == "Реквизиты") then begin
-					parseString = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
-					posa = 0;
-					ExtractObj(parseString,posa,tstr);
-					while(nonblank(tstr)) begin
-						codeCheck = false;
-						tstr = Trim(tstr);
-						if (len(tstr) == 11) then begin
-							// logtext (0,tstr);
-							codeCheck = true;
-							for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
-								if((asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57) and asc(Mid(tstr,countstr,1))!=73 and asc(Mid(tstr,countstr,1))!=78)  then begin
-									codeCheck = false;
-								end;
+			if (left(tstr,24)=="<param name=\"" & USetStr(36419) & "\">") then begin
+				tstr = mid (tstr,24,len(tstr) - 32);
+				posa = 0;
+				ExtractObj(tstr,posa,tstr2);
+				while(nonblank(tstr2)) begin
+					codeCheck = false;
+					tstr2 = Trim(tstr2);
+					if (len(tstr2) == 11) then begin
+						// logtext (0,tstr2);
+						codeCheck = true;
+						for(countstr=0;countstr<len(tstr2);countstr=countstr+1) begin
+							if((asc(Mid(tstr2,countstr,1))<48 or asc(Mid(tstr2,countstr,1))>57) and asc(Mid(tstr2,countstr,1))!=73 and asc(Mid(tstr2,countstr,1))!=78)  then begin
+								codeCheck = false;
 							end;
 						end;
-						if(codeCheck) then begin
-							code = tstr;
-						end;
-						ExtractObj(parseString,posa,tstr);
 					end;
+					if(codeCheck) then begin
+						code = tstr2;
+					end;
+					ExtractObj(tstr,posa,tstr2);
 				end;
+				acode[j] = code;
+				// logtext(0,"acode " & acode[j]);
 				j = j + 1;
-				paramName = XmlGetAttribute(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
 			end;
-			if(nonblank(code)) then begin 
-				queued.CreateGlobalItem(code,brand,price,name);
-				MilliSleep(50);
-				CodeInstf["ECMXA" & code] = true;
+			if (left(tstr,8)=="<vendor>" and blank(brand)) then begin
+				brand =  mid (tstr,8,len(tstr)-17);
+			end;
+			if (left(tstr,7)=="<price>" and blank(price)) then begin
+				price = mid (tstr,7,len(tstr)-15);
+			end;
+			if (left(tstr,13)=="<description>" and blank(name)) then begin
+				name = mid (tstr,13,len(tstr)-27);
+			end;
+			if (left(tstr,7)=="<model>" and blank(model)) then begin
+				model = mid (tstr,7,len(tstr)-15);
+			end;
+			if (nonblank(code)) then begin
+				if (blank(vbrand[code])) then begin
+					vbrand[code] =  brand;
+					// logtext(0,"vbrand " & vbrand[code]);
+				end;
+				if (blank(vprice[code])) then begin
+					vprice[code] = price;
+					// logtext(0,"vprice " & vprice[code]);
+				end;
+				if (blank(vname[code])) then begin
+					vname[code] = name;
+					// logtext(0,"vname " & vname[code]);
+				end;
+				if (blank(vname[code])) then begin
+					vname[code] = model;
+					// logtext(0,"vname " & vname[code]);
+				end;
+				brand = "";
+				price = "";
+				name = "";
+				model = "";
 			end;
 		end;
+		
+		for (i=0;i<j;i=i+1) begin
+			if (nonblank(acode[i])) then begin
+				queued.CreateGlobalItem(acode[i],vbrand[acode[i]],vbrand[acode[i]],vbrand[acode[i]]);
+				MilliSleep(50);
+				CodeInstf["ECMXA" & acode[i]] = true;
+			end;
+		end;
+		
+		
 		GIr.Code = "ECMXA";
 		TrHs = true;
 		while (loopMain(Gir,1,TrHs)) begin
-			if (FileExists("Stop.txt")) then begin
-				TrHs = false;
-			end;
+			if (FileExists("stop")) then begin TrHs = false; end;
 			if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
 			if (TrHs and !CodeInstf[GIr.Code]) then begin
 				queued.Instock0(GIr.Code);
 				MilliSleep(50);
 			end;
 		end;
-		ResetLoop(Gir);
+	
+	
+	
+	
+		// // SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
+		// logtext(0,"CollectXMLItems start");
+		// posa = 0;
+		// cnt = XmlCountChildren(xmlreply4,"yml_catalog/shop/offers");
+		// for(i=0;i<cnt;i=i+1) begin
+			// if (FileExists("Stop.txt")) then begin
+				// i=cnt;
+			// end;
+			// brand = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
+			// price = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/price");
+			// name = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/description");
+			// if(blank(name)) then begin
+				// name = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/model");
+			// end;
+			// j = 0;
+			// code = "";
+			// paramName = XmlGetAttribute(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+			// while(nonblank(paramName)) begin
+				// coding = "";
+				// coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
+				// if(coding == "Реквизиты") then begin
+					// parseString = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
+					// posa = 0;
+					// ExtractObj(parseString,posa,tstr);
+					// while(nonblank(tstr)) begin
+						// codeCheck = false;
+						// tstr = Trim(tstr);
+						// if (len(tstr) == 11) then begin
+							// // logtext (0,tstr);
+							// codeCheck = true;
+							// for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
+								// if((asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57) and asc(Mid(tstr,countstr,1))!=73 and asc(Mid(tstr,countstr,1))!=78)  then begin
+									// codeCheck = false;
+								// end;
+							// end;
+						// end;
+						// if(codeCheck) then begin
+							// code = tstr;
+						// end;
+						// ExtractObj(parseString,posa,tstr);
+					// end;
+				// end;
+				// j = j + 1;
+				// paramName = XmlGetAttribute(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+			// end;
+			// if(nonblank(code)) then begin 
+				// queued.CreateGlobalItem(code,brand,price,name);
+				// MilliSleep(50);
+				// CodeInstf["ECMXA" & code] = true;
+			// end;
+		// end;
+		// GIr.Code = "ECMXA";
+		// TrHs = true;
+		// while (loopMain(Gir,1,TrHs)) begin
+			// if (FileExists("Stop.txt")) then begin
+				// TrHs = false;
+			// end;
+			// if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
+			// if (TrHs and !CodeInstf[GIr.Code]) then begin
+				// queued.Instock0(GIr.Code);
+				// MilliSleep(50);
+			// end;
+		// end;
+		// ResetLoop(Gir);
 	end;
 	writeareatofile(text4,"areafromrequest.txt",0);
 
