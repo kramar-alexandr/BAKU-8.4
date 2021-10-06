@@ -9858,10 +9858,13 @@ begin
 	record VaucherVc Vr;
 	record RebVc Rebr;
 	record CompaniesBlock Compb;
+	record IVVc IVr;
+	row IVVc IVrw;
 	row CompaniesBlock Comprw;
-	boolean TrHs, testf;
-	integer comp,CompQty,i;
-	vector string 150 vRebCode;
+	boolean TrHs,TrHs2,testf,foundf;
+	integer comp,CompQty,i,j,k,l;
+	vector string 150 vRebCode,vAddObject;
+	vector val vVra0;
 	array string 150 aRebCode;
 	
 	blockload(Compb);
@@ -9880,22 +9883,45 @@ begin
 		end;
 	end;
 	getvectortags(vRebCode,aRebCode);
-	for(i=0;i<aRebCode.length;i=i+1)begin
-		logtext(0,"vRebCode[aRebCode[i]] = " & vRebCode[aRebCode[i]]);
-		logtext(0,"vRebCode[i] = " & vRebCode[i]);
-		// Rebr.Code = aRebCode[vRebCode[i]];
-	end;
 	
-	// CompQty = matrowcnt(Compb);
-	// for(comp=0;comp<CompQty;comp=comp+1) begin
-		// matrowget(Compb,comp,Comprw);
-		// if(Comprw.ActiveStatus==0)then begin
-			// SetCompany(comp+1,false);
+	CompQty = matrowcnt(Compb);
+	for(comp=0;comp<CompQty;comp=comp+1) begin
+		matrowget(Compb,comp,Comprw);
+		if(Comprw.ActiveStatus==0)then begin
+			SetCompany(comp+1,false);
+			foundf = false;
+			for(i=0;i<aRebCode.length;i=i+1)begin
+				Rebr.Code = vRebCode[aRebCode[i]];
+				if(ReadFirstMain(Rebr,1,true))then begin
+					if(Rebr.vra0>0)then begin
+						vVra0[Rebr.Code] = Rebr.vra0;
+						vAddObject[Rebr.Code] = Rebr.AddObject;
+						foundf = true;
+					end;
+				end;
+			end;
 			
-			
-
-		// end;
-	// end;
+			if(foundf)then begin
+				TrHs2 = true;
+				IVr.InvDate = CurrentDate;
+				while(LoopBackKey("InvDate",IVr,1,TrHs2)) begin
+					if(IVr.InvDate<StringToDate("15/09/2021")) then begin TrHs = false; end;
+					if(nonblank(vRebCode[IVr.AddRebCode]))then begin
+						for(k=0;k<matrowcnt(IVr);k=k+1)begin
+							matrowget(IVr,k,IVrw);
+							if(IVrw.vRebate==vVra0[IVr.AddRebCode] and IVrw.vRebate>0)then begin
+								if(!setinset(vAddObject[IVr.AddRebCode],IVrw.Objects))then begin
+									IVrw.Objects = AddObjectToObjectList(IVrw.Objects,vAddObject[IVr.AddRebCode]);
+									logtext(0,"comp / IVr.SerNr - " & comp & " / " & IVr.SerNr);
+								end;
+							end;
+						end;
+					end;
+				end;
+				ResetLoop(IVr);
+			end;
+		end;
+	end;
 			
 	
 	logtext(0,"CheckPercentMn end");
