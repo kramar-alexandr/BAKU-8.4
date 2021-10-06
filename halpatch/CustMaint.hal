@@ -10054,3 +10054,96 @@ begin
 return;
 end;
 
+
+global 	//Edit **********************************************Vas-P	06/10/2021
+updating procedure CheckPercentMn()
+begin
+	record VaucherVc Vr;
+	record RebVc Rebr;
+	record CompaniesBlock Compb;
+	record IVVc IVr,oldIVr;
+	row IVVc IVrw;
+	row CompaniesBlock Comprw;
+	boolean TrHs,TrHs2,testf,foundf,needchange;
+	integer comp,CompQty,i,j,k,l;
+	vector string 150 vRebCode,vAddObject;
+	vector val vVra0;
+	array string 150 aRebCode;
+	
+	blockload(Compb);
+
+	logtext(0,"CheckPercentMn start"); 
+	
+	Vr.BarCode = "";
+	TrHs = true;
+	while(loopmain(Vr,1,TrHs))begin
+		testf = true;
+		if(blank(Vr.AddRebCode))then begin testf = false; end;
+		if(testf)then begin
+			logtext(0,"Vr.AddRebCode = " & Vr.AddRebCode);
+			vRebCode[Vr.AddRebCode] = Vr.AddRebCode;
+		end;
+	end;
+	getvectortags(vRebCode,aRebCode);
+	
+	CompQty = matrowcnt(Compb);
+	for(comp=0;comp<CompQty;comp=comp+1) begin
+		matrowget(Compb,comp,Comprw);
+		if(Comprw.ActiveStatus==0)then begin
+			SetCompany(comp+1,false);
+			foundf = false;
+			for(i=0;i<aRebCode.length;i=i+1)begin
+				Rebr.Code = vRebCode[aRebCode[i]];
+				if(ReadFirstMain(Rebr,1,true))then begin
+					if(Rebr.vra0>0)then begin
+						vVra0[Rebr.Code] = Rebr.vra0;
+						vAddObject[Rebr.Code] = Rebr.AddObject;
+						foundf = true;
+					end;
+				end;
+			end;
+			logtext(0,"before foundf");
+			if(foundf)then begin
+				logtext(0,"after foundf");
+				ResetLoop(IVr);
+				TrHs2 = true;
+				IVr.InvDate = CurrentDate;
+				while(LoopBackKey("InvDate",IVr,1,TrHs2)) begin
+				  recordcopy(oldIVr,IVr);
+				  needchange = false;
+					if(IVr.InvDate<StringToDate("15/09/2021")) then begin TrHs2 = false; end;
+					if(nonblank(vRebCode[IVr.AddRebCode]))then begin
+						for(k=0;k<matrowcnt(IVr);k=k+1)begin
+							matrowget(IVr,k,IVrw);
+							if(IVrw.vRebate==vVra0[IVr.AddRebCode] and IVrw.vRebate>0)then begin
+								if(!setinset(vAddObject[IVr.AddRebCode],IVrw.Objects))then begin
+								  needchange = true;
+								  logtext(0,IVrw.Objects);
+									IVrw.Objects = AddObjectToObjectList(IVrw.Objects,vAddObject[IVr.AddRebCode]);
+									logtext(0,IVrw.Objects);
+									matrowput(IVr,k,IVrw);
+									logtext(0,"comp / IVr.SerNr - " & comp & " / " & IVr.SerNr);
+								end;
+							end;
+						end;
+					end;
+					if(needchange)then begin
+					  IVr.OKFlag = 0;
+					  if(recordupdate(oldIVr,IVr,true)==0)then begin
+					    recordcopy(oldIVr,IVr);
+					    IVr.OKFlag = 1;
+              recordupdate(oldIVr,IVr,true);
+					  end;
+					end;
+				end;
+				logtext(0,"after while");
+			end;
+		end;
+	end;
+			
+	
+	logtext(0,"CheckPercentMn end");
+
+
+return;
+end;
