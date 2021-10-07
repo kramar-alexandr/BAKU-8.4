@@ -34,6 +34,8 @@ external updating procedure QdDel1LevCat(record BtrxFirstLevelCatVc); // _-_-_-_
 external updating procedure QdDel2LevCat(record BtrxSecondLevelCatVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:46 21.09.2021
 external updating procedure QdDel3LevCat(record BtrxThirdLevelCatVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:46 21.09.2021
 external updating procedure QdDel4LevCat(record BtrxFourthLevelCatVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:46 21.09.2021
+external function Boolean FindStringInString(string,string);// Edit ************************** BPI Ukraine - KramarAlexandr - 02, 16 03 2021 y. at 1:26:03 PM
+external function Integer FindFirstPosStringInString( string, string); //Edit----------------------Dima  02.03.2015
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -8818,7 +8820,7 @@ begin
 			if (RSf) then begin
 				GIWasUpdated(GIr,LogGIr," GIWasUpdatedlog 30");
 				RecordStore(GIr,true);
-				// logtext(0,GIr.Code & "InStock = 0");
+				logtext(0,GIr.Code & "InStock = 0");
 			end;
 		// end;	
 	end;
@@ -8830,74 +8832,175 @@ end;
 global procedure CollectXMLItems()
 begin
 	record ORVc ORr;
-	area text,replyPr;
-	string 255 tstr,code,brand,price,name,paramName,parseString,coding;
-	integer i,posa,cnt,paramCnt,j,countstr,s;
+	area text,replyPr, tmparea;
+	string 255 tstr,code,brand,price,name,model,paramName,parseString,coding,tstr2;
+	longint i,cnt,paramCnt,j,countstr,s;
+	integer posa;
 	xml xmlreply;
 	boolean codeCheck, TrHs;
 	vector boolean CodeInstf;
+	vector string 255 vbrand,vprice,vname;
+	array string 255 acode;
 	record GlobalItemVc GIr;
+	longint cntl;
 	
-	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
-	logtext(0,"CollectXMLItems start");
-	xmlreply = ParseXMLArea(replyPr);
-	posa = 0;
-	cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
-	for(i=0;i<cnt;i=i+1) begin
-		brand = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
-		price = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/price");
-		name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/description");
-		if(blank(name)) then begin
-			name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/model");
-		end;
-		j = 0;
+	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,500);
+	logtext(0,"<><><><><><><><><><><><><><><><><>  CollectXMLItems start  <><><><><><><><><><><><><><><><><>");
+	writeareatofile(replyPr,"replyFile.txt",0);
+	
+	
+	cntl = 99000;
+	j = 0;
+	//for (i=cntl-1;i>0;i=i-1) begin
+	for (i=0;i<cntl;i=i+1) begin
+		tstr = "";
+		tstr = GetLineFromArea(replyPr,i);
 		code = "";
-		paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
-		while(nonblank(paramName)) begin
-			coding = "";
-			coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
-			if(coding == "Реквизиты") then begin
-				parseString = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
-				posa = 0;
-				ExtractObj(parseString,posa,tstr);
-				while(nonblank(tstr)) begin
-					codeCheck = false;
-					tstr = Trim(tstr);
-					if (len(tstr) == 11) then begin
-						// logtext (0,tstr);
-						codeCheck = true;
-						for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
-							if((asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57) and asc(Mid(tstr,countstr,1))!=73 and asc(Mid(tstr,countstr,1))!=78)  then begin
-								codeCheck = false;
-							end;
+		if (left(tstr,24)=="<param name=\"" & USetStr(36419) & "\">") then begin
+			tstr = mid (tstr,24,len(tstr) - 32);
+			posa = 0;
+			ExtractObj(tstr,posa,tstr2);
+			while(nonblank(tstr2)) begin
+				codeCheck = false;
+				tstr2 = Trim(tstr2);
+				if (len(tstr2) == 11) then begin
+					// logtext (0,tstr2);
+					codeCheck = true;
+					for(countstr=0;countstr<len(tstr2);countstr=countstr+1) begin
+						if((asc(Mid(tstr2,countstr,1))<48 or asc(Mid(tstr2,countstr,1))>57) and asc(Mid(tstr2,countstr,1))!=73 and asc(Mid(tstr2,countstr,1))!=78)  then begin
+							codeCheck = false;
 						end;
 					end;
-					if(codeCheck) then begin
-						code = tstr;
-					end;
-					ExtractObj(parseString,posa,tstr);
 				end;
+				if(codeCheck) then begin
+					code = tstr2;
+				end;
+				ExtractObj(tstr,posa,tstr2);
 			end;
+			acode[j] = code;
+			// logtext(0,"acode " & acode[j]);
 			j = j + 1;
-			paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
 		end;
-		if(nonblank(code)) then begin 
-			queued.CreateGlobalItem(code,brand,price,name);
-			MilliSleep(50);
-			CodeInstf["ECMXA" & code] = true;
+		if (left(tstr,8)=="<vendor>" and blank(brand)) then begin
+			brand =  mid (tstr,8,len(tstr)-17);
+		end;
+		if (left(tstr,7)=="<price>" and blank(price)) then begin
+			price = mid (tstr,7,len(tstr)-15);
+		end;
+		if (left(tstr,13)=="<description>" and blank(name)) then begin
+			name = mid (tstr,13,len(tstr)-27);
+		end;
+		if (left(tstr,7)=="<model>" and blank(model)) then begin
+			model = mid (tstr,7,len(tstr)-15);
+		end;
+		if (nonblank(code)) then begin
+			if (blank(vbrand[code])) then begin
+				vbrand[code] =  brand;
+				// logtext(0,"vbrand " & vbrand[code]);
+			end;
+			if (blank(vprice[code])) then begin
+				vprice[code] = price;
+				// logtext(0,"vprice " & vprice[code]);
+			end;
+			if (blank(vname[code])) then begin
+				vname[code] = name;
+				// logtext(0,"vname " & vname[code]);
+			end;
+			if (blank(vname[code])) then begin
+				vname[code] = model;
+				// logtext(0,"vname " & vname[code]);
+			end;
+			brand = "";
+			price = "";
+			name = "";
+			model = "";
+			// logtext(0,code);
 		end;
 	end;
+	
+	for (i=0;i<j;i=i+1) begin
+		if (nonblank(acode[i])) then begin
+			queued.CreateGlobalItem(acode[i],vbrand[acode[i]],vprice[acode[i]],vname[acode[i]]);
+			MilliSleep(50);
+			CodeInstf["ECMXA" & acode[i]] = true;
+		end;
+	end;
+	
+	
 	GIr.Code = "ECMXA";
 	TrHs = true;
 	while (loopMain(Gir,1,TrHs)) begin
+		if (FileExists("stop")) then begin TrHs = false; end;
 		if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
 		if (TrHs and !CodeInstf[GIr.Code]) then begin
 			queued.Instock0(GIr.Code);
 			MilliSleep(50);
 		end;
 	end;
-	logtext(0,"CollectXMLItems end");
+	logtext(0,"<><><><><><><><><><><><><><><><><>  CollectXMLItems finish  <><><><><><><><><><><><><><><><><>");
 	writeareatofile(text,"areafromrequest.txt",0);
+	
+	// xmlreply = ParseXMLArea(replyPr);
+	// posa = 0;
+	// cnt = XmlCountChildren(xmlreply,"yml_catalog/shop/offers");
+	// logtext(0,cnt & " XmlCountChildren");
+	// for(i=0;i<cnt;i=i+1) begin
+		// if (FileExists("stop")) then begin i = cnt; end;
+		// brand = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
+		// price = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/price");
+		// name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/description");
+		// if(blank(name)) then begin
+			// name = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/model");
+		// end;
+		// j = 0;
+		// code = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/productId");
+		// // paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		// // while(nonblank(paramName)) begin
+			// // coding = "";
+			// // coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
+			// // if(coding == "Реквизиты") then begin
+				// // parseString = XmlGet(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
+				// // posa = 0;
+				// // ExtractObj(parseString,posa,tstr);
+				// // while(nonblank(tstr)) begin
+					// // codeCheck = false;
+					// // tstr = Trim(tstr);
+					// // if (len(tstr) == 11) then begin
+						// // logtext (0,tstr);
+						// // codeCheck = true;
+						// // for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
+							// // if((asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57) and asc(Mid(tstr,countstr,1))!=73 and asc(Mid(tstr,countstr,1))!=78)  then begin
+								// // codeCheck = false;
+							// // end;
+						// // end;
+					// // end;
+					// // if(codeCheck) then begin
+						// // code = tstr;
+					// // end;
+					// // ExtractObj(parseString,posa,tstr);
+				// // end;
+			// // end;
+			// // j = j + 1;
+			// // paramName = XmlGetAttribute(xmlreply,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+		// // end;
+		// if(nonblank(code)) then begin 
+			// queued.CreateGlobalItem(code,brand,price,name);
+			// MilliSleep(50);
+			// CodeInstf["ECMXA" & code] = true;
+		// end;
+	// end;
+	// // GIr.Code = "ECMXA";
+	// // TrHs = true;
+	// // while (loopMain(Gir,1,TrHs)) begin
+		// // if (FileExists("stop")) then begin TrHs = false; end;
+		// // if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
+		// // if (TrHs and !CodeInstf[GIr.Code]) then begin
+			// // queued.Instock0(GIr.Code);
+			// // MilliSleep(50);
+		// // end;
+	// // end;
+	// logtext(0,"<><><><><><><><><><><><><><><><><>  CollectXMLItems finish  <><><><><><><><><><><><><><><><><>");
+	// writeareatofile(text,"areafromrequest.txt",0);
 
 return;
 end;
@@ -9452,13 +9555,13 @@ end;
 
 
 
-global webpublic updating procedure WebCollectXMLGeneralItem()
+global webpublic procedure WebCollectXMLGeneralItem()
 begin
 	/// 1 - CollectXMLNovasItems, 2 - CollectXMLECAZMagItems, 3 - CollectXMLZOOMagItems, 4 - CollectXMLItems.
 	record ORVc ORr;
 	area text,replyPr, text2, replyPr2, text3, replyPr3, text4, replyPr4;
 	string 255 tstr,code,brand,price,name,paramName,parseString,coding,qty,PrefCode,rebate,normalprice;
-	integer i,posa,cnt,paramCnt,j,countstr,s;
+	integer posa,cnt,paramCnt,countstr,s;
 	xml xmlreply, xmlreply3, xmlreply4;
 	boolean codeCheck, TrHs;
 	vector boolean CodeInstf;
@@ -9466,18 +9569,21 @@ begin
 	val quant;
 	record ExpProvItemRegVc EPIRr;
 	json jsresponse;
+	area tmparea;
+	string 255 model,tstr2;
+	vector string 255 vbrand,vprice,vname;
+	array string 255 acode;
+	longint cntl, i, j;
 	
 	logtext(0,"|||	WebCollectXMLGeneralItem start	|||");
 	
-	// CollectXMLItems
-	logtext(0,"Web CollectXMLItems start");
-	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text4,replyPr4,10);
-	xmlreply4 = ParseXMLArea(replyPr4);
+	
+	SetCompany(29,false);
 
 	
 	// CollectXMLZOOMagItems
 	logtext(0,"Web CollectXMLZOOMagItems start");
-	SendWebRequest("zoomagazin.az",443,-1,true,"GET","/index.php?route=product/xml","text/xml","",false,text3,replyPr3,10);
+	SendWebRequest("zoomagazin.az",443,-1,true,"GET","/index.php?route=product/xml","text/xml","",false,text3,replyPr3,5000);
 	xmlreply3 = ParseXMLArea(replyPr3);
 
 	
@@ -9486,12 +9592,14 @@ begin
 	SendWebRequest("api.ecaz.az",443,-1,true,"GET","/services/product/list/","","",false,text2,replyPr2,5000);
 	jsresponse = ParseJSONArea(replyPr2);
 
-	
+	// CollectXMLItems
+	logtext(0,"Web CollectXMLItems start");
+	SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text4,replyPr4,500);
+	// xmlreply4 = ParseXMLArea(replyPr4);
 	
 	
 //______________________________________________________________________________________________________ 1 - CollectXMLNovasItems
 
-	SetCompany(29,false);
 	if (FileExists("NovasHomeOzzi.xml")) then begin
 		addfiletoarea("NovasHomeOzzi.xml",replyPr,0);
 		logtext(0,"CollectXMLNovasItems start");
@@ -9512,7 +9620,8 @@ begin
 			name = XmlGet(xmlreply,"offers/offer[" & i & "]/Name");
 			code = XmlGet(xmlreply,"offers/offer[" & i & "]/ArtCode");
 			qty = XmlGet(xmlreply,"offers/offer[" & i & "]/InStock");
-			rebate = XmlGet(xmlreply,"offers/offer[" & i & "]/discount");
+			// rebate = XmlGet(xmlreply,"offers/offer[" & i & "]/discount");
+			rebate = 0;
 			if(nonblank(code)) then begin 
 				queued.CreateExtProvGlobalItem(PrefCode & code,brand,price,name,true,0,false,rebate,true,qty,true,EPIRr.SerNr);
 				MilliSleep(50);
@@ -9642,72 +9751,175 @@ begin
 
 //______________________________________________________________________________________________________ 4 - CollectXMLItems
 	
+	if (true) then begin
 	
-	// SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
-	//xmlreply4 = ParseXMLArea(replyPr4);
-	logtext(0,"CollectXMLItems start");
-	posa = 0;
-	cnt = XmlCountChildren(xmlreply4,"yml_catalog/shop/offers");
-	for(i=0;i<cnt;i=i+1) begin
-		if (FileExists("Stop.txt")) then begin
-			i=cnt;
-		end;
-		brand = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
-		price = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/price");
-		name = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/description");
-		if(blank(name)) then begin
-			name = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/model");
-		end;
+	
+		brand = "";
+		price = "";
+		name = "";
+		model = "";
+	
+		cntl = 99000;
 		j = 0;
-		code = "";
-		paramName = XmlGetAttribute(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
-		while(nonblank(paramName)) begin
-			coding = "";
-			coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
-			if(coding == "Реквизиты") then begin
-				parseString = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
+		//for (i=cntl-1;i>0;i=i-1) begin
+		i = 0;
+		tstr = GetLineFromArea(replyPr4,i);
+		while (nonblank(tstr)) begin
+			code = "";
+			if (left(tstr,24)=="<param name=\"" & USetStr(36419) & "\">") then begin
+				tstr = mid (tstr,24,len(tstr) - 32);
 				posa = 0;
-				ExtractObj(parseString,posa,tstr);
-				while(nonblank(tstr)) begin
+				ExtractObj(tstr,posa,tstr2);
+				while(nonblank(tstr2)) begin
 					codeCheck = false;
-					tstr = Trim(tstr);
-					if (len(tstr) == 11) then begin
-						// logtext (0,tstr);
+					tstr2 = Trim(tstr2);
+					if (len(tstr2) == 11) then begin
+						// logtext (0,tstr2);
 						codeCheck = true;
-						for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
-							if((asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57) and asc(Mid(tstr,countstr,1))!=73 and asc(Mid(tstr,countstr,1))!=78)  then begin
+						for(countstr=0;countstr<len(tstr2);countstr=countstr+1) begin
+							if((asc(Mid(tstr2,countstr,1))<48 or asc(Mid(tstr2,countstr,1))>57) and asc(Mid(tstr2,countstr,1))!=73 and asc(Mid(tstr2,countstr,1))!=78)  then begin
 								codeCheck = false;
 							end;
 						end;
 					end;
 					if(codeCheck) then begin
-						code = tstr;
+						code = tstr2;
 					end;
-					ExtractObj(parseString,posa,tstr);
+					ExtractObj(tstr,posa,tstr2);
 				end;
+				acode[j] = code;
+				// logtext(0,"acode " & acode[j]);
+				j = j + 1;
 			end;
-			j = j + 1;
-			paramName = XmlGetAttribute(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+			if (left(tstr,8)=="<vendor>" and blank(brand)) then begin
+				brand =  mid (tstr,8,len(tstr)-17);
+			end;
+			if (left(tstr,7)=="<price>" and blank(price)) then begin
+				price = mid (tstr,7,len(tstr)-15);
+			end;
+			if (left(tstr,13)=="<description>" and blank(name)) then begin
+				name = mid (tstr,13,len(tstr)-27);
+			end;
+			if (left(tstr,7)=="<model>" and blank(model)) then begin
+				model = mid (tstr,7,len(tstr)-15);
+			end;
+			if (nonblank(code)) then begin
+				if (blank(vbrand[code])) then begin
+					vbrand[code] =  brand;
+					// logtext(0,"vbrand " & vbrand[code]);
+				end;
+				if (blank(vprice[code])) then begin
+					vprice[code] = price;
+					// logtext(0,"vprice " & vprice[code]);
+				end;
+				if (blank(vname[code])) then begin
+					vname[code] = name;
+					// logtext(0,"vname " & vname[code]);
+				end;
+				if (blank(vname[code])) then begin
+					vname[code] = model;
+					// logtext(0,"vname " & vname[code]);
+				end;
+				brand = "";
+				price = "";
+				name = "";
+				model = "";
+				logtext(0,code);
+				logtext(0,i);
+			end;
+			tstr = "";
+			tstr = GetLineFromArea(replyPr4,i);
+			i = i + 1;
 		end;
-		if(nonblank(code)) then begin 
-			queued.CreateGlobalItem(code,brand,price,name);
-			MilliSleep(50);
-			CodeInstf["ECMXA" & code] = true;
+		
+		for (i=0;i<j;i=i+1) begin
+			if (nonblank(acode[i])) then begin
+				queued.CreateGlobalItem(acode[i],vbrand[acode[i]],vprice[acode[i]],vname[acode[i]]);
+				MilliSleep(50);
+				CodeInstf["ECMXA" & acode[i]] = true;
+			end;
 		end;
+		
+		
+		GIr.Code = "ECMXA";
+		TrHs = true;
+		while (loopMain(Gir,1,TrHs)) begin
+			if (FileExists("stop")) then begin TrHs = false; end;
+			if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
+			if (TrHs and !CodeInstf[GIr.Code]) then begin
+				queued.Instock0(GIr.Code);
+				MilliSleep(50);
+			end;
+		end;
+	
+	
+	
+	
+		// // SendWebRequest("maxi.az",443,-1,true,"GET","/bitrix/catalog_export/ozzi.php","text/xml","",false,text,replyPr,1);
+		// logtext(0,"CollectXMLItems start");
+		// posa = 0;
+		// cnt = XmlCountChildren(xmlreply4,"yml_catalog/shop/offers");
+		// for(i=0;i<cnt;i=i+1) begin
+			// if (FileExists("Stop.txt")) then begin
+				// i=cnt;
+			// end;
+			// brand = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/vendor");
+			// price = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/price");
+			// name = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/description");
+			// if(blank(name)) then begin
+				// name = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/model");
+			// end;
+			// j = 0;
+			// code = "";
+			// paramName = XmlGetAttribute(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+			// while(nonblank(paramName)) begin
+				// coding = "";
+				// coding = ConvertStringFromCodePage("WINDOWS-1251",paramName);
+				// if(coding == "Реквизиты") then begin
+					// parseString = XmlGet(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j & "]");
+					// posa = 0;
+					// ExtractObj(parseString,posa,tstr);
+					// while(nonblank(tstr)) begin
+						// codeCheck = false;
+						// tstr = Trim(tstr);
+						// if (len(tstr) == 11) then begin
+							// // logtext (0,tstr);
+							// codeCheck = true;
+							// for(countstr=0;countstr<len(tstr);countstr=countstr+1) begin
+								// if((asc(Mid(tstr,countstr,1))<48 or asc(Mid(tstr,countstr,1))>57) and asc(Mid(tstr,countstr,1))!=73 and asc(Mid(tstr,countstr,1))!=78)  then begin
+									// codeCheck = false;
+								// end;
+							// end;
+						// end;
+						// if(codeCheck) then begin
+							// code = tstr;
+						// end;
+						// ExtractObj(parseString,posa,tstr);
+					// end;
+				// end;
+				// j = j + 1;
+				// paramName = XmlGetAttribute(xmlreply4,"yml_catalog/shop/offers/offer[" & i & "]/param[" & j &"]","name");
+			// end;
+			// if(nonblank(code)) then begin 
+				// queued.CreateGlobalItem(code,brand,price,name);
+				// MilliSleep(50);
+				// CodeInstf["ECMXA" & code] = true;
+			// end;
+		// end;
+		// GIr.Code = "ECMXA";
+		// TrHs = true;
+		// while (loopMain(Gir,1,TrHs)) begin
+			// if (FileExists("Stop.txt")) then begin
+				// TrHs = false;
+			// end;
+			// if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
+			// if (TrHs and !CodeInstf[GIr.Code]) then begin
+				// queued.Instock0(GIr.Code);
+				// MilliSleep(50);
+			// end;
+		// end;
+		// ResetLoop(Gir);
 	end;
-	GIr.Code = "ECMXA";
-	TrHs = true;
-	while (loopMain(Gir,1,TrHs)) begin
-		if (FileExists("Stop.txt")) then begin
-			TrHs = false;
-		end;
-		if (left(GIr.Code,5)!="ECMXA") then begin TrHs = false; end;
-		if (TrHs and !CodeInstf[GIr.Code]) then begin
-			queued.Instock0(GIr.Code);
-			MilliSleep(50);
-		end;
-	end;
-	ResetLoop(Gir);
 	writeareatofile(text4,"areafromrequest.txt",0);
 
 	
@@ -9851,3 +10063,96 @@ begin
 return;
 end;
 
+
+global 	//Edit **********************************************Vas-P	06/10/2021
+updating procedure CheckPercentMn()
+begin
+	record VaucherVc Vr;
+	record RebVc Rebr;
+	record CompaniesBlock Compb;
+	record IVVc IVr,oldIVr;
+	row IVVc IVrw;
+	row CompaniesBlock Comprw;
+	boolean TrHs,TrHs2,testf,foundf,needchange;
+	integer comp,CompQty,i,j,k,l;
+	vector string 150 vRebCode,vAddObject;
+	vector val vVra0;
+	array string 150 aRebCode;
+	
+	blockload(Compb);
+
+	logtext(0,"CheckPercentMn start"); 
+	
+	Vr.BarCode = "";
+	TrHs = true;
+	while(loopmain(Vr,1,TrHs))begin
+		testf = true;
+		if(blank(Vr.AddRebCode))then begin testf = false; end;
+		if(testf)then begin
+			logtext(0,"Vr.AddRebCode = " & Vr.AddRebCode);
+			vRebCode[Vr.AddRebCode] = Vr.AddRebCode;
+		end;
+	end;
+	getvectortags(vRebCode,aRebCode);
+	
+	CompQty = matrowcnt(Compb);
+	for(comp=0;comp<CompQty;comp=comp+1) begin
+		matrowget(Compb,comp,Comprw);
+		if(Comprw.ActiveStatus==0)then begin
+			SetCompany(comp+1,false);
+			foundf = false;
+			for(i=0;i<aRebCode.length;i=i+1)begin
+				Rebr.Code = vRebCode[aRebCode[i]];
+				if(ReadFirstMain(Rebr,1,true))then begin
+					if(Rebr.vra0>0)then begin
+						vVra0[Rebr.Code] = Rebr.vra0;
+						vAddObject[Rebr.Code] = Rebr.AddObject;
+						foundf = true;
+					end;
+				end;
+			end;
+			logtext(0,"before foundf");
+			if(foundf)then begin
+				logtext(0,"after foundf");
+				ResetLoop(IVr);
+				TrHs2 = true;
+				IVr.InvDate = CurrentDate;
+				while(LoopBackKey("InvDate",IVr,1,TrHs2)) begin
+				  recordcopy(oldIVr,IVr);
+				  needchange = false;
+					if(IVr.InvDate<StringToDate("15/09/2021")) then begin TrHs2 = false; end;
+					if(nonblank(vRebCode[IVr.AddRebCode]))then begin
+						for(k=0;k<matrowcnt(IVr);k=k+1)begin
+							matrowget(IVr,k,IVrw);
+							if(IVrw.vRebate==vVra0[IVr.AddRebCode] and IVrw.vRebate>0)then begin
+								if(!setinset(vAddObject[IVr.AddRebCode],IVrw.Objects))then begin
+								  needchange = true;
+								  logtext(0,IVrw.Objects);
+									IVrw.Objects = AddObjectToObjectList(IVrw.Objects,vAddObject[IVr.AddRebCode]);
+									logtext(0,IVrw.Objects);
+									matrowput(IVr,k,IVrw);
+									logtext(0,"comp / IVr.SerNr - " & comp & " / " & IVr.SerNr);
+								end;
+							end;
+						end;
+					end;
+					if(needchange)then begin
+					  IVr.OKFlag = 0;
+					  if(recordupdate(oldIVr,IVr,true)==0)then begin
+					    recordcopy(oldIVr,IVr);
+					    IVr.OKFlag = 1;
+              recordupdate(oldIVr,IVr,true);
+					  end;
+					end;
+				end;
+				logtext(0,"after while");
+			end;
+		end;
+	end;
+			
+	
+	logtext(0,"CheckPercentMn end");
+
+
+return;
+end;
