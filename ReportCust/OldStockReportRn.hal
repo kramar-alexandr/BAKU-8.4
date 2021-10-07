@@ -33,6 +33,7 @@ BEGIN
 	val turno,totuot;
 	val totvturnlasty,totvturncy,totvturncmonth,totvbrandstock1jan,totvbrandstock_mye,totvmye0360,totvmye360720,totvmye720;
 	longint curtick;
+	record BPIBrandVc BPIBrandr;
 	
 	curtick = getcurtick();
 	if(blankdate(RepSpec.d1))then begin
@@ -73,27 +74,31 @@ BEGIN
 	mye.year = getyear(RepSpec.d1);
 	mye = stringtodate(mye);
 	
-	DIr.CType = "BRAND";
 	TrHs = true;
-	While(loopkey("CType",DIr,1,TrHs))begin
+	BPIBrandr.Code = RepSpec.f2;
+	While(loopmain(BPIBrandr,1,true))begin
 		testf = true;
-		if(DIr.CType!="BRAND")then begin TrHs = false; testf = false; end;
-		if(nonblank(RepSpec.f2) and !setinset(DIr.Code,RepSpec.f2))then begin testf = false; end;
+		if(nonblank(RepSpec.f2) and BPIBrandr.Code!=RepSpec.f2)then begin testf = false; end;
 		
 		if(testf)then begin
-			abrands[abrands.length] = DIr.Code;
-			vbrands[DIr.Code] = DIr.Name;
+			abrands[abrands.length] = BPIBrandr.Code;
+			vbrands[DIr.Code] = BPIBrandr.Name;
 			
-			abrands[abrands.length] = DIr.Code & "_CONS";
-			vbrands[DIr.Code & "_CONS"] = DIr.Name & " Consignation";
+			abrands[abrands.length] = BPIBrandr.Code & "_CONS";
+			vbrands[DIr.Code & "_CONS"] = BPIBrandr.Name & " Consignation";
 			
 		end;
 	end;
+	
+	
 	abrands[abrands.length] = "BLANK";
 	vbrands["BLANK"] = "No brand";
 	
 	abrands[abrands.length] = "BLANK_CONS";
 	vbrands["BLANK_CONS"] = "No brand - Consignation";
+	
+	
+	
 	
 	StartReportNoHeaderJob("Old Stock Report");
 		
@@ -131,13 +136,10 @@ BEGIN
 			testf = true;
 			foundf = false;
 			curbrand = "";
-			for(i=0;i<abrands.length;i=i+1)begin
-				if(setinset(abrands[i],INr.DispGroups))then begin 
-					foundf = true; 
-					curbrand = abrands[i];
-				end;
-				
-			end;
+      if(nonblank(INr.BPIBrand))then begin 
+        foundf = true; 
+        curbrand = INr.BPIBrand;
+      end;
 			if(blank(RepSpec.f2) and blank(curbrand))then begin
 				foundf = true; 
 				curbrand = "BLANK";
@@ -158,7 +160,6 @@ BEGIN
 			totuot = blankval;
 			
 			if(testf)then begin
-				vbrandsum[curbrand] = vbrandsum[curbrand] +1;
 				IHr.ArtCode = INr.Code;
 				TrHs1 = true;
 				while(loopkey("ArtCode",IHr,1,TrHs1))begin
@@ -193,17 +194,10 @@ BEGIN
 										end;
 										if(dateinrange(IHr.TransDate,cys,cye))then begin
 											vturncy[curbrand] = vturncy[curbrand] + turno;
-											/*if(currentuser=="SA")then begin
-												startformat(15);
-													outstring(0,0,IHr.ArtCode,false);
-													outstring(100,0,turno,false);
-												endformat;
-											end;*/
 										end;
 										if(dateinrange(IHr.TransDate,mys,mye))then begin
 											vturncmonth[curbrand] = vturncmonth[curbrand] + turno;
 										end;
-									
 									end;
 								end;
 					
