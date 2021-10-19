@@ -408,7 +408,6 @@ end;
 global
 procedure ExtSalesRn(record RcVc RepSpec)  // Edit ****************************** Ihor Trubachov 16*09*2021 
 begin
-
 	record ORVc ORr;
 	row ORVc ORrw;
 	record POVc POr;
@@ -416,6 +415,7 @@ begin
 	row PUVc PUrw;
 	record INVc INr;
 	record IVVc IVr;
+	row IVVc IVrw;
 	record VIVc VIr;
 	record ARVc ARr;
 	record APVc APr;
@@ -426,10 +426,16 @@ begin
 	record BtrxFirstLevelCatVc BtrxFirstLevelCatr;
 	Boolean TrHs,testf,testf1,testf2,TrHs1;
 	Integer i,j,k,cnrw;
-	val Ret, RValPaid, SumOrders;
+	val Ret, RValPaid,oblRVal, SumOrders;
 	date sd,td;
 	String 255 strObj;
-	
+	//
+	val SumCredIv, SumSH;
+	Boolean chIvCr, chSH;
+	record SHVc SHr;
+	row SHVc SHrw;
+	Integer IVrNumLk;
+
 	StartReportnoheaderjob("Расширенный отчет по продажам");
 
 	StartFormat(15);
@@ -459,19 +465,50 @@ begin
 
 	TrHs = true;
 	while(LoopMain(ORr,1,TrHs))begin
+	  k = 1; 
 		testf = true;
 		testf1 = true;
 		testf2 = true;
 		Ret = blankval;
-		RValPaid = blankval;
 		SumOrders  = blankval;
+		IVrNumLk = 0;
+
+		
+		
+		///
+		chIvCr = false;
+    chSH = false;
+		///
 		
 		if (DateInRange(ORr.OrdDate,sd,td)==false) then begin testf = false; end;
 		
 		if(testf)then begin
+		
+			while(ReadRecordLink(ORr,k,IVr,RLr))begin
+				for(i=0;i<MatRowCnt(IVr);i=i+1)begin
+					MatRowGet(IVr,i,IVrw);
+					if(IVrw.stp==kInvoiceRowTypeCredit)then begin
+						chIvCr = true;
+						IVrNumLk = k; 
+					end;
+				end;
+				k=k+1;
+			end;
+			
+			
+			if(ReadRecordLink(ORr,1,SHr,RLr))then begin
+				chSH = true;
+			end;
+		
 			cnrw = MatRowCnt(ORr);
 			for(i=0;i<cnrw;i=i+1)begin
 				MatRowGet(ORr,i,ORrw);
+				
+				RValPaid = blankval;
+				oblRVal = blankval;
+				
+				SumCredIv = 0;
+				SumSH = 0;
 				
 				StartFormat(15);
 					OutString(30,0,ORr.Addr0,false);
@@ -542,18 +579,26 @@ begin
 					if(ReadRecordLink(ORr,1,VIr,RLr))then begin
 						APr.InvoiceNr = VIr.SerNr;
 						if(ReadFirstMain(ARr,1,true))then begin
-							RValPaid = APr.RVal;
+							oblRVal = APr.RVal;
 						end;
 					end;			
-					OutString(140,0,RValPaid,false);    
+					OutString(140,0,oblRVal,false);    
 
 					RValPaid = blankval;
-					if(ReadRecordLink(ORr,1,IVr,RLr))then begin
-						ARr.InvoiceNr = IVr.SerNr;
-						if(ReadFirstMain(ARr,1,true))then begin
-							RValPaid = (IVr.Sum4 - ARr.RVal);
+					if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
+				
+					 if(IVr.OKFlag==1)then begin
+							ARr.InvoiceNr = IVr.SerNr;
+							if(ReadFirstMain(ARr,1,true))then begin
+								RValPaid = IVr.Sum4 - ARr.RVal;
+							end else begin
+								RValPaid = IVr.Sum4;
+							end;
+						end else begin
+							RValPaid = 0;
 						end;
-					end;				
+						
+					end;
 					OutString(150,0,RValPaid,false);  
 
 					testf1 = true;
@@ -584,7 +629,28 @@ begin
 						end;
 					end;
 					
-					OutString(160,0,RValPaid - SumOrders,false); // ORrw.Sum - SumOrders
+					if(chSH)then begin
+						for(j=0;j<MatRowCnt(SHr);j=j+1)begin
+							MatRowGet(SHr,j,SHrw);
+							if(ORrw.ArtCode == SHrw.ArtCode) then begin
+								SumSH = SumSH + SHrw.FIFORowVal;
+							end;
+						end;
+					end;
+					
+					if(chIvCr)then begin
+						if(ReadRecordLink(ORr,IVrNumLk,IVr,RLr)) then begin
+							for(j=0;j<MatRowCnt(IVr);j=j+1)begin
+								MatRowGet(IVr,j,IVrw);
+								if(ORrw.ArtCode == IVrw.ArtCode) then begin
+									SumCredIv = SumCredIv + IVrw.Sum;
+								end;
+							end;
+						end;
+					end;
+					
+					//OutString(160,0,RValPaid - SumOrders,false); // ORrw.Sum - SumOrders
+					OutString(160,0,(ORrw.Sum - SumCredIv - SumSH + Ret),false); 
 					
 					OutString(170,0,ORr.eMail,false);
 					OutString(180,0,ORr.Phone,false);
