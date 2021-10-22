@@ -726,6 +726,263 @@ end;
 
 
 
+
+
+
+
+
+
+
+global updating procedure DellDuplicesInAllCompanies (record ItemDuplicatesVc IDr)
+begin
+	integer OrigCompany, SourceComp, i, j;
+	record ItemDuplicatesVc newIDr, thisIDr;
+	record ConsItemVc CIr;
+	record INVc INr, oldINr;
+	record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+	string 255 OrigBrand, DubBrand, ConsOrigCode, ConsDupCode, OtherCompOrigBrand, OtherCompDubBrand, thisOrigCode, thisDupCode, ECOrigCode, ECDupCode, OldINCode, NewINCode;
+	boolean TrHs;
+	record GlobalItemVc DupGIr, OrigGIr, OldDupGIr, OldOrigGIr,LogGIr;
+	row GlobalItemVc DupGIrw, OrigGIrw;
+	string 255 OrigCode, DupCode;
+	boolean INSorcesf, LocAddDupInstf;
+	vector boolean AddLocf;
+	
+	blockload(Compb);
+	OrigCompany = CurrentCompany;
+	OrigCode = IDr.OrigCode;
+	DupCode = IDr.DupCode;
+	OrigBrand = IDr.OrigBrandCode;
+	DubBrand = IDr.DupBrandCode;
+	SourceComp = OrigCompany;
+	
+	
+	for(i=1;i<=matrowcnt(Compb);i=i+1)begin
+		setcompany(i,false);
+		matrowget(Compb,i-1,Comprw);
+		if((CompanyIsJWLikeCompany(i)==false or i==3) and Comprw.ActiveStatus==0 and i!=18 and i!=29) then begin
+			INr.Code = OrigCode;
+			INSorcesf = true;
+			if (!ReadFirstMain(INr,1,true)) then begin
+				INSorcesf = false;
+			end;
+			if (blank(INr.BPIBrand) or INr.BPIBrand!=OrigBrand) then begin
+				INSorcesf = false;
+			end;
+			INr.Code = DupCode;
+			if (!ReadFirstMain(INr,1,true)) then begin
+				INSorcesf = false;
+			end;
+			if (blank(INr.BPIBrand)or INr.BPIBrand!=DubBrand) then begin
+				INSorcesf = false;
+			end;
+			if (INSorcesf) then begin
+				SourceComp = CurrentCompany;
+			end;
+		end;
+	end;
+	
+	resetCompany(OrigCompany);
+	
+	
+	if (nonblank(OrigCode) and nonblank(DupCode)) then begin
+		thisIDr.OrigCode = OrigCode;
+		thisIDr.DupCode = DupCode;
+		thisIDr.OrigBrandCode = OrigBrand;
+		thisIDr.DupBrandCode = DubBrand;
+		
+		if (ReadFirstMain(thisIDr,4,true)) then begin
+			recorddelete(thisIDr);
+		end;
+		
+		if (OrigCompany!=18) then begin
+			DupGIr.Code = DubBrand & "_" & DupCode;
+			if (ReadFirstMain(DupGIr,1,true)) then begin
+				if (nonblank(DupGIr.HansaName)) then begin
+					OrigGIr.Code = OrigBrand & "_" & OrigCode;
+					if (ReadFirstMain(OrigGIr,1,true)) then begin
+						recordcopy(LogGIr,OrigGIr);
+						for (i=0;i<matrowcnt(DupGIr);i=i+1) begin
+							matrowget(DupGIr,i,DupGIrw);
+							if (DupGIrw.Instock>0) then begin
+								LocAddDupInstf = false;
+								for (j=0;j<matrowcnt(OrigGIr);j=j+1) begin
+									matrowget(OrigGIr,j,OrigGIrw);
+									if (!AddLocf[DupGIrw.Location]) then begin
+										if (OrigGIrw.Location==DupGIrw.Location) then begin
+										  TimeStamps(OrigGIrw,OrigGIrw.Instock - DupGIrw.Instock," TimeStamplog 37");
+											OrigGIrw.Instock = OrigGIrw.Instock - DupGIrw.Instock;
+											OrigGIrw.Code = OrigGIr.Code;
+											matrowput (OrigGIr,j,OrigGIrw);
+											GIWasUpdated(OrigGIr,LogGIr," GIWasUpdatedlog 126");
+											recordStore(OrigGIr,true);
+											LocAddDupInstf = true;
+										end;
+										if (!LocAddDupInstf) then begin
+											AddLocf[DupGIrw.Location] = true;
+											OrigGIrw.Location = DupGIrw.Location;
+											TimeStamps(OrigGIrw,DupGIrw.Instock," TimeStamplog 38");
+											OrigGIrw.Instock = 0;
+											OrigGIrw.Code = OrigGIr.Code;
+											matrowput (OrigGIr,matrowcnt(OrigGIr),OrigGIrw);
+											GIWasUpdated(OrigGIr,LogGIr," GIWasUpdatedlog 127");
+											recordStore(OrigGIr,true);
+										end;
+									end;
+								end;
+							end;
+						end;
+					end;
+					RecordCopy(OldDupGIr,DupGIr);
+					DupGIr.HansaName = DupGIr.Name;
+					GIWasUpdated(DupGIr,OldDupGIr," GIWasUpdatedlog 128");
+					RecordUpdate(OldDupGIr,DupGIr,true);
+					RecordCopy(OldOrigGIr,OrigGIr);
+					GIWasUpdated(OrigGIr,OldOrigGIr," GIWasUpdatedlog 129");
+					RecordUpdate(OldOrigGIr,OrigGIr,true);
+				end;
+			end;
+			
+			
+			
+			SetCompany(18,false);
+			CIr.LocCode = OrigCode;
+			CIr.BrandCode = OrigBrand;
+			if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
+				ConsOrigCode = CIr.Code;
+			end;
+			
+			CIr.LocCode = DupCode;
+			CIr.BrandCode = DubBrand;
+			if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
+				ConsDupCode = CIr.Code;
+			end;
+			
+			if (nonblank(OrigCode) and nonblank(DupCode)) then begin
+				if (blank(ConsOrigCode)) then begin
+					CreateINConsItem(OrigCode, OrigBrand, SourceComp);
+					CIr.LocCode = OrigCode;
+					CIr.BrandCode = OrigBrand;
+					if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
+						ConsOrigCode = CIr.Code;
+					end;
+				end;
+				
+				if (blank(ConsDupCode)) then begin
+					CreateINConsItem(DupCode, DubBrand, SourceComp);
+					CIr.LocCode = DupCode;
+					CIr.BrandCode = DubBrand;
+					if (ReadFirstKey("LocCodeBrand",CIr,2,true)) then begin
+						ConsDupCode = CIr.Code;
+					end;
+				end;
+			end;
+			
+			
+			if (nonblank(ConsDupCode) and nonblank(ConsOrigCode)) then begin
+				newIDr.DupCode = ConsDupCode;
+				newIDr.OrigCode = ConsOrigCode;
+				newIDr.OrigBrandCode = OrigBrand;
+				newIDr.DupBrandCode = DubBrand;
+				if (ReadFirstMain(newIDr,4,true)) then begin
+					if (CurrentCompany==18) then begin
+						recorddelete(newIDr);
+					end;
+				end;
+			end;
+		end else begin
+			CIr.Code = OrigCode;
+			if (ReadFirstMain(CIr,1,true)) then begin
+				OrigCode = CIr.LocCode;
+			end;
+			
+			CIr.Code = DupCode;
+			if (ReadFirstMain(CIr,1,true)) then begin
+				DupCode = CIr.LocCode;
+			end;
+			SetCompany(1,false);
+			
+			DupGIr.Code = DubBrand & "_" & DupCode;
+			if (ReadFirstMain(DupGIr,1,true)) then begin
+				if (nonblank(DupGIr.HansaName)) then begin
+					OrigGIr.Code = OrigBrand & "_" & OrigCode;
+					if (ReadFirstMain(OrigGIr,1,true)) then begin
+						recordcopy(LogGIr,OrigGIr);
+						for (i=0;i<matrowcnt(DupGIr);i=i+1) begin
+							matrowget(DupGIr,i,DupGIrw);
+							if (DupGIrw.Instock>0) then begin
+								LocAddDupInstf = false;
+								for (j=0;j<matrowcnt(OrigGIr);j=j+1) begin
+									matrowget(OrigGIr,j,OrigGIrw);
+									if (!AddLocf[DupGIrw.Location]) then begin
+										if (OrigGIrw.Location==DupGIrw.Location) then begin
+										  TimeStamps(OrigGIrw,OrigGIrw.Instock - DupGIrw.Instock," TimeStamplog 39");
+											OrigGIrw.Instock = OrigGIrw.Instock - DupGIrw.Instock;
+											OrigGIrw.Code = OrigGIr.Code;
+											matrowput (OrigGIr,j,OrigGIrw);
+											GIWasUpdated(OrigGIr,LogGIr," GIWasUpdatedlog 130");
+											recordStore(OrigGIr,true);
+											LocAddDupInstf = true;
+										end;
+										if (!LocAddDupInstf) then begin
+											AddLocf[DupGIrw.Location] = true;
+											OrigGIrw.Location = DupGIrw.Location;
+											TimeStamps(OrigGIrw,DupGIrw.Instock," TimeStamplog 40");
+											OrigGIrw.Instock = 0;
+											OrigGIrw.Code = OrigGIr.Code;
+											matrowput (OrigGIr,matrowcnt(OrigGIr),OrigGIrw);
+											GIWasUpdated(OrigGIr,LogGIr," GIWasUpdatedlog 131");
+											recordStore(OrigGIr,true);
+										end;
+									end;
+								end;
+							end;
+						end;
+					end;
+					RecordCopy(OldDupGIr,DupGIr);
+					DupGIr.HansaName = DupGIr.Name;
+					GIWasUpdated(DupGIr,OldDupGIr," GIWasUpdatedlog 132");
+					RecordUpdate(OldDupGIr,DupGIr,true);
+					RecordCopy(OldOrigGIr,OrigGIr);
+					GIWasUpdated(OrigGIr,OldOrigGIr," GIWasUpdatedlog 133");
+					RecordUpdate(OldOrigGIr,OrigGIr,true);
+				end;
+			end;
+			
+			thisIDr.OrigCode = OrigCode;
+			thisIDr.DupCode = DupCode;
+			thisIDr.OrigBrandCode = OrigBrand;
+			thisIDr.DupBrandCode = DubBrand;
+			if (ReadFirstMain(thisIDr,4,true)) then begin
+				if (CurrentCompany!=18) then begin
+					recorddelete(newIDr);
+				end;
+			end;
+			
+		end;
+		
+		ResetCompany(OrigCompany);
+		
+	end;
+	
+return
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 global
 updating function LongInt BPIBrandVcRecordUpdateAfter(var record BPIBrandVc BBr,record BPIBrandVc BB2r,LongInt stat,LongInt long4)
 BEGIN
@@ -3452,6 +3709,19 @@ begin
 	ItemDuplicatesVcRecordUpdateAfter = res; 
 return;
 end; 
+
+
+
+
+global
+updating function LongInt ItemDuplicatesVcRecordRemoveAfter(var record ItemDuplicatesVc IDr,record ItemDuplicatesVc ID2r,LongInt stat,LongInt long4)
+begin
+  LongInt res;
+
+  DellDuplicesInAllCompanies (IDr);
+  ItemDuplicatesVcRecordRemoveAfter = res;
+  RETURN;
+END;
 
 
 
