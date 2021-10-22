@@ -1,0 +1,93 @@
+global updating procedure DeleteRhist(var record RHistVc RHr)
+begin
+  
+  recorddelete(RHr);
+  
+return;
+end;
+
+global webpublic procedure WebDeleteOldRHist()
+begin
+  record UserVc USr;
+  record GlobalUserVc GUSr;
+  record RHistVc RHr;
+  integer i,curcomp,CompQty,rwcnt;
+  record CompaniesBlock Compb;
+  row CompaniesBlock Comprw;
+  string 255 tstr;
+  boolean TrHs,testf,isupd;
+  longint cntr;
+
+  logtext(0,"WebDeleteOldRHist");
+  
+  setcompany(1,false);
+  while(loopmain(GUSr,1,true))begin
+    tstr = BuildRecordIdStr(GUSr,currentcompany);
+    resetloop(RHr);
+    RHr.RecidStr = tstr;
+    TrHs = true;
+    if(fileexists("stop"))then begin
+      goto lWebDeleteOldRHist;
+    end;
+    cntr = 0;
+    while(loopbackkey("RecidStr",RHr,1,TrHs))begin
+      if(fileexists("stop"))then begin
+        goto lWebDeleteOldRHist;
+      end;
+      testf = true;
+      if(RHr.RecidStr!=tstr)then begin TrHs = false; testf = false; end;
+      
+      if(testf)then begin
+        //qupdating.DeleteRhist(RHr);
+        stepback(RHr);
+        cntr = cntr + 1;
+        if(cntr>1000)then begin
+          //goto lWebDeleteOldRHist;
+        end;
+      end;
+    end;
+    weboutstring(GUSr.Code & "  " & cntr & "<BR>");
+  end;
+  
+  blockload(Compb);
+  rwcnt = MatRowCnt(Compb);
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    setcompany(i+1,false);
+    MatRowGet(Compb,i,Comprw);
+    resetloop(USr);
+    USr.Code = "";
+    while(loopmain(USr,1,true))begin
+      tstr = BuildRecordIdStr(USr,i+1);
+      resetloop(RHr);
+      RHr.RecidStr = tstr;
+      TrHs = true;
+      if(fileexists("stop"))then begin
+        goto lWebDeleteOldRHist;
+      end;
+      cntr = 0;
+      while(loopbackkey("RecidStr",RHr,1,TrHs))begin
+        if(fileexists("stop"))then begin
+          goto lWebDeleteOldRHist;
+        end;
+        testf = true;
+        if(RHr.RecidStr!=tstr)then begin TrHs = false; testf = false; end;
+      
+        if(testf)then begin
+          qupdating.DeleteRhist(RHr);
+          //stepback(RHr);
+          cntr = cntr + 1;
+          if(cntr>1000)then begin
+            //goto lWebDeleteOldRHist;
+          end;
+        end;
+      end;
+      weboutstring(USr.Code & "  " & cntr & "<BR>");
+    end;
+  end;
+  
+  logtext(0,"WebDeleteOldRHist end");
+
+lWebDeleteOldRHist:;
+
+return;
+end;
