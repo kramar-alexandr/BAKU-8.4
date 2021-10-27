@@ -85,7 +85,7 @@ begin
   string 100 tstr;
   string 50 uloc,brand,brandcode,pricecur,dicode,diname,ditype;
   integer pos,cnt,SQi,TSi,i,Ccntr,Scntr,rowcnt,mtrw,curcomp;
-  boolean TrHs,TrHs1,testf,test2f,f,testf1,locflag,dublikateItem,onerecordexist;
+  boolean TrHs,TrHs1,testf,test2f,f,testf1,locflag,dublikateItem,onerecordexist,skipadd;
   val price,totqty;
   vector boolean stockInArr,origitem;
   vector integer stockQty;
@@ -180,6 +180,7 @@ begin
           ISr.Code = INr.Code;
           TrHs = true;
           onerecordexist = false;
+          skipadd = true;
           while (loopmain(ISr,1,TrHs)) begin
             testf = true;
             if (ISr.Code!=INr.Code) then begin testf = false; TrHs = false; end else begin onerecordexist = true; end;
@@ -188,11 +189,9 @@ begin
             if (ISr.Instock==0 and origitem[ISr.Code]==false) then begin testf = false; end;
 						
             if (testf) then begin
+              onerecordexist = true;
 							// logtext(0,"if (testf) then begin");
               lNofoundnooneIS:;
-              if(currentuser=="SA1")then begin
-                //logtext(0,"ImagesExcel first filter " & INr.Code & " instock " & stocks[0] & " dublicateItem " & dublikateItem);
-              end;
               IDr.OrigCode = INr.Code;
               TrHs1 = true;
               while(LoopKey("OrigCode",IDr,1,TrHs1)) begin
@@ -242,19 +241,22 @@ begin
                 end;
               end;
               ResetLoop(IDr);
-              if !stockInArr[ISr.Location] then begin
-                stockInArr[ISr.Location] = true;
-                stocks[SQi] = ISr.Location;
-                SQi = SQi + 1;
+              if(skipadd)then begin
+                if !stockInArr[ISr.Location] then begin
+                  stockInArr[ISr.Location] = true;
+                  stocks[SQi] = ISr.Location;
+                  SQi = SQi + 1;
+                end;
+                stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
+                totqty = totqty + ISr.Instock;
               end;
-              stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
-              totqty = totqty + ISr.Instock;
             end;					
           end;
           resetloop(ISr);
           if(onerecordexist==false and origitem[INr.Code])then begin
             ISr.Location = RepSpec.f2;
             onerecordexist = true;
+            skipadd = false;
             goto lNofoundnooneIS;
           end;
 				end;
