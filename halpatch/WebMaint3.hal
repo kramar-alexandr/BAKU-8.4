@@ -17,12 +17,13 @@ begin
   string 255 tstr;
   boolean TrHs,testf,isupd;
   longint cntr;
+  record ORVc ORr;
 
   logtext(0,"WebDeleteOldRHist");
   
   setcompany(1,false);
   while(loopmain(GUSr,1,true))begin
-    logtext(0,"Global User " & USr.Code);
+    logtext(0,"Global User " & GUSr.Code);
     tstr = BuildRecordIdStr(GUSr,currentcompany);
     resetloop(RHr);
     RHr.RecidStr = tstr;
@@ -51,10 +52,9 @@ begin
   end;
   
   blockload(Compb);
-  rwcnt = MatRowCnt(Compb);
+  /*rwcnt = MatRowCnt(Compb);
   for (i = 0; i<rwcnt; i = i + 1) begin
     setcompany(i+1,false);
-    MatRowGet(Compb,i,Comprw);
     resetloop(USr);
     USr.Code = "";
     while(loopmain(USr,1,true))begin
@@ -85,11 +85,83 @@ begin
       end;
       weboutstring(USr.Code & "  " & cntr & "<BR>");
     end;
+  end;*/
+  
+  rwcnt = MatRowCnt(Compb);
+  for (i = 0; i<rwcnt; i = i + 1) begin
+    if(i!=17 and i!=27)then begin
+      setcompany(i+1,false);
+      resetloop(ORr);
+      ORr.SerNr = "";
+      while(loopmain(ORr,1,true))begin
+        tstr = BuildRecordIdStr(ORr,i+1);
+        resetloop(RHr);
+        RHr.RecidStr = tstr;
+        TrHs = true;
+        if(fileexists("stop"))then begin
+          goto lWebDeleteOldRHist;
+        end;
+        cntr = 0;
+        while(loopbackkey("RecidStr",RHr,1,TrHs))begin
+          if(fileexists("stop"))then begin
+            goto lWebDeleteOldRHist;
+          end;
+          testf = true;
+          if(RHr.RecidStr!=tstr)then begin TrHs = false; testf = false; end;
+      
+          if(testf)then begin
+            qupdating.DeleteRhist(RHr);
+            //stepback(RHr);
+            cntr = cntr + 1;
+            if(cntr>1000)then begin
+              //goto lWebDeleteOldRHist;
+            end;
+          end;
+        end;
+      end;
+    end;
   end;
   
   logtext(0,"WebDeleteOldRHist end");
 
 lWebDeleteOldRHist:;
 
+return;
+end;
+
+global updating procedure MoveINToIDSALE(record ItemDuplicatesVc IDr)
+begin
+  record INVc INr,uINr;
+  
+  setcompany(3,false);
+  
+  INr.Code = IDr.OrigCode;
+  if(readfirstmain(INr,1,true) and INr.BPIBrand==IDr.OrigBrandCode)then begin
+    setcompany(34,false);
+    recordnew(uINr);
+    INr.UUID = uINr.UUID;
+    recordstore(INr,false);
+    logtext(0,"Item found in V&B " & INr.Code);
+  end;
+
+return;
+end;
+
+
+global webpublic procedure WebCheckIDSaleDuplItems()
+begin
+  record INVc INr;
+  record ItemDuplicatesVc IDr;
+  
+  setcompany(34,false);
+  
+  while(loopmain(IDr,1,true))begin
+    INr.Code = IDr.OrigCode;
+    if(readfirstmain(INr,1,true)==false)then begin
+      weboutstring(IDr.OrigCode & "<BR>");
+      qupdating.MoveINToIDSALE(IDr);
+    end;
+  end;
+  
 return;
 end;
