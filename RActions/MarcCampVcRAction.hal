@@ -47,7 +47,7 @@ remote updating function LongInt IVVcRecordRemove(var record IVVc, record IVVc, 
 external function LongInt ORVcRecordRemoveTest(var record ORVc,record ORVc,LongInt,LongInt);	//Added **********************************************Vas-P	10/09/2021
 external function LongInt ORVcRecordRemove(var record ORVc,record ORVc,LongInt,LongInt);	//Added **********************************************Vas-P	10/09/2021
 external function Boolean PasteCust2InInv(var record IVVc,record LocalMachineBlock,string,Boolean,var string,var string,var string,var string,var string);
-
+remote updating procedure RecalcORMn(record RcVc);  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 16:10 28.10.2021
 
 
 SetLangMode(LangRussian,"RUS",0);
@@ -4835,6 +4835,7 @@ begin
 	val tmpval,csum;
 	boolean tmpbool, cashf, clsumf;
 	vector boolean Itemf;
+	record RcVc RepSpec;
 
 	SetCompany(29,false);
 	
@@ -4889,6 +4890,12 @@ begin
 				end;
 				SHr.OKFlag = 1;
 				error = RecordUpdate(OldSHr,SHr,true);
+				RepSpec.f1 = SHr.OrderNr;
+				RepSpec.flags[1] = 1;
+				RepSpec.flags[0] = 1;
+				RepSpec.flags[2] = 0;
+				RepSpec.ArtMode = 0;
+				RecalcORMn(RepSpec);
 				if (error==0) then begin
 					IVr.OrderNr = ORr.SerNr;
 					if (ReadFirstKey("OrderNr",IVr,1,true)) then begin
@@ -7576,3 +7583,101 @@ begin
 return;
 end;
 
+
+global webpublic updating procedure WebGetLostSales()		//Edit **********************************************Vas-P 	19/10/2021
+begin
+	area getpost;
+	json datajson;
+	string 100 artcode,brandname,email,brandcode,location,token;
+	record LostSalesVc LSr;
+	record BPIBrandVc Brandr;
+	
+	logtext(0,"WebGetLostSales start");
+
+	webgetpostdata(getpost);
+
+	datajson = ParseJsonArea(getpost);
+  
+  token = JSONGet(datajson,"token");
+	artcode = JSONGet(datajson,"artCode");
+	brandname = JSONGet(datajson,"brand");
+	email = JSONGet(datajson,"email");
+	location = JSONGet(datajson,"location");
+	
+	WebSetContentType("application/json");		
+	
+	if(token=="fvgbgtyhmo987654ewsdfghjn")then begin
+	  setcompany(18,false);	
+    if(nonblank(artcode) and nonblank(brandname) and nonblank(email))then begin
+      Brandr.Name = brandname;
+      if(readfirstkey("Name",Brandr,1,true))then begin
+        brandcode = Brandr.Code;
+        LSr.ArtCode = artcode;
+        LSr.BrandCode = brandcode;
+        if(readfirstkey("ArtCode",LSr,2,true)==false)then begin
+          RecordNew(LSr);
+          LSr.ArtCode = artcode;
+          LSr.BrandCode = brandcode;
+          LSr.BrandName = brandname;
+          LSr.Email = email;
+          LSr.Date = CurrentDate;
+          LSr.Location = location;
+          RecordStore(LSr,true);
+        end;
+      end;
+    end;
+	  weboutstring("ok");
+	end else begin
+	  weboutstring("wrong token");
+	  
+	end;
+	logtext(0,"WebGetLostSales end");
+	
+return;
+end;
+
+ 
+// global procedure SendToEmail();	//Edit **********************************************Vas-P	27/10/2021
+// begin
+	// area lostsales, text;
+	// integer lines,i;
+	// string 255 artcode,brandcode,brandname,location,date;
+	// string emails;
+	
+	// AddfiletoArea("C:/Users/tohas/Desktop/lostsales.txt",lostsales,false);
+	// lines = CountLinesInArea(lostsales);  
+  // for (i=0;i<lines;i=i+1) begin
+    // artcode = GetTabTextFromArea(i,0,lostsales);
+		// brandcode = GetTabTextFromArea(i,1,lostsales);
+		// brandname = GetTabTextFromArea(i,2,lostsales);
+		// if(i!=lines)then begin
+			// emails = emails & GetTabTextFromArea(i,3,lostsales) & ",";
+		// end else begin
+			// emails = GetTabTextFromArea(i,3,lostsales);
+		// end;
+		// location = GetTabTextFromArea(i,4,lostsales);
+		// date = GetTabTextFromArea(i,5,lostsales);
+	// end;
+
+	// addtexttoarea("{",text);
+	// addtexttoarea("\"host\":\"smtp.gmail.com\",",text);
+	// addtexttoarea("\"port\":465,",text);
+	// addtexttoarea("\"secure\":true,",text);
+	// addtexttoarea("\"user\":\"IDReporSender@gmail.com\",",text);
+	// addtexttoarea("\"pass\":\"c2h5ohc2h5oh\",",text);
+	// addtexttoarea("\"from\":\"IDReportSender@gmail.com\",",text);
+	// addtexttoarea("\"to\":\"" & emails & "\",",text);
+	// addtexttoarea("\"subject\":\"" & "Lost Sales." & "\",",text);
+	// addtexttoarea("\"artcode\":" & artcode,text);
+	// addtexttoarea("\"brandcode\":" & brandcode,text);
+	// addtexttoarea("\"brandname\":" & brandname,text);
+	// addtexttoarea("\"location\":" & location,text);
+	// addtexttoarea("\"date\":" & date,text);
+	// addtexttoarea("}",text);
+
+	// SendWebRequest("127.0.0.1",1071,-1,false,"POST","/sendMail","application/json","",false,text,replyPr,5);
+
+// return;		
+// end;
+
+		
