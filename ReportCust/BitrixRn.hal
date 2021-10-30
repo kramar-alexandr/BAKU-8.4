@@ -173,7 +173,7 @@ begin
 		if((vSumOrders[tags[i] & "Sum"] - vSumOrders[tags[i] & "RetSum"])==0 and vSumOrders[tags[i] & "cntGet"] > vSumOrders[tags[i] & "cntRet"])then begin
 			OutString(70,0,"",false);
 		end else begin
-			if(vSumOrders[tags[i] & "cntGet"]<=vSumOrders[tags[i] & "cntRet"])then begin
+			if(vSumOrders[tags[i] & "cntGet"]==vSumOrders[tags[i] & "cntRet"])then begin
 				OutString(70,0,0,false);
 			end else begin
 				OutString(70,0,vSumOrders[tags[i] & "Sum"] - vSumOrders[tags[i] & "RetSum"],false);
@@ -187,7 +187,7 @@ begin
 		if((vSumOrders[tags[i] & "Cst"] - vSumOrders[tags[i] & "RetSum"])==0 and vSumOrders[tags[i] & "cntGet"] > vSumOrders[tags[i] & "cntRet"])then begin
 			OutString(80,0,"",false);
 		end else begin
-			if(vSumOrders[tags[i] & "cntGet"]<=vSumOrders[tags[i] & "cntRet"])then begin
+			if(vSumOrders[tags[i] & "cntGet"]==vSumOrders[tags[i] & "cntRet"])then begin
 				OutString(80,0,0,false);
 			end else begin
 				OutString(80,0,vSumOrders[tags[i] & "Cst"] - vSumOrders[tags[i] & "RetSum"],false);
@@ -235,6 +235,12 @@ begin
 	Integer i,j,cnrw;
 	val SumOrders, RValPaid, Ret, cntRet, cntGet;
 	date sd,td;
+	
+	//
+	string 255 FullName,ORrSerNr,Email,PhoneNumber;
+	date dateORr;
+	val SumOrder,CostPrice,AmountPaid;
+	//
 
 	StartReportnoheaderjob("Отчет по продажам");
 
@@ -264,26 +270,34 @@ begin
 		chClose = false;
 		cntRet = 0;
 		cntGet = 0;
+		Ret = blankval;
 		
 		if (DateInRange(ORr.OrdDate,sd,td)==false) then begin testf = false; end;
 		
+		
+		FullName = "";
+		ORrSerNr = "";			
+		SumOrder = blankval;
+		CostPrice = blankval;
+		AmountPaid = blankval;
+		Email = "";
+		PhoneNumber = "";
+		
 		if(testf)then begin
-			StartFormat(15);
-				OutString(30,0,ORr.Addr0,false);
-				OutString(40,0,ORr.OrdDate,false);				
-				OutString(50,0,ORr.SerNr,false);
+				FullName = ORr.Addr0;
+				dateORr = ORr.OrdDate;	
+				ORrSerNr = ORr.SerNr;			
+				SumOrder = ORr.Sum4;
 				
-				OutString(60,0,ORr.Sum4,false);
 				
 				cnrw = MatRowCnt(ORr);
 				for(i=0;i<cnrw;i=i+1)begin
 					MatRowGet(ORr,i,ORrw);
-					cntGet = cntGet + Retrw.Quant;
+					cntGet = cntGet + ORrw.Quant;
 					
 					/////
 					Retr.OrdNr = ORr.SerNr;
 					TrHs1 = true;
-					Ret = blankval;
 					while(LoopKey("OrdNr",Retr,1,TrHs1))begin
 						if(Retr.OrdNr!=ORr.SerNr)then begin TrHs1 = false; end;
 						
@@ -292,13 +306,13 @@ begin
 								MatRowGet(Retr,j,Retrw);
 								if(Retrw.ArtCode==ORrw.ArtCode)then begin
 									cntRet = cntRet + Retrw.Quant;
-									Ret = Ret + Retrw.BBCostPrice * Retrw.Quant;
+									Ret = Ret + Retrw.CostPrice * Retrw.Quant;
 									TrHs1 = false;
 								end;
 							end;
 						end;
 					end;
-					/////
+					ResetLoop(Retr);
 					
 					if(blank(ORrw.ECReservStock))then begin
 						if(testf1)then begin
@@ -321,21 +335,20 @@ begin
 					end;
 				end;
 				
-				
 				if(ORr.Closed!=0)then begin
 					chClose=true;
 				end;
-				
-				if(!chClose)then begin
-					OutString(70,0,0,false);
+
+				if(chClose)then begin
+					CostPrice = 0;
 				end else begin
 					if((SumOrders - Ret)==0 and cntGet > cntRet)then begin
-						OutString(70,0,"",false);
+						CostPrice = blankval;
 					end else begin
 						if(cntGet == cntRet)then begin
-							OutString(70,0,0,false);
+							CostPrice = 0;
 						end else begin
-							OutString(70,0,SumOrders - Ret,false);
+							CostPrice = SumOrders - Ret;
 						end;
 					end;
 				end;
@@ -357,22 +370,41 @@ begin
 				end;
 				
 				
-				if(!chClose)then begin
-					OutString(80,0,0,false);
+				if(chClose)then begin
+					AmountPaid = 0;
 				end else begin
 					if((RValPaid - Ret)==0 and cntGet > cntRet)then begin
-						OutString(80,0,"",false);
+						AmountPaid = blankval;
 					end else begin
 						if(cntGet == cntRet)then begin
-							OutString(80,0,0,false);
+							AmountPaid = 0;
 						end else begin
-							OutString(80,0,RValPaid - Ret,false);
+							AmountPaid = RValPaid - Ret;
 						end;
 					end;
 				end;
 				
-				OutString(90,0,ORr.eMail,false);
-				OutString(100,0,ORr.Phone,false);
+				Email = ORr.eMail;
+				PhoneNumber = ORr.Phone;
+
+			StartFormat(15);
+				OutString(30,0,FullName,false);
+				OutString(40,0,dateORr,false);
+				OutString(50,0,ORrSerNr,false);
+				OutString(60,0,SumOrder,false);
+				if(CostPrice == blankval)then begin
+					OutString(70,0,"",false);
+				end else begin
+					OutString(70,0,CostPrice,false);
+				end;
+				if(AmountPaid == blankval)then begin
+					OutString(80,0,"",false);
+				end else begin
+					OutString(80,0,AmountPaid,false);
+				end;
+				OutString(90,0,Email,false);
+				OutString(100,0,PhoneNumber,false);
+				OutString(110,0,"",false);
 			EndFormat;
 		end;
 
@@ -407,16 +439,19 @@ begin
 	row RetVc Retrw;
 	record GlobalItemVc GlobalItemr; 
 	record BtrxFirstLevelCatVc BtrxFirstLevelCatr;
-	Boolean TrHs,testf,testf1,testf2,TrHs1;
-	Integer i,j,k,cnrw;
-	val Ret, RValPaid,oblRVal, SumOrders;
-	date sd,td;
-	String 255 strObj;
-	//
-	val SumCredIv, SumSH, SumIv;
-	Boolean chSH;
+	record ExpProvItemRegVc EPIRr;
+	record CUVc CUr;
 	record SHVc SHr;
 	row SHVc SHrw;
+	Boolean TrHs,testf,testf1,TrHs1;
+	Integer i,j,k,cnrw;
+	val SumOrders;
+	date sd,td;
+	val SumCredIv, SumSH, SumIv;
+	Boolean chSH;
+	string 255 FullName,ORrSerNr,VendorCode,ProductName_,Provider,Category,CardPromoCode,Email,PhoneNumber;
+	date dateORr;
+	val Sum,Return_,Discount,DebtToSupplier,DebtToSupplierSum,PaidUp,PaidUpSum,Profit,PercDebt;
 
 	StartReportnoheaderjob("Расширенный отчет по продажам");
 
@@ -450,21 +485,13 @@ begin
 	  k = 1; 
 		testf = true;
 		testf1 = true;
-		testf2 = true;
-		Ret = blankval;
 		SumOrders  = blankval;
-
 		
-		
-		///
     chSH = false;
-		///
 		
 		if (DateInRange(ORr.OrdDate,sd,td)==false) then begin testf = false; end;
 		
 		if(testf)then begin
-		
-			// while(ReadRecordLink(ORr,k,IVr,RLr))begin
 
 			if(ReadRecordLink(ORr,1,SHr,RLr))then begin
 				chSH = true;
@@ -475,172 +502,185 @@ begin
 			for(i=0;i<cnrw;i=i+1)begin
 				MatRowGet(ORr,i,ORrw);
 				
-				RValPaid = blankval;
-				oblRVal = blankval;
+				
+				Provider = "";
+				Category = "";
 				
 				SumCredIv = 0;
 				SumIv = 0;
 				SumSH = 0;
 				
-				StartFormat(15);
-					OutString(30,0,ORr.Addr0,false);
-					OutString(40,0,ORr.OrdDate,false);
-					OutString(50,0,ORr.SerNr,false);
-					
+				FullName = ORr.Addr0;
+				dateORr = ORr.OrdDate;
+				ORrSerNr = ORr.SerNr;
 				
-					INr.Code = ORrw.ArtCode;
-					if(ReadFirstMain(INr,1,true))then begin
-						GlobalItemr.Code = INr.Code;
-						if(ReadFirstMain(GlobalItemr,1,true))then begin
-							OutString(60,0,GlobalItemr.HansaCode,false); 
-						end else begin
-							OutString(60,0,"",false); 
-						end;
-						
-						testf1 = true;
+				
+				INr.Code = ORrw.ArtCode;
+				if(ReadFirstMain(INr,1,true))then begin
+					GlobalItemr.Code = INr.GlobalArtCode;
+					if(ReadFirstMain(GlobalItemr,1,true))then begin
+						VendorCode = GlobalItemr.HansaCode;
 					end else begin
-						OutString(60,0,"",false); 
-						testf1 = false;
+						VendorCode = "";
 					end;
-					
-					OutString(70,0,ORrw.Spec,false);   
+				end else begin
+					VendorCode = "";
+				end;
+				
+				ProductName_ = ORrw.Spec; 
+				
+				INr.Code = ORrw.ArtCode;
+				if(ReadFirstMain(INr,1,true))then begin
+					GlobalItemr.Code = INr.GlobalArtCode;
+					if(ReadFirstMain(GlobalItemr,1,true))then begin
+						if(GlobalItemr.ExtProwItRegulations > 0)then begin
+							EPIRr.SerNr = GlobalItemr.ExtProwItRegulations; 
+							if(ReadFirstMain(EPIRr,1,true)) then begin
+								CUr.Code = EPIRr.Comment;
+								if(ReadFirstMain(CUr,1,true)) then begin
+									Provider = CUr.Name;	
+								end;
+							end;
+						end else begin
+							Provider = ORrw.ECReservStock;
+						end;
+					end;
+				end;
+				
+				INr.Code = ORrw.ArtCode;
+				if(ReadFirstMain(INr,1,true))then begin
+					GlobalItemr.Code = INr.GlobalArtCode;
+					if(ReadFirstMain(GlobalItemr,1,true))then begin
+						BtrxFirstLevelCatr.Code = GlobalItemr.BTRxFirstLevCat;
+						if(ReadFirstMain(BtrxFirstLevelCatr,1,true))then begin
+							Category = BtrxFirstLevelCatr.NameRUS;
+						end;
+					end;
+				end;
 
-					strObj = "";
+				Sum = ORrw.Sum;  
+
+				Retr.OrdNr = ORr.SerNr;
+				TrHs1 = true;
+				Return_ = blankval;
+				while(LoopKey("OrdNr",Retr,1,TrHs1))begin
+					if(Retr.OrdNr!=ORr.SerNr)then begin TrHs1 = false; end;
+					
+					if(TrHs1)then begin
+						for(j=0;j<MatRowCnt(Retr);j=j+1)begin
+							MatRowGet(Retr,j,Retrw);
+							if(Retrw.ArtCode==ORrw.ArtCode)then begin
+								Return_ = Return_ + Retrw.CostPrice * Retrw.Quant;
+								TrHs1 = false;
+							end;
+						end;
+					end;
+				end;
+				ResetLoop(Retr);
+				
+				if(ORrw.vRebate!=blankval)then begin
+					Discount = ORrw.vRebate;     
+				end else begin
+					Discount = 0;
+				end;
+				CardPromoCode = ORr.ECLoyaltyCard;
+
+				PaidUpSum = blankval;
+				if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
+				
+				 if(IVr.OKFlag==1)then begin
+						ARr.InvoiceNr = IVr.SerNr;
+						if(ReadFirstMain(ARr,1,true))then begin
+							PaidUpSum = IVr.Sum4 - ARr.RVal;
+						end else begin
+							PaidUpSum = IVr.Sum4;
+						end;
+					end else begin
+						PaidUpSum = 0; // от суммы сч/ф кл PaidUp%
+					end;
+				end;
+				DebtToSupplierSum = IVr.Sum4-PaidUpSum; // по % раскинуть на все товары  IVr.Sum4-PaidUp //DebtToSupplier
+				PercDebt = DebtToSupplierSum/IVr.Sum4 * 100;
+				DebtToSupplier = (Sum * PercDebt) / 100;
+				PaidUp = Sum - DebtToSupplier;
+
+				testf1 = true;
+				if(blank(ORrw.ECReservStock))then begin
 					if(ReadRecordLink(ORr,1,POr,RLr))then begin
-						strObj = POr.VECode;
-					end else begin
-						strObj = "";
-					end;          
-					OutString(80,0,strObj,false);   
-					
-					strObj = "";
-					if(testf1)then begin
-						GlobalItemr.Code = INr.Code;
-						if(ReadFirstMain(GlobalItemr,1,true))then begin
-							BtrxFirstLevelCatr.Code = GlobalItemr.BTRxFirstLevCat;
-							if(ReadFirstMain(BtrxFirstLevelCatr,1,true))then begin
-								strObj = BtrxFirstLevelCatr.NameRUS;
-							end;
-						end;
-					end;
-					OutString(90,0,strObj,false);
-					OutString(100,0,ORrw.Sum,false);     
-
-					Retr.OrdNr = ORr.SerNr;
-					TrHs1 = true;
-					Ret = blankval;
-					while(LoopKey("OrdNr",Retr,1,TrHs1))begin
-						if(Retr.OrdNr!=ORr.SerNr)then begin TrHs1 = false; end;
-						
-						if(TrHs1)then begin
-							for(j=0;j<MatRowCnt(Retr);j=j+1)begin
-								MatRowGet(Retr,j,Retrw);
-								if(Retrw.ArtCode==ORrw.ArtCode)then begin
-									Ret = Ret + Retrw.BBCostPrice * Retrw.Quant;
-									TrHs1 = false;
+						if(ReadRecordLink(POr,1,PUr,RLr))then begin
+							for(j=0;j<MatRowCnt(PUr);j=j+1)begin
+								MatRowGet(PUr,j,PUrw);
+								if(PUrw.ArtCode==ORrw.ArtCode)then begin
+									SumOrders =	PUrw.Sum;
 								end;
 							end;
 						end;
 					end;
-					OutString(110,0,Ret,false); 
-					if(ORrw.vRebate!=blankval)then begin
-						OutString(120,0,ORrw.vRebate & "%",false);     
-					end else begin
-						OutString(120,0,ORrw.vRebate,false);
-					end;
-					OutString(130,0,ORr.ECLoyaltyCard,false); 
-					
-					
-					
-					// if(ReadRecordLink(ORr,1,VIr,RLr))then begin
-						// APr.InvoiceNr = VIr.SerNr;
-						// if(ReadFirstMain(ARr,1,true))then begin
-							// oblRVal = APr.RVal;
-						// end;
-					// end;			
-					//OutString(140,0,oblRVal,false);    
-
-					RValPaid = blankval;
-					if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
-				
-					 if(IVr.OKFlag==1)then begin
-							ARr.InvoiceNr = IVr.SerNr;
-							if(ReadFirstMain(ARr,1,true))then begin
-								RValPaid = IVr.Sum4 - ARr.RVal;
-							end else begin
-								RValPaid = IVr.Sum4;
-							end;
-						end else begin
-							RValPaid = 0;
-						end;
-						
-					end;
-					OutString(140,0,ORrw.Sum-RValPaid,false);    
-					OutString(150,0,RValPaid,false);  
-
-					testf1 = true;
-					if(blank(ORrw.ECReservStock))then begin
-						if(ReadRecordLink(ORr,1,POr,RLr))then begin
-							if(ReadRecordLink(POr,1,PUr,RLr))then begin
-								for(j=0;j<MatRowCnt(PUr);j=j+1)begin
-									MatRowGet(PUr,j,PUrw);
-									if(PUrw.ArtCode==ORrw.ArtCode)then begin
-										SumOrders =	PUrw.Sum;
-									end;
-								end;
-							end;
-						end;
-					end else begin
-						k=1;
-						while(ReadRecordLink(ORr,k,PUr,RLr))begin
-							if(testf1)then begin
-								for(j=0;j<MatRowCnt(PUr);j=j+1)begin
-									MatRowGet(PUr,j,PUrw);
-									if(PUrw.ArtCode==ORrw.ArtCode)then begin
-										SumOrders =	PUrw.Sum;
-										testf1 = false;
-									end;
-								end;
-							end;
-							k=k+1;
-						end;
-					end;
-					
-					if(chSH)then begin
-						for(j=0;j<MatRowCnt(SHr);j=j+1)begin
-							MatRowGet(SHr,j,SHrw);
-							if(ORrw.ArtCode == SHrw.ArtCode) then begin
-								SumSH = SumSH + SHrw.FIFORowVal;
-							end;
-						end;
-					end;
-					
+				end else begin
 					k=1;
-					while(ReadRecordLink(ORr,k,IVr,RLr))begin
-						if(IVr.PayDeal == "CN")then begin
-							for(j=0;j<MatRowCnt(IVr);j=j+1)begin
-								MatRowGet(IVr,j,IVrw);
-								if(ORrw.ArtCode == IVrw.ArtCode) then begin
-									SumCredIv = SumCredIv + IVrw.Sum;
-								end;
-							end;
-						end else begin
-							for(j=0;j<MatRowCnt(IVr);j=j+1)begin
-								MatRowGet(IVr,j,IVrw);
-								if(ORrw.ArtCode == IVrw.ArtCode) then begin
-									SumIv = SumIv + IVrw.Sum;
-								end;
+					while(ReadRecordLink(ORr,k,PUr,RLr))begin
+						for(j=0;j<MatRowCnt(PUr);j=j+1)begin
+							MatRowGet(PUr,j,PUrw);
+							if(PUrw.ArtCode==ORrw.ArtCode)then begin
+								SumOrders =	SumOrders + PUrw.Sum; // сумма поступления
+								testf1 = false;
 							end;
 						end;
-						
 						k=k+1;
 					end;
+				end;
+				
+				if(chSH)then begin
+					for(j=0;j<MatRowCnt(SHr);j=j+1)begin
+						MatRowGet(SHr,j,SHrw);
+						if(ORrw.ArtCode == SHrw.ArtCode) then begin
+							SumSH = SumSH + SHrw.FIFORowVal;
+						end;
+					end;
+				end;
+				
+				k=1;
+				while(ReadRecordLink(ORr,k,IVr,RLr))begin
+					if(IVr.PayDeal == "CN")then begin
+						for(j=0;j<MatRowCnt(IVr);j=j+1)begin
+							MatRowGet(IVr,j,IVrw);
+							if(ORrw.ArtCode == IVrw.ArtCode) then begin
+								SumCredIv = SumCredIv + IVrw.Sum;
+							end;
+						end;
+					end else begin
+						for(j=0;j<MatRowCnt(IVr);j=j+1)begin
+							MatRowGet(IVr,j,IVrw);
+							if(ORrw.ArtCode == IVrw.ArtCode) then begin
+								SumIv = SumIv + IVrw.Sum;
+							end;
+						end;
+					end;
 					
-					//OutString(160,0,RValPaid - SumOrders,false); // ORrw.Sum - SumOrders
-					OutString(160,0,(SumIv - SumCredIv - SumSH + Ret),false); 
-					
-					OutString(170,0,ORr.eMail,false);
-					OutString(180,0,ORr.Phone,false);
+					k=k+1;
+				end;
+				
+				Profit = (SumIv - SumCredIv - SumSH + Return_);
+				Email = ORr.eMail;
+				PhoneNumber = ORr.Phone;
+				
+				StartFormat(15);
+				OutString(30,0,FullName,false); 												
+				OutString(40,0,dateORr,false);                          
+				OutString(50,0,ORrSerNr,false);                  
+				OutString(60,0,VendorCode,false);                
+				OutString(70,0,ProductName_,false);               
+				OutString(80,0,Provider,false);                      
+				OutString(90,0,Category,false);                      
+				OutString(100,0,Sum,false);                         
+				OutString(110,0,Return_,false);                       
+				OutString(120,0,Discount & "%",false);                        
+				OutString(130,0,CardPromoCode,false);    
+				OutString(140,0,DebtToSupplier,false);               
+				OutString(150,0,PaidUp,false);                      
+				OutString(160,0,Profit,false);                       
+				OutString(170,0,Email,false);                         
+				OutString(180,0,PhoneNumber,false);                       
 				EndFormat; 
 			end;
 		end;
@@ -731,9 +771,6 @@ begin
 						orquant[orquant.length] = ORr.SerNr;
 						orsum = orsum + ORr.Sum4;
 						
-						//LogText(0,"tmpdate = " & tmpdate & " enddate = " & enddate);
-						//LogText(0,"ORr.SerNr = " & ORr.SerNr & " ORr.OrdDate = " & ORr.OrdDate);///////////////////////////////////////////////////////////////////////////////////
-						
 						SHr.OrderNr = ORr.SerNr;
 						if (ReadFirstKey("OrderKey",SHr,1,true)) then begin
 							if (SHr.OKFlag==1) then begin
@@ -742,7 +779,7 @@ begin
 								for (i=0;i<matrowcnt(ORr);i=i+1) begin
 									matrowget(ORr,i,ORrw);
 									
-									shsum = shsum + ORrw.Shipd2 * ORrw.Price * ORrw.vRebate; // Edit ********************** Ihor Trubachov 25*10*2021
+									shsum = shsum + ORrw.Shipd2 * ORrw.Price - ((ORrw.Shipd2 * ORrw.Price * ORrw.vRebate)/100); // Edit ********************** Ihor Trubachov 25*10*2021
 									if(ORrw.ECReservComp>0 and nonblank(ORrw.ECReservStock))then begin
 										idquant = idquant + ORrw.Shipd2;										
 									end else begin
