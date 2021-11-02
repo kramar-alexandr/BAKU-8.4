@@ -5739,12 +5739,13 @@ string 100 class;
 record CompaniesBlock Compb;
 row CompaniesBlock Comprw;
 record ItemStatusVc ISr,IS2r;
-boolean TrHs;
+boolean TrHs,TrHs2;
 record LocationVc Locr;
 boolean instock;
 longint curtick;	
 record ConsItemVc CIr;
 val clientres;
+record ItemDuplicatesVc IDr;
 
 	// WebSyncCustomerSales;
 	
@@ -5771,20 +5772,6 @@ val clientres;
 		matrowget(Compb,i,Comprw);
 		if(Comprw.ActiveStatus==0)then begin
 			SetCompany(i+1,false);
-			/*If(nonblank(INr.GlobalArtCode)) then begin
-				IN2r.Code = Right(INr.GlobalArtCode,Len(INr.GlobalArtCode)-9);
-			end else begin 	IN2r.Code = INr.Code; end;
-				if(!ReadFirstMain(IN2r,1,true)) then begin
-					goto skipcomp;
-				end;	
-				
-			if(IN2r.BPIBrand!=INr.BPIBrand) then begin 
-				if(nonblank(RepSpec.f2)) then begin 
-					if(RepSpec.f2!=IN2r.BPIBrand) then begin
-						goto skipcomp;
-					end;
-				end;	
-			end;*/
 			
 			IN2r.Code = INr.Code;
 			if(currentcompany!=18)then begin
@@ -5869,6 +5856,55 @@ val clientres;
 							endformat;
 					end;
 				end;
+				IDr.OrigCode = INr.Code;
+        TrHs = true;
+        while(loopMain(IDr,1,TrHs))begin
+          if (IDr.OrigCode!=INr.Code) then begin TrHs = false; end;
+          if (IDr.OrigBrandCode==INr.BPIBrand and TrHs) then begin
+            TrHs2 = true;
+            IS2r.Code = IDr.DupCode;
+            while(loopmain(IS2r,1,TrHs2))begin
+              if(IS2r.Code!=IDr.DupCode)then begin TrHs2 = false; end;
+          
+              if(TrHs2)then begin
+                  instock = true;
+                  startformat(15);
+                  outstring(0,0,IS2r.Location,false);
+                  Locr.Code = IS2r.Location;
+                  readfirstmain(Locr,1,true);
+                  outstring(50,0,Locr.Name,false);
+                  if(currentcompany!=18)then begin
+                    outstring(120,"dblINVc",IN2r.Code ,false);
+                  end else begin
+                    outstring(120,0,INr.Code ,false);
+                  end;
+                  outstring(180,0,IN2r.Name ,false);
+                  if(blank(IS2r.Instock)) then begin
+                    outstring(300,0,"0",false);
+                  end else begin	
+                    outstring(300,0,IS2r.Instock,false);
+                  end;	
+                  if(blank(IS2r.RsrvQty)) then begin
+                    outstring(350,0,"0",false);
+                  end else begin	
+                    outstring(350,0,IS2r.RsrvQty+clientres,false);
+                  end;	
+                  if(blank(IS2r.Instock) and blank(IS2r.RsrvQty)) then begin
+                    outstring(400,0,"0",false);
+                  end else begin	
+                    outstring(400,0,IS2r.Instock-IS2r.RsrvQty-clientres,false);
+                  end;		
+                  endformat;
+              end;
+            end;
+          
+          
+          end;
+        end;
+        resetloop(IDr);
+				
+				
+				
 			end;	
 		end;
 		skipcomp:;
