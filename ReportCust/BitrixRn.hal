@@ -226,14 +226,14 @@ begin
 	row ORVc ORrw;
 	record POVc POr;
 	record PUVc PUr;
-	record IVVc IVr;
+	record IVVc IVr, CredIVr;
 	record ARVc ARr;
 	record RLinkVc RLr;
 	record RetVc Retr;
 	row RetVc Retrw;
-	Boolean TrHs,TrHs1,testf,testf1,testf2, chClose;
+	Boolean TrHs,TrHs1,testf,testf1,testf2, chClose,SumOrderblf,CostPriceblf,AmountPaidblf,TrHs2;
 	Integer i,j,cnrw;
-	val SumOrders, RValPaid, Ret, cntRet, cntGet;
+	val SumOrders, RValPaid, Ret, cntRet, cntGet, RetSum;
 	date sd,td;
 	
 	//
@@ -279,7 +279,9 @@ begin
 		ORrSerNr = "";			
 		SumOrder = blankval;
 		CostPrice = blankval;
+		CostPriceblf = true;
 		AmountPaid = blankval;
+		AmountPaidblf = true;
 		Email = "";
 		PhoneNumber = "";
 		
@@ -341,20 +343,25 @@ begin
 
 				if(chClose)then begin
 					CostPrice = 0;
+					CostPriceblf = false;
 				end else begin
 					if((SumOrders - Ret)==0 and cntGet > cntRet)then begin
 						CostPrice = blankval;
 					end else begin
 						if(cntGet == cntRet)then begin
 							CostPrice = 0;
+							CostPriceblf = false;
 						end else begin
 							CostPrice = SumOrders - Ret;
+							CostPriceblf = false;
 						end;
 					end;
 				end;
 				
 				
 				if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
+					
+					
 				
 				 if(IVr.OKFlag==1)then begin
 						ARr.InvoiceNr = IVr.SerNr;
@@ -367,19 +374,37 @@ begin
 						RValPaid = 0;
 					end;
 					
+					RetSum = 0;
+					TrHs2 = true;
+					CredIVr.OrderNr = ORr.SerNr;
+					while (LoopKey("OrderNr",CredIVr,1,TrHs2)) begin
+						testf2 = true;
+						if (CredIVr.OrderNr!=ORr.SerNr) then begin TrHs2 = false; testf2 = false; end;
+						if (CredIVr.SerNr==IVr.SerNr) then begin testf2 = false; end;
+						if (CredIVr.OKFlag!=1) then begin testf2 = false; end;
+						// if (CredIVr.TransDate>RepSpec.sEndDate) then begin testf2 = false; end;
+						if (testf2) then begin
+							RetSum = RetSum + CredIVr.Sum4;
+						end;
+					end;
+					resetloop(CredIVr);
+					
 				end;
 				
 				
 				if(chClose)then begin
 					AmountPaid = 0;
+					AmountPaidblf = false;
 				end else begin
-					if((RValPaid - Ret)==0 and cntGet > cntRet)then begin
+					if((RValPaid - RetSum)==0 and cntGet > cntRet)then begin
 						AmountPaid = blankval;
 					end else begin
 						if(cntGet == cntRet)then begin
 							AmountPaid = 0;
+							AmountPaidblf = false;
 						end else begin
-							AmountPaid = RValPaid - Ret;
+							AmountPaid = RValPaid - RetSum;
+							AmountPaidblf = false;
 						end;
 					end;
 				end;
@@ -392,12 +417,12 @@ begin
 				OutString(40,0,dateORr,false);
 				OutString(50,0,ORrSerNr,false);
 				OutString(60,0,SumOrder,false);
-				if(CostPrice == blankval)then begin
+				if(CostPriceblf)then begin
 					OutString(70,0,"",false);
 				end else begin
 					OutString(70,0,CostPrice,false);
 				end;
-				if(AmountPaid == blankval)then begin
+				if(AmountPaidblf)then begin
 					OutString(80,0,"",false);
 				end else begin
 					OutString(80,0,AmountPaid,false);
