@@ -151,7 +151,7 @@ updating procedure UpdateInstock(string filename,string transnr,string ac,string
 BEGIN
   record ItemStatusVc ISr;
   record ItemStatusVc oldISr;
-  Boolean found,deltest,locf,ItemDuplicatesf;
+  Boolean found,deltest,locf,ItemDuplicatesf,updateGIneed;
   string 10 loc2;
   Date bldat;
   val waprice;
@@ -246,21 +246,17 @@ LUpdateInstock:;
       (ISr.ProdOrd==0) and
       (ISr.WOrd==0) and
       (ISr.InWSheet==0)) then begin deltest = true; end;
+  
+  if(ISr.Instock!=oldISr.Instock or ISr.RsrvQty!=oldISr.RsrvQty)then begin
+    updateGIneed = true;
+  end;
   if (deltest==false) then begin
     if (found==false) then begin
       if (RecordStore(ISr,true)) then begin 
-				// if(nonblank(INr.BPIBrand))then begin
-					// GIr.Code = INr.BPIBrand & "_" & INr.Code;
-					// oldGIr.Code = INr.BPIBrand & "_" & INr.Code;
-					// RecordCopy(CrtINr,INr);
-					// if (!readfirstmain(GIr,1,true))then begin CreateNewGlobalItem(CrtINr); end;
-				// end;
 				if(nonblank(INr.BPIBrand))then begin
 					GIr.Code = INr.BPIBrand & "_" & INr.Code;
-					// oldGIr.Code = INr.BPIBrand & "_" & INr.Code;
 					if (!FileExists("STOPSincGI")) then begin
 						if (readfirstmain(GIr,1,true))then begin
-							//if (readfirstmain(oldGIr,1,true)) then begin end;
 							RecordCopy(oldGIr,GIr);
 							DiffStockVal = 0;
 							rwcnt = matrowcnt(GIr);
@@ -276,22 +272,14 @@ LUpdateInstock:;
 									GIrw.Code = GIr.Code;
 									
 									if(GIrw.Instock<0) then begin GIrw.Instock = 0; end;
-									// if(CurGirInstock!=GIrw.Instock)then begin // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 17:50 14.08.2020
-										matrowput(GIr,i,GIrw);
-										GIWasUpdated(GIr,oldGIr," GIWasUpdatedlog 83");
-										if (RecordUpdate(oldGIr,GIr,true)==0) then begin 
-											BRChb.WabUPDstockf = 1;
-											BlockStore(BRChb);
-											UpdateStockInOrigGlobalItem(GIr.Code, DiffStockVal, GIrw.Location, ItemDuplicatesf);
-											UpdateStockInSetGlobalItem(GIr.Code);
-											// if (!ItemDuplicatesf and GIrw.Instock==1 and CurrentCompany==1) then begin
-												// RecordCopy(oldGIr,GIr);
-												// GIrw.Instock = 0;
-												// matrowput(GIr,i,GIrw);
-												// if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
-											// end;
-										end;
-									// end;
+                  matrowput(GIr,i,GIrw);
+                  GIWasUpdated(GIr,oldGIr," GIWasUpdatedlog 83");
+                  if (RecordUpdate(oldGIr,GIr,true)==0) then begin 
+                    BRChb.WabUPDstockf = 1;
+                    BlockStore(BRChb);
+                    UpdateStockInOrigGlobalItem(GIr.Code, DiffStockVal, GIrw.Location, ItemDuplicatesf);
+                    UpdateStockInSetGlobalItem(GIr.Code);
+                  end;
 								end;
 							end;
 							if(!locf and SetInSet(loc2,WRSb.ResStockSet))then begin
@@ -310,12 +298,6 @@ LUpdateInstock:;
 										BlockStore(BRChb);
 										UpdateStockInOrigGlobalItem(GIr.Code, DiffStockVal, GIrw.Location, ItemDuplicatesf);
 										UpdateStockInSetGlobalItem(GIr.Code);
-										// if (!ItemDuplicatesf and GIrw.Instock==1 and CurrentCompany==1) then begin
-											// RecordCopy(oldGIr,GIr);
-											// GIrw.Instock = 0;
-											// matrowput(GIr,i,GIrw);
-											// if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
-										// end;
 									end;
 								end;
 							end;
@@ -328,18 +310,10 @@ LUpdateInstock:;
 			end;
     end else begin
       if (RecordUpdate(oldISr,ISr,false)==0) then begin 
-				// if(nonblank(INr.BPIBrand))then begin
-					// GIr.Code = INr.BPIBrand & "_" & INr.Code;
-					// oldGIr.Code = INr.BPIBrand & "_" & INr.Code;
-					// RecordCopy(CrtINr,INr);
-					// if (!readfirstmain(GIr,1,true))then begin CreateNewGlobalItem(CrtINr); end;
-				// end;
-				if(nonblank(INr.BPIBrand))then begin
+				if(nonblank(INr.BPIBrand) and updateGIneed)then begin
 					GIr.Code = INr.BPIBrand & "_" & INr.Code;
-					//oldGIr.Code = INr.BPIBrand & "_" & INr.Code;
 					if (!FileExists("STOPSincGI")) then begin
 						if (readfirstmain(GIr,1,true))then begin
-							//if (readfirstmain(oldGIr,1,true)) then begin end;
 							RecordCopy(oldGIr,Gir);
 							rwcnt = matrowcnt(GIr);
 							locf = false;
@@ -353,21 +327,13 @@ LUpdateInstock:;
 									GIrw.Instock = ISr.Instock - ISr.RsrvQty;
 									GIrw.Code = GIr.Code;
 									matrowput(GIr,i,GIrw);
-									// if(CurGirInstock!=GIrw.Instock)then begin  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 17:51 14.08.2020
-										GIWasUpdated(GIr,oldGIr," GIWasUpdatedlog 85");
-										if (RecordUpdate(oldGIr,GIr,true)==0) then begin
-											BRChb.WabUPDstockf = 1;
-											BlockStore(BRChb);
-											UpdateStockInOrigGlobalItem(GIr.Code, DiffStockVal, GIrw.Location, ItemDuplicatesf);
-											UpdateStockInSetGlobalItem(GIr.Code);
-											// if (!ItemDuplicatesf and GIrw.Instock==1 and CurrentCompany==1) then begin
-												// RecordCopy(oldGIr,GIr);
-												// GIrw.Instock = 0;
-												// matrowput(GIr,i,GIrw);
-												// if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
-											// end;
-										end;
-									// end;
+                  GIWasUpdated(GIr,oldGIr," GIWasUpdatedlog 85");
+                  if (RecordUpdate(oldGIr,GIr,true)==0) then begin
+                    BRChb.WabUPDstockf = 1;
+                    BlockStore(BRChb);
+                    UpdateStockInOrigGlobalItem(GIr.Code, DiffStockVal, GIrw.Location, ItemDuplicatesf);
+                    UpdateStockInSetGlobalItem(GIr.Code);
+                  end;
 								end;
 							end;
 							if(!locf and SetInSet(loc2,WRSb.ResStockSet))then begin
@@ -386,12 +352,6 @@ LUpdateInstock:;
 										BlockStore(BRChb);
 										UpdateStockInOrigGlobalItem(GIr.Code, DiffStockVal, GIrw.Location, ItemDuplicatesf);
 										UpdateStockInSetGlobalItem(GIr.Code);
-										// if (!ItemDuplicatesf and GIrw.Instock==1 and CurrentCompany==1) then begin
-											// RecordCopy(oldGIr,GIr);
-											// GIrw.Instock = 0;
-											// matrowput(GIr,i,GIrw);
-											// if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
-										// end;
 									end;
 								end;
 							end;
@@ -406,18 +366,10 @@ LUpdateInstock:;
   end else begin
     if (found) then begin
       if (RecordUpdate(oldISr,ISr,false)==0) then begin 
-				// if(nonblank(INr.BPIBrand))then begin
-					// GIr.Code = INr.BPIBrand & "_" & INr.Code;
-					// oldGIr.Code = INr.BPIBrand & "_" & INr.Code;
-					// RecordCopy(CrtINr,INr);
-					// if (!readfirstmain(GIr,1,true))then begin CreateNewGlobalItem(CrtINr); end;
-				// end;
-				if(nonblank(INr.BPIBrand))then begin
+				if(nonblank(INr.BPIBrand) and updateGIneed)then begin
 					GIr.Code = INr.BPIBrand & "_" & INr.Code;
-					// oldGIr.Code = INr.BPIBrand & "_" & INr.Code;
 					if (!FileExists("STOPSincGI")) then begin
 						if (readfirstmain(GIr,1,true))then begin
-							//if (readfirstmain(oldGIr,1,true)) then begin end;
 							RecordCopy(oldGIr,Gir);
 							rwcnt = matrowcnt(GIr);
 							locf = false;
@@ -434,21 +386,13 @@ LUpdateInstock:;
 									
 									if(GIrw.Instock<0) then begin GIrw.Instock = 0; end;
 									matrowput(GIr,i,GIrw);
-									// if(CurGirInstock!=GIrw.Instock)then begin  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 17:52 14.08.2020
 										GIWasUpdated(GIr,oldGIr," GIWasUpdatedlog 87");
 										if (RecordUpdate(oldGIr,GIr,true)==0) then begin 
 											BRChb.WabUPDstockf = 1;
 											BlockStore(BRChb);
 											UpdateStockInOrigGlobalItem(GIr.Code, DiffStockVal, GIrw.Location, ItemDuplicatesf);
 											UpdateStockInSetGlobalItem(GIr.Code);
-											// if (!ItemDuplicatesf and GIrw.Instock==1 and CurrentCompany==1) then begin
-												// RecordCopy(oldGIr,GIr);
-												// GIrw.Instock = 0;
-												// matrowput(GIr,i,GIrw);
-												// if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
-											// end;
 										end;
-									// end;
 								end;
 							end;
 							if(!locf and SetInSet(loc2,WRSb.ResStockSet))then begin
@@ -467,12 +411,6 @@ LUpdateInstock:;
 										BlockStore(BRChb);
 										UpdateStockInOrigGlobalItem(GIr.Code, DiffStockVal, GIrw.Location, ItemDuplicatesf);
 										UpdateStockInSetGlobalItem(GIr.Code);
-										// if (!ItemDuplicatesf and GIrw.Instock==1 and CurrentCompany==1) then begin 
-											// RecordCopy(oldGIr,GIr);
-											// GIrw.Instock = 0;
-											// matrowput(GIr,i,GIrw);
-											// if (RecordUpdate(oldGIr,GIr,true)==0) then begin end;
-										// end;
 									end;
 								end;
 							end;
@@ -486,17 +424,6 @@ LUpdateInstock:;
     end;
   end;
 
-//  if (ac==TestISb.ArtCode) then begin
-//    LogText(0,"result filename " & chr(9) & filename & chr(9)  & " transnr " & chr(9) & transnr & chr(9) & " ISr.Instock " & chr(9) & ISr.Instock & chr(9) & " ISr.OrddOut " & chr(9) & ISr.OrddOut & chr(9) & " ISr.POQty " & chr(9) & ISr.POQty & chr(9)  & " ISr.POUnOKQty " & chr(9) & ISr.POUnOKQty & chr(9) & " ISr.Location " & chr(9) & ISr.Location & chr(9) & "ISr.RsrvQty" & chr(9) & ISr.RsrvQty & chr(9) & "  " & chr(9) & "  ");
-//  end;
-
-/*  
-  if (location!=";;;") then begin
-    if (ac==TestISb.ArtCode) then begin
-      //LogText(0,"filename " & chr(9) & filename & chr(9)  & " transnr " & chr(9) & transnr & chr(9) & " Instock " & chr(9) & q & chr(9) & " OrddOut " & chr(9) & o & chr(9) & " OrdSum " & chr(9) & ISr.OrddOut & chr(9) & " location " & chr(9) & location & chr(9) & " transdat " & chr(9) & transdat);
-    end;
-  end;
-*/  
 
   if (location!=";;;") then begin
     UpdateInstock(filename,transnr,ac,";;;",transdat,q,o,rsvrqp,poq,unokpoq,q2,prodord,word,wsheet);
