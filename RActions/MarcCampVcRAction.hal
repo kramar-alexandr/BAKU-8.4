@@ -16,7 +16,7 @@ remote procedure ORSumup(var record ORVc);
 remote updating function longint CreateGlobalIVFromWebOR (var record ORVc);
 remote procedure ORVc_PastePayDeal(var record ORVc);
 external function boolean CompanyIsJWLikeCompany(Integer);
-external updating procedure SendIVVisitToCRM(var record IVVc);
+external updating procedure SendIVVisitToCRM(record IVVc);
 remote updating procedure RDBDoBuildData(LongInt);
 external procedure ParsePhones(string, var integer, var array string); //edited by BPI
 external function string 255 StrReplace(string,string,string);
@@ -3142,7 +3142,8 @@ begin
 return;
 end;
 
-global updating procedure SendIVVisitToCRM(var record IVVc IVr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger11:38 11.09.2018
+
+global updating procedure SendIVVisitToCRM(record IVVc IVr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger11:38 11.09.2018
 begin
 	integer err,noErr;
   string 255 host,tstr,nonce,opaque,page;
@@ -3445,6 +3446,7 @@ begin
 				jsresponse = ParseJSONArea(reply);
 				if(nonblank(MyJSGet(jsresponse,"result")))then begin
 					IVr.CRMid = MyJSGet(jsresponse,"result");
+					recordstore(IVr,true);
 					Logtext(0,"SendIVVisitToCRM" & MyJSGet(jsresponse,"result"));
 				end;
 			end;
@@ -3453,6 +3455,15 @@ begin
 			writeareatofile(reply,"CRMResponse.txt",1);
 		end;
 	end;
+return;
+end;
+
+global procedure thSendIVVisitToCRM(record IVVc IVr)
+begin
+  
+  logtext(0,"thSendIVVisitToCRM");
+  qupdating.SendIVVisitToCRM(IVr);
+
 return;
 end;
 
@@ -3738,6 +3749,16 @@ return;
 end;
 
 
+global procedure thSendUpdateIVVisitToCRM(record IVVc IVr)
+begin
+  
+  logtext(0,"thSendUpdateIVVisitToCRM");
+  qupdating.SendUpdateIVVisitToCRM(IVr);
+
+return;
+end;
+
+
 global updating procedure SendVisitstoCRM()
 begin
 	integer i;
@@ -3764,10 +3785,7 @@ begin
 				if(TrHs and IVr.InvDate>=fromdate)then begin
 					oldid = IVr.CRMid;
 					if(blank(oldid) and IVr.OKFlag==1)then begin
-						SendIVVisitToCRM(IVr);
-						if(nonblank(IVr.CRMid))then begin
-							recordstore(IVr,true);
-						end;
+						threadasync.thSendIVVisitToCRM(IVr);
 					end;
 				end else begin
 					TrHs = false;
@@ -5953,13 +5971,10 @@ LongInt port,pos,mtrw,cnter;
 								//if(fileexists("demoserver"))then begin
 									if(blank(IVr.CRMid))then begin
 										// logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
-										SendIVVisitToCRM(IVr);
-										if(nonblank(IVr.CRMid))then begin
-											recordstore(IVr,true);
-										end;
+										threadasync.thSendIVVisitToCRM(IVr);
 									end else begin
 										// logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
-										SendUpdateIVVisitToCRM(IVr);
+										threadasync.thSendUpdateIVVisitToCRM(IVr);
 									end;
 								//end;						
 							end;	
@@ -6035,24 +6050,18 @@ global
 							// logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
 							LastComp = i+1;
 							LastIVVc = IVr.SerNr;
-							SendUpdateIVVisitToCRM(IVr);
-							if(nonblank(IVr.CRMid))then begin
-								recordstore(IVr,true);
-								LastComp = i+1;
-								LastIVVc = IVr.SerNr;
-								cnter = cnter + 1;
-							end;
+							threadasync.thSendUpdateIVVisitToCRM(IVr);
+              LastComp = i+1;
+              LastIVVc = IVr.SerNr;
+              cnter = cnter + 1;
 						end else begin
 							// logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
 							LastComp = i+1;
 							LastIVVc = IVr.SerNr;
-							SendUpdateIVVisitToCRM(IVr);
-							if(nonblank(IVr.CRMid))then begin
-								recordstore(IVr,true);
-								LastComp = i+1;
-								LastIVVc = IVr.SerNr;
-								cnter = cnter + 1;
-							end;
+							threadasync.thSendUpdateIVVisitToCRM(IVr);
+              LastComp = i+1;
+              LastIVVc = IVr.SerNr;
+              cnter = cnter + 1;
 						end;
 					end;
 				end;
@@ -6109,18 +6118,12 @@ LongInt port,pos,mtrw,cnter;
 					if(testf)then begin
 						if(nonblank(IVr.CRMid))then begin
 							// logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
-							SendUpdateIVVisitToCRM(IVr);
-							if(nonblank(IVr.CRMid))then begin
-								recordstore(IVr,true);
-								cnter = cnter + 1;
-							end;
+							threadasync.thSendUpdateIVVisitToCRM(IVr);
+							cnter = cnter + 1;
 						end else begin
 							// logtext(0,IVr.InvDate & "SerNr - " & IVr.SerNr & " Company-" & CurrentCompany);
-							SendUpdateIVVisitToCRM(IVr);
-							if(nonblank(IVr.CRMid))then begin
-								recordstore(IVr,true);
-								cnter = cnter + 1;
-							end;
+							threadasync.thSendUpdateIVVisitToCRM(IVr);
+							cnter = cnter + 1;
 						end;
 					end;
 				end;
