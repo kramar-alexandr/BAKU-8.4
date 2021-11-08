@@ -508,8 +508,8 @@ begin
 	record INVc INr;
 	record IVVc IVr, IV2r;
 	row IVVc IVrw, IV2rw;
-	record VIVc VIr;
-	row VIVc VIrw;
+	record VIVc VIr, credVIr;
+	row VIVc VIrw, credVIrw;
 	record ARVc ARr;
 	record APVc APr;
 	record RLinkVc RLr;
@@ -525,8 +525,8 @@ begin
 	Integer i,j,k,cnrw, PONr, PUNr, SHNr, VINr;
 	val SumOrders;
 	date sd,td;
-	val SumCredIv, SumSH, SumIv;
-	Boolean chSH;
+	val SumCredIv, SumSH, SumIv, SumCredVI, SumItCredVI;
+	Boolean chSH, found;
 	string 255 FullName,ORrSerNr,VendorCode,ProductName_,Provider,Category,CardPromoCode,Email,PhoneNumber;
 	date dateORr;
 	val Sum,Return_,Discount,DebtToSupplier,DebtToSupplierSum,PaidUp,PaidUpSum,Profit,PercDebt;
@@ -580,7 +580,8 @@ begin
 			for(i=0;i<cnrw;i=i+1)begin
 				MatRowGet(ORr,i,ORrw);
 				
-				
+				SumCredVI = 0;
+				SumItCredVI = 0;
 				Provider = "";
 				Category = "";
 				
@@ -703,9 +704,31 @@ begin
 									for(j=0;j<MatRowCnt(VIr);j=j+1)begin
 										MatRowGet(VIr,j,VIrw);
 										if(VIrw.Item==ORrw.ArtCode)then begin
+											credVIr.CredInv = VIr.SerNr;
+											while (LoopKey("CredInv",credVIr,1,found)) begin
+												if (credVIr.CredInv!=VIr.SerNr) then begin found = false; end;
+												if (found) and (credVIr.OKFlag==1) then begin
+													SumCredVI = SumCredVI + credVIr.PayVal;
+													for(j=0;j<MatRowCnt(credVIr);j=j+1)begin
+														MatRowGet(credVIr,j,credVIrw);
+														if(credVIrw.Item==VIrw.Item)then begin
+															SumItCredVI = SumItCredVI + credVIrw.Sum;
+														end;
+													end;
+												end;
+											end;
+											resetloop(credVIr);
 											APr.SerNr = VIr.SerNr;
 											if (ReadFirstMain(APr,1,true)) then begin
-												PercDebt = APr.RVal/VIr.PayVal * 100;
+												if (SumCredVI > 0 and SumItCredVI==0) then begin
+													PercDebt = APr.RVal + SumCredVI/VIr.PayVal * 100;
+												end else begin
+													if (SumCredVI > 0 and SumItCredVI>0) then begin
+														PercDebt = 0;
+													end else begin
+														PercDebt = APr.RVal/VIr.PayVal * 100;
+													end;
+												end;
 											end else begin
 												PercDebt = 0;
 											end;
@@ -747,9 +770,31 @@ begin
 								for(j=0;j<MatRowCnt(VIr);j=j+1)begin
 									MatRowGet(VIr,j,VIrw);
 									if(VIrw.Item==ORrw.ArtCode)then begin
+										credVIr.CredInv = VIr.SerNr;
+										while (LoopKey("CredInv",credVIr,1,found)) begin
+											if (credVIr.CredInv!=VIr.SerNr) then begin found = false; end;
+											if (found) and (credVIr.OKFlag==1) then begin
+												SumCredVI = SumCredVI + credVIr.PayVal;
+												for(j=0;j<MatRowCnt(credVIr);j=j+1)begin
+													MatRowGet(credVIr,j,credVIrw);
+													if(credVIrw.Item==VIrw.Item)then begin
+														SumItCredVI = SumItCredVI + credVIrw.Sum;
+													end;
+												end;
+											end;
+										end;
+										resetloop(credVIr);
 										APr.SerNr = VIr.SerNr;
 										if (ReadFirstMain(APr,1,true)) then begin
-											PercDebt = APr.RVal/VIr.PayVal * 100;
+											if (SumCredVI > 0 and SumItCredVI==0) then begin
+												PercDebt = APr.RVal + SumCredVI/VIr.PayVal * 100;
+											end else begin
+												if (SumCredVI > 0 and SumItCredVI>0) then begin
+													PercDebt = 0;
+												end else begin
+													PercDebt = APr.RVal/VIr.PayVal * 100;
+												end;
+											end;
 										end else begin
 											PercDebt = 0;
 										end;
