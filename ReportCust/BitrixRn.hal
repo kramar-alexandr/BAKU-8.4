@@ -509,6 +509,7 @@ begin
 	record IVVc IVr, IV2r;
 	row IVVc IVrw, IV2rw;
 	record VIVc VIr;
+	row VIVc VIrw;
 	record ARVc ARr;
 	record APVc APr;
 	record RLinkVc RLr;
@@ -521,7 +522,7 @@ begin
 	record SHVc SHr;
 	row SHVc SHrw;
 	Boolean TrHs,testf,testf1,TrHs1;
-	Integer i,j,k,cnrw;
+	Integer i,j,k,cnrw, PONr, PUNr, SHNr, VINr;
 	val SumOrders;
 	date sd,td;
 	val SumCredIv, SumSH, SumIv;
@@ -662,50 +663,103 @@ begin
 				end;
 				CardPromoCode = ORr.ECLoyaltyCard;
 
-				PaidUpSum = blankval;
-				if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
+				// PaidUpSum = blankval;
+				// if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
 				
-				 if(IVr.OKFlag==1)then begin
-						ARr.InvoiceNr = IVr.SerNr;
-						if(ReadFirstMain(ARr,1,true))then begin
-							PaidUpSum = IVr.Sum4 - ARr.RVal;
-						end else begin
-							PaidUpSum = IVr.Sum4;
-						end;
-					end else begin
-						PaidUpSum = 0; // от суммы сч/ф кл PaidUp%
-					end;
-				end;
-				DebtToSupplierSum = IVr.Sum4-PaidUpSum; // по % раскинуть на все товары  IVr.Sum4-PaidUp //DebtToSupplier
-				PercDebt = DebtToSupplierSum/IVr.Sum4 * 100;
-				DebtToSupplier = (Sum * PercDebt) / 100;
-				PaidUp = Sum - DebtToSupplier;
-
+				 // if(IVr.OKFlag==1)then begin
+						// ARr.InvoiceNr = IVr.SerNr;
+						// if(ReadFirstMain(ARr,1,true))then begin
+							// PaidUpSum = IVr.Sum4 - ARr.RVal;
+						// end else begin
+							// PaidUpSum = IVr.Sum4;
+						// end;
+					// end else begin
+						// PaidUpSum = 0; // от суммы сч/ф кл PaidUp%
+					// end;
+				// end;
+				// DebtToSupplierSum = IVr.Sum4-PaidUpSum; // по % раскинуть на все товары  IVr.Sum4-PaidUp //DebtToSupplier
+				// PercDebt = DebtToSupplierSum/IVr.Sum4 * 100;
+				// DebtToSupplier = (Sum * PercDebt) / 100;
+				PercDebt = 0;
 				testf1 = true;
 				if(blank(ORrw.ECReservStock))then begin
-					if(ReadRecordLink(ORr,1,POr,RLr))then begin
-						if(ReadRecordLink(POr,1,PUr,RLr))then begin
-							for(j=0;j<MatRowCnt(PUr);j=j+1)begin
-								MatRowGet(PUr,j,PUrw);
-								if(PUrw.ArtCode==ORrw.ArtCode)then begin
-									SumOrders =	PUrw.Sum;
+					if(testf1)then begin
+						PONr = 1;
+						while (ReadRecordLink(ORr,PONr,POr,RLr)) begin
+							PUNr = 1;
+							while (ReadRecordLink(POr,PUNr,PUr,RLr)) begin
+								for(j=0;j<MatRowCnt(PUr);j=j+1)begin
+									MatRowGet(PUr,j,PUrw);
+									if(PUrw.ArtCode==ORrw.ArtCode)then begin
+										SumOrders =	PUrw.Sum;
+										testf1 = false;
+									end;
 								end;
+								VINr = 1;
+								while (ReadRecordLink(PUr,VINr,VIr,RLr)) begin
+									APr.SerNr = VIr.SerNr;
+									if (ReadFirstMain(APr,1,true)) then begin
+										PercDebt = APr.RVal/IVr.Sum4 * 100;
+									end else begin
+										PercDebt = 0;
+									end;
+									for(j=0;j<MatRowCnt(VIr);j=j+1)begin
+										MatRowGet(VIr,j,VIrw);
+										if(VIrw.Item==ORrw.ArtCode)then begin
+											Sum = VIrw.Sum;
+										end;
+									end;
+									VINr = VINr + 1;
+								end;
+								PUNr = PUNr + 1;
+							end;
+							PONr = PONr + 1;
+						end;
+						if (testf1) then begin
+							SHNr = 1;
+							while (ReadRecordLink(ORr,SHNr,SHr,RLr)) begin
+								for (j=0;j<matrowcnt(SHr);j=j+1) begin
+									matrowget(SHr,j,SHrw);
+									if(SHrw.ArtCode==ORrw.ArtCode)then begin
+										SumOrders =	SHrw.FIFORowVal;
+									end;
+								end;
+								SHNr = SHNr + 1;
 							end;
 						end;
 					end;
 				end else begin
-					k=1;
-					while(ReadRecordLink(ORr,k,PUr,RLr))begin
-						for(j=0;j<MatRowCnt(PUr);j=j+1)begin
-							MatRowGet(PUr,j,PUrw);
-							if(PUrw.ArtCode==ORrw.ArtCode)then begin
-								SumOrders =	SumOrders + PUrw.Sum; // сумма поступления
-								testf1 = false;
+					if(testf1)then begin
+						k=1;
+						while (ReadRecordLink(ORr,k,PUr,RLr)) begin
+							for(j=0;j<MatRowCnt(PUr);j=j+1)begin
+								MatRowGet(PUr,j,PUrw);
+								if(PUrw.ArtCode==ORrw.ArtCode)then begin
+									SumOrders = PUrw.Sum; // сумма поступления
+									testf1 = false;
+								end;
+							end;
+							k=k+1;
+							while (ReadRecordLink(PUr,VINr,VIr,RLr)) begin
+								APr.SerNr = VIr.SerNr;
+								if (ReadFirstMain(APr,1,true)) then begin
+									PercDebt = APr.RVal/IVr.Sum4 * 100;
+								end else begin
+									PercDebt = 0;
+								end;
+								for(j=0;j<MatRowCnt(VIr);j=j+1)begin
+									MatRowGet(VIr,j,VIrw);
+									if(VIrw.Item==ORrw.ArtCode)then begin
+										Sum = VIrw.Sum;
+									end;
+								end;
+								VINr = VINr + 1;
 							end;
 						end;
-						k=k+1;
-					end;
+					end;	
 				end;
+				DebtToSupplier = (Sum * PercDebt) / 100;
+				PaidUp = Sum - DebtToSupplier;
 				
 				if(chSH)then begin
 					for(j=0;j<MatRowCnt(SHr);j=j+1)begin
