@@ -12,11 +12,13 @@ begin
 	record POVc POr;
 	record ORVc ORr;
 	row ORVc ORrw;
+	record SHVc SHr;
+	row SHVc SHrw;
 	record RLinkVc RLr;
 	record RetVc Retr;
 	row RetVc Retrw;
 	Boolean TrHs,TrHs1,testf,testf1, chClose;
-	Integer i,j,k, cnrw;
+	Integer i,j,k, cnrw, SHNr, PONr, PUNr;
 	vector val vSumOrders;
 	vector Date vSt_End_Order;
 	vector String 255 vFullName, vEmail;
@@ -57,11 +59,20 @@ begin
 			end;
 			
 			if(!chClose)then begin
+				SHNr = 1;
+				while (ReadRecordLink(ORr,SHNr,SHr,RLr)) begin
+					if (SHr.OKFlag==1) then begin
+						for (j=0;j<matrowcnt(SHr);j=j+1) begin
+							matrowget(SHr,j,SHrw);
+							vSumOrders[ORr.Phone & "cntGet"] = vSumOrders[ORr.Phone & "cntGet"] + SHrw.Ship;
+						end;
+					end;
+					SHNr = SHNr + 1;
+				end;
 				
 				cnrw = MatRowCnt(ORr);
 				for(i=0;i<cnrw;i=i+1)begin
 					MatRowGet(ORr,i,ORrw);
-					vSumOrders[ORr.Phone & "cntGet"] = vSumOrders[ORr.Phone & "cntGet"] + ORrw.Quant;
 					
 					
 					TrHs1 = true;
@@ -89,10 +100,26 @@ begin
 					
 					if(blank(ORrw.ECReservStock))then begin
 						if(testf1)then begin
-							if(ReadRecordLink(ORr,1,POr,RLr))then begin
-								if(ReadRecordLink(POr,1,PUr,RLr) and PUr.OKFlag==1)then begin
-									vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice;
-									testf1 = false;
+							PONr = 1;
+							while (ReadRecordLink(ORr,PONr,POr,RLr)) begin
+								PUNr = 1;
+								while (ReadRecordLink(POr,PUNr,PUr,RLr)) begin
+									if (PUr.OKFlag==1) then begin
+										vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	PUr.SumCostPrice;
+										testf1 = false;
+									end;
+									PUNr = PUNr + 1;
+								end;
+								PONr = PONr + 1;
+							end;
+							if (testf1) then begin
+								SHNr = 1;
+								while (ReadRecordLink(ORr,SHNr,SHr,RLr)) begin
+									for (j=0;j<matrowcnt(SHr);j=j+1) begin
+										matrowget(SHr,j,SHrw);
+										vSumOrders[ORr.Phone & "Cst"] =	vSumOrders[ORr.Phone & "Cst"] +	SHrw.FIFORowVal;
+									end;
+									SHNr = SHNr + 1;
 								end;
 							end;
 						end;
@@ -190,6 +217,9 @@ begin
 			if(vSumOrders[tags[i] & "cntGet"]==vSumOrders[tags[i] & "cntRet"])then begin
 				OutString(80,0,0,false);
 			end else begin
+				if (vSumOrders[tags[i] & "RetSum"]==blankval) then begin
+					vSumOrders[tags[i] & "RetSum"] = 0;
+				end;
 				OutString(80,0,vSumOrders[tags[i] & "Cst"] - vSumOrders[tags[i] & "RetSum"],false);
 			end;
 			
@@ -263,7 +293,9 @@ begin
 	td = RepSpec.sEndDate;
 
 	TrHs = true;
-	while(LoopMain(ORr,1,TrHs))begin
+	ORr.OrdDate = sd;
+	while(LoopKey("OrdDate",ORr,1,TrHs))begin
+		if (DateInRange(ORr.OrdDate,sd,td)==false) then begin TrHs = false; testf = false; end;
 		testf = true;
 		testf1 = true;
 		testf2 = true;
@@ -273,9 +305,7 @@ begin
 		cntRet = 0;
 		cntGet = 0;
 		Ret = blankval;
-		
-		if (DateInRange(ORr.OrdDate,sd,td)==false) then begin testf = false; end;
-		
+		RetSum = 0;
 		
 		FullName = "";
 		ORrSerNr = "";			
@@ -288,154 +318,170 @@ begin
 		PhoneNumber = "";
 		
 		if(testf)then begin
-				FullName = ORr.Addr0;
-				dateORr = ORr.OrdDate;	
-				ORrSerNr = ORr.SerNr;			
-				SumOrder = ORr.Sum4;
-				
-				
-				cnrw = MatRowCnt(ORr);
-				for(i=0;i<cnrw;i=i+1)begin
-					MatRowGet(ORr,i,ORrw);
-					cntGet = cntGet + ORrw.Shipd2;
+			FullName = ORr.Addr0;
+			dateORr = ORr.OrdDate;	
+			ORrSerNr = ORr.SerNr;			
+			SumOrder = ORr.Sum4;
+			
+			
+			SHNr = 1;
+			while (ReadRecordLink(ORr,SHNr,SHr,RLr)) begin
+				if (SHr.OKFlag==1) then begin
+					for (j=0;j<matrowcnt(SHr);j=j+1) begin
+						matrowget(SHr,j,SHrw);
+						cntGet = cntGet + SHrw.Ship;
+					end;
+				end;
+				SHNr = SHNr + 1;
+			end;
+			
+			
+			cnrw = MatRowCnt(ORr);
+			for(i=0;i<cnrw;i=i+1)begin
+				MatRowGet(ORr,i,ORrw);
+				Retr.OrdNr = ORr.SerNr;
+				TrHs1 = true;
+				while(LoopKey("OrdNr",Retr,1,TrHs1))begin
+					if(Retr.OrdNr!=ORr.SerNr)then begin TrHs1 = false; end;
 					
-					/////
-					Retr.OrdNr = ORr.SerNr;
-					TrHs1 = true;
-					while(LoopKey("OrdNr",Retr,1,TrHs1))begin
-						if(Retr.OrdNr!=ORr.SerNr)then begin TrHs1 = false; end;
-						
-						if(TrHs1)then begin
-							for(j=0;j<MatRowCnt(Retr);j=j+1)begin
-								MatRowGet(Retr,j,Retrw);
-								if(Retrw.ArtCode==ORrw.ArtCode)then begin
-									cntRet = cntRet + Retrw.Quant;
-									Ret = Ret + Retrw.CostPrice * Retrw.Quant;
-									TrHs1 = false;
-								end;
+					if(TrHs1)then begin
+						for(j=0;j<MatRowCnt(Retr);j=j+1)begin
+							MatRowGet(Retr,j,Retrw);
+							if(Retrw.ArtCode==ORrw.ArtCode)then begin
+								cntRet = cntRet + Retrw.Quant;
+								Ret = Ret + Retrw.CostPrice * Retrw.Quant;
+								TrHs1 = false;
 							end;
 						end;
 					end;
-					ResetLoop(Retr);
-					
-					if(blank(ORrw.ECReservStock))then begin
-						if(testf1)then begin
-							PONr = 1;
-							while (ReadRecordLink(ORr,PONr,POr,RLr)) begin
-								PUNr = 1;
-								while (ReadRecordLink(POr,PUNr,PUr,RLr)) begin
-									SumOrders =	SumOrders +	PUr.SumCostPrice;
-									testf1 = false;
-									PUNr = PUNr + 1;
-								end;
-								PONr = PONr + 1;
-							end;
-							if (testf1) then begin
-								SHNr = 1;
-								while (ReadRecordLink(ORr,SHNr,SHr,RLr)) begin
-									for (j=0;j<matrowcnt(SHr);j=j+1) begin
-										matrowget(SHr,j,SHrw);
-										SumOrders =	SumOrders +	SHrw.FIFORowVal;
-										SHNr = SHNr + 1;
-									end;
-								end;
-							end;
-						end;
-					end else begin
-						if(testf2)then begin
-							j=1;
-							while(ReadRecordLink(ORr,j,PUr,RLr))begin
+				end;
+				ResetLoop(Retr);
+				
+				if(blank(ORrw.ECReservStock))then begin
+					if(testf1)then begin
+						PONr = 1;
+						while (ReadRecordLink(ORr,PONr,POr,RLr)) begin
+							PUNr = 1;
+							while (ReadRecordLink(POr,PUNr,PUr,RLr)) begin
 								SumOrders =	SumOrders +	PUr.SumCostPrice;
-								j=j+1;
-								testf2 = false;
+								testf1 = false;
+								PUNr = PUNr + 1;
 							end;
-						end;	
+							PONr = PONr + 1;
+						end;
+						if (testf1) then begin
+							SHNr = 1;
+							while (ReadRecordLink(ORr,SHNr,SHr,RLr)) begin
+								for (j=0;j<matrowcnt(SHr);j=j+1) begin
+									matrowget(SHr,j,SHrw);
+									SumOrders =	SumOrders +	SHrw.FIFORowVal;
+								end;
+								SHNr = SHNr + 1;
+							end;
+						end;
 					end;
-				end;
-				
-				if(ORr.Closed!=0)then begin
-					chClose=true;
-				end;
-
-				if(chClose)then begin
-					CostPrice = 0;
-					CostPriceblf = false;
 				end else begin
-					if((SumOrders - Ret)==0 and cntGet > cntRet)then begin
-						CostPrice = blankval;
-					end else begin
-						if(cntGet == cntRet)then begin
+					if(testf2)then begin
+						j=1;
+						while (ReadRecordLink(ORr,j,PUr,RLr)) begin
+							SumOrders =	SumOrders +	PUr.SumCostPrice;
+							j=j+1;
+							testf2 = false;
+						end;
+					end;	
+				end;
+			end;
+			
+			if(ORr.Closed!=0)then begin
+				chClose=true;
+			end;
+
+			if(chClose)then begin
+				CostPrice = 0;
+				CostPriceblf = false;
+			end else begin
+				if((SumOrders - Ret)==0 and cntGet > cntRet)then begin
+					CostPrice = blankval;
+				end else begin
+					if(cntGet == cntRet)then begin
+						if (cntGet == 0) then begin
+							CostPrice = blankval;
+						end else begin
 							CostPrice = 0;
 							CostPriceblf = false;
-						end else begin
-							CostPrice = SumOrders - Ret;
-							CostPriceblf = false;
-						end;
-					end;
-				end;
-				
-				
-				if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
-					
-					
-					minusIVStatf = false;
-					if(IVr.OKFlag==1)then begin
-						ARr.InvoiceNr = IVr.SerNr;
-						if(ReadFirstMain(ARr,1,true))then begin
-							if (ARr.RVal<0) then begin
-								minusIVStatf = true;
-								RValPaid = ARr.RVal;
-							end else begin
-								RValPaid = IVr.Sum4 - ARr.RVal;  //////
-							end;
-						end else begin
-							RValPaid = IVr.Sum4;
 						end;
 					end else begin
-						RValPaid = 0;
+						CostPrice = SumOrders - Ret;
+						CostPriceblf = false;
 					end;
-					
-					RetSum = 0;
-					TrHs2 = true;
-					CredIVr.OrderNr = ORr.SerNr;
-					while (LoopKey("OrderNr",CredIVr,1,TrHs2)) begin
-						testf2 = true;
-						if (CredIVr.OrderNr!=ORr.SerNr) then begin TrHs2 = false; testf2 = false; end;
-						if (CredIVr.SerNr==IVr.SerNr) then begin testf2 = false; end;
-						if (CredIVr.OKFlag!=1) then begin testf2 = false; end;
-						// if (CredIVr.TransDate>RepSpec.sEndDate) then begin testf2 = false; end;
-						if (testf2) then begin
-							RetSum = RetSum + CredIVr.Sum4;
-						end;
-					end;
-					resetloop(CredIVr);
-					
 				end;
+			end;
+			
+			
+			if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
 				
 				
-				if(chClose)then begin
-					AmountPaid = 0;
-					AmountPaidblf = false;
+				minusIVStatf = false;
+				if(IVr.OKFlag==1)then begin
+					ARr.InvoiceNr = IVr.SerNr;
+					if(ReadFirstMain(ARr,1,true))then begin
+						if (ARr.RVal<0) then begin
+							minusIVStatf = true;
+							RValPaid = ARr.RVal;
+						end else begin
+							RValPaid = IVr.Sum4 - ARr.RVal;  //////
+						end;
+					end else begin
+						RValPaid = IVr.Sum4;
+					end;
 				end else begin
-					if((RValPaid - RetSum)==0 and cntGet > cntRet)then begin
-						AmountPaid = blankval;
-					end else begin
-						if(cntGet == cntRet and (RValPaid - RetSum)==0)then begin
+					RValPaid = 0;
+				end;
+				
+				TrHs2 = true;
+				CredIVr.OrderNr = ORr.SerNr;
+				while (LoopKey("OrderNr",CredIVr,1,TrHs2)) begin
+					testf2 = true;
+					if (CredIVr.OrderNr!=ORr.SerNr) then begin TrHs2 = false; testf2 = false; end;
+					if (CredIVr.SerNr==IVr.SerNr) then begin testf2 = false; end;
+					if (CredIVr.OKFlag!=1) then begin testf2 = false; end;
+					// if (CredIVr.TransDate>RepSpec.sEndDate) then begin testf2 = false; end;
+					if (testf2) then begin
+						RetSum = RetSum + CredIVr.Sum4;
+					end;
+				end;
+				resetloop(CredIVr);
+				
+			end;
+			
+			
+			if(chClose)then begin
+				AmountPaid = 0;
+				AmountPaidblf = false;
+			end else begin
+				if((RValPaid - RetSum)==0 and cntGet > cntRet)then begin
+					AmountPaid = blankval;
+				end else begin
+					if(cntGet == cntRet and (RValPaid - RetSum)==0)then begin
+						if (cntGet == 0) then begin
+							AmountPaid = blankval;
+						end else begin
 							AmountPaid = 0;
 							AmountPaidblf = false;
-						end else begin
-							if (minusIVStatf) then begin
-								AmountPaid = RValPaid;
-							end else begin
-								AmountPaid = RValPaid - RetSum;
-							end;
-							AmountPaidblf = false;
 						end;
+					end else begin
+						if (minusIVStatf) then begin
+							AmountPaid = RValPaid;
+						end else begin
+							AmountPaid = RValPaid - RetSum;
+						end;
+						AmountPaidblf = false;
 					end;
 				end;
-				
-				Email = ORr.eMail;
-				PhoneNumber = ORr.Phone;
+			end;
+			
+			Email = ORr.eMail;
+			PhoneNumber = ORr.Phone;
 
 			StartFormat(15);
 				OutString(30,0,FullName,false);
@@ -481,7 +527,8 @@ begin
 	record INVc INr;
 	record IVVc IVr, IV2r;
 	row IVVc IVrw, IV2rw;
-	record VIVc VIr;
+	record VIVc VIr, credVIr;
+	row VIVc VIrw, credVIrw;
 	record ARVc ARr;
 	record APVc APr;
 	record RLinkVc RLr;
@@ -494,11 +541,11 @@ begin
 	record SHVc SHr;
 	row SHVc SHrw;
 	Boolean TrHs,testf,testf1,TrHs1;
-	Integer i,j,k,cnrw;
+	Integer i,j,k,cnrw, PONr, PUNr, SHNr, VINr, l;
 	val SumOrders;
 	date sd,td;
-	val SumCredIv, SumSH, SumIv;
-	Boolean chSH;
+	val SumCredIv, SumSH, SumIv, SumCredVI, SumItCredVI;
+	Boolean chSH, found;
 	string 255 FullName,ORrSerNr,VendorCode,ProductName_,Provider,Category,CardPromoCode,Email,PhoneNumber;
 	date dateORr;
 	val Sum,Return_,Discount,DebtToSupplier,DebtToSupplierSum,PaidUp,PaidUpSum,Profit,PercDebt;
@@ -552,7 +599,8 @@ begin
 			for(i=0;i<cnrw;i=i+1)begin
 				MatRowGet(ORr,i,ORrw);
 				
-				
+				SumCredVI = 0;
+				SumItCredVI = 0;
 				Provider = "";
 				Category = "";
 				
@@ -560,6 +608,8 @@ begin
 				SumIv = 0;
 				SumSH = 0;
 				
+				Sum = 0;
+				PaidUp = 0;
 				FullName = ORr.Addr0;
 				dateORr = ORr.OrdDate;
 				ORrSerNr = ORr.SerNr;
@@ -608,7 +658,7 @@ begin
 					end;
 				end;
 
-				Sum = ORrw.Sum;  
+				// Sum = ORrw.Sum;  
 
 				Retr.OrdNr = ORr.SerNr;
 				TrHs1 = true;
@@ -635,50 +685,151 @@ begin
 				end;
 				CardPromoCode = ORr.ECLoyaltyCard;
 
-				PaidUpSum = blankval;
-				if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
+				// PaidUpSum = blankval;
+				// if(ReadRecordLink(ORr,1,IVr,RLr))then begin // Edit ****************************** Ihor Trubachov 13*10*2021 
 				
-				 if(IVr.OKFlag==1)then begin
-						ARr.InvoiceNr = IVr.SerNr;
-						if(ReadFirstMain(ARr,1,true))then begin
-							PaidUpSum = IVr.Sum4 - ARr.RVal;
-						end else begin
-							PaidUpSum = IVr.Sum4;
-						end;
-					end else begin
-						PaidUpSum = 0; // от суммы сч/ф кл PaidUp%
-					end;
-				end;
-				DebtToSupplierSum = IVr.Sum4-PaidUpSum; // по % раскинуть на все товары  IVr.Sum4-PaidUp //DebtToSupplier
-				PercDebt = DebtToSupplierSum/IVr.Sum4 * 100;
-				DebtToSupplier = (Sum * PercDebt) / 100;
-				PaidUp = Sum - DebtToSupplier;
-
+				 // if(IVr.OKFlag==1)then begin
+						// ARr.InvoiceNr = IVr.SerNr;
+						// if(ReadFirstMain(ARr,1,true))then begin
+							// PaidUpSum = IVr.Sum4 - ARr.RVal;
+						// end else begin
+							// PaidUpSum = IVr.Sum4;
+						// end;
+					// end else begin
+						// PaidUpSum = 0; // от суммы сч/ф кл PaidUp%
+					// end;
+				// end;
+				// DebtToSupplierSum = IVr.Sum4-PaidUpSum; // по % раскинуть на все товары  IVr.Sum4-PaidUp //DebtToSupplier
+				// PercDebt = DebtToSupplierSum/IVr.Sum4 * 100;
+				// DebtToSupplier = (Sum * PercDebt) / 100;
+				DebtToSupplier = 0;
+				PercDebt = 0;
 				testf1 = true;
 				if(blank(ORrw.ECReservStock))then begin
-					if(ReadRecordLink(ORr,1,POr,RLr))then begin
-						if(ReadRecordLink(POr,1,PUr,RLr))then begin
-							for(j=0;j<MatRowCnt(PUr);j=j+1)begin
-								MatRowGet(PUr,j,PUrw);
-								if(PUrw.ArtCode==ORrw.ArtCode)then begin
-									SumOrders =	PUrw.Sum;
+					if(testf1)then begin
+						PONr = 1;
+						while (ReadRecordLink(ORr,PONr,POr,RLr)) begin
+							PUNr = 1;
+							while (ReadRecordLink(POr,PUNr,PUr,RLr)) begin
+								for(j=0;j<MatRowCnt(PUr);j=j+1)begin
+									MatRowGet(PUr,j,PUrw);
+									if(PUrw.ArtCode==ORrw.ArtCode)then begin
+										SumOrders =	PUrw.Sum;
+										testf1 = false;
+									end;
 								end;
+								VINr = 1;
+								while (ReadRecordLink(PUr,VINr,VIr,RLr)) begin
+									for(j=0;j<MatRowCnt(VIr);j=j+1)begin
+										MatRowGet(VIr,j,VIrw);
+										if(VIrw.Item==ORrw.ArtCode)then begin
+											credVIr.CredInv = VIr.SerNr;
+											found = true;
+											while (LoopKey("CredInv",credVIr,1,found)) begin
+												if (credVIr.CredInv!=VIr.SerNr) then begin found = false; end;
+												if (found) and (credVIr.OKFlag==1) then begin
+													SumCredVI = SumCredVI + credVIr.PayVal;
+													for(l=0;l<MatRowCnt(credVIr);l=l+1)begin
+														MatRowGet(credVIr,l,credVIrw);
+														if(credVIrw.Item==VIrw.Item)then begin
+															SumItCredVI = SumItCredVI + credVIrw.Sum;
+														end;
+													end;
+												end;
+											end;
+											resetloop(credVIr);
+											APr.SerNr = VIr.SerNr;
+											if (ReadFirstMain(APr,1,true)) then begin
+												if (SumCredVI > 0 and SumItCredVI==0) then begin
+													PercDebt = APr.RVal/(VIr.PayVal - SumCredVI) * 100;
+												end else begin
+													if (SumCredVI > 0 and SumItCredVI>0) then begin
+														PercDebt = 0;
+													end else begin
+														PercDebt = APr.RVal/VIr.PayVal * 100;
+													end;
+												end;
+											end else begin
+												PercDebt = 0;
+											end;
+											Sum = VIrw.Sum;
+										end;
+									end;
+									VINr = VINr + 1;
+								end;
+								PUNr = PUNr + 1;
+							end;
+							PONr = PONr + 1;
+						end;
+						if (testf1) then begin
+							SHNr = 1;
+							while (ReadRecordLink(ORr,SHNr,SHr,RLr)) begin
+								for (j=0;j<matrowcnt(SHr);j=j+1) begin
+									matrowget(SHr,j,SHrw);
+									if(SHrw.ArtCode==ORrw.ArtCode)then begin
+										SumOrders =	SHrw.FIFORowVal;
+									end;
+								end;
+								SHNr = SHNr + 1;
 							end;
 						end;
 					end;
 				end else begin
-					k=1;
-					while(ReadRecordLink(ORr,k,PUr,RLr))begin
-						for(j=0;j<MatRowCnt(PUr);j=j+1)begin
-							MatRowGet(PUr,j,PUrw);
-							if(PUrw.ArtCode==ORrw.ArtCode)then begin
-								SumOrders =	SumOrders + PUrw.Sum; // сумма поступления
-								testf1 = false;
+					if(testf1)then begin
+						k=1;
+						while (ReadRecordLink(ORr,k,PUr,RLr)) begin
+							for(j=0;j<MatRowCnt(PUr);j=j+1)begin
+								MatRowGet(PUr,j,PUrw);
+								if(PUrw.ArtCode==ORrw.ArtCode)then begin
+									SumOrders = PUrw.Sum; // сумма поступления
+									testf1 = false;
+								end;
+							end;
+							k=k+1;
+							VINr = 1;
+							while (ReadRecordLink(PUr,VINr,VIr,RLr)) begin
+								for(j=0;j<MatRowCnt(VIr);j=j+1)begin
+									MatRowGet(VIr,j,VIrw);
+									if(VIrw.Item==ORrw.ArtCode)then begin
+										credVIr.CredInv = VIr.SerNr;
+										found = true;
+										while (LoopKey("CredInv",credVIr,1,found)) begin
+											if (credVIr.CredInv!=VIr.SerNr) then begin found = false; end;
+											if (found) and (credVIr.OKFlag==1) then begin
+												SumCredVI = SumCredVI + credVIr.PayVal;
+												for(l=0;l<MatRowCnt(credVIr);l=l+1)begin
+													MatRowGet(credVIr,l,credVIrw);
+													if(credVIrw.Item==VIrw.Item)then begin
+														SumItCredVI = SumItCredVI + credVIrw.Sum;
+													end;
+												end;
+											end;
+										end;
+										resetloop(credVIr);
+										APr.SerNr = VIr.SerNr;
+										if (ReadFirstMain(APr,1,true)) then begin
+											if (SumCredVI > 0 and SumItCredVI==0) then begin
+												PercDebt = APr.RVal/(VIr.PayVal - SumCredVI) * 100;
+											end else begin
+												if (SumCredVI > 0 and SumItCredVI>0) then begin
+													PercDebt = 0;
+												end else begin
+													PercDebt = APr.RVal/VIr.PayVal * 100;
+												end;
+											end;
+										end else begin
+											PercDebt = 0;
+										end;
+										Sum = VIrw.Sum;
+									end;
+								end;
+								VINr = VINr + 1;
 							end;
 						end;
-						k=k+1;
-					end;
+					end;	
 				end;
+				DebtToSupplier = (Sum * PercDebt) / 100;
+				PaidUp = Sum - SumItCredVI - DebtToSupplier;
 				
 				if(chSH)then begin
 					for(j=0;j<MatRowCnt(SHr);j=j+1)begin
@@ -834,7 +985,7 @@ begin
 										otherquant = otherquant + ORrw.Shipd2;
 									end;									
 								end;
-								if (otherquant > 0) then begin
+								if (oritshipd > 0) then begin
 									shquant[shquant.length] = SHr.SerNr;
 								end;
 							end;
