@@ -540,7 +540,7 @@ begin
 	record CUVc CUr;
 	record SHVc SHr;
 	row SHVc SHrw;
-	Boolean TrHs,testf,testf1,TrHs1;
+	Boolean TrHs,testf,testf1,TrHs1,PUf,VIf;
 	Integer i,j,k,cnrw, PONr, PUNr, SHNr, VINr, l;
 	val SumOrders;
 	date sd,td;
@@ -614,6 +614,8 @@ begin
 				dateORr = ORr.OrdDate;
 				ORrSerNr = ORr.SerNr;
 				
+				PUf = false;
+				VIf = false;
 				
 				INr.Code = ORrw.ArtCode;
 				if(ReadFirstMain(INr,1,true))then begin
@@ -711,6 +713,7 @@ begin
 						while (ReadRecordLink(ORr,PONr,POr,RLr)) begin
 							PUNr = 1;
 							while (ReadRecordLink(POr,PUNr,PUr,RLr)) begin
+								if (PUr.OKFlag==1) then begin PUf = true; end;
 								for(j=0;j<MatRowCnt(PUr);j=j+1)begin
 									MatRowGet(PUr,j,PUrw);
 									if(PUrw.ArtCode==ORrw.ArtCode)then begin
@@ -720,6 +723,7 @@ begin
 								end;
 								VINr = 1;
 								while (ReadRecordLink(PUr,VINr,VIr,RLr)) begin
+									if (VIr.OKFlag==1) then begin VIf = true; end;
 									for(j=0;j<MatRowCnt(VIr);j=j+1)begin
 										MatRowGet(VIr,j,VIrw);
 										if(VIrw.Item==ORrw.ArtCode)then begin
@@ -764,6 +768,10 @@ begin
 						if (testf1) then begin
 							SHNr = 1;
 							while (ReadRecordLink(ORr,SHNr,SHr,RLr)) begin
+								if (SHr.OKFlag==1) then begin
+									PUf = true;
+									VIf = true;
+								end;
 								for (j=0;j<matrowcnt(SHr);j=j+1) begin
 									matrowget(SHr,j,SHrw);
 									if(SHrw.ArtCode==ORrw.ArtCode)then begin
@@ -778,6 +786,7 @@ begin
 					if(testf1)then begin
 						k=1;
 						while (ReadRecordLink(ORr,k,PUr,RLr)) begin
+							if (PUr.OKFlag==1) then begin PUf = true; end;
 							for(j=0;j<MatRowCnt(PUr);j=j+1)begin
 								MatRowGet(PUr,j,PUrw);
 								if(PUrw.ArtCode==ORrw.ArtCode)then begin
@@ -788,6 +797,7 @@ begin
 							k=k+1;
 							VINr = 1;
 							while (ReadRecordLink(PUr,VINr,VIr,RLr)) begin
+								if (VIr.OKFlag==1) then begin VIf = true; end;
 								for(j=0;j<MatRowCnt(VIr);j=j+1)begin
 									MatRowGet(VIr,j,VIrw);
 									if(VIrw.Item==ORrw.ArtCode)then begin
@@ -832,28 +842,36 @@ begin
 				PaidUp = Sum - SumItCredVI - DebtToSupplier;
 				
 				if(chSH)then begin
-					for(j=0;j<MatRowCnt(SHr);j=j+1)begin
-						MatRowGet(SHr,j,SHrw);
-						if(ORrw.ArtCode == SHrw.ArtCode) then begin
-							SumSH = SumSH + SHrw.FIFORowVal;
+					if (SHr.OKFlag==1) then begin
+						for(j=0;j<MatRowCnt(SHr);j=j+1)begin
+							MatRowGet(SHr,j,SHrw);
+							if(ORrw.ArtCode == SHrw.ArtCode) then begin
+								SumSH = SumSH + SHrw.FIFORowVal;
+							end;
 						end;
 					end;
 				end;
 				
 				k=1;
 				while(ReadRecordLink(ORr,k,IVr,RLr))begin
-					if(IVr.PayDeal == "CN")then begin
-						for(j=0;j<MatRowCnt(IVr);j=j+1)begin
-							MatRowGet(IVr,j,IVrw);
-							if(ORrw.ArtCode == IVrw.ArtCode) then begin
-								SumCredIv = SumCredIv + IVrw.Sum;
+					if (IVr.OKFlag==1) then begin	
+						if(IVr.PayDeal == "CN")then begin
+							for(j=0;j<MatRowCnt(IVr);j=j+1)begin
+								MatRowGet(IVr,j,IVrw);
+								if(ORrw.ArtCode == IVrw.ArtCode) then begin
+									SumCredIv = SumCredIv + IVrw.Sum;
+								end;
 							end;
-						end;
-					end else begin
-						for(j=0;j<MatRowCnt(IVr);j=j+1)begin
-							MatRowGet(IVr,j,IVrw);
-							if(ORrw.ArtCode == IVrw.ArtCode) then begin
-								SumIv = SumIv + IVrw.Sum;
+						end else begin
+							for(j=0;j<MatRowCnt(IVr);j=j+1)begin
+								MatRowGet(IVr,j,IVrw);
+								if(ORrw.ArtCode == IVrw.ArtCode) then begin
+									ARr.InvoiceNr = IVr.SerNr;
+									if(ReadFirstMain(ARr,1,true))then begin
+										
+									end;
+									SumIv = SumIv + IVrw.Sum;
+								end;
 							end;
 						end;
 					end;
@@ -877,8 +895,21 @@ begin
 				OutString(110,0,Return_,false);                       
 				OutString(120,0,Discount & "%",false);                        
 				OutString(130,0,CardPromoCode,false);    
-				OutString(140,0,DebtToSupplier,false);               
-				OutString(150,0,PaidUp,false);                      
+				if (PUf) then begin
+					OutString(140,0,DebtToSupplier,false);         
+				end else begin
+					OutString(140,0,"",false);
+				end;
+				if (VIf) then begin
+					OutString(150,0,PaidUp,false);         
+				end else begin
+					OutString(150,0,"",false);
+				end;
+				if (SumIv > 0) then begin
+					OutString(160,0,Profit,false); 
+				end else begin
+					OutString(160,0,"",false); 
+				end;
 				OutString(160,0,Profit,false);                       
 				OutString(170,0,Email,false);                         
 				OutString(180,0,PhoneNumber,false);                       
