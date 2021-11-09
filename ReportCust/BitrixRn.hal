@@ -544,11 +544,11 @@ begin
 	Integer i,j,k,cnrw, PONr, PUNr, SHNr, VINr, l;
 	val SumOrders;
 	date sd,td;
-	val SumCredIv, SumSH, SumIv, SumCredVI, SumItCredVI;
+	val SumCredIv, SumSH, SumIv, SumCredVI, SumItCredVI, sum4IV;
 	Boolean chSH, found;
 	string 255 FullName,ORrSerNr,VendorCode,ProductName_,Provider,Category,CardPromoCode,Email,PhoneNumber;
 	date dateORr;
-	val Sum,Return_,Discount,DebtToSupplier,DebtToSupplierSum,PaidUp,PaidUpSum,Profit,PercDebt,retailSum, Ret;
+	val Sum,Return_,Discount,DebtToSupplier,DebtToSupplierSum,PaidUp,PaidUpSum,Profit,PercDebt,retailSum, Ret, ClPaidUpSum, IVRetSum;
 
 	StartReportnoheaderjob("Расширенный отчет по продажам");
 
@@ -832,7 +832,11 @@ begin
 										end else begin
 											PercDebt = 0;
 										end;
-										Sum = VIrw.Sum;
+										if (VIrw.VATCode) then begin
+											Sum = VIrw.Sum + VIrw.Sum / 100 * 18;
+										end else begin
+											Sum = VIrw.Sum;
+										end;
 									end;
 								end;
 								VINr = VINr + 1;
@@ -841,7 +845,6 @@ begin
 					end;	
 				end;
 				DebtToSupplier = (Sum * PercDebt) / 100;
-				PaidUp = Sum - SumItCredVI - DebtToSupplier;
 				
 				if(chSH)then begin
 					if (SHr.OKFlag==1) then begin
@@ -856,11 +859,16 @@ begin
 						end;
 					end;
 				end;
-				
+				IVRetSum = 0;
+				ClPaidUpSum = 0;
+				SumIv = 0;
+				SumCredIv = 0;
+				sum4IV = 0;
 				k=1;
 				while(ReadRecordLink(ORr,k,IVr,RLr))begin
 					if (IVr.OKFlag==1) then begin	
 						if(IVr.PayDeal == "CN")then begin
+							IVRetSum = IVr.Sum4;
 							for(j=0;j<MatRowCnt(IVr);j=j+1)begin
 								MatRowGet(IVr,j,IVrw);
 								if(ORrw.ArtCode == IVrw.ArtCode) then begin
@@ -868,6 +876,19 @@ begin
 								end;
 							end;
 						end else begin
+							if(IVr.OKFlag==1)then begin
+								sum4IV = IVr.Sum4;
+								ARr.InvoiceNr = IVr.SerNr;
+								if(ReadFirstMain(ARr,1,true))then begin
+									ClPaidUpSum = IVr.Sum4 - ARr.RVal;
+								end else begin
+									ClPaidUpSum = IVr.Sum4;
+								end;
+							end else begin
+								sum4IV = IVr.Sum4;
+								ClPaidUpSum = 0; // от суммы сч/ф кл PaidUp%
+							end;
+							
 							for(j=0;j<MatRowCnt(IVr);j=j+1)begin
 								MatRowGet(IVr,j,IVrw);
 								if(ORrw.ArtCode == IVrw.ArtCode) then begin
@@ -880,6 +901,10 @@ begin
 					k=k+1;
 				end;
 				
+				//SumIv - sum4IV
+				//x			-	ClPaidUpSum - SumCredIv
+				
+				PaidUp = SumIv * (ClPaidUpSum - SumCredIv) / sum4IV;
 				Profit = (SumIv - SumCredIv - SumSH + Ret);
 				Email = ORr.eMail;
 				PhoneNumber = ORr.Phone;
