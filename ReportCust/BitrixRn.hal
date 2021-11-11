@@ -531,7 +531,7 @@ begin
 	row VIVc VIrw, credVIrw;
 	record ARVc ARr;
 	record APVc APr;
-	record RLinkVc RLr;
+	record RLinkVc RLr, RL2r;
 	record RetVc Retr;
 	row RetVc Retrw;
 	record GlobalItemVc GlobalItemr; 
@@ -540,8 +540,8 @@ begin
 	record CUVc CUr;
 	record SHVc SHr;
 	row SHVc SHrw;
-	Boolean TrHs,testf,testf1,TrHs1,PUf,VIf,SHf;
-	Integer i,j,k,cnrw, PONr, PUNr, SHNr, VINr, l;
+	Boolean TrHs,testf,testf1,TrHs1,PUf,VIf,SHf,IVf,VATf;
+	Integer i,j,k,cnrw, PONr, PUNr, SHNr, VINr, l, IVNr;
 	val SumOrders;
 	date sd,td;
 	val SumCredIv, SumSH, SumIv, SumCredVI, SumItCredVI, sum4IV;
@@ -549,7 +549,8 @@ begin
 	string 255 FullName,ORrSerNr,VendorCode,ProductName_,Provider,Category,CardPromoCode,Email,PhoneNumber;
 	date dateORr;
 	val Sum,Return_,Discount,DebtToSupplier,DebtToSupplierSum,PaidUp,PaidUpSum,Profit,PercDebt,retailSum, Ret, ClPaidUpSum, IVRetSum;
-
+	vector boolean CredIVf;
+	
 	StartReportnoheaderjob("Расширенный отчет по продажам");
 
 	StartFormat(15);
@@ -613,6 +614,7 @@ begin
 				FullName = ORr.Addr0;
 				dateORr = ORr.OrdDate;
 				ORrSerNr = ORr.SerNr;
+				Profit = 0;
 				
 				PUf = false;
 				VIf = false;
@@ -749,7 +751,7 @@ begin
 												if (SumCredVI > 0 and SumItCredVI==0) then begin
 													PercDebt = APr.RVal/(VIr.PayVal - SumCredVI) * 100;
 												end else begin
-													if (SumCredVI > 0 and SumItCredVI>0) then begin
+													if (SumCredVI > 0 and SumItCredVI - VIrw.Sum==0) then begin
 														PercDebt = 0;
 													end else begin
 														PercDebt = APr.RVal/VIr.PayVal * 100;
@@ -758,7 +760,12 @@ begin
 											end else begin
 												PercDebt = 0;
 											end;
-											Sum = VIrw.Sum;
+											if (VIrw.VATCode == "18%") then begin
+												VATf = true;
+												Sum = VIrw.Sum + VIrw.Sum / 100 * 18;
+											end else begin
+												Sum = VIrw.Sum;
+											end;
 										end;
 									end;
 									VINr = VINr + 1;
@@ -823,7 +830,7 @@ begin
 											if (SumCredVI > 0 and SumItCredVI==0) then begin
 												PercDebt = APr.RVal/(VIr.PayVal - SumCredVI) * 100;
 											end else begin
-												if (SumCredVI > 0 and SumItCredVI>0) then begin
+												if (SumCredVI > 0 and SumItCredVI - VIrw.Sum==0) then begin
 													PercDebt = 0;
 												end else begin
 													PercDebt = APr.RVal/VIr.PayVal * 100;
@@ -833,6 +840,7 @@ begin
 											PercDebt = 0;
 										end;
 										if (VIrw.VATCode == "18%") then begin
+											VATf = true;
 											Sum = VIrw.Sum + VIrw.Sum / 100 * 18;
 										end else begin
 											Sum = VIrw.Sum;
@@ -864,19 +872,36 @@ begin
 				SumIv = 0;
 				SumCredIv = 0;
 				sum4IV = 0;
+				IVf = false;
 				k=1;
 				while(ReadRecordLink(ORr,k,IVr,RLr))begin
 					if (IVr.OKFlag==1) then begin	
-						if(IVr.PayDeal == "CN")then begin
-							IVRetSum = IVr.Sum4;
+						if(IVr.PayDeal == "CN" and !CredIVf[IVr.SerNr & "_" & ORrw.ArtCode])then begin
+							IVRetSum = IVRetSum + IV2r.Sum4;
 							for(j=0;j<MatRowCnt(IVr);j=j+1)begin
 								MatRowGet(IVr,j,IVrw);
-								if(ORrw.ArtCode == IVrw.ArtCode) then begin
+								if(ORrw.ArtCode == IVrw.ArtCode and IVrw.stp == 1) then begin
+									CredIVf[IVr.SerNr & "_" & ORrw.ArtCode] = true;
 									SumCredIv = SumCredIv + IVrw.Sum;
 								end;
 							end;
 						end else begin
-							if(IVr.OKFlag==1)then begin
+							if(IVr.PayDeal != "CN" and !CredIVf[IVr.SerNr])then begin
+								IVNr = 1;
+								while (ReadRecordLink(IVr,IVNr,IV2r,RL2r)) begin
+									if(IV2r.PayDeal == "CN" and IV2r.OKFlag==1 and !CredIVf[IV2r.SerNr & "_" & ORrw.ArtCode])then begin
+										IVRetSum = IVRetSum + IV2r.Sum4;
+										for(j=0;j<MatRowCnt(IV2r);j=j+1)begin
+											MatRowGet(IV2r,j,IV2rw);
+											if(IV2rw.ArtCode==ORrw.ArtCode and IV2rw.stp == 1)then begin
+												CredIVf[IV2r.SerNr & "_" & ORrw.ArtCode] = true;
+												SumCredIv = SumCredIv + IV2rw.Sum;
+											end;
+										end;
+									end;
+									IVNr = IVNr + 1;
+								end;
+								IVf = true;
 								sum4IV = IVr.Sum4;
 								ARr.InvoiceNr = IVr.SerNr;
 								if(ReadFirstMain(ARr,1,true))then begin
@@ -884,15 +909,12 @@ begin
 								end else begin
 									ClPaidUpSum = IVr.Sum4;
 								end;
-							end else begin
-								sum4IV = IVr.Sum4;
-								ClPaidUpSum = 0; // от суммы сч/ф кл PaidUp%
-							end;
-							
-							for(j=0;j<MatRowCnt(IVr);j=j+1)begin
-								MatRowGet(IVr,j,IVrw);
-								if(ORrw.ArtCode == IVrw.ArtCode) then begin
-									SumIv = SumIv + IVrw.Sum;
+								
+								for(j=0;j<MatRowCnt(IVr);j=j+1)begin
+									MatRowGet(IVr,j,IVrw);
+									if(ORrw.ArtCode == IVrw.ArtCode) then begin
+										SumIv = SumIv + IVrw.Sum;
+									end;
 								end;
 							end;
 						end;
@@ -904,8 +926,21 @@ begin
 				//SumIv - sum4IV
 				//x			-	ClPaidUpSum - SumCredIv
 				
-				PaidUp = SumIv * (ClPaidUpSum - SumCredIv) / sum4IV;
+				if (ORrSerNr=="7684") then begin
+					logtext (0,SumIv);
+					logtext (0,SumCredIv);
+					logtext (0,IVRetSum);
+					logtext (0,ClPaidUpSum);
+					logtext (0,sum4IV);
+				end;
+				if (SumCredIv == 0) then begin
+					PaidUp = SumIv * ClPaidUpSum / sum4IV;
+				end else begin
+					PaidUp = (SumIv - SumCredIv) * (ClPaidUpSum - IVRetSum) / sum4IV;
+				end;
+			
 				Profit = (SumIv - SumCredIv - SumSH + Ret);
+				
 				Email = ORr.eMail;
 				PhoneNumber = ORr.Phone;
 				
@@ -924,17 +959,29 @@ begin
 				if (PUf) then begin
 					OutString(140,0,DebtToSupplier,false);         
 				end else begin
-					OutString(140,0,"",false);
+					if (ORr.Closed==1) then begin
+						OutString(140,0,0,false);
+					end else begin
+						OutString(140,0,"",false);
+					end;
 				end;
-				if (VIf) then begin
+				if (IVf) then begin
 					OutString(150,0,PaidUp,false);         
 				end else begin
-					OutString(150,0,"",false);
+					if (ORr.Closed==1) then begin
+						OutString(140,0,0,false);
+					end else begin
+						OutString(140,0,"",false);
+					end;
 				end;
 				if (SHf) then begin
 					OutString(160,0,Profit,false); 
 				end else begin
-					OutString(160,0,"",false); 
+					if (ORr.Closed==1) then begin
+						OutString(140,0,0,false);
+					end else begin
+						OutString(140,0,"",false);
+					end;
 				end;
 				OutString(170,0,Email,false);                         
 				OutString(180,0,PhoneNumber,false);                       
