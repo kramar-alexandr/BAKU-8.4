@@ -1627,6 +1627,216 @@ end;
 
 
 
+
+
+
+
+
+
+global updating procedure ECCreateTmpPOfromOR(record ORVc ORr)
+begin
+	integer mtrw,i,j,k,pos,rownum;
+	row ORVc ORrw;
+	row POVc POrw;
+	string 50 ostr;
+	array string 100 class,artcode;
+	record INVc INr;
+	boolean foundf,TrHs,testf;
+	record CUVc CUr;
+	record DIVc DIr;
+	string 200 vendor;
+	record ActVc Actr;
+	record BPIBrandVc BBr;
+	record LocationVc Locr;
+	record ECVendFobSetBlaock ECVFSBb;
+	row ECVendFobSetBlaock ECVFSBrw;
+	vector string 255 vVendor;
+	record POVc POr, oldPOr;
+	
+	BlockLoad(ECVFSBb);
+	
+	for (i=0;i<matrowcnt(ECVFSBb);i=i+1) begin
+		matrowget(ECVFSBb,i,ECVFSBrw);
+		vVendor[ECVFSBrw.LocCode] = ECVFSBrw.VendName;
+	end;
+	logtext(0,"ECCreateTmpPOfromOR");
+	mtrw = matrowcnt(ORr);
+	For(i=0;i<mtrw;i=i+1) begin
+		matrowget(ORr,i,ORrw); 
+		if(nonblank(ORrw.ArtCode))then begin
+			INr.Code = ORrw.ArtCode;
+			if(readfirstmain(INr,1,true))then begin
+				if(INr.ExtProwItRegulations<0)then begin
+					
+					foundf = false;
+					For(j=0;j<k;j=j+1) begin
+	  				if(class[j]==ORrw.ECReservStock)then begin
+	  					foundf = true;
+	  				end;
+					end; 
+					
+					if(!foundf and nonblank(ORrw.ECReservStock))then begin
+						class[k] = ORrw.ECReservStock;
+						k=k+1;
+					end;
+					logtext(0,k & " k");
+					/*pos = 0;
+					ostr = "";
+					vendor = "";
+					ExtractObj(INr.DispGroups,pos,ostr);
+					while(nonblank(ostr))begin
+						if(nonblank(ostr))then begin
+							DIr.Code = ostr;
+							if(readfirstmain(DIr,1,true))then begin
+								if(DIr.CType=="BRAND")then begin
+									vendor = DIr.Name;
+								end;
+							end;
+							ExtractObj(INr.DispGroups,pos,ostr);
+						end;
+					end;
+					foundf = false;
+					For(j=0;j<k;j=j+1) begin
+	  				if(class[j]==vendor)then begin
+	  					foundf = true;
+	  				end;
+					end; 
+					if(!foundf)then begin
+						class[k]=vendor;
+						k=k+1;
+					end;*/
+					
+				end;	
+			end;
+		end;
+	end;
+	
+	For(j=0;j<k;j=j+1) begin
+		recordnew(POr);
+			rownum = 0;
+			POr.OrdNr = ORr.SerNr;
+			logtext(0,POr.OrdNr & " POr.OrdNr");
+			POr.VECode = "";
+			CUr.Code = vVendor[class[j]];
+			TrHs = true;
+			/*while(loopkey("Name",CUr,1,TrHs))begin
+				testf = true;
+				if(CUr.Name!=class[j])then begin TrHs = false; testf = false; end;
+				if(CUr.VEType!=1)then begin testf = false; end;
+				//if(CUr.Code<"0009999" and CUr.Code>"0000001")then begin testf = false; end;
+        if ((CUr.VECat=="IDEA") and (currentcompany!=28))then begin testf = false; end;
+        if ((CUr.VECat!="IDEA") and (currentcompany==28))then begin testf = false; end;
+				*/
+				if(readfirstmain(CUr,1,true))then begin
+					testf = true;
+					if(testf)then begin
+						POr.VECode = CUr.Code;
+						POVc_PasteVECode(POr,true);
+						TrHs = false;
+					end;
+				end;
+			//end;
+			//resetloop(CUr);
+			
+			
+			/*if(readfirstkey("Name",CUr,1,true))then begin
+				POr.VECode = CUr.Code;
+				POVc_PasteVECode(POr,true);
+			end else begin
+				POr.VECode = "";
+			end;*/
+
+			// POr.InvAddr4 = ORr.OrderClass & ORr.SerNr;
+			POr.PlanShip = addday(POr.TransDate,CUr.PlanShipDays);
+			POr.POClass = "TMP";
+			POr.InvAddr4 = POr.POClass & ORr.SerNr;
+			POr.ItemFromOtherSTockObj = class[j];
+			For(i=0;i<mtrw;i=i+1) begin
+				matrowget(ORr,i,ORrw); 
+				if(nonblank(ORrw.ArtCode))then begin
+					INr.Code = ORrw.ArtCode;
+					if(readfirstmain(INr,1,true))then begin
+						if(INr.ItemType==1)then begin
+							/*pos = 0;
+							ostr = "";
+							vendor = "";
+							ExtractObj(INr.DispGroups,pos,ostr);
+							while(nonblank(ostr))begin
+								if(nonblank(ostr))then begin
+									DIr.Code = ostr;
+									if(readfirstmain(DIr,1,true))then begin
+										if(DIr.CType=="BRAND")then begin
+											vendor = DIr.Name;
+										end;
+									end;
+									ExtractObj(INr.DispGroups,pos,ostr);
+								end;
+							end;
+							ostr = vendor;*/
+							
+							
+							// BBr.Code = INr.BPIBrand;
+							// readfirstmain(BBr,1,true);
+							ostr = ORrw.ECReservStock;
+							
+							if(ostr==class[j])then begin
+								if((ORrw.Quant-ORrw.Shipd1)>0)then begin
+									POrw.ArtCode = ORrw.ArtCode;
+									matrowput(POr,rownum,POrw);
+									POVc_PasteArtCode(POr,rownum,false);
+									matrowget(POr,rownum,POrw);
+									//POrw.Price = ORrw.Price;
+									POrw.Quant = ORrw.Quant - ORrw.Shipd1;
+									POrw.Spec = ORrw.Spec;
+									POrw.OrdRow = i;	
+									matrowput(POr,rownum,POrw);
+									POVc_PasteQuant(POr,rownum);
+									rownum = rownum + 1;
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+		if(matrowcnt(POr)>0)then begin
+			POr.SerNr = NextSerNr("POVc",POr.TransDate,-1,false,"");  
+			POr.Location = ORr.Location;	
+			//if(ORr.OrderClass=="CLIEN")then begin
+				POr.IDStatus = "PO On Enquiry";
+			// end else begin
+				// POr.IDStatus = "PO Confirmed";
+			// end;
+			Locr.Code = ORr.Location;
+			if(ReadFirstMain(Locr,1,true)) then begin
+				if (!SetInSet(Locr.Objects,POr.Objects)) then begin
+					if(blank(POr.Objects)) then begin 
+						POr.Objects = Locr.Objects;
+					end else begin
+						POr.Objects = POr.Objects & "," & Locr.Objects;
+					end;
+				end;
+			end;
+			POr.CurncyCode = "AZN";
+			POr.CheckCurncyCode = "AZN";
+			recordStore(POr,false);
+			RecordCopy(oldPOr,POr);
+			POr.Objects = "ECOMMERCE";
+			POr.OKFlag = 1;
+			RecordUpdate(oldPOr,POr,true);
+			createrecordlink(POr,CurrentCompany,ORr,CurrentCompany);
+			createrecordlink(ORr,CurrentCompany,POr,CurrentCompany);
+		end;
+	end; 
+
+
+return;
+end;
+
+
+
+
+
+
 global updating procedure ORLClassGreenColour(longint ORSerNr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger14:52 21.02.2019
 begin
 	record IVVc IVr;
@@ -1833,7 +2043,7 @@ begin
 	row ORVc ORrw, ECORrw;
 	record SHVc SH2r;
 	row SHVc SHrw, SH2rw;
-	record POVc POr;
+	record POVc POr, oldPOr;
 	row POVc POrw;
 	string 50 ostr;
 	array string 100 class,artcode,itemcurrency;
@@ -1841,7 +2051,7 @@ begin
 	boolean foundf,TrHs,testf,cuf,chsum,locIvOKf,serportf;
 	record CUVc CUr;
 	record DIVc DIr;
-	string 200 vendor,loccode,errmsg,OffserNr,warning;
+	string 200 vendor,loccode,errmsg,OffserNr,warning, tmpFob;
 	vector string 255 ECCodes, vItemCurrency, OldNewArt,vBarCode,vLocCashier;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBrw;
@@ -2011,10 +2221,28 @@ begin
 			resetloop(INr);
 			
 			matrowget(CBb,OldComp-1,CBrw);
-			RecordNew(POr);
-			POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
 			ECORr.SerNr = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
 			if(ReadFirstMain(ECORr,1,true))then begin 
+				i=0;
+				ecvcnt = matrowcnt(ECVFSBb);
+				//logtext(0,ecvcnt);
+				for(v=0;v<ecvcnt;v=v+1)begin
+					matrowget (ECVFSBb,v,ECVFSBrw);
+					//logtext(0,ECVFSBrw.LocCode & " <> " & loccode);
+					if(ECVFSBrw.LocCode==loccode and cmpnmb==ECVFSBrw.CompanyNr)then begin
+						tmpFob = ECVFSBrw.VendName;
+						v = ecvcnt;
+					end;
+				end;
+				while (ReadRecordLink(ECORr,i,POr,RLinkr))begin
+					if(POr.POClass=="TMP" and POr.VECode==tmpFob)then begin
+						RecordCopy(oldPOr,POr);
+						POr.OKFlag = 0;
+						RecordUpdate(oldPOr,POr,true);
+						RecordDelete(POr);
+					end;
+					i = i + 1;
+				end;
 				mtrw = matrowcnt(ECORr);
 				For(i=0;i<mtrw;i=i+1) begin
 					matrowget(ECORr,i,ECORrw);
@@ -2024,6 +2252,8 @@ begin
 					end;
 				end;
 			end;
+			RecordNew(POr);
+			POr.InvAddr4 = right(ORr.OfficialSerNr,(len(ORr.OfficialSerNr)-3));
 			ecvcnt = matrowcnt(ECVFSBb);
 			//logtext(0,ecvcnt);
 			for(v=0;v<ecvcnt;v=v+1)begin
