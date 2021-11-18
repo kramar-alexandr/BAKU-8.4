@@ -2156,7 +2156,7 @@ end;
 
 
 
-global updating procedure SendLoyaltyCardToCRM(var record LoyaltyCardVc LCr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger11:38 11.09.2018
+global procedure SendLoyaltyCardToCRM(var record LoyaltyCardVc LCr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger11:38 11.09.2018
 begin
 	integer err,noErr;
   string 255 host,tstr,nonce,opaque,page;
@@ -2197,11 +2197,11 @@ begin
 			if(nonblank(MyJSGet(jsresponse,"result")))then begin
 				CUr.CRMid = MyJSGet(jsresponse,"result");
 				logtext(0,"SendUpdateLoyaltyCardToCRM CUr.CRMid " & CUr.CRMid);
-				recordstore(CUr,true);
+				qupdating.qurecordstoreCU(CUr);
 			end;
 		end;
 		
-		LCMLr.Code = LCr.LCMLevel;
+		/*LCMLr.Code = LCr.LCMLevel;
 		readfirstmain(LCMLr,1,true);
 		if(blank(LCMLr.CRMid) or LCMLr.CRMid=="null")then begin
 			SendWebRequest(host,port,-1,false,"GET","/api/LoyaltyCard/GetCrmId?hansaId=" & UrlEncode(LCMLr.Code),"application/json","",false,req,reply,5);
@@ -2211,7 +2211,7 @@ begin
 				logtext(0,"SendUpdateLoyaltyCardToCRM LCMLr.CRMid " & LCMLr.CRMid);
 				recordstore(LCMLr,true);
 			end;
-		end;
+		end;*/
 		
 		Rebr.Code = LCr.RebCodeCRM;
 		if(blank(Rebr.Code))then begin
@@ -2224,7 +2224,7 @@ begin
 			jsresponse = ParseJSONArea(reply);
 			if(nonblank(MyJSGet(jsresponse,"result")))then begin
 				Rebr.CRMid = MyJSGet(jsresponse,"result");
-				recordstore(Rebr,true);
+				qupdating.qurecordstoreRebr(Rebr);
 				logtext(0,"SendUpdateLoyaltyCardToCRM Rebr.CRMid " & Rebr.CRMid);
 			end;
 		end;
@@ -2260,6 +2260,7 @@ begin
 			jsresponse = ParseJSONArea(reply);
 			if(nonblank(MyJSGet(jsresponse,"result")))then begin
 				LCr.CRMid = MyJSGet(jsresponse,"result");
+				qupdating.qurecordstoreLC(LCr);
 				logtext(0,"SendLoyaltyCardToCRM " & MyJSGet(jsresponse,"result"));
 			end;
 		end;
@@ -2352,11 +2353,11 @@ begin
 			if(nonblank(MyJSGet(jsresponse,"result")))then begin
 				LCr.CRMid = MyJSGet(jsresponse,"result");
 				if(Blank(LCr.CRMid)) then begin
-				  qupdating.SendLoyaltyCardToCRM(LCr);
+				  threadasync.SendLoyaltyCardToCRM(LCr);
 					goto  lSendUpdateLoyaltyCardToCRM;
 				end;
 			end else begin
-				qupdating.SendLoyaltyCardToCRM(LCr);
+				threadasync.SendLoyaltyCardToCRM(LCr);
 				goto  lSendUpdateLoyaltyCardToCRM;
 			end;
 		end;
@@ -2372,18 +2373,6 @@ begin
 				qupdating.qurecordstoreCU(CUr);
 			end;
 		end;
-		
-		/*LCMLr.Code = LCr.LCMLevel;
-		readfirstmain(LCMLr,1,true);
-		if(blank(LCMLr.CRMid) or LCMLr.CRMid=="null")then begin
-			SendWebRequest(host,port,-1,false,"GET","/api/LoyaltyProgram/GetCrmId?hansaId=" & UrlEncode(LCMLr.Code),"application/json","",false,req,reply,5);
-			jsresponse = ParseJSONArea(reply);
-			if(nonblank(MyJSGet(jsresponse,"result")))then begin
-				LCMLr.CRMid = MyJSGet(jsresponse,"result");
-				logtext(0,"SendUpdateLoyaltyCardToCRM LCMLr.CRMid " & LCMLr.CRMid);
-				recordstore(LCMLr,true);
-			end;
-		end;*/
 		
 		Rebr.Code = LCr.RebCodeCRM;
 		readfirstmain(Rebr,1,true);
@@ -2411,18 +2400,14 @@ begin
 		if(nonblank(LCMLr.CRMid)) then begin
 		addtexttoarea("\"loyaltyProgramId\":\"" & NormalizeStrToJson(LCMLr.CRMid) & "\"," & chr(13) & chr(10),req);
 		end;
-		//addtexttoarea("\"cardNumber\":\"" & LCr.SerNr & "\"," & chr(13) & chr(10),req);
 		if(nonblank(Rebr.CRMid)) then begin
-		addtexttoarea("\"discountId\":\"" & NormalizeStrToJson(Rebr.CRMid) & "\"," & chr(13) & chr(10),req);
+		  addtexttoarea("\"discountId\":\"" & NormalizeStrToJson(Rebr.CRMid) & "\"," & chr(13) & chr(10),req);
 		end;
 		addtexttoarea("\"currentBalance\":\"" & LCr.PointsBalance & "\"," & chr(13) & chr(10),req);
 		addtexttoarea("\"startDate\":\"" & datetostring(LCr.StartDate,"YYYY-MM-DD") & "\"," & chr(13) & chr(10),req);
 		addtexttoarea("\"endDate\":\"" & datetostring(LCr.ExpiryDate,"YYYY-MM-DD") & "\"," & chr(13) & chr(10),req);
-		//addtexttoarea("\"barCode\":\"" & "" & "\"," & chr(13) & chr(10),req);
-		//addtexttoarea("\"cardColorId\":\"" & "" & "\"," & chr(13) & chr(10),req);
 		addtexttoarea("\"cashbackLevel\":\"" & LCr.CashbackLevelPoints & "\"," & chr(13) & chr(10),req);
 		addtexttoarea("\"totallyAccumulatedPoints\":\"" & LCr.PointsBalanceTotal & "\"," & chr(13) & chr(10),req);
-		//addtexttoarea("\"applicationId\":\"" & "" & "\"," & chr(13) & chr(10),req);
 		addtexttoarea("\"id\":" & "\"" & NormalizeStrToJson(LCr.CRMid) & "\"" & chr(13) & chr(10),req);
 		addtexttoarea("}" & chr(13) & chr(10),req);
 		addtexttoarea(currentdate & ":" & currenttime & " " & chr(13) & chr(10) ,req);
