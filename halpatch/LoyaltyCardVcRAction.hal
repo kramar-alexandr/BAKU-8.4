@@ -4,8 +4,8 @@ external procedure NextM4Number(string,var string);
 external procedure SplitAlphaDigit(string,var string,var LongInt);
 external updating procedure CopyLoyaltyBalanceToNewCard(var record LoyaltyCardVc); //Edit***************************Sasha2,12:19 23.05.2017
 external updating procedure CreateLoyaltyCardRemote(record CUVc,var record LoyaltyCardVc);// Edit ************************** BPI Ukraine - KramarAlexandr - Thursday, 4 January 2018 12:28:35
-external updating procedure SendLoyaltyCardToCRM(var record LoyaltyCardVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger13:07 12.09.2018
-external procedure SendUpdateLoyaltyCardToCRM(var record LoyaltyCardVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger13:07 12.09.2018
+external procedure SendLoyaltyCardToCRM(var record LoyaltyCardVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger13:07 12.09.2018
+external procedure SendUpdateLoyaltyCardToCRM(record LoyaltyCardVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger13:07 12.09.2018
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -192,6 +192,19 @@ begin
   return;
 end;
 
+
+global
+updating function LongInt LoyaltyCardVcRecordSaveAfter(var record LoyaltyCardVc LoyaltyCardr,record LoyaltyCardVc LoyaltyCard2r,LongInt stat,LongInt long4)
+BEGIN
+  LongInt res;
+
+  threadasync.SendLoyaltyCardToCRM(LoyaltyCardr); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger13:05 12.09.2018
+
+  LoyaltyCardVcRecordSaveAfter = res;
+  RETURN;
+END;
+
+
 global
 updating function LongInt LoyaltyCardVcRecordCheck(var record LoyaltyCardVc LoyaltyCardr,record LoyaltyCardVc LoyaltyCard2r,LongInt stat,LongInt long4)  //edited by BPI
 begin
@@ -326,13 +339,6 @@ begin
 	  LoyaltyCardr.PointsBalanceTotal = blankval; // Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 15 May 2019 09:50:59
 	end;
 		
-	if (stat==Rs_insert) then begin
-		SendLoyaltyCardToCRM(LoyaltyCardr); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger13:05 12.09.2018
-  end;
-  if (stat==Rs_update) then begin
-		threadasync.SendUpdateLoyaltyCardToCRM(LoyaltyCardr); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger13:05 12.09.2018
-	end;
-	
 	
 LLoyaltyCardVcRecordCheck:;
   LoyaltyCardVcRecordCheck = res;
@@ -359,6 +365,7 @@ global
 updating function LongInt LoyaltyCardVcRecordUpdateAfter(var record LoyaltyCardVc LCr,record LoyaltyCardVc LC2r,LongInt stat,LongInt long4)
 begin
   LongInt res;
+  record CUVc CUr;
  
   if (blank(LC2r.PointsTo)) and (nonblank(LCr.PointsTo)) then begin
     TransferPointsHist(LCr,false);
@@ -368,6 +375,19 @@ begin
       TransferPointsHist(LCr,false);
     end;
   end;
+  
+  if(left(LCr.SerNr,4)=="APPL")then begin
+    CUr.Code = LCr.CustCode;
+    if(readfirstmain(CUr,1,true))then begin
+      if(CUr.CustCat!="APP")then begin
+        CUr.CustCat = "APP";
+        recordstore(CUr,true);
+      end;
+    end;
+  end;
+  
+	threadasync.SendUpdateLoyaltyCardToCRM(LCr); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger13:05 12.09.2018
+  
   LoyaltyCardVcRecordUpdateAfter = res;
   return;
 end;
@@ -415,8 +435,8 @@ begin
 					CreateLoyaltyCardRemote(CUr,LoyaltyCardr);
 					LoyaltyCardr.SerNr = RepSpec.f2;
 					CopyLoyaltyBalanceToNewCard(LoyaltyCardr); //Edit***************************Sasha2,12:20 23.05.2017
-					SendLoyaltyCardToCRM(LoyaltyCardr);
 					recordstore(LoyaltyCardr,true);
+					threadasync.SendLoyaltyCardToCRM(LoyaltyCardr);
 						
 					if(nonblank(LoyaltyCardr.CustCode))then begin
 						CUr.Code = LoyaltyCardr.CustCode;
