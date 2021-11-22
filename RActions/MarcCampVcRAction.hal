@@ -7702,6 +7702,46 @@ begin
 return;
 end;
 
+function boolean DoFoundItem(string artcode)	//Edit **********************************************Vas-P	22/11/2021
+begin
+	boolean res;
+	record INVc INr;
+  record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	integer i,rwcnt;
+	boolean foundf;
+	
+	BlockLoad(Compb);	
+	rwcnt = matrowcnt(Compb);
+	
+	for(i=0;i<rwcnt;i=i+1)begin
+	  matrowget(Compb,i,Comprw);
+		if(Comprw.ActiveStatus==0) then begin
+		  setcompany(i+1,false);
+			foundf = false;
+      INr.Code = artcode;
+      if(ReadFirstMain(INr,1,true)) then begin
+        foundf = true;
+			end else begin
+        INr.AlternativeCode = artcode;
+        if(ReadFirstKey("AlternativeCode",INr,1,true)) then begin
+          foundf = true;
+        end else begin
+          INr.BarCode = artcode;
+          if(ReadFirstKey("BarCode",INr,1,true)) then begin
+            foundf = true;
+          end;
+        end;
+			end;
+			if(foundf) then begin
+				res = foundf;
+			end;
+		end;
+	end;
+		
+	DoFoundItem = res;
+return;
+end;
 
 global webpublic updating procedure WebGetLostSales()		//Edit **********************************************Vas-P 	19/10/2021
 begin
@@ -7709,8 +7749,11 @@ begin
 	json datajson;
 	string 100 artcode,brandname,email,brandcode,location,token;
 	record LostSalesVc LSr;
+	record INVc INr;
 	record BPIBrandVc Brandr;
 	area delimeter;
+	boolean foundf;
+	string 100 foundstr;
 	
 	logtext(0,"================================================ WebGetLostSales");
 	
@@ -7725,32 +7768,45 @@ begin
 	datajson = ParseJsonArea(getpost);
   
   token = JSONGet(datajson,"token");
-	artcode = JSONGet(datajson,"artCode");
+	artcode = JSONGet(datajson,"artcode");
 	brandname = JSONGet(datajson,"brand");
 	email = JSONGet(datajson,"email");
 	location = JSONGet(datajson,"boutique");
 	
 	WebSetContentType("application/json");		
-	
+
 	if(token=="fvgbgtyhmo987654ewsdfghjn")then begin
 	  setcompany(18,false);	
     if(nonblank(artcode) and nonblank(brandname) and nonblank(email))then begin
       Brandr.Name = brandname;
       if(readfirstkey("Name",Brandr,1,true))then begin
         brandcode = Brandr.Code;
-        LSr.ArtCode = artcode;
-        LSr.BrandCode = brandcode;
-        if(readfirstkey("ArtCode",LSr,2,true)==false)then begin
-          RecordNew(LSr);
-          LSr.ArtCode = artcode;
-          LSr.BrandCode = brandcode;
-          LSr.BrandName = brandname;
-          LSr.Email = email;
-          LSr.Date = CurrentDate;
-          LSr.Location = location;
-          RecordStore(LSr,true);
-          weboutstring("ok");
-        end;
+				foundf = false;
+				INr.AlternativeCode = artcode;
+				if(readfirstkey("AlternativeCode",INr,1,true))then begin
+					foundf = true;
+				end;
+				if(!foundf)then begin
+					foundf = DoFoundItem(artcode);
+				end;
+				if(foundf)then begin
+					weboutstring("artcode = " & artcode);
+					// LSr.ArtCode = artcode;
+					// LSr.BrandCode = brandcode;
+					// if(readfirstkey("ArtCode",LSr,2,true)==false)then begin
+						// RecordNew(LSr);
+						// LSr.ArtCode = artcode;
+						// LSr.BrandCode = brandcode;
+						// LSr.BrandName = brandname;
+						// LSr.Email = email;
+						// LSr.Date = CurrentDate;
+						// LSr.Location = location;
+						// RecordStore(LSr,true);
+						// weboutstring("ok");
+					// end;
+				end else begin
+					weboutstring("wrong artcode");
+				end; 
       end else begin
         weboutstring("wrong brand");
       end;
