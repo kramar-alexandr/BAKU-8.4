@@ -1086,6 +1086,107 @@ end;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
 
 
 
+
+global 
+updating procedure OrderCompiledMn (var record ORVc ORr) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 18:00 23.11.2021
+begin
+	record IVVc IVr, OldIVr, IV2r;
+	record ORVc LocORr, OldLocORr;
+	row ORVc ORrw, LocORrw;
+	record SHVc SHr, OldSHr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	integer OldComp, MaxCompCode, rwcnt, i, j, PUcnt, y, LocComp, VIOFFCnt, k, mtrw, n;
+	vector boolean Compf;
+	record RLinkVc RLr;
+	vector boolean LocSHCompltdf, vNotSMcomp, vNotSMItemFCash;
+	record ActVc Actr, oldActr;
+	vector integer DeletedSH;
+	record LocalMachineBlock LMb;
+	record RetVc LocRetr;
+	record SRBlock SRb;
+	LongInt newnr, warn;
+	string 255 tstr;
+	Boolean nousersernr,testf,SMf;
+	record CUVc CUr;
+	longint r, res, IVOFFCnt;
+	record RetPUVc RetPUr;
+	row RetPUVc RetPUrw;
+	record VIVc VIr, credVIr, offVIr;
+	record ECommManUserBlock ECMUb;
+	record IVVc IVCreditr,offIVr, OldIVcreditr;
+	row IVVc IVCreditrw;
+	record StockMovVc SMr, newStockMovr;
+	row StockMovVc newStockMovrw;
+	record ECCasierDocSetBlock ECCDSb;
+	row ECCasierDocSetBlock ECCDSrw;
+	vector string 255 vNotSMcompLoc, vNotSMcompLocItem, vSHLocation;
+	
+	BlockLoad(ECCDSb);
+	
+	
+	rwcnt = matrowcnt(ECCDSb);
+	for (i=0;i<rwcnt;i=i+1) begin
+		matrowget(ECCDSb,i,ECCDSrw);
+		vNotSMcomp[ECCDSrw.CompNr] = true;
+		vNotSMcompLoc[ECCDSrw.CompNr] = ECCDSrw.LocCode;
+	end;
+	
+	rwcnt = matrowcnt(ORr);
+	for (i=0;i<rwcnt;i=i+1) begin
+		matrowget(ORr,i,ORrw);
+		if(vNotSMcomp[ORrw.ECReservComp]) then begin
+			vNotSMItemFCash[ORrw.SerialNr] = true;
+			vNotSMcompLocItem[ORrw.SerialNr] = vNotSMcompLoc[ORrw.ECReservComp];
+		end;
+	end;
+	
+	OldComp = CurrentCompany;
+	i=1;
+	while (ReadRecordLink(ORr,i,LocORr,RLr)) begin
+		if(matrowcnt(LocORr)>0)then begin
+			matrowget(LocORr,0,LocORrw);
+			if(SetCompany(LocORrw.ECReservComp,false))then begin
+				logtext(0,"Local OR, company: " & LocORrw.ECReservComp);
+				if(ReadFirstMain(LocORr,1,true))then begin
+					j = 1;
+					while (ReadRecordLink(LocORr,j,SHr,RLr))begin
+						if (SHr.OKFlag==0) then begin
+							RecordCopy(OldSHr,SHr);
+							SHr.OKFlag = 1;
+							RecordUpdate(OldSHr,SHr,true);
+						end;
+						j = j + 1;
+					end;
+					j = 1;
+					while (ReadRecordLink(LocORr,j,IVr,RLr))begin
+						if(IVr.OKFlag==0)then begin
+							RecordCopy(OldIVr,IVr);
+							IVr.OKFlag = 1;
+							RecordUpdate(OldIVr,IVr,true);
+						end;
+						j = j + 1;
+					end;
+					RecordCopy(OldLocORr,LocORr);
+				end;
+			end;
+		end;
+		i = i + 1;
+	end;
+	ResetCompany(OldComp);
+	
+	return;
+end;   // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 18:00 23.11.2021
+
+
+
+
+
+
+
+
+
+
 global 
 updating function longint CreateLocalORFromWebOR (var record ORVc ORr, var record ORVc OR2r) // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger  17:56 17.10.2018
 begin
