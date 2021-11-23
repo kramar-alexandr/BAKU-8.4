@@ -2092,9 +2092,9 @@ begin
 							weboutstring("<td>" & CIr.LocCode & "</td>");
 							weboutstring("<td>" & CIr.BrandCode & "</td>");
 							weboutstring("</tr>");
-							queued.DelCIS(CISr);
-							millisleep(50);
-							stepback(CISr);
+							// queued.DelCIS(CISr);
+							// millisleep(50);
+							// stepback(CISr);
 							newCISr.ItemCode = ORrw.ArtCode;
 							newCISr.OrderNr = ORr.SerNr;
 							if (NoKItemRow[ORrw.GlobalItemArtCode]>0) then begin
@@ -2111,6 +2111,111 @@ begin
 	
  return;
 end;
+
+
+
+global
+webpublic procedure WebGetKareItCodesWithoutK()
+begin
+	record ClientItemStatusVc CISr, newCISr;
+	record ConsItemVc CIr;
+	record ORVc ORr;
+	row ORVc ORrw;
+	record POVc POr;
+	row POVc POrw;
+	record PUVc PUr;
+	row PUVc PUrw;
+	boolean NoKItem;
+	longint i, PUOKQty;
+	boolean TrHs, PUOkf, TrHs2, genTrHs;
+	vector integer NoKItemRow;
+	vector boolean delNoKItemRow;
+	string 50 st;
+ 
+	st = webgetarg("upd");
+	logtext(0,"================================================ WebGetKareItCodesWithoutK");
+  SetCompany(18,false);
+	
+	weboutstring("<table>");
+	CISr.ItemCode = "";
+	genTrHs = true;
+	while (loopmain(CISr,1,genTrHs)) begin
+		if (FileExists("stop")) then begin genTrHs = false; end;
+		clearVector(NoKItemRow);
+		NoKItem = false;
+		CIr.Code = CISr.ItemCode;
+		if (readfirstmain(CIr,1,true)) then begin
+			ORr.SerNr = CISr.OrderNr;
+			if (ReadFIrstMain(ORr,1,true)) then begin
+				POr.OrdNr = ORr.SerNr;
+				TrHs = true;
+				while (loopkey("OrdNr",POr,1,TrHs)) begin
+					if (POr.OrdNr!=ORr.SerNr) then begin TrHs = false; end;
+					if (TrHs) then begin
+						PUr.PONr = POr.SerNr;
+						TrHs2 = true;
+						while (loopkey("PONr",PUr,1,TrHs2)) begin
+							if (PUr.PONr!=POr.SerNr) then begin TrHs2 = false; end;
+							if (TrHs2 and PUr.OKFlag==1) then begin
+								for (i=0;i<matrowcnt(PUr);i=i+1) begin
+									matrowget(PUr,i,PUrw);
+									NoKItemRow[PUrw.VIReconComment] = NoKItemRow[PUrw.VIReconComment] + PUrw.Quant;
+								end;
+							end;
+						end;
+						ResetLoop(PUr);
+					end;
+				end;
+				ResetLoop(POr);
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					if (left(ORrw.GlobalItemArtCode,1)=="K" and ORrw.GlobalItemArtCode==CIr.LocCode) then begin
+						NoKItem = true;
+					end;
+				end;
+				if (!NoKItem) then begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						if (ORrw.GlobalItemArtCode=="K" & CIr.LocCode) then begin
+							weboutstring("<tr>");
+							weboutstring("<td>" & ORr.SerNr & "</td>");
+							weboutstring("<td>" & ORrw.GlobalItemArtCode & "</td>");
+							weboutstring("<td>" & CIr.LocCode & "</td>");
+							weboutstring("<td>" & CIr.BrandCode & "</td>");
+							weboutstring("</tr>");
+							// queued.DelCIS(CISr);
+							// millisleep(50);
+							// stepback(CISr);
+							delNoKItemRow[CISr.ItemCode & "_" & CISr.OrderNr] = true;
+							newCISr.ItemCode = ORrw.ArtCode;
+							newCISr.OrderNr = ORr.SerNr;
+							if (NoKItemRow[ORrw.GlobalItemArtCode]>0) then begin
+								newCISr.Quant = NoKItemRow[ORrw.GlobalItemArtCode];
+							end;
+							queued.UpdCIS(newCISr);
+							millisleep(50);
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	CISr.ItemCode = "";
+	genTrHs = true;
+	while (loopmain(CISr,1,genTrHs)) begin
+		if (FileExists("stop")) then begin genTrHs = false; end;
+		if (delNoKItemRow[CISr.ItemCode & "_" & CISr.OrderNr] and genTrHs) then begin
+			logtext(0,CISr.ItemCode & "_" & CISr.OrderNr);
+			queued.DelCIS(CISr);
+			millisleep(50);
+			stepback(CISr);
+		end;
+	end;
+ return;
+end;
+
+
+
 
 global updating procedure UpdORVc (var record ORVc ORr)
 begin
