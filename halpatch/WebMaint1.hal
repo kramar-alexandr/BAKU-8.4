@@ -1993,6 +1993,14 @@ begin
 end;
 
 
+
+global updating procedure UpdCIS (var record ClientItemStatusVc CISr)
+begin
+	recordStore(CISr,true);
+	return;
+end;
+
+
 global
 webpublic procedure WebGetKareItCodesWithoutK()
 begin
@@ -2029,7 +2037,10 @@ begin
 							weboutstring("<td>" & ORrw.GlobalItemArtCode & "</td>");
 							weboutstring("<td>" & CIr.LocCode & "</td>");
 							weboutstring("<td>" & CIr.BrandCode & "</td>");
-							weboutstring("</tr>");
+							weboutstring("</tr>")
+							CISr.ItemCode = ORrw.ArtCode;
+							queued.UpdCIS(CISr);
+							millisleep(50);
 						end;
 					end;
 				end;
@@ -2040,7 +2051,11 @@ begin
  return;
 end;
 
-
+global updating procedure UpdORVc (var record ORVc ORr)
+begin
+	recordStore(ORr,true);
+	return;
+end;
 
 
 global
@@ -2054,7 +2069,8 @@ begin
 	row POVc POrw;
 	longint i;
 	vector boolean NoKItem;
-	boolean TrHs;
+	vector integer NoKItemRow;
+	boolean TrHs, ORUPD;
  
 	logtext(0,"================================================ WebGetKareItCodesWithoutK");
   SetCompany(18,false);
@@ -2063,10 +2079,12 @@ begin
 	ResetLoop(ORr);
 	while (loopmain(ORr,1,true)) begin
 		clearvector(NoKItem);
+		clearvector(NoKItemRow);
 		for (i=0;i<matrowcnt(ORr);i=i+1) begin
 			matrowget(ORr,i,ORrw);
 			if (left(ORrw.GlobalItemArtCode,1)!="K") then begin
 				NoKItem[ORrw.GlobalItemArtCode] = true;
+				NoKItemRow[ORrw.GlobalItemArtCode] = i;
 			end;
 		end;
 		POr.OrdNr = ORr.SerNr;
@@ -2074,6 +2092,7 @@ begin
     while (loopkey("OrdNr",POr,1,TrHs)) begin
 			if (POr.OrdNr!=ORr.SerNr) then begin TrHs = false; end;
 			if (TrHs) then begin
+				ORUPD = false;
 				for (i=0;i<matrowcnt(POr);i=i+1) begin
 					matrowget(POr,i,POrw);
 					if (NoKItem[right(POrw.VEArtCode,len(POrw.VEArtCode)-1)] and left(POrw.VEArtCode,1)=="K") then begin
@@ -2085,7 +2104,18 @@ begin
 						weboutstring("<td>" & POrw.VEArtCode & "</td>");
 						weboutstring("<td>" & i & "</td>");
 						weboutstring("</tr>");
+						matrowget(ORr,NoKItemRow[right(POrw.VEArtCode,len(POrw.VEArtCode)-1)],ORrw);
+						if(ORrw.Shipd1==0)then begin
+							ORrw.ArtCode = POrw.ArtCode;
+							ORrw.GlobalItemArtCode = POrw.VEArtCode;
+							matrowput(ORr,NoKItemRow[right(POrw.VEArtCode,len(POrw.VEArtCode)-1)],ORrw);
+							ORUPD = true;
+						end;
 					end;
+				end;
+				if (ORUPD) then begin
+					queued.UpdORVc(ORr);
+					millisleep(50);
 				end;
 			end;
 		end;
