@@ -2008,8 +2008,14 @@ begin
 	record ConsItemVc CIr;
 	record ORVc ORr;
 	row ORVc ORrw;
+	record POVc POr;
+	row POVc POrw;
+	record PUVc PUr;
+	row PUVc PUrw;
 	boolean NoKItem;
-	longint i
+	longint i, PUOKQty;
+	boolean TrHs, PUOkf, TrHs2;
+	vector integer NoKItemRow;
  
 	logtext(0,"================================================ WebGetKareItCodesWithoutK");
   SetCompany(18,false);
@@ -2017,11 +2023,30 @@ begin
 	weboutstring("<table>");
 	CISr.ItemCode = "";
 	while (loopmain(CISr,1,true)) begin
+		clearVector(NoKItemRow);
 		NoKItem = false;
 		CIr.Code = CISr.ItemCode;
 		if (readfirstmain(CIr,1,true)) then begin
 			ORr.SerNr = CISr.OrderNr;
 			if (ReadFIrstMain(ORr,1,true)) then begin
+				while (loopkey("OrdNr",POr,1,TrHs)) begin
+					if (POr.OrdNr!=ORr.SerNr) then begin TrHs = false; end;
+					if (TrHs) then begin
+						PUr.PONr = POr.SerNr;
+						TrHs2 = true;
+						while (loopkey("PONr",PUr,1,TrHs2)) begin
+							if (PUr.PONr!=POr.SerNr) then begin TrHs2 = false; end;
+							if (TrHs2 and PUr.OKFlag==1) then begin
+								for (i=0;i<matrowcnt(PUr);i=i+1) begin
+									matrowget(PUr,i,PUrw);
+									NoKItemRow[PUrw.VIReconComment] = NoKItemRow[PUrw.VIReconComment] + PUrw.Quant;
+								end;
+							end;
+						end;
+						ResetLoop(PUr);
+					end;
+				end;
+				ResetLoop(POr);
 				for (i=0;i<matrowcnt(ORr);i=i+1) begin
 					matrowget(ORr,i,ORrw);
 					if (left(ORrw.GlobalItemArtCode,1)=="K" and ORrw.GlobalItemArtCode==CIr.LocCode) then begin
@@ -2039,6 +2064,9 @@ begin
 							weboutstring("<td>" & CIr.BrandCode & "</td>");
 							weboutstring("</tr>")
 							CISr.ItemCode = ORrw.ArtCode;
+							if (NoKItemRow[ORrw.GlobalItemArtCode]>0) then begin
+								CISr.Quant = NoKItemRow[ORrw.GlobalItemArtCode];
+							end;
 							queued.UpdCIS(CISr);
 							millisleep(50);
 						end;
