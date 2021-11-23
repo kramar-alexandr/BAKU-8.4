@@ -6858,7 +6858,7 @@ return;
 end;	
 
 
-function string 255 SearchLastPUInComp(string itemcode,string brandcode,var date lastdate,var integer lastdatecomp,var val lastcost,var string lastcurncy,var record PLVc PLr)
+function string 255 SearchLastPUInComp(string itemcode,string brandcode,var date lastdate,var integer lastdatecomp,var val lastcost,var string lastcurncy,var record PLVc PLr,array string maincodeincomp,var boolean existsinstock)
 begin
   string 255 res;
   record CompaniesBlock Compb;
@@ -6869,6 +6869,7 @@ begin
 	boolean TrHs,testf;
 	record INVc INr;
 	record PLVc PL2r;
+	record ItemStatusVc ISr;
 	
 	BlockLoad(Compb);	
 	rwcnt = matrowcnt(Compb);
@@ -6879,6 +6880,15 @@ begin
 		  setcompany(i+1,false);
 		  INr.Code = itemcode;
       if(readfirstmain(INr,1,true) and brandcode==INr.BPIBrand)then begin
+        
+        if(INr.Code!=maincodeincomp[0] and INr.Code!=maincodeincomp[1])then begin
+          ISr.Code = INr.Code;
+          ISr.Location = ";;;";
+          if(readfirstmain(ISr,2,true) and ISr.Instock>0)then begin
+            existsinstock = true;
+          end;
+        
+        end;
         TrHs = true;
         IHr.ArtCode = itemcode;
         IHr.FileName = "PUVc";
@@ -6934,8 +6944,9 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	string 30 companies,nextdupcode,lastcurncy;
+	array string 30 maincodeincomp;
 	vector string 255 vComp;
-	boolean TrHs,TrHs2,testf,testf2;
+	boolean TrHs,TrHs2,testf,testf2,existsinstock;
 	array string 30 tags,aCodes,aorig,aSearchitems;
 	vector boolean vCodes,vOrig;
 	record ConsItemVc CIr;
@@ -6959,7 +6970,7 @@ begin
 	  testf = true;
 	  if(nonblank(RepSpec.f1) and RepSpec.f1!=IDr.OrigBrandCode)then begin testf = false; end;
     if(testf)then begin
-      if(nextdupcode!=IDr.OrigCode)then begin
+      if(nextdupcode!=IDr.OrigCode and nonblank(nextdupcode))then begin
         getvectortags(vCodes,aCodes);
         aSearchitems[0] = IDr.OrigBrandCode;
         startformat(15);
@@ -6974,6 +6985,10 @@ begin
             readfirstmain(CIr,1,true);
             outstring(i*50,0,CIr.LocCode,false);
             aSearchitems[aSearchitems.length] = CIr.LocCode;
+            if(CIr.Code==IDr.OrigCode)then begin
+              maincodeincomp[0] = CIr.Code;
+              maincodeincomp[1] = CIr.LocCode;
+            end;
           end;
         endformat;
       
@@ -6991,10 +7006,20 @@ begin
           lastcurncy = "";
           lastcost = blankval;
           recordnew(PLr);
+          existsinstock = false;
           for(i=1;i<aSearchitems.length;i=i+1)begin
-            outstring(i*50,0,SearchLastPUInComp(aSearchitems[i],aSearchitems[0],lastdate,lastdatecomp,lastcost,lastcurncy,PLr),false);
+            outstring(i*50,0,SearchLastPUInComp(aSearchitems[i],aSearchitems[0],lastdate,lastdatecomp,lastcost,lastcurncy,PLr,maincodeincomp,existsinstock),false);
           end;
         endformat;
+        if(existsinstock)then begin
+          startformat(15);
+            outstring(0,0,"Nothing on stock",false);
+          endformat;
+        end else begin
+          startformat(15);
+            outstring(0,0,"Exists on stock",false);
+          endformat;
+        end;
         startformat(15);
           outstring(0,0,"Last Company With PU",false);
           outstring(100,0,lastdatecomp,false);
