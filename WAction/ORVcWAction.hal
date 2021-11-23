@@ -3168,13 +3168,43 @@ return;
 end;
 
 
-global procedure OR_FixDuplicateCodess(var record ORVc ORr)		//Edit **********************************************Vas-P	03/11/2021
+global updating procedure OR_FixDuplicateCodess(var record ORVc ORr)		//Edit **********************************************Vas-P	03/11/2021
 begin
   row ORVc ORrw;
   record ItemDuplicatesVc IDr;
   record INVc INr,IN2r;
   integer i,rwcnt;
-  
+	record POVc POr;
+	row POVc POrw;
+	record PUVc PUr;
+	row PUVc PUrw;
+	boolean NoKItem;
+	boolean TrHs, PUOkf, TrHs2;
+	vector integer NoKItemRow;
+	record ClientItemStatusVc CISr, newCISr;
+	string 50 st;
+		
+		POr.OrdNr = ORr.SerNr;
+		TrHs = true;
+		while (loopkey("OrdNr",POr,1,TrHs)) begin
+			if (POr.OrdNr!=ORr.SerNr) then begin TrHs = false; end;
+			if (TrHs) then begin
+				PUr.PONr = POr.SerNr;
+				TrHs2 = true;
+				while (loopkey("PONr",PUr,1,TrHs2)) begin
+					if (PUr.PONr!=POr.SerNr) then begin TrHs2 = false; end;
+					if (TrHs2 and PUr.OKFlag==1) then begin
+						for (i=0;i<matrowcnt(PUr);i=i+1) begin
+							matrowget(PUr,i,PUrw);
+							NoKItemRow[PUrw.VIReconComment] = NoKItemRow[PUrw.VIReconComment] + PUrw.Quant;
+						end;
+					end;
+				end;
+				ResetLoop(PUr);
+			end;
+		end;
+		ResetLoop(POr);
+		
   // if(ORr.OKFlag==0)then begin
     rwcnt = matrowcnt(ORr);
     for(i=0;i<rwcnt;i=i+1)begin
@@ -3184,21 +3214,33 @@ begin
         if(readfirstmain(INr,1,true))then begin
           IDr.DupCode = INr.Code;
           if(ReadFirstKey("DupCode",IDr,1,true)) then begin
+						CISr.ItemCode = ORrw.ArtCode;
+						CISr.OrderNr = ORr.SerNr;
+						if (ReadFirstMain(CISr,2,true)) then begin
+							RecordDelete(CISr);
+						end;
             ORrw.ArtCode = IDr.OrigCode;
 						IN2r.Code = IDr.OrigCode;
             readfirstmain(IN2r,1,true);
 						ORrw.GlobalItemArtCode = IN2r.AlternativeCode;
+						newCISr.ItemCode = ORrw.ArtCode;
+						newCISr.OrderNr = ORr.SerNr;
+						if (NoKItemRow[ORrw.GlobalItemArtCode]>0) then begin
+							newCISr.Quant = NoKItemRow[ORrw.GlobalItemArtCode];
+						end;
+						RecordStore(newCISr,true);
           end;
         end;
         matrowput(ORr,i,ORrw);
       end;
+			recordStore(ORr,true);
     end;
   // end;
   
 return;
 end;
 
-global procedure FixDuplicateCodesORDsm()	//Edit **********************************************Vas-P	03/11/2021
+global updating procedure FixDuplicateCodesORDsm()	//Edit **********************************************Vas-P	03/11/2021
 begin
   record ORVc ORr;
   integer wn;
