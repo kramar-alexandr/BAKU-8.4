@@ -6858,7 +6858,7 @@ return;
 end;	
 
 global
-updating procedure ChangeAllDuplCodes(string itemcode,string brandcode,val lastcost,string lastcurncy)
+updating procedure ChangeAllDuplCodes(array string itemcode,string brandcode,val lastcost,val lastincost,val lastpurcost,string lastcurncy)
 begin
   string 255 res;
   record CompaniesBlock Compb;
@@ -6870,8 +6870,9 @@ begin
 	record INVc INr,IN2r;
 	record PLVc PL2r;
 	record ItemStatusVc ISr;
+	integer k;
 	
-	logtext(0,"-----------ChangeAllDuplCodes " & itemcode & " brand " & brandcode);
+	
 	
 	BlockLoad(Compb);	
 	rwcnt = matrowcnt(Compb);
@@ -6880,14 +6881,25 @@ begin
 	  matrowget(Compb,i,Comprw);
 		if(Comprw.ActiveStatus==0) then begin
 		  setcompany(i+1,false);
-		  INr.Code = itemcode;
-      if(readfirstmain(INr,1,true) and brandcode==INr.BPIBrand)then begin
-        if(INr.LastPurchPrice2<lastcost)then begin
-          recordcopy(IN2r,INr);
-          INr.LastPurchPrice2 = lastcost;
-          INr.LastPurchCurncyCode = lastcurncy;
-          recordupdate(IN2r,INr,true);
-        end; 
+		  for(k=1;k<itemcode.length;k=k+1)begin
+        INr.Code = itemcode[k];
+        logtext(0,"-----------ChangeAllDuplCodes " & itemcode[k] & " brand " & brandcode);
+        if(readfirstmain(INr,1,true) and brandcode==INr.BPIBrand)then begin
+          if(INr.LastPurchPrice2!=lastcost)then begin
+            recordcopy(IN2r,INr);
+            LogTextToFile(i+1 & "|" & INr.Code & "|" & INr.LastPurchPrice2 & "|" & INr.LastPurchCurncyCode & "|" & INr.InPrice & "|" & INr.LastPurchPrice,"BeforeCjange.txt");
+            INr.LastPurchPrice2 = lastcost;
+            INr.LastPurchCurncyCode = lastcurncy;
+            INr.InPrice = lastincost;
+            INr.LastPurchPrice = lastpurcost;
+            ISr.Code = INr.Code;
+            ISr.Location = ";;;";
+            readfirstmain(ISr,2,true);
+            LogTextToFile("compnr " & i+1 & "| INr.Code " & INr.Code & "|" & INr.LastPurchPrice2 & "|" & INr.InPrice & "|instock|" & ISr.Instock,"ChangeAllDuplCodes.txt");
+
+            recordupdate(IN2r,INr,true);
+          end; 
+        end;
       end;
 		end;
 	end;
@@ -6895,7 +6907,7 @@ begin
 return;
 end;
 
-function string 255 SearchLastPUInComp(string itemcode,string brandcode,var date lastdate,var integer lastdatecomp,var val lastcost,var string lastcurncy,var record PLVc PLr,array string maincodeincomp,var boolean existsinstock)
+function string 255 SearchLastPUInComp(string itemcode,string brandcode,var date lastdate,var integer lastdatecomp,var val lastcost,var val lastincost,var val lastpurcost,var string lastcurncy,var record PLVc PLr,array string maincodeincomp,var boolean existsinstock)
 begin
   string 255 res;
   record CompaniesBlock Compb;
@@ -6942,6 +6954,8 @@ begin
                   lastdate = IHr.TransDate;
                   lastdatecomp = i+1;
                   lastcost = INr.LastPurchPrice2;
+                  lastpurcost = INr.LastPurchPrice;
+                  lastincost = INr.InPrice;
                   lastcurncy = INr.LastPurchCurncyCode;
                   PL2r.PLCode = "RRP";
                   PL2r.ArtCode = INr.Code;
@@ -6989,7 +7003,7 @@ begin
 	vector boolean vCodes,vOrig;
 	record ConsItemVc CIr;
 	date lastdate,blankd;
-	val lastcost;
+	val lastcost,lastincost,lastpurcost;
 	record PLVc PLr;
 	
 	logtext(0,"FillDuplicateRn start");
@@ -7044,6 +7058,8 @@ begin
           lastdatecomp = 0;
           lastcurncy = "";
           lastcost = blankval;
+          lastpurcost = blankval;
+          lastincost = blankval;
           recordnew(PLr);
           existsinstock = false;
           for(i=1;i<aSearchitems.length;i=i+1)begin
@@ -7051,9 +7067,13 @@ begin
               needtoupdate = true;
             end;
             existsinstockloc = false;
-            outstring(i*50,0,SearchLastPUInComp(aSearchitems[i],aSearchitems[0],lastdate,lastdatecomp,lastcost,lastcurncy,PLr,maincodeincomp,existsinstockloc),false);
+            outstring(i*50,0,SearchLastPUInComp(aSearchitems[i],aSearchitems[0],lastdate,lastdatecomp,lastcost,lastincost,lastpurcost,lastcurncy,PLr,maincodeincomp,existsinstockloc),false);
           end;
         endformat;
+        
+        if(RepSpec.f2=="gogogostart")then begin
+          needtoupdate = true;
+        end;
         
         startformat(15);
           outstring(0,0,"Last Company With PU",false);
@@ -7073,10 +7093,10 @@ begin
         endformat;
         
         
-        if(lastdatecomp>0 and lastcost>0 and nonblank(lastcurncy))then begin
+        if(lastdatecomp>0 and lastcost>0 and nonblank(lastcurncy) and !fileexists("stop"))then begin
           if(nonblank(RepSpec.f2) and needtoupdate)then begin
-            logtext(0,"call ChangeAllDuplCodes");
-            qupdating.ChangeAllDuplCodes(aSearchitems[i],aSearchitems[0],lastcost,lastcurncy);
+            logtext(0,"call ChangeAllDuplCodes " & aSearchitems.length);
+            qupdating.ChangeAllDuplCodes(aSearchitems,aSearchitems[0],lastcost,lastincost,lastpurcost,lastcurncy);
           end;
         end;
         
