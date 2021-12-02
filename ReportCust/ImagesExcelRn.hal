@@ -143,6 +143,7 @@ begin
     EndRow(sheetnum,fileToSave,rownum);
     
     INr.Code = "";
+
     while (loopmain(INr,1,true)) begin
     	testf1 = true;
 			clearVector(INDubCodes);
@@ -152,6 +153,7 @@ begin
 			if(nonblank(RepSpec.f9) and !setinset(RepSpec.f9,INr.DispGroups) and RepSpec.f9!=INr.BPISubGroup)then begin testf1 = false; end;
 			if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,INr.OldDispGroups) and RepSpec.f8!=INr.SN)then begin testf1 = false; end;
 			if(nonblank(RepSpec.f11) and RepSpec.f11!=INr.MainDisp)then begin testf1 = false; end;
+    	
     	
     	if(testf1)then begin
 				ClearStocksStuff(SQi,stockInArr,stocks,stockQty);
@@ -173,8 +175,13 @@ begin
 					end;
 					ResetLoop(dupINr);
 				end;
+				IDr.OrigCode = INr.Code;
+				if(ReadFirstMain(IDr,1,true)) then begin
+				  origitem[INr.Code] = true;
+				end;
 				//setcompany(currentcompany,false);
 				totqty = 0;
+
 			  if(!dublikateItem)then begin
 				  // ISr.Code = "K30";
           ISr.Code = INr.Code;
@@ -259,37 +266,65 @@ begin
             skipadd = false;
             goto lNofoundnooneIS;
           end;
-				end;
-
-				if(currentcompany!=18 and RepSpec.flags[5]!=0)then begin
-					setcompany(18,false);
-					CIr.LocCode = INr.Code;
-					CIr.BrandCode = INr.BPIBrand;
-					if(ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
-						ISr.Code = CIr.Code;
-						TrHs = true;
-						while (loopmain(ISr,1,TrHs)) begin
-							testf = true;
-							if (ISr.Code!=CIr.Code) then begin testf = false; TrHs = false; end;
-							//if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
-							if (ISr.Location==";;;") then begin testf = false; end;
-							if (ISr.Instock==0) then begin testf = false; end;
-							if (testf) then begin
-								if !stockInArr[ISr.Location] then begin
-									stockInArr[ISr.Location] = true;
-									stocks[SQi] = ISr.Location;
-									SQi = SQi + 1;
-								end;
-								stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
-								totqty = totqty + ISr.Instock;
-							end;
-						end;
-						resetloop(ISr);
-					end;
-					resetcompany(curcomp);
-				end;
-				
-				if(currentcompany!=4 and RepSpec.flags[6]!=0)then begin
+          
+          if(currentcompany!=18 and RepSpec.flags[5]!=0)then begin
+            setcompany(18,false);
+            CIr.LocCode = INr.Code;
+            CIr.BrandCode = INr.BPIBrand;
+            if(ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
+              ISr.Code = CIr.Code;
+              TrHs = true;
+              while (loopmain(ISr,1,TrHs)) begin
+                testf = true;
+                if (ISr.Code!=CIr.Code) then begin testf = false; TrHs = false; end;
+                //if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
+                if (ISr.Location==";;;") then begin testf = false; end;
+                if (ISr.Instock==0) then begin testf = false; end;
+                if (testf) then begin
+                  if !stockInArr[ISr.Location] then begin
+                    stockInArr[ISr.Location] = true;
+                    stocks[SQi] = ISr.Location;
+                    SQi = SQi + 1;
+                  end;
+                  stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
+                  totqty = totqty + ISr.Instock;
+                end;
+              end;
+              resetloop(ISr);
+            
+             
+              IDr.OrigCode = CIr.Code;
+              TrHs1 = true;
+              while(LoopKey("OrigCode",IDr,1,TrHs1)) begin
+                if(IDr.OrigCode!=CIr.Code) then begin TrHs1 = false; end;
+                if(TrHs1)then begin
+                  ISr.Code = IDr.DupCode;
+                  TrHs = true;
+                  while (loopmain(ISr,1,TrHs)) begin
+                    testf = true;
+                    if (ISr.Code!=IDr.DupCode) then begin testf = false; TrHs = false; end;
+                    //if (nonblank(RepSpec.f2) and ISr.Location!=RepSpec.f2) then begin testf = false; end;
+                    if (ISr.Location==";;;") then begin testf = false; end;
+                    if (ISr.Instock==0) then begin testf = false; end;
+                    if (testf) then begin
+                      if !stockInArr[ISr.Location] then begin
+                        stockInArr[ISr.Location] = true;
+                        stocks[SQi] = ISr.Location;
+                        SQi = SQi + 1;
+                      end;
+                      stockQty[ISr.Location] = stockQty[ISr.Location] + ISr.Instock;
+                      totqty = totqty + ISr.Instock;
+                    end;
+                  end;
+                  resetloop(ISr);
+                end;
+              end;
+              resetloop(IDr);
+            end;
+            resetcompany(curcomp);
+          end;
+          
+          if(currentcompany!=4 and RepSpec.flags[6]!=0)then begin
 					setcompany(4,false);
 					ISr.Code = INr.Code;
 					TrHs = true;
@@ -336,6 +371,12 @@ begin
 					resetloop(ISr);
 					resetcompany(curcomp);
 				end;
+          
+				end;
+
+				
+				
+				
         
 				if(nonblank(stocks[0]) and !dublikateItem and totqty!=0) then begin
 				
