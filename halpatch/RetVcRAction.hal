@@ -1500,7 +1500,7 @@ global
 updating function LongInt RetVcRecordUpdateAfter(var record RetVc Retr,record RetVc Ret2r,LongInt stat,LongInt long4)
 BEGIN 
   LongInt res, mtrw, i, warn, k, rwcnt;
-  Boolean ihef, testf;
+  Boolean ihef, testf, TrHs;
   record IVVc IVr, offIVr;
 	row IVVc IVrw;
   record IVVc oldIVr;
@@ -1627,40 +1627,52 @@ BEGIN
 							end;
 						end;
 					end;
-					if (!(Retr.ECOMMERCEOrdf==1 and currentcompany!=29)) then begin
-						if (RecordAction_raPasteRetInInv(IVr,Retr.SerNr)==1) then begin
-							RecordCopy(oldIVr,IVr);
-							IVr.OKFlag = 1;
-							if(currentcompany==29)then begin
-								mtrw = matrowcnt(IVr);
-								for (i=0;i<mtrw;i=i+1) begin
-									matrowget(IVr,i,IVrw);
-									if(IVrw.stp==1)then begin
-										IVrw.SalesAcc = ACb.CredDomSalesAcc;
-										matrowput(IVr,i,IVrw);
-									end;
-								end;
-								testf = true;
-								IVOFFCnt = 1;
-								while (testf) begin
-									offIVr.OfficialSerNr = IVr.CustOrdNr & "-" & IVOFFCnt;
-									if(ReadFirstKey("OfficialSerNr",offIVr,1,true) and offIVr.SerNr!=IVr.SerNr)then begin
-										IVOFFCnt = IVOFFCnt + 1;
-									end else begin
-										testf = false;
-										IVr.OfficialSerNr = IVr.CustOrdNr & "-" & IVOFFCnt;
-									end;
-								end;
-								ORr.SerNr = Retr.OrdNr;
-								if(readfirstmain(ORr,1,true))then begin 
-									CreateRecordLink(IVr,CurrentCompany,ORr,CurrentCompany);  
-									CreateRecordLink(ORr,CurrentCompany,IVr,CurrentCompany);  
+          if (RecordAction_raPasteRetInInv(IVr,Retr.SerNr)==1) then begin
+            RecordCopy(oldIVr,IVr);
+            IVr.OKFlag = 1;
+						if(currentcompany==29)then begin
+							mtrw = matrowcnt(IVr);
+							for (i=0;i<mtrw;i=i+1) begin
+								matrowget(IVr,i,IVrw);
+								if(IVrw.stp==1)then begin
+									IVrw.SalesAcc = ACb.CredDomSalesAcc;
+									matrowput(IVr,i,IVrw);
 								end;
 							end;
-							RecordUpdate(oldIVr,IVr,true);
-							
+							testf = true;
+							IVOFFCnt = 1;
+							while (testf) begin
+								offIVr.OfficialSerNr = IVr.CustOrdNr & "-" & IVOFFCnt;
+								if(ReadFirstKey("OfficialSerNr",offIVr,1,true) and offIVr.SerNr!=IVr.SerNr)then begin
+									IVOFFCnt = IVOFFCnt + 1;
+								end else begin
+									testf = false;
+									IVr.OfficialSerNr = IVr.CustOrdNr & "-" & IVOFFCnt;
+								end;
+							end;
+							ORr.SerNr = Retr.OrdNr;
+							if(readfirstmain(ORr,1,true))then begin 
+								CreateRecordLink(IVr,CurrentCompany,ORr,CurrentCompany);  
+								CreateRecordLink(ORr,CurrentCompany,IVr,CurrentCompany);  
+							end;
+						end else begin
+							if (Retr.ECOMMERCEOrdf==1) then begin
+								offIVr.OrderNr = Retr.OrdNr;
+								TrHs = true;
+								while(LoopKey("OrderNr",offIVr,1,TrHs)) begin	
+									if (offIVr.OrderNr!=Retr.OrdNr) then begin TrHs = false; end;
+									if (TrHs and offIVr.Location==Retr.Location) then begin
+										matrowget(IVr,0,IVrw);
+										IVrw.OrdRow = offIVr.SerNr;
+										matrowput(IVr,0,IVrw);
+									end;
+								end;
+								resetloop(IVr);
+							end;
 						end;
-					end;
+            RecordUpdate(oldIVr,IVr,true);
+						
+          end;
         end;
       end;
     end;
