@@ -6885,6 +6885,7 @@ begin
         INr.Code = itemcode[k];
         logtext(0,"-----------ChangeAllDuplCodes " & itemcode[k] & " brand " & brandcode);
         if(readfirstmain(INr,1,true) and brandcode==INr.BPIBrand)then begin
+				//logtext(0,"|||||||||||||||||||Current company " & currentCompany);
           if(INr.LastPurchPrice2!=lastcost)then begin
             recordcopy(IN2r,INr);
             LogTextToFile(i+1 & "|" & INr.Code & "|" & INr.LastPurchPrice2 & "|" & INr.LastPurchCurncyCode & "|" & INr.InPrice & "|" & INr.LastPurchPrice,"BeforeCjange.txt");
@@ -7239,3 +7240,102 @@ begin
 return; 
 end;	
 
+
+global procedure FillDuplicateMn2(string INrCode)	// Edit ********************** Ihor Trubachov 03*12*2021
+begin
+	record ItemDuplicatesVc IDr;
+	record ItemHistVc IHr;
+	record INVc INr;
+	integer i,j,curcomp,CompQty,lastdatecomp;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	string 30 companies,nextdupcode,lastcurncy;
+	array string 30 maincodeincomp;
+	vector string 255 vComp;
+	boolean TrHs,TrHs2,testf,testf2,existsinstock,existsinstockloc,needtoupdate;
+	array string 30 tags,aCodes,aorig,aSearchitems;
+	vector boolean vCodes,vOrig;
+	record ConsItemVc CIr;
+	date lastdate,blankd;
+	val lastcost,lastincost,lastpurcost;
+	record PLVc PLr;
+	
+	logtext(0,"FillDuplicateMn2 start");
+	
+	CompQty = matrowcnt(Compb);
+	curcomp = currentcompany;
+	
+	// companies = "4,7,8,25,18,34";
+	
+	IDr.OrigCode = INrCode;
+	TrHs = true;
+	while(loopkey("OrigCode",IDr,1,TrHs)) begin
+	  testf = true;
+	  if(IDr.OrigCode != INrCode)then begin TrHs = false; testf = false; end;
+    if(testf)then begin
+      
+      needtoupdate = false;
+			
+			//
+			vCodes[IDr.OrigCode] = true;
+			vCodes[IDr.DupCode] = true;
+			//
+			
+      getvectortags(vCodes,aCodes);
+      aSearchitems[0] = IDr.OrigBrandCode;
+      for(i=0;i<aCodes.length;i=i+1)begin
+        aSearchitems[aSearchitems.length] = aCodes[i];
+      end;
+      
+      for(i=0;i<aCodes.length;i=i+1)begin
+        CIr.Code = aCodes[i];
+        readfirstmain(CIr,1,true);
+        aSearchitems[aSearchitems.length] = CIr.LocCode;
+        if(CIr.Code==IDr.OrigCode)then begin
+          maincodeincomp[0] = CIr.Code;
+          maincodeincomp[1] = CIr.LocCode;
+        end;
+      end;
+
+      
+      curcomp = currentcompany;
+      
+      lastdate = blankd;
+      lastdatecomp = 0;
+      lastcurncy = "";
+      lastcost = blankval;
+      lastpurcost = blankval;
+      lastincost = blankval;
+      recordnew(PLr);
+      existsinstock = false;
+      for(i=1;i<aSearchitems.length;i=i+1)begin
+				needtoupdate = true;
+				existsinstockloc = false;
+				SearchLastPUInComp(aSearchitems[i],aSearchitems[0],lastdate,lastdatecomp,lastcost,lastincost,lastpurcost,lastcurncy,PLr,maincodeincomp,existsinstockloc);
+      end;
+        
+      if(lastdatecomp>0 and lastcost>0 and nonblank(lastcurncy)/* and !fileexists("stop")*/)then begin
+        if(needtoupdate)then begin
+          logtext(0,"call ChangeAllDuplCodes " & aSearchitems.length);
+          qupdating.ChangeAllDuplCodes(aSearchitems,aSearchitems[0],lastcost,lastincost,lastpurcost,lastcurncy);
+          millisleep(20);
+        end;
+      end;
+          
+      resetcompany(curcomp);
+      clearvector(vCodes);
+      cleararray(aCodes);
+      cleararray(aSearchitems);
+      // vCodes[IDr.OrigCode] = true;
+      // vCodes[IDr.DupCode] = true;
+
+    end;
+  end;
+  
+  
+	
+
+	logtext(0,"FillDuplicateMn2 end");
+	
+return; 
+end;	
