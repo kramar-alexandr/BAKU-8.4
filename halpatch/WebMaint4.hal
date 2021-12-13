@@ -1,0 +1,92 @@
+global updating procedure ChangeCustomerInInvoice(record IVVc IVr,string newcust)
+begin
+  record IPrsVc IPrsr;
+  boolean TrHs2;
+  record IVVc credIVr;
+  record IPVc IPr;
+  row IPVc IPrw;
+  integer i,rwcnt;
+  
+  logtext(0,IVr.SerNr & " newcust " & newcust);
+  
+  IVr.CustCode = newcust;
+  recordstore(IVr,true);
+  logtext(0,"ChangeCustomerInInvoice saved IVVc " & IVr.SerNr);
+  
+  IPrsr.IVNr = IVr.SerNr;
+    TrHs2 = true;
+    while (LoopKey("IVKey",IPrsr,1,TrHs2)) begin
+      if (IPrsr.IVNr<>IVr.SerNr) then begin TrHs2 = false; end;
+      if (TrHs2) then begin
+        IPrsr.CustCode = newcust;
+        //recorddelete(IPrsr);
+        //recordstore(IPrsr,true);
+        
+        switch (IPrsr.TransType) begin
+        case kIPrsTransTypeInvoice:
+          if(IPrsr.TransNr!=IPrsr.IVNr)then begin
+            credIVr.SerNr = IPrsr.TransNr;
+            if (ReadFirstMain(credIVr,1,true)) then begin
+              credIVr.CustCode = newcust;
+              recordstore(credIVr,true);
+              logtext(0,"ChangeCustomerInInvoice saved cred-IVVc " & credIVr.SerNr);
+            end;
+          end;
+        case kIPrsTransTypeReceipt:
+          IPr.SerNr = IPrsr.TransNr;
+          if(readfirstmain(IPr,1,true))then begin
+            rwcnt = matrowcnt(IPr);
+            for(i=0;i<rwcnt;i=i+1) begin
+              matrowget(IPr,i,IPrw);
+              if(IPrw.InvoiceNr==IVr.SerNr)then begin
+                IPrw.CustCode = newcust;
+                matrowput(IPr,i,IPrw);
+              end;
+            end;
+            recordstore(IPr,true);
+            logtext(0,"ChangeCustomerInInvoice saved IPVc " & IPr.SerNr);
+          end;
+
+        end;
+        
+      end;
+    end;
+    
+    
+return;
+end;
+
+global webpublic procedure WebChanheProjectCustomerCodes()
+begin
+  area alist;
+  integer length,i;
+  string 100 comstr,ivserstr,custcode;
+  record IVVc IVr;
+  
+  webgetpostdata(alist);
+  
+  length = countlinesinarea(alist);
+  weboutstring("<table>");
+  for(i=0;i<length;i=i+1)begin
+    comstr = GetTabTextFromArea(i,0,alist);
+    ivserstr = GetTabTextFromArea(i,1,alist);
+    custcode = GetTabTextFromArea(i,2,alist);
+    if(stringtoint(comstr)>0)then begin
+        setcompany(stringtoint(comstr),false);
+        IVr.SerNr = stringtolongint(ivserstr);
+        if(readfirstmain(IVr,1,true) and IVr.CustCode!=custcode and nonblank(custcode))then begin
+          weboutstring("<tr>");
+          weboutstring("<td>" & comstr & "</td>");
+          weboutstring("<td>" & IVr.SerNr & "</td>");
+          weboutstring("<td>" & IVr.CustCode & "</td>");
+          weboutstring("<td>" & custcode & "</td>");
+          weboutstring("<td>" & IVr.PayDeal & "</td>");
+          weboutstring("</tr>");
+          qupdating.ChangeCustomerInInvoice(IVr,custcode);
+        end;
+    end;
+  end;
+  weboutstring("</table>");
+  
+return;
+end;
