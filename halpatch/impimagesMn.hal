@@ -18255,7 +18255,7 @@ record INVc INr;
 record PUVc PUr;
 row PUVc PUrw;
 record RLinkVc RLr;
-integer i, j;
+integer i, j, k;
 boolean testf, absent;
 
 logtext(0,"================================================ Start WebPOVcOutFOB_SKLAD ================================================");
@@ -18266,47 +18266,37 @@ weboutstring("<table>");
 
 	while(LoopMain(POr,1,true))begin
 		testf = true;
-		absent = true;
-		if(POr.VECode!="FOB_SKLAD")then begin
+		if(POr.VECode!="FOB_SKLAD" or POr.Closed==1)then begin
 			testf = false;
 		end;
 	
 		if(testf)then begin
 			for(i=0;i<MatRowCnt(POr);i=i+1)begin
+				absent = true;
 				MatRowGet(POr,i,POrw);
 				INr.Code = POrw.ArtCode;
 				if(ReadFirstMain(INr,1,true))then begin
 					if(INr.BPIBrand=="BRND0099")then begin
 						ItemDuplicatesr.OrigCode = "K" & POrw.ArtCode;
 						if(ReadFirstMain(ItemDuplicatesr,1,true) and ItemDuplicatesr.DupCode==POrw.ArtCode)then begin
-							if(!ReadRecordLink(POr,1,PUr,RLr))then begin
+							k = 1;
+							while(ReadRecordLink(POr,k,PUr,RLr))begin
+								if(PUr.OKFlag==1)then begin
+									for(j=0;j<MatRowCnt(PUr);j=j+1)begin
+										MatRowGet(PUr,j,PUrw);
+										if(PUrw.ArtCode==POrw.ArtCode)then begin
+											absent = false;
+										end;
+									end;
+								end;
+								k = k + 1;
+							end;
+							if(absent)then begin
 								weboutstring("<tr>");
 								weboutstring("<td>" & POr.SerNr & "</td>");
 								weboutstring("<td>" & i & "</td>");
 								weboutstring("<td>" & POrw.ArtCode & "</td>");
 								weboutstring("</tr>");
-							end else begin
-								if(PUr.OKFlag==0)then begin
-									weboutstring("<tr>");
-									weboutstring("<td>" & POr.SerNr & "</td>");
-									weboutstring("<td>" & i & "</td>");
-									weboutstring("<td>" & POrw.ArtCode & "</td>");
-									weboutstring("</tr>");
-								end else begin
-									for(j=0;j<MatRowCnt(PUr);j=j+1)begin
-										MatRowGet(PUr,i,PUrw);
-										if(PUrw.ArtCode==POrw.ArtCode)then begin
-											absent = false;
-										end;
-									end;
-									if(absent)then begin
-										weboutstring("<tr>");
-										weboutstring("<td>" & POr.SerNr & "</td>");
-										weboutstring("<td>" & i & "</td>");
-										weboutstring("<td>" & POrw.ArtCode & "</td>");
-										weboutstring("</tr>");
-									end;
-								end;
 							end;
 						end;
 					end;
