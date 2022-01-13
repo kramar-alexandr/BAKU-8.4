@@ -946,9 +946,9 @@ begin
 	record GlobalItemVc mainGIr,TPCPGIr,DupGlobalItem,LogGIr;
 	boolean TrHs,testf,testf1, TrHs2;
 	val ITRebate,price;
-	record INVc INr;
+	record INVc INr, DupINr;
 	vector boolean compCh;
-	boolean OldItemf,needtostore,storef;
+	boolean OldItemf,needtostore,storef,InstockDupINf;
 	vector val ItemOldPrice, ItemOldRebate, NewItemPrice, NewItemRebate, DifferPrices, DifferRebates,ItemPriceComp,ItemRebComp;
 	array string 255 ItemCodes, DiffItemCodes,tags;
 	longint DiffItemsCnt;
@@ -994,6 +994,29 @@ begin
 			if(SetInSet(i+1,"1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,19,20,21,22,23,24,25,26,27,28,29,30,31,34")) then begin	
 				if(Comprw.ActiveStatus==0 and i+1!=10 and i+1!=32)then begin
 					SetCompany(i+1,false);
+					InstockDupINf = false;
+					IDr.OrigCode = INr.Code;
+					TrHs2 = true;
+					while(loopMain(IDr,1,TrHs2))begin
+						if (IDr.OrigCode!=INr.Code) then begin TrHs2 = false; end;
+						if (IDr.OrigBrandCode==left(GIr.Code,8) and TrHs2) then begin
+							price = blankval;
+							tprice = blankval;
+							DupINr.Code = IDr.DupCode;
+							if(!(CurrentCompany==29 and blank(DupINr.Group))) then begin
+								if (ReadFirstMain(DupINr,1,true) and DupINr.BPIBrand==left(GIr.Code,8)) then begin
+									ISr.Code = DupINr.Code;
+									ISr.Location = ";;;";
+									if(ReadFirstMain(ISr,2,true)) then begin 
+										if(ISr.Instock>0) then begin
+											InstockDupINf = true;
+										end;	
+									end;	
+								end;
+							end;
+						end;
+					end;
+					ResetLoop(IDr);
 					price = blankval;
 					tprice = blankval;
 					INr.Code = GIr.HansaCode;
@@ -1024,7 +1047,7 @@ begin
 								//if(tprice>price) then begin price = tprice; end;
 							end;	
 							if(ReadFirstMain(ISr,2,true)) then begin
-								if(ISr.Instock>0) then begin
+								if(ISr.Instock>0 or InstockDupINf) then begin
 									if(!OldItemf and (price!=GIr.Price or GIr.Rebate!=ITRebate))then begin
 										OldItemf = true;
 									end;
