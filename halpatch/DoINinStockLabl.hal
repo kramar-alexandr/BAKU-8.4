@@ -27,6 +27,9 @@ external function boolean CheckIfBarcodeIsDigits(string);
 external procedure NextM4Number(string,var string);
 remote function Boolean GetTempItemPrice(var val,string,var string, date,var string); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 11:04 19.06.2019
 external procedure StockInAllCompRn(record RcVc);
+remote procedure FindFiscalYear(Date,var Date,var Date); // Edit ********************** Ihor Trubachov 10*01*2022
+remote function Integer CountObjects(string); // Edit ********************** Ihor Trubachov 10*01*2022
+remote procedure ExtractElemFromSet(string,integer,var string);  // Edit ********************** Ihor Trubachov 10*01*2022
 
 updating procedure CheckBarcodeValue(var record INVc INr,var string bcode)
 begin
@@ -589,3 +592,81 @@ integer wn;
 	
 return;
 end;
+
+global // Edit ********************** Ihor Trubachov 10*01*2022
+procedure MBARClassReportDefaults(Integer wn)
+BEGIN
+  record RcVc RepSpec;
+	record LimBalanceBlock LBBlock;
+	row LimBalanceBlock LBBlockw;
+  Date curYearstartdate,curYearenddate;
+	integer i;
+	Boolean isFined;
+	string 255 ctype;
+  
+	BlockLoad(LBBlock);
+	
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  ReportDefaults(RepSpec,"MBARClass");  
+  FindFiscalYear(RepSpec.sStartDate,curYearstartdate,curYearenddate);  
+  RepSpec.d2 = RepSpec.sStartDate;
+  RepSpec.f4 = 3;
+	
+	isFined = false; // Edit ********************** Ihor Trubachov 10*01*2022
+	for(i=0;i<MatRowCnt(LBBlock);i=i+1)begin
+		MatRowGet(LBBlock,i,LBBlockw);
+		
+		if(LBBlockw.UserCode==CurrentUser and !isFined and CountObjects(LBBlockw.Objects) < 2)then begin
+			RepSpec.ObjStr = LBBlockw.Objects; 
+			isFined = true;
+		end;
+		if(LBBlockw.UserCode==CurrentUser and !isFined and CountObjects(LBBlockw.Objects) >= 2)then begin
+			ExtractElemFromSet(LBBlockw.Objects,1,ctype);
+			RepSpec.ObjStr = ctype;
+			isFined = true;
+		end;
+	end;
+	
+  PutWindowRecord(wn,RepSpec);
+  SelectWindow(wn);
+  RETURN;
+END;
+
+
+global // Edit ********************** Ihor Trubachov 10*01*2022
+procedure CLOutRepRClassReportDefaults(Integer wn)
+BEGIN
+  record RcVc RepSpec;
+	record LimFinanceBlock LFBlock;
+	row LimFinanceBlock LFBlockw;
+  Date curYearstartdate,curYearenddate;
+	integer i;
+	Boolean isFined;
+  string 255 ctype;
+  
+	BlockLoad(LFBlock);
+	
+  DeselectWindow(wn,false);
+  GetWindowRecord(wn,RepSpec);
+  ReportDefaults(RepSpec,"CLOutRepRClass");  
+	
+	isFined = false; // Edit ********************** Ihor Trubachov 10*01*2022
+	for(i=0;i<MatRowCnt(LFBlock);i=i+1)begin
+		MatRowGet(LFBlock,i,LFBlockw);
+		
+		if(LFBlockw.UserCode==CurrentUser and !isFined and CountObjects(LFBlockw.Objects) < 2)then begin
+			RepSpec.f2 = LFBlockw.Objects; 
+			isFined = true;
+		end;
+		if(LFBlockw.UserCode==CurrentUser and !isFined and CountObjects(LFBlockw.Objects) >= 2)then begin
+			ExtractElemFromSet(LFBlockw.Objects,1,ctype);
+			RepSpec.f2 = ctype;
+			isFined = true;
+		end;
+	end;
+	
+  PutWindowRecord(wn,RepSpec);
+  SelectWindow(wn);
+  RETURN;
+END;

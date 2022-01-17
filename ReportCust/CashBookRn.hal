@@ -1,5 +1,7 @@
 //server-only
 external procedure LogProcTime(string,longint);
+remote function Integer CountObjects(string); // Edit ********************** Ihor Trubachov 10*01*2022
+remote procedure ExtractElemFromSet(string,integer,var string);  // Edit ********************** Ihor Trubachov 10*01*2022
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -102,7 +104,7 @@ begin
 	record CLOutVc CLOutr;
 	row CLOutVc CLOutrw;
 	date sd,ed;
-	boolean TrHs,testf,foundf;
+	boolean TrHs,testf,foundf,CheckOut, CheckFind;
 	integer i,mtrw;
 	record CLCorspVc CLCor;
 	string 200 paymodes,location;
@@ -112,6 +114,11 @@ begin
 	string 200 tstr;
 	longint curtick;
 	val basesum;
+	record LimFinanceBlock LFBlock; 
+	row LimFinanceBlock LFBlockw; 
+	string 255 strObj,ctype;
+	
+	BlockLoad(LFBlock); // Edit ********************** Ihor Trubachov 10*01*2022
 	
 	curtick = getcurtick();
 	blockload(PMb);
@@ -130,6 +137,37 @@ begin
 	
 	sd = RepSpec.sStartDate;
 	ed = RepSpec.sEndDate;
+	
+	CheckFind = false;
+	for(i=0;i<MatRowCnt(LFBlock);i=i+1)begin
+		MatRowGet(LFBlock,i,LFBlockw);
+		
+		if(!CheckFind and CurrentUser==LFBlockw.UserCode)then begin
+			strObj = LFBlockw.Objects;
+			CheckFind = true;
+		end;
+	end;
+	
+	CheckOut = false;
+	if(nonblank(strObj) and nonblank(RepSpec.f2))then begin
+		CheckOut = true;
+		for(i=1;i<=CountObjects(RepSpec.f2);i=i+1)begin
+			ExtractElemFromSet(RepSpec.f2,i,ctype);
+			if(SetInSet(ctype,strObj))then begin
+				CheckOut = false;
+			end;
+		end;
+	end;
+	
+	if(CheckOut)then begin
+		StartReportNoHeaderJob(USetStr(36428));
+			startformat(15);
+				outstring(20,0,USetStr(36429) & strObj,false);
+			endformat;
+		endjob;
+		goto EndCLOutRepRn;
+	end;
+	
 	
 	StartReportNoHeaderJob("Отчет по расходам");
 		startformat(15);
@@ -205,5 +243,7 @@ begin
 		
 	endjob;
 	LogProcTime("CLOutRepRn",getcurtick() - curtick);
+	
+	EndCLOutRepRn:;
 return;
 end;

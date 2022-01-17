@@ -90,3 +90,122 @@ begin
   
 return;
 end;
+
+
+
+
+global webpublic procedure WebFindErrorsnegQtyFifoIVVcPositions()
+begin
+	record IVVc IVr;
+	row IVVc IVrw;
+	val totcostpricecurncy, qty1, CurTCCP;
+	record ItemHistVc oldIHr;
+	boolean TrHs, testf, findfcurcost, TrHs2;
+	integer i;
+		
+  setcompany(stringtoint(webgetarg("compnr")),false);
+  
+  weboutstring("<table>");
+	
+		weboutstring("<tr>");
+		weboutstring("<td>" & "IV No" & "</td>");
+		weboutstring("<td>" & "Row" & "</td>");
+		weboutstring("<td>" & "ArtCode" & "</td>");
+		weboutstring("<td>" & "Qty" & "</td>");
+		weboutstring("<td>" & "Shortage" & "</td>");
+		weboutstring("<td>" & "Cost price in cur. (Current IV IH)" & "</td>");
+		weboutstring("<td>" & "For existing IV IH (Cost price in cur)" & "</td>");
+		weboutstring("<td>" & "IV-ret. mechan. result befor updates (Cost price in cur)" & "</td>");
+		weboutstring("</tr>");
+	
+	IVr.OKFlag = 1;
+	TrHs2 = true;
+	while (LoopKey("OKFlag",IVr,1,TrHs2)) begin
+		if (IVr.OKFlag != 1) then begin TrHs2 = false; end;
+		if (TrHs2 and !(IVr.Invalid>0)) then begin
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				totcostpricecurncy = 0;
+				if (IVrw.Quant<0) then begin //Edit-------------------Vitalii 13:18 15.01.2016
+					if (!(IVrw.FIFOCur>0)) then begin //Edit***************************Sasha2,12:47 20.05.2016 {
+						//totcostpricecurncy = IVrw.FIFO * IHr.Qty;
+						oldIHr.ArtCode = IVrw.ArtCode;
+						oldIHr.FileName = "IVVc";
+						qty1 = IVrw.Quant;
+						ResetLoop(oldIHr);
+						TrHs = true;
+						findfcurcost = false;
+						CurTCCP = 0;
+						while (LoopBackKey("FNArtCode",oldIHr,2,TrHs)) begin
+							if (oldIHr.ArtCode<>IVrw.ArtCode) then begin TrHs = false; end;
+							if (qty1>=0) then begin TrHs = false; end;
+							if (TrHs) then begin
+								testf = true;
+								if (oldIHr.FileName<>"IVVc") then begin testf = false; end;
+								if (oldIHr.StockAffectf==0) then begin testf = false; end;
+								//if (oldIHr.Qty>0) then begin testf = false; end;
+								if (oldIHr.Location<>IVr.Location) then begin testf = false; end;
+								if (oldIHr.TransNr>=IVr.SerNr) then begin testf = false; end;
+								if (oldIHr.TransNr==IVr.SerNr) then begin CurTCCP = oldIHr.TotCostPriceCurncy / oldIHr.Qty; end;
+								if (testf) then begin
+									if (oldIHr.Qty<qty1) then begin
+										totcostpricecurncy = totcostpricecurncy + oldIHr.TotCostPriceCurncy/oldIHr.Qty*qty1;
+										findfcurcost = true;
+										qty1 = 0;
+									end else begin
+										if (oldIHr.Qty>0) then begin
+											totcostpricecurncy = totcostpricecurncy - oldIHr.TotCostPriceCurncy;
+											findfcurcost = true;
+										end else begin
+											totcostpricecurncy = totcostpricecurncy + oldIHr.TotCostPriceCurncy;
+											findfcurcost = true;
+										end;
+										qty1 = qty1 - oldIHr.Qty;
+									end;
+									if (qty1==0) then begin
+										TrHs = false;
+									end;
+								end;
+							end;
+						end;  
+						
+						if (totcostpricecurncy<0) then begin // for case if there are no positive invoices (with qty>0). Just negative invoices (with qty<0).
+							findfcurcost = false;
+						end;
+						if (qty1!=0 and findfcurcost) then begin
+							// if ((totcostpricecurncy / -(IVrw.Quant - qty1)) - (totcostpricecurncy / -IVrw.Quant)>0.5 or (totcostpricecurncy / -(IVrw.Quant - qty1))==0) then begin
+							weboutstring("<tr>");
+							weboutstring("<td>" & IVr.SerNr & "</td>");
+							weboutstring("<td>" & i+1 & "</td>");
+							weboutstring("<td>" & IVrw.ArtCode & "</td>");
+							weboutstring("<td>" & IVrw.Quant & "</td>");
+							weboutstring("<td>" & qty1 & "</td>");
+							weboutstring("<td>" & CurTCCP & "</td>");
+							weboutstring("<td>" & totcostpricecurncy / -(IVrw.Quant - qty1) & "</td>");
+							weboutstring("<td>" & totcostpricecurncy / -IVrw.Quant & "</td>");
+							weboutstring("</tr>");
+							// end;
+						end;
+					end;
+				end; 
+			end;
+		end;
+	end;
+	ResetLoop(IVr);
+  weboutstring("</table>");
+  
+return;
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+

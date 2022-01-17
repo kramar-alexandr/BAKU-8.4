@@ -16,6 +16,8 @@ external procedure ListPerTrans(record RcVc);
 external procedure GetAccDCBalance(string,string,Date,record ObjBalVc,Integer,Integer,Integer,string,var val,var val,Integer);
 external procedure AnalyticalGroup(record RcVc);
 external procedure ClearAcums();
+remote function Integer CountObjects(string); // Edit ********************** Ihor Trubachov 10*01*2022
+remote procedure ExtractElemFromSet(string,integer,var string);  // Edit ********************** Ihor Trubachov 10*01*2022
 
 procedure GetMonthText(Date td,var string res)
 BEGIN
@@ -1146,10 +1148,48 @@ end;
 	global
 procedure MBA2Rn(var record RcVc RepSpec)
 BEGIN  
+	record LimBalanceBlock LBBlock; // Edit ********************** Ihor Trubachov 10*01*2022
+	row LimBalanceBlock LBBlockw; 
+	string 255 strObj,ctype;
+	boolean CheckOut, CheckFind;
+	integer i;
+	BlockLoad(LBBlock);
+
+	CheckFind = false;
+	for(i=0;i<MatRowCnt(LBBlock);i=i+1)begin
+		MatRowGet(LBBlock,i,LBBlockw);
+		
+		if(!CheckFind and CurrentUser==LBBlockw.UserCode)then begin
+			strObj = LBBlockw.Objects;
+			CheckFind = true;
+		end;
+	end;
+	
+	CheckOut = false;
+	if(nonblank(strObj) and nonblank(RepSpec.ObjStr))then begin
+		CheckOut = true;
+		for(i=1;i<=CountObjects(RepSpec.ObjStr);i=i+1)begin
+			ExtractElemFromSet(RepSpec.ObjStr,i,ctype);
+			if(SetInSet(ctype,strObj))then begin
+				CheckOut = false;
+			end;
+		end;
+	end;
+	
+	if(CheckOut)then begin
+		StartReportNoHeaderJob(USetStr(36428));
+			startformat(15);
+				outstring(20,0,USetStr(36429) & strObj,false);
+			endformat;
+		endjob;
+		goto EndMBA2Rn;
+	end;
 
 	RepSpec.flags[12] = 1;
 
   MBACode(RepSpec,1);
+	
+	EndMBA2Rn:;
   RETURN;
 END;
 	// Edit End ---------------------------------------------- Edit End
