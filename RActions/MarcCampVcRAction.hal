@@ -7933,3 +7933,125 @@ begin
 return;		
 end;
 
+
+
+
+global procedure FindErrorsnegQtyFifoIVVcPositions(record RcVc RepSpec)
+begin
+	record IVVc IVr;
+	row IVVc IVrw;
+	val totcostpricecurncy, qty1, CurTCCP;
+	record ItemHistVc oldIHr;
+	boolean TrHs, testf, testf2, findfcurcost, TrHs2;
+	integer i, j, rwcnt, StartComp, EndComp;
+	record CompaniesBlock CBb;
+
+  BlockLoad(CBb);
+		
+	startreportnoheaderjob("FindErrorsnegQtyFifoIVVcPositions");
+	startformat(15);
+		outstring(30,0,"IV No",false);
+		outstring(90,0,"Row",false);
+		outstring(140,0,"ArtCode",false);
+		outstring(200,0,"Qty",false);
+		outstring(250,0,"Shortage",false);
+		outstring(310,0,"Cost price in cur. (Current IV IH)",false);
+		outstring(360,0,"For existing IV IH (Cost price in cur)",false);
+		outstring(420,0,"IV-ret. mechan. result befor updates (Cost price in cur)",false);
+	endformat;
+	
+	//////
+	if(RepSpec.flags[0]==0)then begin
+		StartComp = CurrentCompany;
+		EndComp = StartComp + 1;
+	end else begin
+		StartComp = 1;
+		EndComp = MatRowCnt(CBb) + 1;
+	end;
+	
+	for(j=StartComp;j<EndComp;j=j+1)begin
+		if(SetCompany(j,false)) then begin
+			IVr.OKFlag = 1;
+			TrHs2 = true;
+			while (LoopKey("OKFlag",IVr,1,TrHs2)) begin
+				testf2 = true;
+				if(!DateInRange(IVr.InvDate,RepSpec.sStartDate,RepSpec.sEndDate) and nonblankdate(RepSpec.sStartDate) and nonblankdate(RepSpec.sEndDate))then begin testf2 = false; end;
+				
+				if(testf2)then begin
+					if (IVr.OKFlag != 1) then begin TrHs2 = false; end;
+					if (TrHs2 and !(IVr.Invalid>0)) then begin
+						for (i=0;i<matrowcnt(IVr);i=i+1) begin
+							matrowget(IVr,i,IVrw);
+							totcostpricecurncy = 0;
+							if (IVrw.Quant<0) then begin 
+								if (!(IVrw.FIFOCur>0)) then begin 
+									oldIHr.ArtCode = IVrw.ArtCode;
+									oldIHr.FileName = "IVVc";
+									qty1 = IVrw.Quant;
+									ResetLoop(oldIHr);
+									TrHs = true;
+									findfcurcost = false;
+									CurTCCP = 0;
+									while (LoopBackKey("FNArtCode",oldIHr,2,TrHs)) begin
+										if (oldIHr.ArtCode<>IVrw.ArtCode) then begin TrHs = false; end;
+										if (qty1>=0) then begin TrHs = false; end;
+										if (TrHs) then begin
+											testf = true;
+											if (oldIHr.FileName<>"IVVc") then begin testf = false; end;
+											if (oldIHr.StockAffectf==0) then begin testf = false; end;
+											if (oldIHr.Location<>IVr.Location) then begin testf = false; end;
+											if (oldIHr.TransNr>=IVr.SerNr) then begin testf = false; end;
+											if (oldIHr.TransNr==IVr.SerNr) then begin CurTCCP = oldIHr.TotCostPriceCurncy / oldIHr.Qty; end;
+											if (testf) then begin
+												if (oldIHr.Qty<qty1) then begin
+													totcostpricecurncy = totcostpricecurncy + oldIHr.TotCostPriceCurncy/oldIHr.Qty*qty1;
+													findfcurcost = true;
+													qty1 = 0;
+												end else begin
+													if (oldIHr.Qty>0) then begin
+														totcostpricecurncy = totcostpricecurncy - oldIHr.TotCostPriceCurncy;
+														findfcurcost = true;
+													end else begin
+														totcostpricecurncy = totcostpricecurncy + oldIHr.TotCostPriceCurncy;
+														findfcurcost = true;
+													end;
+													qty1 = qty1 - oldIHr.Qty;
+												end;
+												if (qty1==0) then begin
+													TrHs = false;
+												end;
+											end;
+										end;
+									end;  
+									ResetLoop(oldIHr);
+									
+									if (totcostpricecurncy<0) then begin
+										findfcurcost = false;
+									end;
+									if (qty1!=0 and findfcurcost) then begin
+										startformat(15);
+										outstring(30,0,IVr.SerNr,false);
+										outstring(90,0,i+1,false);
+										outstring(140,0,IVrw.ArtCode,false);
+										outstring(200,0,IVrw.Quant,false);
+										outval(250,0,qty1,m4val,false);
+										outval(310,0,CurTCCP,m4val,false);
+										outval(360,0,(totcostpricecurncy / -(IVrw.Quant - qty1)),m4val,false);
+										outval(420,0,(totcostpricecurncy / -IVrw.Quant),m4val,false);
+										endformat;
+									end;
+								end;
+							end; 
+						end;
+					end;
+				end;
+				
+			end;
+			ResetLoop(IVr);
+		end;
+	end;
+	
+  endjob;
+  
+return;
+end;
