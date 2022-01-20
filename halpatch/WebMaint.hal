@@ -46,7 +46,10 @@ external procedure TimeStamps(var row GlobalItemVc,val,string);
 external procedure GIWasUpdated(record GlobalItemVc,record GlobalItemVc,string);
 external procedure ExtractObj(string,var Integer,var string);
 remote updating procedure PasteMaxTS (var record GlobalItemVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:13 09.12.2021
-
+remote function string 255 DeleteBackSlash (string); 
+remote function string 255 ParseHEX(string);
+external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
+remote procedure IVSumup(var record IVVc,Boolean);
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -5147,6 +5150,181 @@ end;
 
 
 
+
+
+global webpublic procedure WebGetInvSumForTerm()
+begin
+	record IVVc IVr;
+	row IVVc IVrw;
+	boolean TrHs;
+	area getpost;
+	string 255 filename;
+	json datajson;
+	longint a, ORSerNr, mtrw, IVSerNr, in;
+	string 255 at;
+	string 155 id,sum;
+	vector val codequant;
+	integer i,j,wn,y,compno,k,c,sernrf,cn;
+	string 255 hex,out,warning,errstr,loyaltycard,namesname,inwarning,code,stockcode,affobj,tstr;
+	val ps;
+
+	
+	
+	webgetpostdata(getpost);
+	a = GetArealength(getpost);
+	datajson = ParseJsonArea(getpost);
+	at = DeleteBackSlash(JSONGet(datajson,"accessToken"));
+	in = StringToLongInt(JSONGet(datajson,"invoiceNr"));
+	at = ParseHEX(at);
+	cn = StringToInt(JSONGet(datajson,"compNr"));
+	logtext(0,at);
+	logtext(0,in);
+	logtext(0,cn);
+	if (at=="") then begin
+		SetCompany(cn,false);
+		IVr.SerNr = in;
+		if (ReadFirstMain(IVr,1,true)) then begin
+			if (IVr.OKFlag!=1) then begin
+				if (IVr.CurncyCode=="AZN") then begin
+					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":" & IVr.Sum4 & "}"); 
+				end else begin
+					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":5,\"message\":\"Invoice currency isn`t base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+				end;
+			end else begin
+				weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":2,\"message\":\"The invoice has already been confirmed!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+			end;
+		end else begin
+			weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":1,\"message\":\"Invoice not found!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+		end;
+	end else begin
+		weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":4,\"message\":\"Invalid access token!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+	end;
+	return;
+end;
+
+
+
+
+
+
+
+
+
+global webpublic updating procedure WebCreatePaymentThrTerm()
+begin
+	record IVVc IVr, OldIVr;
+	row IVVc IVrw;
+	boolean CCPAYEXf;
+	area getpost;
+	string 255 filename;
+	json datajson;
+	longint a, ORSerNr, mtrw, IVSerNr, in, res;
+	string 255 at;
+	string 155 id,sum;
+	vector val codequant;
+	integer i,j,wn,y,compno,k,c,sernrf,cn, rwcnt;
+	string 255 hex,out,warning,errstr,loyaltycard,namesname,inwarning,code,stockcode,affobj,tstr, crncy;
+	val ps;
+	val from,to1,to2,base1,base2;
+	record PMBlock PMb;
+	row PMBlock PMbrw;
+
+	
+	
+	webgetpostdata(getpost);
+	CloseFile;
+	a = GetArealength(getpost);
+	datajson = ParseJsonArea(getpost);
+	at = DeleteBackSlash(JSONGet(datajson,"accessToken"));
+	in = StringToLongInt(JSONGet(datajson,"invoiceNr"));
+	at = ParseHEX(at);
+	cn = StringToInt(JSONGet(datajson,"compNr"));
+	ps = StringToVal(JSONGet(datajson,"paidSum"),M4Val);
+	logtext(0,at);
+	logtext(0,in);
+	logtext(0,cn);
+	logtext(0,ps);
+	if (at=="") then begin
+		SetCompany(cn,false);
+		blockload(PMb);
+		IVr.SerNr = in;
+		if (ReadFirstMain(IVr,1,true)) then begin
+			if (IVr.OKFlag!=1) then begin
+				if (IVr.CurncyCode=="AZN") then begin
+					RecordCopy(OldIVr,IVr);
+					CCPAYEXf = false;
+					rwcnt = MatRowCnt(IVr);
+					for (i=0;i<rwcnt;i=i+1) begin
+						MatRowGet(IVr,i,IVrw);
+						if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+							CCPAYEXf = true;
+						end;
+					end;
+					
+					if (!CCPAYEXf) then begin
+						ClearRow(IVr,IVrw,kInvoiceRowTypeCreditCardPayment);
+						IVrw.stp = kInvoiceRowTypeCreditCardPayment;
+						IVrw.Sum = ps;
+						IVrw.PayMode = "T1";
+						for (i=0;i<matrowcnt(PMb);i=i+1) begin
+							matrowget(PMb,i,PMbrw);
+							if (IVrw.PayMode==PMbrw.Code) then begin
+								IVrw.Spec = PMbrw.Comment;
+							end;
+						end;
+						if (blank(IVrw.Spec)) then begin
+							IVrw.Spec = "PM not found";
+						end;
+						IVrw.SerialNr = "";// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 31 January 2018 15:21:10
+						IVrw.Comment = "";// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 31 January 2018 15:21:28
+						IVrw.AuthorizationCode ="";
+
+
+						crncy = "AZN";
+						GetFullCurncyRate(crncy,IVr.TransDate,from,to1,to2,base1,base2);
+						IVrw.CurncyCode = crncy;
+						IVrw.FrRate = from;
+						IVrw.ToRateB1 = to1;
+						IVrw.ToRateB2 = to2;
+						IVrw.BaseRate1 = base1;
+						IVrw.BaseRate2 = base2;  
+						IVrw.Objects = "";
+					
+						if(IVrw.Sum!=0)then begin
+							MatRowPut(IVr,MatRowCnt(IVr),IVrw);
+						end else begin
+							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & 999 & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+						end;
+						IVSumup(IVr,true);
+						IVr.OKFlag = 1;
+						res = RecordUpdate(OldIVr,IVr,true);
+						if (res==0) then begin
+							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+						end else begin
+							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & res & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+						end;
+					end else begin
+						weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & 24195 & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+					end;
+				end else begin
+					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":5,\"message\":\"Invoice currency isn`t base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+				end;
+			end else begin
+				weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":2,\"message\":\"The invoice has already been confirmed!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+			end;
+		end else begin
+			weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":1,\"message\":\"Invoice not found!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+		end;
+	end else begin
+		weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":4,\"message\":\"Invalid access token!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+	end;
+	return;
+end;
+
+
+
+	
+	
 
 
 procedure OpenInvoiceNumber(string custcode, var LongInt lastpos,var record APVc resAPr)
