@@ -5109,7 +5109,7 @@ end;
 
 
 
-global webpublic updating procedure WebRestoreDaysForBallancePayment()
+global webpublic updating procedure WebRestoreDaysForBallancePayment // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:51 20.01.2022
 begin
 	record POVc POr;
 	record ConsItemVc CIr;
@@ -5152,7 +5152,7 @@ end;
 
 
 
-global webpublic procedure WebGetInvSumForTerm()
+global webpublic updating procedure WebGetInvSumForTerm()
 begin
 	record IVVc IVr;
 	row IVVc IVrw;
@@ -5167,8 +5167,9 @@ begin
 	integer i,j,wn,y,compno,k,c,sernrf,cn;
 	string 255 hex,out,warning,errstr,loyaltycard,namesname,inwarning,code,stockcode,affobj,tstr;
 	val ps;
+	record TermHistVc THr;
 
-	
+	logtext(0,"WebGetInvSumForTerm start");
 	
 	webgetpostdata(getpost);
 	a = GetArealength(getpost);
@@ -5177,27 +5178,49 @@ begin
 	in = StringToLongInt(JSONGet(datajson,"invoiceNr"));
 	at = ParseHEX(at);
 	cn = StringToInt(JSONGet(datajson,"compNr"));
-	logtext(0,at);
-	logtext(0,in);
-	logtext(0,cn);
+	
 	if (at=="") then begin
 		SetCompany(cn,false);
+		THr.SerNr = NextSerNr("TermHistVc",CurrentDate,-1,false,"");
+		THr.InvNr = in;
+		THr.ReqType = "WebGetInvSumForTerm";
+		THr.AccessToken = at;
+		THr.Date = CurrentDate;
+		THr.Time = CurrentTime;
 		IVr.SerNr = in;
 		if (ReadFirstMain(IVr,1,true)) then begin
 			if (IVr.OKFlag!=1) then begin
 				if (IVr.CurncyCode=="AZN") then begin
 					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":" & IVr.Sum4 & "}"); 
+					THr.RespStat = 0;
+					THr.PaySum = IVr.Sum4;
+					THr.Comment = "Success operation!";
 				end else begin
 					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":5,\"message\":\"Invoice currency isn`t base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+					THr.RespStat = 5;
+					THr.PaySum = 0;
+					THr.Comment = "Invoice currency isn`t base currency!";
 				end;
 			end else begin
 				weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":2,\"message\":\"The invoice has already been confirmed!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+				THr.RespStat = 2;
+				THr.PaySum = 0;
+				THr.Comment = "The invoice has already been confirmed!";
 			end;
 		end else begin
 			weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":1,\"message\":\"Invoice not found!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+			THr.RespStat = 1;
+			THr.PaySum = 0;
+			THr.Comment = "Invoice not found!";
 		end;
 	end else begin
 		weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":4,\"message\":\"Invalid access token!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+		THr.RespStat = 4;
+		THr.PaySum = 0;
+		THr.Comment = "Invalid access token!";
+	end;
+	if(Recordstore (THr,true)) then begin
+		logtext(0,"WebGetInvSumForTerm finish");
 	end;
 	return;
 end;
@@ -5210,7 +5233,7 @@ end;
 
 
 
-global webpublic updating procedure WebCreatePaymentThrTerm()
+global webpublic updating procedure WebCreatePaymentThrTerm() // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:51 20.01.2022
 begin
 	record IVVc IVr, OldIVr;
 	row IVVc IVrw;
@@ -5228,8 +5251,9 @@ begin
 	val from,to1,to2,base1,base2;
 	record PMBlock PMb;
 	row PMBlock PMbrw;
-
+	record TermHistVc THr;
 	
+	logtext(0,"WebGetInvSumForTerm start");
 	
 	webgetpostdata(getpost);
 	CloseFile;
@@ -5240,12 +5264,17 @@ begin
 	at = ParseHEX(at);
 	cn = StringToInt(JSONGet(datajson,"compNr"));
 	ps = StringToVal(JSONGet(datajson,"paidSum"),M4Val);
-	logtext(0,at);
-	logtext(0,in);
-	logtext(0,cn);
-	logtext(0,ps);
+	
+	
 	if (at=="") then begin
 		SetCompany(cn,false);
+		
+		THr.SerNr = NextSerNr("TermHistVc",CurrentDate,-1,false,"");
+		THr.InvNr = in;
+		THr.ReqType = "WebCreatePaymentThrTerm";
+		THr.AccessToken = at;
+		THr.Date = CurrentDate;
+		THr.Time = CurrentTime;
 		blockload(PMb);
 		IVr.SerNr = in;
 		if (ReadFirstMain(IVr,1,true)) then begin
@@ -5275,8 +5304,8 @@ begin
 						if (blank(IVrw.Spec)) then begin
 							IVrw.Spec = "PM not found";
 						end;
-						IVrw.SerialNr = "";// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 31 January 2018 15:21:10
-						IVrw.Comment = "";// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 31 January 2018 15:21:28
+						IVrw.SerialNr = "";
+						IVrw.Comment = "";
 						IVrw.AuthorizationCode ="";
 
 
@@ -5292,31 +5321,58 @@ begin
 					
 						if(IVrw.Sum!=0)then begin
 							MatRowPut(IVr,MatRowCnt(IVr),IVrw);
+							IVSumup(IVr,true);
+							IVr.OKFlag = 1;
+							res = RecordUpdate(OldIVr,IVr,true);
+							if (res==0) then begin
+								weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+								THr.RespStat = 0;
+								THr.PaySum = IVr.Sum4;
+								THr.Comment = "Success operation!";
+							end else begin
+								weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & res & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+								THr.RespStat = 3;
+								THr.PaySum = IVr.Sum4;
+								THr.Comment = "Internal error:" & res & "!";
+							end;
 						end else begin
 							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & 999 & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
-						end;
-						IVSumup(IVr,true);
-						IVr.OKFlag = 1;
-						res = RecordUpdate(OldIVr,IVr,true);
-						if (res==0) then begin
-							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
-						end else begin
-							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & res & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+							THr.RespStat = 3;
+							THr.PaySum = IVr.Sum4;
+							THr.Comment = "Internal error:" & res & "!";
 						end;
 					end else begin
 						weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & 24195 & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+						THr.RespStat = 3;
+						THr.PaySum = IVr.Sum4;
+						THr.Comment = "Internal error:" & 24195 & "!";
 					end;
 				end else begin
 					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":5,\"message\":\"Invoice currency isn`t base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+					THr.RespStat = 5;
+					THr.PaySum = IVr.Sum4;
+					THr.Comment = "Invoice currency isn`t base currency!";
 				end;
 			end else begin
 				weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":2,\"message\":\"The invoice has already been confirmed!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+				THr.RespStat = 2;
+				THr.PaySum = 0;
+				THr.Comment = "The invoice has already been confirmed!";
 			end;
 		end else begin
 			weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":1,\"message\":\"Invoice not found!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+			THr.RespStat = 1;
+			THr.PaySum = 0;
+			THr.Comment = "Invoice not found!";
 		end;
 	end else begin
 		weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":4,\"message\":\"Invalid access token!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+		THr.RespStat = 4;
+		THr.PaySum = 0;
+		THr.Comment = "Invalid access token!";
+	end;
+	if(Recordstore (THr,true)) then begin
+		logtext(0,"WebGetInvSumForTerm finish");
 	end;
 	return;
 end;
