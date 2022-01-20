@@ -1797,6 +1797,7 @@ begin
 			GIr.Rebate = 0;
 			GIWasUpdated(GIr,LogGIr," GIWasUpdatedlog 42"); 
 			RecordStore(GIr,true);  
+			logtext(0,"0 ------------------------ " & GIr.Price);
 		end;
 		for (i=0;i<CompQty;i=i+1)begin
 			if(stop==100) then begin
@@ -1977,17 +1978,20 @@ begin
 					TPCPGIr.PriceFromComp = Comprw.CompName;
 					GIWasUpdated(TPCPGIr,LogGIr," GIWasUpdatedlog 43");
 					RecordStore(TPCPGIr,true);
+					logtext(0,"1 ------------------------ " & TPCPGIr.Price);
 				end;
 				GIWasUpdated(GIr,LogGIr," GIWasUpdatedlog 44");
 				storef = true;
 				RecordStore(GIr,true);
 				UpdateStockInSetGlobalItem(GIr.Code);
+				logtext(0,"2 ------------------------ " & GIr.Price);
 			end;	
 		end;
 		if(needtostore and storef==false)then begin
 			GIWasUpdated(GIr,LogGIr," GIWasUpdatedlog 44.1");
 			RecordStore(GIr,true);
 			UpdateStockInSetGlobalItem(GIr.Code);
+			logtext(0,"3 ------------------------ " & GIr.Price);
 		end;
 	end;
 	
@@ -2062,3 +2066,122 @@ begin
 	logtext(0,"================================================ End WebCorrectErrorCurrency ================================================");
 return;
 end;
+
+/*
+global webpublic procedure WebCheckErrorCurrency()  // Edit ********************** Ihor Trubachov 19*01*2022
+begin
+	record PLVc PLr;
+	record GlobalItemVc GIr;
+	record INVc INr;
+	record CompaniesBlock CBb;
+	row CompaniesBlock CBbw;
+	integer i,rwcnt;
+	array string 255 VCompName, VCurrency, VArtCode, VGlobalArtCode, VCompNum;
+	vector val VPrice, vpricereb;
+	array string 255 ACode;
+	Boolean testf, TrHs;
+	LongInt iter, num;
+	string 255 GLCode, LArtCode;
+	
+	BlockLoad(CBb);
+	
+	logtext(0,"================================================ Start WebCheckErrorCurrency ================================================");
+	
+	weboutstring("<table>");
+	weboutstring("<tr>");
+	weboutstring("<td>" & "Company Num" & "</td>");
+	weboutstring("<td>" & "Company Name" & "</td>");
+	weboutstring("<td>" & "Global ArtCode" & "</td>");
+	weboutstring("<td>" & "ArtCode" & "</td>");
+	weboutstring("<td>" & "Price" & "</td>");
+	weboutstring("<td>" & "Currency" & "</td>");
+	weboutstring("</tr>");
+	
+	iter = 0;
+	num = 0;
+	rwcnt = MatRowCnt(CBb);
+	for(i=0;i<rwcnt;i=i+1)begin
+		MatRowGet(CBb,i,CBbw);
+		if(SetCompany(i + 1,false)) then begin
+			TrHs = true;
+			PLr.PLCode = "RRP";
+			while(LoopMain(PLr,1,TrHs))begin
+				testf = true;
+				if(PLr.PLCode != "RRP")then begin TrHs = false; testf = false; end;
+				if(PLr.CurncyCode == "AZN" or blank(PLr.CurncyCode) or blankval==PLr.ExVatPrice or PLr.ExVatPrice==0)then begin testf = false; end;
+				//if(fileexists("stop"))then begin TrHs = false; testf = false; end;
+				
+				if(testf)then begin
+					INr.Code = PLr.ArtCode;
+					if(ReadFirstMain(INr,1,true))then begin
+						if(nonblank(INr.GlobalArtCode))then begin
+							GIr.Code = INr.GlobalArtCode;
+							if(ReadFirstMain(GIr,1,true))then begin
+								if(GIr.Price==PLr.ExVatPrice)then begin
+									// logtext(0,"Do: ");
+									// LogText(0, "Comp num " & i + 1);
+									// LogText(0, "Comp name " & CBbw.CompName);
+									// LogText(0, "Global Code " & GIr.Code);
+									// LogText(0, "ArtCode " & PLr.ArtCode);
+									// LogText(0, "Price " & GIr.Price);
+									// LogText(0, "Currency " & PLr.CurncyCode);
+									// GLCode = GIr.Code;
+									// LArtCode = PLr.ArtCode;
+									
+									weboutstring("<tr>");
+									weboutstring("<td>" & i + 1 & "</td>");
+									weboutstring("<td>" & CBbw.CompName & "</td>");
+									weboutstring("<td>" & GIr.Code & "</td>");
+									weboutstring("<td>" & PLr.ArtCode & "</td>");
+									weboutstring("<td>" & GIr.Price & "</td>");
+									weboutstring("<td>" & PLr.CurncyCode & "</td>");
+									weboutstring("</tr>");
+									
+									goto OUTFromLoopWebCheckErrorCurrency;
+								end;
+							end;
+						end;
+					end;
+				end;
+				
+			end;
+			ResetLoop(PLr);
+		end;
+	end;
+	
+	OUTFromLoopWebCheckErrorCurrency:;
+	for(i=0;i<rwcnt;i=i+1)begin
+		MatRowGet(CBb,i,CBbw);
+		if(SetCompany(i + 1,false)) then begin
+			TrHs = true;
+			PLr.PLCode = "RRP";
+			PLr.ArtCode = LArtCode;
+			while(LoopMain(PLr,2,TrHs))begin
+				testf = true;
+				if(PLr.PLCode != "RRP" or PLr.ArtCode != LArtCode)then begin TrHs = false; testf = false; end;
+				//if(PLr.CurncyCode == "AZN" or blank(PLr.CurncyCode) or blankval==PLr.ExVatPrice or PLr.ExVatPrice==0)then begin testf = false; end;
+				if(blankval==PLr.ExVatPrice or PLr.ExVatPrice==0)then begin testf = false; end;
+				//if(fileexists("stop"))then begin TrHs = false; testf = false; end;
+				
+				if(testf)then begin
+					if(GIr.Price==PLr.ExVatPrice)then begin
+						weboutstring("<tr>");
+						weboutstring("<td>" & i + 1 & "</td>");
+						weboutstring("<td>" & CBbw.CompName & "</td>");
+						weboutstring("<td>" & GLCode & "</td>");
+						weboutstring("<td>" & PLr.ArtCode & "</td>");
+						weboutstring("<td>" & PLr.ExVatPrice & "</td>");
+						weboutstring("<td>" & PLr.CurncyCode & "</td>");
+						weboutstring("</tr>");
+					end;
+				end;
+				
+			end;
+			ResetLoop(PLr);
+		end;
+	end;
+	weboutstring("</table>");
+	
+	logtext(0,"================================================ End WebCheckErrorCurrency ================================================");
+return;
+end;*/
