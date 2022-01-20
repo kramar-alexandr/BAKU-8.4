@@ -105,6 +105,7 @@ begin
 	integer i,rwcnt,j;
 	record CompaniesBlock CBb;
 	row CompaniesBlock CBbw;
+	record ItemStatusVc ISr;
 		
 		
   setcompany(stringtoint(webgetarg("compnr")),false);
@@ -133,12 +134,23 @@ begin
 			IVr.OKFlag = 1;
 			TrHs2 = true;
 			while (LoopKey("OKFlag",IVr,1,TrHs2)) begin
+				if (FileExists("stop")) then begin TrHs2 = false; end;
 				if (IVr.OKFlag != 1) then begin TrHs2 = false; end;
 				if (TrHs2 and !(IVr.Invalid>0)) then begin
 					for (i=0;i<matrowcnt(IVr);i=i+1) begin
 						matrowget(IVr,i,IVrw);
+						testf2 = true;
+						ISr.Code = IVrw.ArtCode;
+						ISr.Location = ";;;";
+						if (ReadFirstMain(ISr,1,true)) then begin
+							if (!ISr.Instock>0) then begin
+								testf2 = false;
+							end;
+						end else begin
+							testf2 = false;
+						end;
 						totcostpricecurncy = 0;
-						if (IVrw.Quant<0) then begin //Edit-------------------Vitalii 13:18 15.01.2016
+						if (IVrw.Quant<0 and testf2) then begin //Edit-------------------Vitalii 13:18 15.01.2016
 							if (!(IVrw.FIFOCur>0)) then begin //Edit***************************Sasha2,12:47 20.05.2016 {
 								//totcostpricecurncy = IVrw.FIFO * IHr.Qty;
 								oldIHr.ArtCode = IVrw.ArtCode;
@@ -184,9 +196,10 @@ begin
 								if (totcostpricecurncy<0) then begin // for case if there are no positive invoices (with qty>0). Just negative invoices (with qty<0).
 									findfcurcost = false;
 								end;
-								testf2 = true;
 								if (CurTCCP==(totcostpricecurncy / -(IVrw.Quant - qty1))) then begin testf2 = false; end;
 								if (CurTCCP==(totcostpricecurncy / -IVrw.Quant)) then begin testf2 = false; end;
+								
+								
 								if (qty1!=0 and findfcurcost and testf2) then begin
 									// if ((totcostpricecurncy / -(IVrw.Quant - qty1)) - (totcostpricecurncy / -IVrw.Quant)>0.5 or (totcostpricecurncy / -(IVrw.Quant - qty1))==0) then begin
 									weboutstring("<tr>");
