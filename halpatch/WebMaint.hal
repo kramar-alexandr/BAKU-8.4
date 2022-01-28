@@ -50,6 +50,9 @@ remote function string 255 DeleteBackSlash (string);
 remote function string 255 ParseHEX(string);
 external procedure GetFullCurncyRate(var string,Date,var val,var val,var val,var val,var val);
 remote procedure IVSumup(var record IVVc,Boolean);
+remote procedure GetFullCurncyRate (var string,Date,var val,var val,var val,var val,var val); // Edit ********************** Ihor Trubachov 21*01*2022
+remote function val MulRateToBase1(var string,val,val,val,val,val,val,roundmode); // Edit ********************** Ihor Trubachov 21*01*2022
+remote function Boolean PasteInvIn2IPr(var record IPVc,Integer,Date,var val,Boolean,var Boolean); // Edit ********************** Ihor Trubachov 21*01*2022
 
 SetLangMode(LangRussian,"RUS",0);
 
@@ -5109,7 +5112,7 @@ end;
 
 
 
-global webpublic updating procedure WebRestoreDaysForBallancePayment()
+global webpublic updating procedure WebRestoreDaysForBallancePayment // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:51 20.01.2022
 begin
 	record POVc POr;
 	record ConsItemVc CIr;
@@ -5152,7 +5155,7 @@ end;
 
 
 
-global webpublic procedure WebGetInvSumForTerm()
+global webpublic updating procedure WebGetInvSumForTerm()
 begin
 	record IVVc IVr;
 	row IVVc IVrw;
@@ -5167,8 +5170,11 @@ begin
 	integer i,j,wn,y,compno,k,c,sernrf,cn;
 	string 255 hex,out,warning,errstr,loyaltycard,namesname,inwarning,code,stockcode,affobj,tstr;
 	val ps;
+	record TermHistVc THr;
+	val td,fr,to1,to2,b1,b2,price;
+	roundmode rnd;
 
-	
+	logtext(0,"WebGetInvSumForTerm start");
 	
 	webgetpostdata(getpost);
 	a = GetArealength(getpost);
@@ -5177,27 +5183,74 @@ begin
 	in = StringToLongInt(JSONGet(datajson,"invoiceNr"));
 	at = ParseHEX(at);
 	cn = StringToInt(JSONGet(datajson,"compNr"));
-	logtext(0,at);
-	logtext(0,in);
-	logtext(0,cn);
+	
 	if (at=="") then begin
 		SetCompany(cn,false);
+		THr.SerNr = NextSerNr("TermHistVc",CurrentDate,-1,false,"");
+		THr.InvNr = in;
+		THr.ReqType = "WebGetInvSumForTerm";
+		THr.AccessToken = at;
+		THr.Date = CurrentDate;
+		THr.Time = CurrentTime;
 		IVr.SerNr = in;
 		if (ReadFirstMain(IVr,1,true)) then begin
-			if (IVr.OKFlag!=1) then begin
-				if (IVr.CurncyCode=="AZN") then begin
-					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":" & IVr.Sum4 & "}"); 
+			if (IVr.CurncyCode=="AZN") then begin
+				if (IVr.OKFlag!=1) then begin
+					if (IVr.CurncyCode=="AZN") then begin
+						weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":" & IVr.Sum4 & "}"); 
+						THr.RespStat = 0;
+						THr.PaySum = IVr.Sum4;
+						THr.Comment = "Success operation!";
+					end else begin
+						weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":5,\"message\":\"Invoice currency isn`t base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+						THr.RespStat = 5;
+						THr.PaySum = 0;
+						THr.Comment = "Invoice currency isn`t base currency!";
+					end;
 				end else begin
-					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":5,\"message\":\"Invoice currency isn`t base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":2,\"message\":\"The invoice has already been confirmed!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+					THr.RespStat = 2;
+					THr.PaySum = 0;
+					THr.Comment = "The invoice has already been confirmed!";
 				end;
 			end else begin
-				weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":2,\"message\":\"The invoice has already been confirmed!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+				if (IVr.OKFlag==1) then begin
+					if (IVr.CurncyCode!="AZN") then begin
+						
+						GetFullCurncyRate(IVr.CurncyCode,CurrentDate,fr,to1,to2,b1,b2);
+						price = MulRateToBase1(IVr.CurncyCode,IVr.Sum4,fr,to1,to2,b1,b2,rnd);
+						
+						weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":" & price & "}"); 
+						THr.RespStat = 0;
+						THr.PaySum = price;
+						THr.Comment = "Success operation!";
+					end else begin
+						weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":6,\"message\":\"Invoice currency is base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+						THr.RespStat = 6;
+						THr.PaySum = 0;
+						THr.Comment = "Invoice currency is base currency!";
+					end;
+				end else begin
+					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":7,\"message\":\"The invoice has not been confirmed yet!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+					THr.RespStat = 7;
+					THr.PaySum = 0;
+					THr.Comment = "The invoice has not been confirmed yet!";
+				end;
 			end;
 		end else begin
 			weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":1,\"message\":\"Invoice not found!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+			THr.RespStat = 1;
+			THr.PaySum = 0;
+			THr.Comment = "Invoice not found!";
 		end;
 	end else begin
 		weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":4,\"message\":\"Invalid access token!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+		THr.RespStat = 4;
+		THr.PaySum = 0;
+		THr.Comment = "Invalid access token!";
+	end;
+	if(Recordstore (THr,true)) then begin
+		logtext(0,"WebGetInvSumForTerm finish");
 	end;
 	return;
 end;
@@ -5210,11 +5263,11 @@ end;
 
 
 
-global webpublic updating procedure WebCreatePaymentThrTerm()
+global webpublic updating procedure WebCreatePaymentThrTerm() // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 9:51 20.01.2022
 begin
 	record IVVc IVr, OldIVr;
 	row IVVc IVrw;
-	boolean CCPAYEXf;
+	boolean tmpbool;
 	area getpost;
 	string 255 filename;
 	json datajson;
@@ -5225,11 +5278,19 @@ begin
 	integer i,j,wn,y,compno,k,c,sernrf,cn, rwcnt;
 	string 255 hex,out,warning,errstr,loyaltycard,namesname,inwarning,code,stockcode,affobj,tstr, crncy;
 	val ps;
-	val from,to1,to2,base1,base2;
+	val fr,to1,to2,b1,b2,tmpval, price;
 	record PMBlock PMb;
 	row PMBlock PMbrw;
+	record TermHistVc THr;
+	record IPVc IPr, OldIPr;
+  row IPVc IPrw;
+	record ARVc ARr;
+	roundmode rnd;
+	val from,base1,base2;
+	boolean CCPAYEXf;
 
 	
+	logtext(0,"WebCreatePaymentThrTerm start");
 	
 	webgetpostdata(getpost);
 	CloseFile;
@@ -5240,90 +5301,496 @@ begin
 	at = ParseHEX(at);
 	cn = StringToInt(JSONGet(datajson,"compNr"));
 	ps = StringToVal(JSONGet(datajson,"paidSum"),M4Val);
-	logtext(0,at);
-	logtext(0,in);
-	logtext(0,cn);
-	logtext(0,ps);
+	
+	
 	if (at=="") then begin
 		SetCompany(cn,false);
+		
+		THr.SerNr = NextSerNr("TermHistVc",CurrentDate,-1,false,"");
+		THr.InvNr = in;
+		THr.ReqType = "WebCreatePaymentThrTerm";
+		THr.AccessToken = at;
+		THr.Date = CurrentDate;
+		THr.Time = CurrentTime;
 		blockload(PMb);
 		IVr.SerNr = in;
 		if (ReadFirstMain(IVr,1,true)) then begin
-			if (IVr.OKFlag!=1) then begin
-				if (IVr.CurncyCode=="AZN") then begin
-					RecordCopy(OldIVr,IVr);
-					CCPAYEXf = false;
-					rwcnt = MatRowCnt(IVr);
-					for (i=0;i<rwcnt;i=i+1) begin
-						MatRowGet(IVr,i,IVrw);
-						if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
-							CCPAYEXf = true;
-						end;
-					end;
-					
-					if (!CCPAYEXf) then begin
-						ClearRow(IVr,IVrw,kInvoiceRowTypeCreditCardPayment);
-						IVrw.stp = kInvoiceRowTypeCreditCardPayment;
-						IVrw.Sum = ps;
-						IVrw.PayMode = "T1";
-						for (i=0;i<matrowcnt(PMb);i=i+1) begin
-							matrowget(PMb,i,PMbrw);
-							if (IVrw.PayMode==PMbrw.Code) then begin
-								IVrw.Spec = PMbrw.Comment;
+			if (IVr.CurncyCode=="AZN") then begin
+				if (IVr.OKFlag!=1) then begin
+					if (IVr.CurncyCode=="AZN") then begin
+						RecordCopy(OldIVr,IVr);
+						CCPAYEXf = false;
+						rwcnt = MatRowCnt(IVr);
+						for (i=0;i<rwcnt;i=i+1) begin
+							MatRowGet(IVr,i,IVrw);
+							if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+								CCPAYEXf = true;
 							end;
 						end;
-						if (blank(IVrw.Spec)) then begin
-							IVrw.Spec = "PM not found";
-						end;
-						IVrw.SerialNr = "";// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 31 January 2018 15:21:10
-						IVrw.Comment = "";// Edit ************************** BPI Ukraine - KramarAlexandr - Wednesday, 31 January 2018 15:21:28
-						IVrw.AuthorizationCode ="";
+						
+						if (!CCPAYEXf) then begin
+							ClearRow(IVr,IVrw,kInvoiceRowTypeCreditCardPayment);
+							IVrw.stp = kInvoiceRowTypeCreditCardPayment;
+							IVrw.Sum = ps;
+							IVrw.PayMode = "T1";
+							for (i=0;i<matrowcnt(PMb);i=i+1) begin
+								matrowget(PMb,i,PMbrw);
+								if (IVrw.PayMode==PMbrw.Code) then begin
+									IVrw.Spec = PMbrw.Comment;
+								end;
+							end;
+							if (blank(IVrw.Spec)) then begin
+								IVrw.Spec = "PM not found";
+							end;
+							IVrw.SerialNr = "";
+							IVrw.Comment = "";
+							IVrw.AuthorizationCode ="";
 
 
-						crncy = "AZN";
-						GetFullCurncyRate(crncy,IVr.TransDate,from,to1,to2,base1,base2);
-						IVrw.CurncyCode = crncy;
-						IVrw.FrRate = from;
-						IVrw.ToRateB1 = to1;
-						IVrw.ToRateB2 = to2;
-						IVrw.BaseRate1 = base1;
-						IVrw.BaseRate2 = base2;  
-						IVrw.Objects = "";
-					
-						if(IVrw.Sum!=0)then begin
-							MatRowPut(IVr,MatRowCnt(IVr),IVrw);
+							crncy = "AZN";
+							GetFullCurncyRate(crncy,IVr.TransDate,from,to1,to2,base1,base2);
+							IVrw.CurncyCode = crncy;
+							IVrw.FrRate = from;
+							IVrw.ToRateB1 = to1;
+							IVrw.ToRateB2 = to2;
+							IVrw.BaseRate1 = base1;
+							IVrw.BaseRate2 = base2;  
+							IVrw.Objects = "";
+						
+							if(IVrw.Sum!=0)then begin
+								MatRowPut(IVr,MatRowCnt(IVr),IVrw);
+								IVSumup(IVr,true);
+								IVr.OKFlag = 1;
+								res = RecordUpdate(OldIVr,IVr,true);
+								if (res==0) then begin
+									weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+									THr.RespStat = 0;
+									THr.PaySum = IVr.Sum4;
+									THr.Comment = "Success operation!";
+								end else begin
+									weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & res & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+									THr.RespStat = 3;
+									THr.PaySum = IVr.Sum4;
+									THr.Comment = "Internal error:" & res & "!";
+								end;
+							end else begin
+								weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & 999 & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+								THr.RespStat = 3;
+								THr.PaySum = IVr.Sum4;
+								THr.Comment = "Internal error:" & res & "!";
+							end;
 						end else begin
-							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & 999 & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
-						end;
-						IVSumup(IVr,true);
-						IVr.OKFlag = 1;
-						res = RecordUpdate(OldIVr,IVr,true);
-						if (res==0) then begin
-							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
-						end else begin
-							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & res & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & 24195 & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+							THr.RespStat = 3;
+							THr.PaySum = IVr.Sum4;
+							THr.Comment = "Internal error:" & 24195 & "!";
 						end;
 					end else begin
-						weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & 24195 & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+						weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":5,\"message\":\"Invoice currency isn`t base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+						THr.RespStat = 5;
+						THr.PaySum = IVr.Sum4;
+						THr.Comment = "Invoice currency isn`t base currency!";
 					end;
 				end else begin
-					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":5,\"message\":\"Invoice currency isn`t base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":2,\"message\":\"The invoice has already been confirmed!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+					THr.RespStat = 2;
+					THr.PaySum = 0;
+					THr.Comment = "The invoice has already been confirmed!";
 				end;
 			end else begin
-				weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":2,\"message\":\"The invoice has already been confirmed!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+				if (IVr.OKFlag==1) then begin
+					if (IVr.CurncyCode!="AZN") then begin
+						GetFullCurncyRate(IVr.CurncyCode,CurrentDate,fr,to1,to2,b1,b2);
+						price = MulRateToBase1(IVr.CurncyCode,IVr.Sum4,fr,to1,to2,b1,b2,rnd);
+						
+						ARr.InvoiceNr = IVr.SerNr;
+						if (ReadFirstMain(ARr,1,true)) then begin
+							RecordNew(IPr);
+							RecordCopy(OldIPr,IPr);
+							IPrw.InvoiceNr = IVr.SerNr;
+							MatRowPut(IPr,0,IPrw);
+							PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+							MatRowGet(IPr,0,IPrw);
+							IPrw.Objects = IVr.Objects;
+							matrowget(IVr,0,IVrw);
+							if (nonblank(IVrw.Objects) and nonblank(IPrw.Objects)) then begin IPrw.Objects = IPrw.Objects & ","; end;
+							if (nonblank(IVrw.Objects)) then begin IPrw.Objects = IPrw.Objects & IVrw.Objects; end;
+							MatRowPut(IPr,0,IPrw);
+							IPr.MachineName = IVr.MachineName;
+							IPr.OKFlag = 1;
+	
+							res = RecordUpdate(OldIPr,IPr,true);
+							if (res==0) then begin
+								CreateRecordLink(IPr,CurrentCompany,IVr,CurrentCompany);  
+                CreateRecordLink(IVr,CurrentCompany,IPr,CurrentCompany);  
+
+								weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":0,\"message\":\"Success operation!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+								THr.RespStat = 0;
+								THr.PaySum = price;
+								THr.Comment = "Success operation!";
+							end else begin
+								weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & res & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+								THr.RespStat = 3;
+								THr.PaySum = price;
+								THr.Comment = "Internal error:" & res & "!";
+							end;
+						end else begin
+							weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":3,\"message\":\"Internal error:" & 35129 & "!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+							THr.RespStat = 3;
+							THr.PaySum = price;
+							THr.Comment = "Internal error:" & 35129 & "!";
+						end;
+					end else begin
+						weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":6,\"message\":\"Invoice currency is base currency!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+						THr.RespStat = 5;
+						THr.PaySum = price;
+						THr.Comment = "Invoice currency is base currency!";
+					end;
+				end else begin
+					weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":7,\"message\":\"The invoice has not been confirmed yet!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+					THr.RespStat = 2;
+					THr.PaySum = 0;
+					THr.Comment = "The invoice has not been confirmed yet!";
+				end;
 			end;
 		end else begin
 			weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":1,\"message\":\"Invoice not found!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+			THr.RespStat = 1;
+			THr.PaySum = 0;
+			THr.Comment = "Invoice not found!";
 		end;
 	end else begin
 		weboutstring("{\"accessToken\":\"" & at & "\",\"compNr\":" & cn & ",\"resultCode\":4,\"message\":\"Invalid access token!\",\"invoiceNr\":" & in & ",\"toPay\":0.0}"); 
+		THr.RespStat = 4;
+		THr.PaySum = 0;
+		THr.Comment = "Invalid access token!";
+	end;
+	if(Recordstore (THr,true)) then begin
+		logtext(0,"WebCreatePaymentThrTerm finish");
 	end;
 	return;
 end;
 
 
 
+global webpublic updating procedure WebAPIMilliOn() // Edit ********************** Ihor Trubachov 25*01*2022
+begin
+	longint a, IVSerNr, in;
+	string 255 at;
+	string 155 id,sum, IVSerNrstr, Companystr, command;
+	val ps;
+	record IVVc IVr, OldIVr;
+	row IVVc IVrw;
+	boolean CCPAYEXf, tmpbool;
+	longint res;
+	integer i,j,wn,y,compno,k,c,sernrf,cn, rwcnt, pos;
+	string 255 hex,out,warning,errstr,loyaltycard,namesname,inwarning,code,stockcode,affobj,tstr, crncy;
+	val from,to1,to2,base1,base2;
+	record PMBlock PMb;
+	row PMBlock PMbrw;
+	record TermHistVc THr;
+	record ARVc ARr;
+	record IPVc IPr, OldIPr;
+	row IPVc IPrw;
+	val td,fr,b1,b2,price, tmpval;
+	roundmode rnd;
 	
+	at = DeleteBackSlash(WebGetArg("txn_id"));
+	id = WebGetArg("account");
+	command = WebGetArg("command");
+	ps = StringToVal(WebGetArg("sum"),M4Val);
+	pos = 0;
+	ExtractObjWithSeparator("|",id,true,pos,Companystr);
+	ExtractObjWithSeparator("|",id,true,pos,IVSerNrstr);
+	logtext(0,Companystr);
+	logtext(0,IVSerNrstr);
+	cn = StringToInt(Companystr);
+	in = StringToLongInt(IVSerNrstr);
+	
+	if(SetCompany(cn,false))then begin
+		if (command=="check") then begin
+			weboutstring("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+			weboutstring("<response>");
+			if (at=="") then begin
+				SetCompany(cn,false);
+				THr.SerNr = NextSerNr("TermHistVc",CurrentDate,-1,false,"");
+				THr.InvNr = in;
+				THr.ReqType = "WebAPIMilliOn_CHECK";
+				THr.AccessToken = at;
+				THr.Date = CurrentDate;
+				THr.Time = CurrentTime;
+				IVr.SerNr = in;
+				if (ReadFirstMain(IVr,1,true)) then begin
+					if (IVr.OKFlag!=1) then begin
+						if (IVr.CurncyCode=="AZN") then begin
+							weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+							weboutstring("<result>" & 0 & "</result>");
+							weboutstring("<comment>Success operation!</comment>");
+							weboutstring("<addinfo>" & IVr.Sum4 & "</addinfo>");
+							THr.RespStat = 0;
+							THr.PaySum = IVr.Sum4;
+							THr.Comment = "Success operation!";
+						end else begin
+							weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+							weboutstring("<result>" & 5 & "</result>");
+							weboutstring("<comment>Invoice currency isn`t base currency!</comment>");
+							weboutstring("<addinfo>0</addinfo>");
+							THr.RespStat = 5;
+							THr.PaySum = 0;
+							THr.Comment = "Invoice currency isn`t base currency!";
+						end;
+					end else begin
+						if(IVr.CurncyCode!="AZN")then begin // Edit ********************** Ihor Trubachov 25*01*2022
+							GetFullCurncyRate(IVr.CurncyCode,CurrentDate,fr,to1,to2,b1,b2);
+							price = MulRateToBase1(IVr.CurncyCode,IVr.Sum4,fr,to1,to2,b1,b2,rnd);
+							
+							weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+							weboutstring("<result>" & 0 & "</result>");
+							weboutstring("<comment>Success operation!</comment>");
+							weboutstring("<addinfo>" & price & "</addinfo>");
+							THr.RespStat = 0;
+							THr.PaySum = price;
+							THr.Comment = "Success operation!";
+						end else begin
+							weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+							weboutstring("<result>" & 2 & "</result>");
+							weboutstring("<comment>The invoice has already been confirmed!</comment>");
+							weboutstring("<addinfo>0</addinfo>");
+							THr.RespStat = 2;
+							THr.PaySum = 0;
+							THr.Comment = "The invoice has already been confirmed!";
+						end;
+					end;
+				end else begin
+					weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+					weboutstring("<result>" & 1 & "</result>");
+					weboutstring("<comment>Invoice not found!</comment>");
+					weboutstring("<addinfo>0</addinfo>");
+					THr.RespStat = 1;
+					THr.PaySum = 0;
+					THr.Comment = "Invoice not found!";
+				end;
+			end else begin
+				weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+				weboutstring("<result>" & 4 & "</result>");
+				weboutstring("<comment>Invalid access token!</comment>");
+				weboutstring("<addinfo>0</addinfo>");
+				THr.RespStat = 4;
+				THr.PaySum = 0;
+				THr.Comment = "Invalid access token!";
+			end;
+			if(Recordstore (THr,true)) then begin
+				logtext(0,"WebCreatePaymentThrTermMilliOn finish");
+			end;
+			weboutstring("</response>");
+		end else begin
+			if (command=="pay") then begin
+				weboutstring("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+				weboutstring("<response>");
+				if (at=="") then begin
+					SetCompany(cn,false);
+					
+					THr.SerNr = NextSerNr("TermHistVc",CurrentDate,-1,false,"");
+					THr.InvNr = in;
+					THr.ReqType = "WebAPIMilliOn_PAY";;
+					THr.AccessToken = at;
+					THr.Date = CurrentDate;
+					THr.Time = CurrentTime;
+					blockload(PMb);
+					IVr.SerNr = in;
+					if (ReadFirstMain(IVr,1,true)) then begin
+						if (IVr.OKFlag!=1) then begin
+							if (IVr.CurncyCode=="AZN") then begin
+								RecordCopy(OldIVr,IVr);
+								CCPAYEXf = false;
+								rwcnt = MatRowCnt(IVr);
+								for (i=0;i<rwcnt;i=i+1) begin
+									MatRowGet(IVr,i,IVrw);
+									if (IVrw.stp==kInvoiceRowTypeCreditCardPayment) then begin
+										CCPAYEXf = true;
+									end;
+								end;
+								
+								if (!CCPAYEXf) then begin
+									ClearRow(IVr,IVrw,kInvoiceRowTypeCreditCardPayment);
+									IVrw.stp = kInvoiceRowTypeCreditCardPayment;
+									IVrw.Sum = ps;
+									IVrw.PayMode = "T1";
+									for (i=0;i<matrowcnt(PMb);i=i+1) begin
+										matrowget(PMb,i,PMbrw);
+										if (IVrw.PayMode==PMbrw.Code) then begin
+											IVrw.Spec = PMbrw.Comment;
+										end;
+									end;
+									if (blank(IVrw.Spec)) then begin
+										IVrw.Spec = "PM not found";
+									end;
+									IVrw.SerialNr = "";
+									IVrw.Comment = "";
+									IVrw.AuthorizationCode ="";
+
+
+									crncy = "AZN";
+									GetFullCurncyRate(crncy,IVr.TransDate,from,to1,to2,base1,base2);
+									IVrw.CurncyCode = crncy;
+									IVrw.FrRate = from;
+									IVrw.ToRateB1 = to1;
+									IVrw.ToRateB2 = to2;
+									IVrw.BaseRate1 = base1;
+									IVrw.BaseRate2 = base2;  
+									IVrw.Objects = "";
+								
+									if(IVrw.Sum!=0)then begin
+										MatRowPut(IVr,MatRowCnt(IVr),IVrw);
+										IVSumup(IVr,true);
+										IVr.OKFlag = 1;
+										res = RecordUpdate(OldIVr,IVr,true);
+										if (res==0) then begin
+											weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+											// weboutstring("<prv_txn>" & THr.SerNr & "</prv_txn>");
+											weboutstring("<amount>" & IVr.Sum4 & "</amount>");
+											weboutstring("<result>" & 0 & "</result>");
+											weboutstring("<comment>Success operation!</comment>");
+											THr.RespStat = 0;
+											THr.PaySum = IVr.Sum4;
+											THr.Comment = "Success operation!";
+										end else begin
+											weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+											// weboutstring("<prv_txn>" & THr.SerNr & "</prv_txn>");
+											weboutstring("<amount>" & 0 & "</amount>");
+											weboutstring("<result>" & 3 & "</result>");
+											weboutstring("<comment>Internal error:" & res & "!</comment>");
+											THr.RespStat = 3;
+											THr.PaySum = IVr.Sum4;
+											THr.Comment = "Internal error:" & res & "!";
+										end;
+									end else begin
+										weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+										// weboutstring("<prv_txn>" & THr.SerNr & "</prv_txn>");
+										weboutstring("<amount>" & 0 & "</amount>");
+										weboutstring("<result>" & 3 & "</result>");
+										weboutstring("<comment>Internal error:999!</comment>");
+										THr.RespStat = 3;
+										THr.PaySum = IVr.Sum4;
+										THr.Comment = "Internal error:" & res & "!";
+									end;
+								end else begin
+									weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+									// weboutstring("<prv_txn>" & THr.SerNr & "</prv_txn>");
+									weboutstring("<amount>" & 0 & "</amount>");
+									weboutstring("<result>" & 3 & "</result>");
+									weboutstring("<comment>Internal error:24195!</comment>");
+									THr.RespStat = 3;
+									THr.PaySum = IVr.Sum4;
+									THr.Comment = "Internal error:" & 24195 & "!";
+								end;
+							end else begin
+								weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+								// weboutstring("<prv_txn>" & THr.SerNr & "</prv_txn>");
+								weboutstring("<amount>" & 0 & "</amount>");
+								weboutstring("<result>" & 5 & "</result>");
+								weboutstring("<comment>Invoice currency isn`t base currency!</comment>");
+								THr.RespStat = 5;
+								THr.PaySum = IVr.Sum4;
+								THr.Comment = "Invoice currency isn`t base currency!";
+							end;
+						end else begin
+							if(IVr.CurncyCode!="AZN") then begin // Edit ********************** Ihor Trubachov 25*01*2022
+								GetFullCurncyRate(IVr.CurncyCode,CurrentDate,fr,to1,to2,b1,b2);
+								price = MulRateToBase1(IVr.CurncyCode,IVr.Sum4,fr,to1,to2,b1,b2,rnd);
+						
+								ARr.InvoiceNr = IVr.SerNr;
+								if (ReadFirstMain(ARr,1,true)) then begin
+									RecordNew(IPr);
+									RecordCopy(OldIPr,IPr);
+									IPrw.InvoiceNr = IVr.SerNr;
+									MatRowPut(IPr,0,IPrw);
+									PasteInvIn2IPr(IPr,0,IPr.TransDate,tmpval,false,tmpbool);
+									MatRowGet(IPr,0,IPrw);
+									IPrw.Objects = IVr.Objects;
+									matrowget(IVr,0,IVrw);
+									if (nonblank(IVrw.Objects) and nonblank(IPrw.Objects)) then begin IPrw.Objects = IPrw.Objects & ","; end;
+									if (nonblank(IVrw.Objects)) then begin IPrw.Objects = IPrw.Objects & IVrw.Objects; end;
+									MatRowPut(IPr,0,IPrw);
+									IPr.MachineName = IVr.MachineName;
+									IPr.OKFlag = 1;
+			
+									res = RecordUpdate(OldIPr,IPr,true);
+									if (res==0) then begin
+										CreateRecordLink(IPr,CurrentCompany,IVr,CurrentCompany);  
+										CreateRecordLink(IVr,CurrentCompany,IPr,CurrentCompany);  
+										weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+										weboutstring("<amount>" & price & "</amount>");
+										weboutstring("<result>" & 0 & "</result>");
+										weboutstring("<comment>Success operation!</comment>");
+										THr.RespStat = 0;
+										THr.PaySum = price;
+										THr.Comment = "Success operation!";
+									end else begin
+										weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+										weboutstring("<amount>" & 0 & "</amount>");
+										weboutstring("<result>" & 3 & "</result>");
+										weboutstring("<comment>Internal error:" & res & "!</comment>");
+										THr.RespStat = 3;
+										THr.PaySum = price;
+										THr.Comment = "Internal error:" & res & "!";
+									end;
+								end else begin
+									weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+									weboutstring("<amount>" & 0 & "</amount>");
+									weboutstring("<result>" & 3 & "</result>");
+									weboutstring("<comment>Internal error:" & 35129 & "!</comment>");
+									THr.RespStat = 3;
+									THr.PaySum = price;
+									THr.Comment = "Internal error:" & 35129 & "!";
+								end;
+								
+							end else begin
+								weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+								// weboutstring("<prv_txn>" & THr.SerNr & "</prv_txn>");
+								weboutstring("<amount>" & 0 & "</amount>");
+								weboutstring("<result>" & 2 & "</result>");
+								weboutstring("<comment>The invoice has already been confirmed!</comment>");
+								THr.RespStat = 2;
+								THr.PaySum = 0;
+								THr.Comment = "The invoice has already been confirmed!";
+							end;
+						end;
+					end else begin
+						weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+						// weboutstring("<prv_txn>" & THr.SerNr & "</prv_txn>");
+						weboutstring("<amount>" & 0 & "</amount>");
+						weboutstring("<result>" & 1 & "</result>");
+						weboutstring("<comment>Invoice not found!</comment>");
+						THr.RespStat = 1;
+						THr.PaySum = 0;
+						THr.Comment = "Invoice not found!";
+					end;
+				end else begin
+					weboutstring("<osmp_txn_id>" & at & "</osmp_txn_id>");
+					// weboutstring("<prv_txn>" & THr.SerNr & "</prv_txn>");
+					weboutstring("<amount>" & 0 & "</amount>");
+					weboutstring("<result>" & 4 & "</result>");
+					weboutstring("<comment>Invalid access token!</comment>");
+					THr.RespStat = 4;
+					THr.PaySum = 0;
+					THr.Comment = "Invalid access token!";
+				end;
+				if(Recordstore (THr,true)) then begin
+					logtext(0,"WebCreatePaymentThrTermMilliOn finish");
+				end;
+				weboutstring("</response>");
+			end else begin
+			
+			end;
+		end;
+	end;
+	
+	return;
+end;
+
+
+
 	
 
 
@@ -5736,5 +6203,6 @@ begin
 
 return;
 end;
+
 
 
