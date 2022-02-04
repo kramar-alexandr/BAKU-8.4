@@ -1,7 +1,6 @@
 external procedure MulVATIV(string,val,var val,var val,Integer,Integer);
 external procedure HT2Per(Date, Date , var string);
 external procedure LogProcTime(string,longint);
-remote function boolean CompanyIsJWLikeCompany(Integer);
 
 global
 procedure NewGiftCertRn(record RcVc RepSpec)
@@ -39,13 +38,11 @@ begin
 	boolean okflag;	
 	longint curtick;
 	array val totalSum;
-	array string 255 aGCRrSerNr, aGCSrSerNr, aTypePayMode, aGCSrBar, aCurrency;
+	array string 255 aGCRrSerNr, aGCSrSerNr, aTypePayMode;
 	record GCTypeVc GCTr;
   
   sdate = RepSpec.sStartDate;
   edate = RepSpec.sEndDate;
-	
-	curcomp = CurrentCompany;
 	
 	startreportnoheaderjob(UsetStr(12720));
 
@@ -56,8 +53,12 @@ begin
   SetRepCol(6,360);
   
   StartFormat(15);
+		// OutString(0,0,"Номер",false);
+		// OutString(2,0,"Сумма",true);
+		// OutString(3,0,"Оставшееся",true);
+		// OutString(4,0,"Клиент",false);
+		// OutString(5,0,"Наимен.",false);
 		OutString(0,0,USetStr(12731),false);
-		OutString(1,0,USetStr(36437),false); ////// 
 		OutString(2,0,USetStr(12732),true);
 		OutString(3,0,USetStr(12741),true);
 		OutString(4,0,USetStr(12724),false);
@@ -69,7 +70,6 @@ begin
 		OutString(440,0,USetStr(36434),false);
 		OutString(450,0,USetStr(36435),false);
 		OutString(460,0,USetStr(36436),false);
-		OutString(470,0,USetStr(36438),false); ////// 
   EndFormat;
   Black_Divider(0,1);
   
@@ -86,18 +86,11 @@ begin
     end;
     
     if (testf) then begin
+			aGCSrSerNr[i] = GCSr.InvSerNr;
       GCSr.SerNr = GCr.SerNr;
       sold = ReadFirstMain(GCSr,1,true);  
       GCRr.GCSSerNr = GCr.SerNr;
       received = ReadFirstKey("GCSSerNr",GCRr,1,true);
-
-			if (sold) then begin
-        aGCSrSerNr[i] = GCSr.InvSerNr;
-				aGCSrBar[i] = GCSr.BarCode;
-			end else begin	
-				aGCSrSerNr[i] = "";
-				aGCSrBar[i] = "";
-      end; 
 			
 			if (received) then begin
         aGCRrSerNr[i] = GCRr.InvSerNr;
@@ -113,8 +106,6 @@ begin
 				end;
 			end;
 			
-			aCurrency[i] = "";
-			totalSum[i] = 0;
       if (sold) then begin
         switch (GCSr.FileName) begin
           case "IVVc":
@@ -125,56 +116,12 @@ begin
               location = IVr.Location; 
               solddate = IVr.InvDate;
 							totalSum[i] = IVr.Sum4;
-							aCurrency[i] = IVr.CurncyCode;
             end else begin
-              // custcode = USetStr(12733);
-              // custName = USetStr(12733);
-              // location = USetStr(12733); 
-							// totalSum[i] = IVr.Sum4;
-							// aCurrency[i] = IVr.CurncyCode;
-							okflag = false;
-							for(comp=1;comp<=34;comp=comp+1) begin
-								if(CompanyIsJWLikeCompany(comp))then begin
-									SetCompany(comp,false);
-									IVr.SerNr = GCSr.InvSerNr;
-									
-									
-									if(ReadFirstMain(IVr,1,true))then begin
-										for(i=0;i<MatRowCnt(IVr);i=i+1) begin
-											MatRowGet(IVr,i,IVrw);
-											if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
-												outstring(0,0,IVr.Location,false);
-												okflag = true;
-												goto ENDLOOPFORCOMP_NewGiftCertRn;
-											end;	
-										end;
-									end;
-									
-								end;
-							end;	
-							
-							ENDLOOPFORCOMP_NewGiftCertRn:;
-							SetCompany(curcomp,false);
-							
-							if(okflag)then begin
-								custcode = IVr.CustCode;
-								custName = IVr.Addr0;
-								location = IVr.Location; 
-								solddate = IVr.InvDate;
-								totalSum[i] = IVr.Sum4;
-								aCurrency[i] = IVr.CurncyCode;
-							end else begin
-								custcode = USetStr(12733);
-								custName = USetStr(12733);
-								location = USetStr(12733); 
-								totalSum[i] = IVr.Sum4;
-								aCurrency[i] = IVr.CurncyCode;
-							end;
-
+              custcode = USetStr(12733);
+              custName = USetStr(12733);
+              location = USetStr(12733); 
+							totalSum[i] = IVr.Sum4;
             end;     
-						
-						
-						
           case "IVCashVc":
             IVCashr.SerNr = GCSr.InvSerNr;
             if (ReadFirstMain(IVCashr,1,true)) then begin
@@ -207,13 +154,11 @@ begin
               location = IVr.Location; 
               solddate = IVr.InvDate;
 							totalSum[i] = IVr.Sum4;
-							aCurrency[i] = IVr.CurncyCode;
             end else begin
               custcode = USetStr(12733);
               custName = USetStr(12733);
               location = USetStr(12733); 
 							totalSum[i] = 0;
-							aCurrency[i] = IVr.CurncyCode;
             end;     
         end;        
       end else begin
@@ -260,12 +205,11 @@ begin
   for (i=0;i<maxp;i=i+1) begin
     StartFormat(15);
     OutLongInt(0,0,aser[i],false);
-		OutString(1,0,aGCSrBar[i],false);
     OutVal(2,0,aamount[i],M4Val,true);
     OutVal(3,0,aremn[i],M4Val,true);
     OutString(4,"DblCUVc",acucode[i],false);
     OutString(5,0,Left(acuname[i],15),false);
-		OutDate(6,0,aTypePayMode[i],true);
+		OutDate(6,0,aTypePayMode[i],true);// TYPE
 		
     OutDate(410,0,aissdate[i],true);
     OutDate(420,0,asolddate[i],true);
@@ -274,8 +218,6 @@ begin
     OutDate(440,0,arcvdate[i],true);
 		Outstring(450,0,aGCRrSerNr[i],false);
 		Outstring(460,0,totalSum[i],false);
-		OutString(470,0,aCurrency[i],false);
-		
 		
     totam = totam + aamount[i];
     totnet = totnet + anet[i];
