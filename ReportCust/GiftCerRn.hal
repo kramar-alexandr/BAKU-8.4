@@ -1,6 +1,7 @@
 external procedure MulVATIV(string,val,var val,var val,Integer,Integer);
 external procedure HT2Per(Date, Date , var string);
 external procedure LogProcTime(string,longint);
+remote function boolean CompanyIsJWLikeCompany(Integer);
 
 global
 procedure NewGiftCertRn(record RcVc RepSpec)
@@ -35,14 +36,17 @@ begin
   val vatv,t1;
 	////////////////////
 	integer comp,curcomp;
-	boolean okflag;	
+	boolean okflag, notFound;	
 	longint curtick;
 	array val totalSum;
-	array string 255 aGCRrSerNr, aGCSrSerNr, aTypePayMode;
+	array string 255 aGCRrSerNr, aGCSrSerNr, aTypePayMode, aGCSrBar, aCurrency;
 	record GCTypeVc GCTr;
+	vector string 255 aBoutique;
   
   sdate = RepSpec.sStartDate;
   edate = RepSpec.sEndDate;
+	
+	curcomp = CurrentCompany;
 	
 	startreportnoheaderjob(UsetStr(12720));
 
@@ -53,12 +57,8 @@ begin
   SetRepCol(6,360);
   
   StartFormat(15);
-		// OutString(0,0,"Номер",false);
-		// OutString(2,0,"Сумма",true);
-		// OutString(3,0,"Оставшееся",true);
-		// OutString(4,0,"Клиент",false);
-		// OutString(5,0,"Наимен.",false);
 		OutString(0,0,USetStr(12731),false);
+		OutString(2,0,USetStr(36437),false);
 		OutString(2,0,USetStr(12732),true);
 		OutString(3,0,USetStr(12741),true);
 		OutString(4,0,USetStr(12724),false);
@@ -67,9 +67,12 @@ begin
 		OutString(410,0,USetStr(36431),false);
 		OutString(420,0,USetStr(36432),false);
 		OutString(430,0,USetStr(36433),false);
+		OutString(430,0,"Shop sold",false);
 		OutString(440,0,USetStr(36434),false);
 		OutString(450,0,USetStr(36435),false);
+		OutString(450,0,"Shop get",false);
 		OutString(460,0,USetStr(36436),false);
+		OutString(470,0,USetStr(36438),false);
   EndFormat;
   Black_Divider(0,1);
   
@@ -86,42 +89,98 @@ begin
     end;
     
     if (testf) then begin
-			aGCSrSerNr[i] = GCSr.InvSerNr;
       GCSr.SerNr = GCr.SerNr;
       sold = ReadFirstMain(GCSr,1,true);  
       GCRr.GCSSerNr = GCr.SerNr;
       received = ReadFirstKey("GCSSerNr",GCRr,1,true);
 			
-			if (received) then begin
-        aGCRrSerNr[i] = GCRr.InvSerNr;
+			
+			if (sold) then begin
+        aGCSrSerNr[maxp] = GCSr.InvSerNr;
+				aGCSrBar[maxp] = GCSr.BarCode;
 			end else begin	
-				aGCRrSerNr[i] = "";
+				aGCSrSerNr[maxp] = "";
+				aGCSrBar[maxp] = "";
       end; 
 			
-			aTypePayMode[i] = "";
+			if (received) then begin
+        aGCRrSerNr[maxp] = GCRr.InvSerNr;
+			end else begin	
+				aGCRrSerNr[maxp] = "";
+      end; 
+			
+			/*aTypePayMode[maxp] = "";
 			if(nonblank(GCr.Type)) then begin
 				GCTr.Code = GCr.Type;
 				if(ReadFirstMain(GCTr,1,true)) then begin
-					aTypePayMode[i] = GCTr.PayMode;
+					aTypePayMode[maxp] = GCTr.PayMode;
 				end;
 			end;
+			*/
 			
+			aCurrency[maxp] = "";
+			totalSum[maxp] = 0;
+			aBoutique[maxp] = "";
+			aCurrency[maxp] = "";
+			okflag = false;
       if (sold) then begin
         switch (GCSr.FileName) begin
           case "IVVc":
+						notFound = true;
             IVr.SerNr = GCSr.InvSerNr;
             if (ReadFirstMain(IVr,1,true)) then begin
-              custcode = IVr.CustCode;
-              custName = IVr.Addr0;
-              location = IVr.Location; 
-              solddate = IVr.InvDate;
-							totalSum[i] = IVr.Sum4;
+							for(j=0;j<MatRowCnt(IVr);j=j+1) begin
+								MatRowGet(IVr,j,IVrw);
+								if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
+									okflag = true;
+									notFound = false;
+									aBoutique[maxp & "_sold"] = IVr.Location;
+									aTypePayMode[maxp] = IVrw.PayMode;
+									goto ENDLOOPFORCOMP_NewGiftCertRn;
+								end;	
+							end;
+              
             end else begin
-              custcode = USetStr(12733);
-              custName = USetStr(12733);
-              location = USetStr(12733); 
-							totalSum[i] = IVr.Sum4;
+							notFound = true;
             end;     
+						
+						if(notFound)then begin
+							for(comp=1;comp<=34;comp=comp+1) begin
+								if(CompanyIsJWLikeCompany(comp))then begin
+									SetCompany(comp,false);
+									IVr.SerNr = GCSr.InvSerNr;
+									
+									if(ReadFirstMain(IVr,1,true))then begin
+										for(j=0;j<MatRowCnt(IVr);j=j+1) begin
+											MatRowGet(IVr,j,IVrw);
+											if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
+												okflag = true;
+												aBoutique[maxp & "_sold"] = IVr.Location;
+												aTypePayMode[maxp] = IVrw.PayMode;
+												goto ENDLOOPFORCOMP_NewGiftCertRn;
+											end;	
+										end;
+									end;
+									
+								end;
+							end;	
+							
+							ENDLOOPFORCOMP_NewGiftCertRn:;
+							SetCompany(curcomp,false);
+							
+							if(okflag)then begin
+								custcode = IVr.CustCode;
+								custName = IVr.Addr0;
+								location = IVr.Location; 
+								solddate = IVr.InvDate;
+							end else begin
+								custcode = USetStr(12733);
+								custName = USetStr(12733);
+								location = USetStr(12733); 	
+							end;
+						end;
+						
+						
           case "IVCashVc":
             IVCashr.SerNr = GCSr.InvSerNr;
             if (ReadFirstMain(IVCashr,1,true)) then begin
@@ -147,23 +206,99 @@ begin
               location = USetStr(12733); 
             end;     
           otherwise
+						notFound = true;
             IVr.SerNr = GCSr.InvSerNr;
             if (ReadFirstMain(IVr,1,true)) then begin
-              custcode = IVr.CustCode;
-              custName = IVr.Addr0;
-              location = IVr.Location; 
-              solddate = IVr.InvDate;
-							totalSum[i] = IVr.Sum4;
+							for(j=0;j<MatRowCnt(IVr);j=j+1) begin
+								MatRowGet(IVr,j,IVrw);
+								if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
+									okflag = true;
+									notFound = false;
+									aBoutique[maxp & "_sold"] = IVr.Location;
+									aTypePayMode[maxp] = IVrw.PayMode;
+									goto ENDLOOPFORCOMP_NewGiftCertRn;
+								end;	
+							end;
             end else begin
-              custcode = USetStr(12733);
-              custName = USetStr(12733);
-              location = USetStr(12733); 
-							totalSum[i] = 0;
-            end;     
+							notFound = true;
+            end;  
+						if(notFound)then begin
+							for(comp=1;comp<=34;comp=comp+1) begin
+								if(CompanyIsJWLikeCompany(comp))then begin
+									SetCompany(comp,false);
+									IVr.SerNr = GCSr.InvSerNr;
+									
+									if(ReadFirstMain(IVr,1,true))then begin
+										for(j=0;j<MatRowCnt(IVr);j=j+1) begin
+											MatRowGet(IVr,j,IVrw);
+											if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
+												okflag = true;
+												aBoutique[maxp & "_sold"] = IVr.Location;
+												aTypePayMode[maxp] = IVrw.PayMode;
+												goto ENDLOOPFORCOMP_NewGiftCertRn;
+											end;	
+										end;
+									end;
+									
+								end;
+							end;	
+						end;
         end;        
       end else begin
         solddate = bd;
-      end;  
+      end; 
+			okflag = false;
+			if (received) then begin
+				IVr.SerNr = GCRr.InvSerNr;
+				notFound = true;
+				if (ReadFirstMain(IVr,1,true)) then begin
+					for(j=0;j<MatRowCnt(IVr);j=j+1) begin
+						MatRowGet(IVr,j,IVrw);
+						LogText(0, "1) IVr.SerNr = " & IVr.SerNr & " first = " & (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) & " second = " & (GCRr.GCSSerNr==IVrw.GCNr));
+						if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment AND GCRr.GCSSerNr==IVrw.GCNr) then begin
+							okflag = true;
+							notFound = false;
+							aBoutique[maxp & "_get"] = IVr.Location;
+							totalSum[maxp] = IVr.Sum4;
+							aCurrency[maxp] = IVr.CurncyCode;
+							LogText(0, "2) IVr.SerNr = " & IVr.SerNr & " IVr.Location = " & IVr.Location & " IVr.Sum4 = " & IVr.Sum4 & " IVr.CurncyCode = " & IVr.CurncyCode);
+							goto ENDLOOPFORCOMP2_NewGiftCertRn;
+						end;
+					end;					
+          
+        end else begin
+					notFound = true;
+        end;
+				
+				if(notFound)then begin
+					for(comp=1;comp<=34;comp=comp+1) begin
+						if(CompanyIsJWLikeCompany(comp))then begin
+							SetCompany(comp,false);
+							IVr.SerNr = GCRr.InvSerNr;
+							
+							if(ReadFirstMain(IVr,1,true))then begin
+								for(j=0;j<MatRowCnt(IVr);j=j+1) begin
+									MatRowGet(IVr,j,IVrw);
+									LogText(0, "1) IVr.SerNr = " & IVr.SerNr & " first = " & (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) & " second = " & (GCRr.GCSSerNr==IVrw.GCNr));
+									if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment AND GCRr.GCSSerNr==IVrw.GCNr) then begin
+										okflag = true;
+										aBoutique[maxp & "_get"] = IVr.Location;
+										totalSum[maxp] = IVr.Sum4;
+										aCurrency[maxp] = IVr.CurncyCode;
+										LogText(0, "2) IVr.SerNr = " & IVr.SerNr & " IVr.Location = " & IVr.Location & " IVr.Sum4 = " & IVr.Sum4 & " IVr.CurncyCode = " & IVr.CurncyCode);
+										goto ENDLOOPFORCOMP2_NewGiftCertRn;
+									end;	
+								end;
+							end;
+							
+						end;
+					end;	
+				end;
+				
+				ENDLOOPFORCOMP2_NewGiftCertRn:;
+				SetCompany(curcomp,false);
+			end; 
+			
     end;
     if (testf) then begin
       aser[maxp] = GCr.SerNr;
@@ -177,6 +312,10 @@ begin
         arcvdate[maxp] = GCRr.TransDate;
         aissdate[maxp] = GCr.TransDate;
         aremn[maxp] = GCSr.Balance;
+				
+				if(aremn[maxp] < 0) then begin
+					aremn[maxp] = 0;
+				end;
 				
         rwcnt = MatRowCnt(IVr);
         for (ivi=0;ivi<rwcnt;ivi=ivi+1) begin
@@ -205,19 +344,24 @@ begin
   for (i=0;i<maxp;i=i+1) begin
     StartFormat(15);
     OutLongInt(0,0,aser[i],false);
+		OutString(2,0,aGCSrBar[i],false);
     OutVal(2,0,aamount[i],M4Val,true);
     OutVal(3,0,aremn[i],M4Val,true);
     OutString(4,"DblCUVc",acucode[i],false);
     OutString(5,0,Left(acuname[i],15),false);
-		OutDate(6,0,aTypePayMode[i],true);// TYPE
+		OutDate(6,0,aTypePayMode[i],true);
 		
     OutDate(410,0,aissdate[i],true);
     OutDate(420,0,asolddate[i],true);
 		
-		Outstring(430,0,aGCSrSerNr[i],false);
+		OutString(430,0,aGCSrSerNr[i],false);
+		OutString(430,0,aBoutique[i & "_sold"],false);
     OutDate(440,0,arcvdate[i],true);
-		Outstring(450,0,aGCRrSerNr[i],false);
-		Outstring(460,0,totalSum[i],false);
+		OutString(450,0,aGCRrSerNr[i],false);
+		OutString(450,0,aBoutique[i & "_get"],false);
+		OutString(460,0,totalSum[i],false);
+		OutString(470,0,aCurrency[i],false);
+		
 		
     totam = totam + aamount[i];
     totnet = totnet + anet[i];
@@ -227,6 +371,7 @@ begin
   end;
   Black_Divider(0,1);
   StartFormat(15);
+	OutString(0,0,"",false);
   OutString(0,0,UsetStr(12737),false);
   OutVal(2,0,totam,M4Val,true);
   OutVal(3,0,totremn,M4Val,true);
