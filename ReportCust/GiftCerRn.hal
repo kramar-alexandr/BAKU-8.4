@@ -36,7 +36,7 @@ begin
   val vatv,t1;
 	////////////////////
 	integer comp,curcomp;
-	boolean okflag;	
+	boolean okflag, notFound;	
 	longint curtick;
 	array val totalSum;
 	array string 255 aGCRrSerNr, aGCSrSerNr, aTypePayMode, aGCSrBar, aCurrency;
@@ -94,7 +94,6 @@ begin
       GCRr.GCSSerNr = GCr.SerNr;
       received = ReadFirstKey("GCSSerNr",GCRr,1,true);
 			
-			//LogText(0, "sold = " & sold & " received = " & received);
 			
 			if (sold) then begin
         aGCSrSerNr[maxp] = GCSr.InvSerNr;
@@ -110,13 +109,14 @@ begin
 				aGCRrSerNr[maxp] = "";
       end; 
 			
-			aTypePayMode[maxp] = "";
+			/*aTypePayMode[maxp] = "";
 			if(nonblank(GCr.Type)) then begin
 				GCTr.Code = GCr.Type;
 				if(ReadFirstMain(GCTr,1,true)) then begin
 					aTypePayMode[maxp] = GCTr.PayMode;
 				end;
 			end;
+			*/
 			
 			aCurrency[maxp] = "";
 			totalSum[maxp] = 0;
@@ -126,18 +126,25 @@ begin
       if (sold) then begin
         switch (GCSr.FileName) begin
           case "IVVc":
+						notFound = true;
             IVr.SerNr = GCSr.InvSerNr;
             if (ReadFirstMain(IVr,1,true)) then begin
 							for(j=0;j<MatRowCnt(IVr);j=j+1) begin
 								MatRowGet(IVr,j,IVrw);
 								if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
 									okflag = true;
+									notFound = false;
 									aBoutique[maxp & "_sold"] = IVr.Location;
+									aTypePayMode[maxp] = IVrw.PayMode;
 									goto ENDLOOPFORCOMP_NewGiftCertRn;
 								end;	
 							end;
               
             end else begin
+							notFound = true;
+            end;     
+						
+						if(notFound)then begin
 							for(comp=1;comp<=34;comp=comp+1) begin
 								if(CompanyIsJWLikeCompany(comp))then begin
 									SetCompany(comp,false);
@@ -149,6 +156,7 @@ begin
 											if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
 												okflag = true;
 												aBoutique[maxp & "_sold"] = IVr.Location;
+												aTypePayMode[maxp] = IVrw.PayMode;
 												goto ENDLOOPFORCOMP_NewGiftCertRn;
 											end;	
 										end;
@@ -165,18 +173,12 @@ begin
 								custName = IVr.Addr0;
 								location = IVr.Location; 
 								solddate = IVr.InvDate;
-								totalSum[maxp] = IVr.Sum4;
-								aCurrency[maxp] = IVr.CurncyCode;
 							end else begin
 								custcode = USetStr(12733);
 								custName = USetStr(12733);
-								location = USetStr(12733); 
-								totalSum[maxp] = IVr.Sum4;
-								aCurrency[maxp] = IVr.CurncyCode;	
+								location = USetStr(12733); 	
 							end;
-
-            end;     
-						
+						end;
 						
 						
           case "IVCashVc":
@@ -204,18 +206,23 @@ begin
               location = USetStr(12733); 
             end;     
           otherwise
+						notFound = true;
             IVr.SerNr = GCSr.InvSerNr;
             if (ReadFirstMain(IVr,1,true)) then begin
 							for(j=0;j<MatRowCnt(IVr);j=j+1) begin
 								MatRowGet(IVr,j,IVrw);
 								if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
 									okflag = true;
+									notFound = false;
 									aBoutique[maxp & "_sold"] = IVr.Location;
+									aTypePayMode[maxp] = IVrw.PayMode;
 									goto ENDLOOPFORCOMP_NewGiftCertRn;
 								end;	
 							end;
-              
             end else begin
+							notFound = true;
+            end;  
+						if(notFound)then begin
 							for(comp=1;comp<=34;comp=comp+1) begin
 								if(CompanyIsJWLikeCompany(comp))then begin
 									SetCompany(comp,false);
@@ -227,6 +234,7 @@ begin
 											if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
 												okflag = true;
 												aBoutique[maxp & "_sold"] = IVr.Location;
+												aTypePayMode[maxp] = IVrw.PayMode;
 												goto ENDLOOPFORCOMP_NewGiftCertRn;
 											end;	
 										end;
@@ -234,7 +242,7 @@ begin
 									
 								end;
 							end;	
-            end;     
+						end;
         end;        
       end else begin
         solddate = bd;
@@ -242,17 +250,27 @@ begin
 			okflag = false;
 			if (received) then begin
 				IVr.SerNr = GCRr.InvSerNr;
+				notFound = true;
 				if (ReadFirstMain(IVr,1,true)) then begin
 					for(j=0;j<MatRowCnt(IVr);j=j+1) begin
 						MatRowGet(IVr,j,IVrw);
-						if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment AND GCRr.GCSSerNr==IVrw.GCNr) then begin // tIVrw.stp==kInvoiceRowTypeGiftVoucherPayment and tIVrw.GCNr==GCRr.GCSSerNr
+						LogText(0, "1) IVr.SerNr = " & IVr.SerNr & " first = " & (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) & " second = " & (GCRr.GCSSerNr==IVrw.GCNr));
+						if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment AND GCRr.GCSSerNr==IVrw.GCNr) then begin
 							okflag = true;
+							notFound = false;
 							aBoutique[maxp & "_get"] = IVr.Location;
+							totalSum[maxp] = IVr.Sum4;
+							aCurrency[maxp] = IVr.CurncyCode;
+							LogText(0, "2) IVr.SerNr = " & IVr.SerNr & " IVr.Location = " & IVr.Location & " IVr.Sum4 = " & IVr.Sum4 & " IVr.CurncyCode = " & IVr.CurncyCode);
 							goto ENDLOOPFORCOMP2_NewGiftCertRn;
-						end;	
-					end;
+						end;
+					end;					
           
         end else begin
+					notFound = true;
+        end;
+				
+				if(notFound)then begin
 					for(comp=1;comp<=34;comp=comp+1) begin
 						if(CompanyIsJWLikeCompany(comp))then begin
 							SetCompany(comp,false);
@@ -261,9 +279,13 @@ begin
 							if(ReadFirstMain(IVr,1,true))then begin
 								for(j=0;j<MatRowCnt(IVr);j=j+1) begin
 									MatRowGet(IVr,j,IVrw);
+									LogText(0, "1) IVr.SerNr = " & IVr.SerNr & " first = " & (IVrw.stp==kInvoiceRowTypeGiftVoucherPayment) & " second = " & (GCRr.GCSSerNr==IVrw.GCNr));
 									if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment AND GCRr.GCSSerNr==IVrw.GCNr) then begin
 										okflag = true;
 										aBoutique[maxp & "_get"] = IVr.Location;
+										totalSum[maxp] = IVr.Sum4;
+										aCurrency[maxp] = IVr.CurncyCode;
+										LogText(0, "2) IVr.SerNr = " & IVr.SerNr & " IVr.Location = " & IVr.Location & " IVr.Sum4 = " & IVr.Sum4 & " IVr.CurncyCode = " & IVr.CurncyCode);
 										goto ENDLOOPFORCOMP2_NewGiftCertRn;
 									end;	
 								end;
@@ -271,7 +293,7 @@ begin
 							
 						end;
 					end;	
-        end;     
+				end;
 				
 				ENDLOOPFORCOMP2_NewGiftCertRn:;
 				SetCompany(curcomp,false);
