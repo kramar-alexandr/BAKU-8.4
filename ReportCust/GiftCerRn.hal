@@ -41,6 +41,7 @@ begin
 	array val totalSum;
 	array string 255 aGCRrSerNr, aGCSrSerNr, aTypePayMode, aGCSrBar, aCurrency;
 	record GCTypeVc GCTr;
+	vector string 255 aBoutique;
   
   sdate = RepSpec.sStartDate;
   edate = RepSpec.sEndDate;
@@ -57,7 +58,7 @@ begin
   
   StartFormat(15);
 		OutString(0,0,USetStr(12731),false);
-		OutString(1,0,USetStr(36437),false); ////// 
+		OutString(1,0,USetStr(36437),false);
 		OutString(2,0,USetStr(12732),true);
 		OutString(3,0,USetStr(12741),true);
 		OutString(4,0,USetStr(12724),false);
@@ -66,10 +67,12 @@ begin
 		OutString(410,0,USetStr(36431),false);
 		OutString(420,0,USetStr(36432),false);
 		OutString(430,0,USetStr(36433),false);
+		OutString(430,0,"Shop sold",false);
 		OutString(440,0,USetStr(36434),false);
 		OutString(450,0,USetStr(36435),false);
+		OutString(450,0,"Shop get",false);
 		OutString(460,0,USetStr(36436),false);
-		OutString(470,0,USetStr(36438),false); ////// 
+		OutString(470,0,USetStr(36438),false);
   EndFormat;
   Black_Divider(0,1);
   
@@ -115,36 +118,35 @@ begin
 			
 			aCurrency[i] = "";
 			totalSum[i] = 0;
+			aBoutique[i] = "";
+			aCurrency[i] = "";
+			okflag = false;
       if (sold) then begin
         switch (GCSr.FileName) begin
           case "IVVc":
             IVr.SerNr = GCSr.InvSerNr;
             if (ReadFirstMain(IVr,1,true)) then begin
-              custcode = IVr.CustCode;
-              custName = IVr.Addr0;
-              location = IVr.Location; 
-              solddate = IVr.InvDate;
-							totalSum[i] = IVr.Sum4;
-							aCurrency[i] = IVr.CurncyCode;
+							for(i=0;i<MatRowCnt(IVr);i=i+1) begin
+								MatRowGet(IVr,i,IVrw);
+								if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
+									okflag = true;
+									aBoutique[i & "_sold"] = IVr.Location;
+									goto ENDLOOPFORCOMP_NewGiftCertRn;
+								end;	
+							end;
+              
             end else begin
-              // custcode = USetStr(12733);
-              // custName = USetStr(12733);
-              // location = USetStr(12733); 
-							// totalSum[i] = IVr.Sum4;
-							// aCurrency[i] = IVr.CurncyCode;
-							okflag = false;
 							for(comp=1;comp<=34;comp=comp+1) begin
 								if(CompanyIsJWLikeCompany(comp))then begin
 									SetCompany(comp,false);
 									IVr.SerNr = GCSr.InvSerNr;
 									
-									
 									if(ReadFirstMain(IVr,1,true))then begin
 										for(i=0;i<MatRowCnt(IVr);i=i+1) begin
 											MatRowGet(IVr,i,IVrw);
 											if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
-												//outstring(0,0,IVr.Location,false);
 												okflag = true;
+												aBoutique[i & "_sold"] = IVr.Location;
 												goto ENDLOOPFORCOMP_NewGiftCertRn;
 											end;	
 										end;
@@ -168,7 +170,7 @@ begin
 								custName = USetStr(12733);
 								location = USetStr(12733); 
 								totalSum[i] = IVr.Sum4;
-								aCurrency[i] = IVr.CurncyCode;
+								aCurrency[i] = IVr.CurncyCode;	
 							end;
 
             end;     
@@ -202,23 +204,77 @@ begin
           otherwise
             IVr.SerNr = GCSr.InvSerNr;
             if (ReadFirstMain(IVr,1,true)) then begin
-              custcode = IVr.CustCode;
-              custName = IVr.Addr0;
-              location = IVr.Location; 
-              solddate = IVr.InvDate;
-							totalSum[i] = IVr.Sum4;
-							aCurrency[i] = IVr.CurncyCode;
+							for(i=0;i<MatRowCnt(IVr);i=i+1) begin
+								MatRowGet(IVr,i,IVrw);
+								if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
+									okflag = true;
+									aBoutique[i & "_sold"] = IVr.Location;
+									goto ENDLOOPFORCOMP_NewGiftCertRn;
+								end;	
+							end;
+              
             end else begin
-              custcode = USetStr(12733);
-              custName = USetStr(12733);
-              location = USetStr(12733); 
-							totalSum[i] = 0;
-							aCurrency[i] = IVr.CurncyCode;
+							for(comp=1;comp<=34;comp=comp+1) begin
+								if(CompanyIsJWLikeCompany(comp))then begin
+									SetCompany(comp,false);
+									IVr.SerNr = GCSr.InvSerNr;
+									
+									if(ReadFirstMain(IVr,1,true))then begin
+										for(i=0;i<MatRowCnt(IVr);i=i+1) begin
+											MatRowGet(IVr,i,IVrw);
+											if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IVrw.GCNr) then begin
+												okflag = true;
+												aBoutique[i & "_sold"] = IVr.Location;
+												goto ENDLOOPFORCOMP_NewGiftCertRn;
+											end;	
+										end;
+									end;
+									
+								end;
+							end;	
             end;     
         end;        
       end else begin
         solddate = bd;
-      end;  
+      end; 
+			okflag = false;
+			if (received) then begin
+				IVr.SerNr = GCRr.InvSerNr;
+				if (ReadFirstMain(IVr,1,true)) then begin
+					for(i=0;i<MatRowCnt(IVr);i=i+1) begin
+						MatRowGet(IVr,i,IVrw);
+						if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment AND GCRr.GCSSerNr==IVrw.GCNr) then begin // tIVrw.stp==kInvoiceRowTypeGiftVoucherPayment and tIVrw.GCNr==GCRr.GCSSerNr
+							okflag = true;
+							aBoutique[i & "_get"] = IVr.Location;
+							goto ENDLOOPFORCOMP2_NewGiftCertRn;
+						end;	
+					end;
+          
+        end else begin
+					for(comp=1;comp<=34;comp=comp+1) begin
+						if(CompanyIsJWLikeCompany(comp))then begin
+							SetCompany(comp,false);
+							IVr.SerNr = GCRr.InvSerNr;
+							
+							if(ReadFirstMain(IVr,1,true))then begin
+								for(i=0;i<MatRowCnt(IVr);i=i+1) begin
+									MatRowGet(IVr,i,IVrw);
+									if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment AND GCRr.GCSSerNr==IVrw.GCNr) then begin
+										okflag = true;
+										aBoutique[i & "_get"] = IVr.Location;
+										goto ENDLOOPFORCOMP2_NewGiftCertRn;
+									end;	
+								end;
+							end;
+							
+						end;
+					end;	
+        end;     
+				
+				ENDLOOPFORCOMP2_NewGiftCertRn:;
+				SetCompany(curcomp,false);
+			end; 
+			
     end;
     if (testf) then begin
       aser[maxp] = GCr.SerNr;
@@ -274,10 +330,12 @@ begin
     OutDate(410,0,aissdate[i],true);
     OutDate(420,0,asolddate[i],true);
 		
-		Outstring(430,0,aGCSrSerNr[i],false);
+		OutString(430,0,aGCSrSerNr[i],false);
+		OutString(430,0,aBoutique[i & "_sold"],false);
     OutDate(440,0,arcvdate[i],true);
-		Outstring(450,0,aGCRrSerNr[i],false);
-		Outstring(460,0,totalSum[i],false);
+		OutString(450,0,aGCRrSerNr[i],false);
+		OutString(450,0,aBoutique[i & "_get"],false);
+		OutString(460,0,totalSum[i],false);
 		OutString(470,0,aCurrency[i],false);
 		
 		
