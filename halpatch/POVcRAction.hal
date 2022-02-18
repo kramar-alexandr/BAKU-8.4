@@ -480,10 +480,11 @@ begin
 	vector integer ItemQty;
 	record ItemHistVc IHr;
 	vector val ItmRowRemQty;
-	record INVc INr;
+	record INVc INr, OldCompINr, DupINr, UUINr;
+	integer CompSender;
 	
 	res = -1;
-	
+	CompSender = CurrentCompany;
 	for (i=0;i<matrowcnt(POp);i=i+1) begin
 		matrowget(POp,i,POrw);
 		if (nonblank(POrw.ArtCode)) then begin
@@ -509,8 +510,19 @@ begin
 						if(ReadFirstMain(ISr,2,true)) then begin 
 							if (ISr.Instock-ISr.RsrvQty>=ItemQty[POrw.ArtCode]) then begin
 								dupItEx = true;
-								POrw.ArtCode = IDr.DupCode;
-								MatRowPut(POp,i,POrw);
+								DupINr.Code = IDr.DupCode;
+								if (ReadFIrstMain(DupINr,1,true)) then begin
+									SetCompany(OldComp,false);
+									OldCompINr.Code = IDr.DupCode;
+									if (!ReadFIrstMain(OldCompINr,1,true)) then begin
+										RecordNew(UUINr);
+										DupINr.UUID = UUINr.UUID;
+										RecordStore(DupINr,true);
+									end;
+									ResetCompany(CompSender);
+									POrw.ArtCode = IDr.DupCode;
+									MatRowPut(POp,i,POrw);
+								end;
 							end;
 						end;
 					end;
