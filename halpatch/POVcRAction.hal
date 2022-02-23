@@ -473,15 +473,18 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	LongInt i, compcnt, rwcnt, j, OldCompany, res;
-	boolean TrHs, testf;
+	boolean TrHs, testf, dupItEx;
 	string 255 tstr;
 	record ItemStatusVc ISr,IS1r;
+	record ItemDuplicatesVc IDr;
 	vector integer ItemQty;
 	record ItemHistVc IHr;
 	vector val ItmRowRemQty;
+	record INVc INr, OldCompINr, DupINr, UUINr;
+	integer CompSender;
 	
 	res = -1;
-	
+	CompSender = CurrentCompany;
 	for (i=0;i<matrowcnt(POp);i=i+1) begin
 		matrowget(POp,i,POrw);
 		if (nonblank(POrw.ArtCode)) then begin
@@ -494,13 +497,50 @@ begin
 		matrowget(POp,i,POrw);
 		ItmRowRemQty[POrw.ArtCode] = ItemQty[POrw.ArtCode];
 		if (ItemQty[POrw.ArtCode]>0) then begin
+			dupItEx = false;
+			INr.Code = POrw.ArtCode;
+			if (ReadFirstMain(INr,1,true)) then begin
+				IDr.OrigCode = INr.Code;
+				TrHs = true;
+				while (loopMain(IDr,1,TrHs)) begin
+					if (IDr.OrigCode != INr.Code) then begin  TrHs = false; end;
+					if (TrHs and IDr.OrigBrandCode == INr.BPIBrand) then begin
+						ISr.Code = IDr.DupCode;
+						ISr.Location = Location;
+						if(ReadFirstMain(ISr,2,true)) then begin 
+							if (ISr.Instock-ISr.RsrvQty>=ItemQty[POrw.ArtCode]) then begin
+								dupItEx = true;
+								DupINr.Code = IDr.DupCode;
+								if (ReadFIrstMain(DupINr,1,true)) then begin
+									SetCompany(OldComp,false);
+									OldCompINr.Code = IDr.DupCode;
+									if (!ReadFIrstMain(OldCompINr,1,true)) then begin
+										RecordNew(UUINr);
+										DupINr.UUID = UUINr.UUID;
+										RecordStore(DupINr,true);
+									end;
+									ResetCompany(CompSender);
+									POrw.ArtCode = IDr.DupCode;
+									MatRowPut(POp,i,POrw);
+								end;
+							end;
+						end;
+					end;
+				end;
+				resetloop(IDr);
+			end;
 			ISr.Code = POrw.ArtCode;
 			ISr.Location = Location;
 			if(ReadFirstMain(ISr,2,true)) then begin 
-				if (ISr.Instock-ISr.RsrvQty<ItemQty[POrw.ArtCode]) then begin
+				if (ISr.Instock-ISr.RsrvQty<ItemQty[POrw.ArtCode] and !dupItEx) then begin
+					res = i;
+				end;
+			end else begin
+				if (!dupItEx) then begin
 					res = i;
 				end;
 			end;
+		
 			Lcr.Code = Location;
 			if(ReadFirstMain(Lcr,1,true)) then begin
 				if(nonblank(Lcr.ConsigStockCode)) then begin
@@ -557,16 +597,19 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	LongInt i, compcnt, rwcnt, j, curCompany;
-	boolean TrHs;
-	string 255 tstr, MainPersonsStr;
+	boolean TrHs, dupItEx;
+	string 255 tstr, MainPersonsStr, dupCode;
 	record ActVc Actr;
 	record UserVc Userr;
 	record ItemStatusVc ISr,IS1r;
+	record ItemDuplicatesVc IDr;
+	record INVc INr;
+
 	
 	curCompany = currentcompany;
 	Userr.Code = "";
 	while (LoopMain(Userr,1,true)) begin
-		if (Userr.Location==Location and Userr.AccessGroup=="STORE") then begin
+		if (Userr.Location==Location and SetInSet("STORE",Userr.AccessGroup)) then begin
 			if (nonblank(MainPersonsStr)) then begin MainPersonsStr = MainPersonsStr & ","; end;
 			MainPersonsStr = MainPersonsStr & Userr.Code;
 		end;
@@ -588,16 +631,37 @@ begin
 	
 	for (i=0;i<matrowcnt(POp);i=i+1) begin
 		MatRowGet(POp,i,POrw);
-		ClearRow(SDr,SDrw,1);
+		MatRowGet(SDr,i,SDrw);
 		Lcr.Code = Location;
 		if(ReadFirstMain(Lcr,1,true)) then begin
+			dupItEx = false;
+			dupCode = "";
+			INr.Code = POrw.ArtCode;
+			if (ReadFirstMain(INr,1,true)) then begin
+				IDr.OrigCode = INr.Code;
+				TrHs = true;
+				while (loopMain(IDr,1,TrHs)) begin
+					if (IDr.OrigCode != INr.Code) then begin  TrHs = false; end;
+					if (TrHs and IDr.OrigBrandCode == INr.BPIBrand) then begin
+						ISr.Code = IDr.DupCode;
+						ISr.Location = Location;
+						if(ReadFirstMain(ISr,2,true)) then begin 
+							if (ISr.Instock-ISr.RsrvQty>=POrw.Quant) then begin
+								dupItEx = true;
+								dupCode = IDr.DupCode;
+							end;
+						end;
+					end;
+				end;
+				resetloop(IDr);
+			end;
 			if(nonblank(Lcr.ConsigStockCode)) then begin
 				ISr.Code = POrw.ArtCode;
 				ISr.Location = Location;
 				SDrw.Location = Lcr.Code;
 				POrw.ConsgType = 0;
 				MatRowPut(POp,i,POrw);
-				if(ReadfirstMain(ISr,2,true)) then begin
+				if(ReadfirstMain(ISr,2,true) and !dupItEx) then begin
 					if(ISr.Instock-ISr.RsrvQty<POrw.Quant) then begin
 						IS1r.Code = POrw.ArtCode;
 						IS1r.Location = Lcr.ConsigStockCode;
@@ -615,7 +679,11 @@ begin
 				ResetCompany(curCompany);
 			end;
 		end;
-		SDrw.ArtCode = POrw.ArtCode;
+		if (!dupItEx) then begin
+			SDrw.ArtCode = POrw.ArtCode;
+		end else begin
+			SDrw.ArtCode = dupCode;
+		end;
 		SDrw.Qty = POrw.Quant;
 		MatRowPut(SDr,i,SDrw);
 		SDVc_PasteArtCode(SDr,i,1,tstr,tstr);
@@ -665,6 +733,7 @@ begin
 			if (POp.ItemFromOtherSTockObj==Lcr.FOBSuplier) then begin
 				TrHs = false;
 				res = POChekItemStockInCompSenderDo(POp,Lcr.Code,OldCompany,OtherCurrf);
+				logtext(0, i & " " &  Lcr.Code & " " & res);
 			end;
 		end;
 		ResetLoop(Lcr);
@@ -2366,7 +2435,7 @@ begin
 	val ChCustCost;
 	record ORVc ORr;
 	record ItemDuplicatesVc IDr;  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 10:42 17.08.2020
-	integer ErrRow;
+	integer ErrRow, maxCustCostCh;
 	record BPIBrandVc BBr;
 	string 255 vendors;
 	boolean findVendors, OtherCurrf,TrHs2,ACCf,testf22;
@@ -2487,10 +2556,13 @@ begin
 		for (i=0;i<matrowcnt(POr);i=i+1) begin
 			matrowget(POr,i,POrw);
 			ChCustCost = ChCustCost + StringToVal(POrw.CustomsCost,M4Val) * POrw.Quant;
+			maxCustCostCh = maxCustCostCh + POrw.Quant;
 			if(POrw.Price==0)then begin custcostchf = false; end;
 		end;
 		ChCustCost = ChCustCost + 10;
-		if(POr.CustomsCost>ChCustCost and custcostchf) then begin
+		logtext(0,ChCustCost);
+		logtext(0,POr.CustomsCost);
+		if(POr.CustomsCost>ChCustCost and custcostchf and maxCustCostCh<500) then begin
 			RecordCheckError(36326,"",-1,"CustomsCost");      
 			res = 36326;
 			goto LPOVcRecordCheck;
