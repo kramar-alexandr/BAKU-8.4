@@ -2553,19 +2553,19 @@ begin
 	row OnePOneRebVc OPORrw;
 	record IVVc IVr;
 	row IVVc IVrw, IV2rw;
-	longint i,j,k,x,r;
+	longint i,j,k,x,r,INcnt,s;
 	vector string 255 vItemRebObj, DubCodes, vRebObj;
 	boolean rebfound, TrHs, testf, testf1, testf2, rebf, rebitemf;
 	date sd, ed;
 	string 255 location, brand, conslocation, deflocation;
-	vector string 255 aRebItems, aRebObjects, aRebFromDate, aRebToDate, aRebCodes;
-	array string 255 aRebs;
+	vector string 255 vRebItems, vRebObjects, vRebFromDate, vRebToDate, vINGroup;
+	array string 255 aRebs, aItems, vRebCodes;
 	vector date vRebStartDate, vRebEndDate;
 	vector longint vRebcnt;
 	vector boolean vItemRebInMathm, aRebFound, userbrand;
 	record ItemDuplicatesVc IDr;
 	integer pos;
-	vector val vSaleQtyPrc, aRebPrc;
+	vector val vSaleQtyPrc, vRebPrc;
 
 
 	record RcVc RepSpec;
@@ -2576,6 +2576,19 @@ begin
 	setCompany(4,false);
 	sd = AddMonth(CurrentDate,-3);
 	ed = CurrentDate;
+	
+
+	INr.Code = "";
+	while (loopmain(INr,1,true)) begin
+		if (INr.ConsgType==0) then begin
+			aItems[x] = INr.Code;
+			vINGroup[INr.Code] = INr.Group;
+			x = x + 1;
+			INcnt = x;
+		end;
+	end;
+	resetloop(INr);
+	
 	
 	
 	x = 0;
@@ -2598,7 +2611,7 @@ begin
 				aRebFound[aRebs[k]] = true;
 				vRebStartDate[aRebs[k]] = Rebr.FromDate;
 				vRebEndDate[aRebs[k]] = Rebr.ToDate;
-				aRebCodes[aRebs[k]] = Rebr.Code;
+				vRebCodes[aRebs[k]] = Rebr.Code;
 				vRebObj[aRebs[k]] = Rebr.Object;
 				k = k + 1;
 			end;
@@ -2606,55 +2619,50 @@ begin
 				matrowget(Rebr,i,Rebrw);
 				if (Rebrw.vra0 > 0) then begin
 					if (Rebrw.CodeType==0) then begin
-						INr.Group = Rebrw.ITCode;
-						TrHs = true;
-						if (loopkey("Group",INr,1,TrHs)) then begin
-							if (INr.Group!=Rebrw.ITCode) then begin TrHs = false; end;
-							if (TrHs) then begin
+						for (s=0;s<INcnt;s=s+1) begin
+							testf1 = true;
+							if (vINGroup[aItems[s]]!=Rebrw.ITCode) then begin testf1 = false; end;
+							if (testf1) then begin
 								vRebcnt[aRebs[k]] = x;
-								vItemRebInMathm[INr.Code] = true;
-								vSaleQtyPrc[x] = 0;
-								aRebItems[x] = INr.Code;
-								aRebObjects[x] = Rebr.Object;
-								aRebPrc[x] = Rebrw.vra0;
-								aRebFromDate[x] = Rebr.FromDate;
-								aRebToDate[x] = Rebr.ToDate;
+								vItemRebInMathm[aItems[s]] = true;
+								vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
+								vRebItems[aRebs[k] & "_" & x] = aItems[s];
+								vRebObjects[aRebs[k] & "_" & x] = Rebr.Object;
+								vRebPrc[aRebs[k] & "_" & x] = Rebrw.vra0;
+								vRebFromDate[aRebs[k] & "_" & x] = Rebr.FromDate;
+								vRebToDate[aRebs[k] & "_" & x] = Rebr.ToDate;
 								x = x + 1;
 							end;
 						end;
-						resetloop(INr);
 					end;
 					if (Rebrw.CodeType==1) then begin
-						INr.Code = Rebrw.ITCode;
-						if (ReadFirstMain(INr,1,true)) then begin
-							vRebcnt[aRebs[k]] = x;
-							vItemRebInMathm[INr.Code] = true;
-							vSaleQtyPrc[x] = 0;
-							aRebItems[x] = INr.Code;
-							aRebObjects[x] = Rebr.Object;
-							aRebPrc[x] = Rebrw.vra0;
-							aRebFromDate[x] = Rebr.FromDate;
-							aRebToDate[x] = Rebr.ToDate;
-							x = x + 1;
-						end;
+						vRebcnt[aRebs[k]] = x;
+						vItemRebInMathm[Rebrw.ITCode] = true;
+						vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
+						vRebItems[aRebs[k] & "_" & x] = Rebrw.ITCode;
+						vRebObjects[aRebs[k] & "_" & x] = Rebr.Object;
+						vRebPrc[aRebs[k] & "_" & x] = Rebrw.vra0;
+						vRebFromDate[aRebs[k] & "_" & x] = Rebr.FromDate;
+						vRebToDate[aRebs[k] & "_" & x] = Rebr.ToDate;
+						x = x + 1;
 					end;
 				end;
 			end;
 			if (Rebr.vra0 > 0) then begin
-				INr.Code = "";
-				while (loopmain(INr,1,true)) begin
-					if (INr.ConsgType==0) then begin
+				for (s=0;s<INcnt;s=s+1) begin
+					testf1 = true;
+					if (!vItemRebInMathm[INr.Code]) then begin testf1 = false; end;
+					if (testf1) then begin
 						vRebcnt[aRebs[k]] = x;
-						aRebItems[x] = INr.Code;
-						vSaleQtyPrc[x] = 0;
-						aRebObjects[x] = Rebr.Object;
-						aRebPrc[x] = Rebr.vra0;
-						aRebFromDate[x] = Rebr.FromDate;
-						aRebToDate[x] = Rebr.ToDate;
+						vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
+						vRebItems[aRebs[k] & "_" & x] = aItems[s];
+						vRebObjects[aRebs[k] & "_" & x] = Rebr.Object;
+						vRebPrc[aRebs[k] & "_" & x] = Rebr.vra0;
+						vRebFromDate[aRebs[k] & "_" & x] = Rebr.FromDate;
+						vRebToDate[aRebs[k] & "_" & x] = Rebr.ToDate;
 						x = x + 1;
 					end;
 				end;
-				resetloop(INr);
 			end;
 		end;
 		k = k + 1;
@@ -2679,7 +2687,7 @@ begin
 				aRebFound[aRebs[k]] = true;
 				vRebStartDate[aRebs[k]] = MyRebr.FromDate;
 				vRebEndDate[aRebs[k]] = MyRebr.ToDate;
-				aRebCodes[aRebs[k]] = MyRebr.Code;
+				vRebCodes[aRebs[k]] = MyRebr.Code;
 				vRebObj[aRebs[k]] = MyRebr.Object;
 				k = k + 1;
 			end;
@@ -2688,55 +2696,53 @@ begin
 				matrowget(MyRebr,i,MyRebrw);
 				if (MyRebrw.vra0 > 0) then begin
 					if (MyRebrw.CodeType==0) then begin
-						INr.Group = MyRebrw.ITCode;
-						TrHs = true;
-						if (loopkey("Group",INr,1,TrHs)) then begin
-							if (INr.Group!=MyRebrw.ITCode) then begin TrHs = false; end;
-							if (TrHs) then begin
+						for (s=0;s<INcnt;s=s+1) begin
+							testf1 = true;
+							if (vINGroup[aItems[s]]!=MyRebrw.ITCode) then begin testf1 = false; end;
+							if (testf1) then begin
 								vRebcnt[aRebs[k]] = x;
-								vItemRebInMathm[INr.Code] = true;
-								vSaleQtyPrc[x] = 0;
-								aRebItems[x] = INr.Code;
-								aRebObjects[x] = MyRebr.Object;
-								aRebPrc[x] = MyRebrw.vra0;
-								aRebFromDate[x] = MyRebr.FromDate;
-								aRebToDate[x] = MyRebr.ToDate;
+								vItemRebInMathm[aItems[s]] = true;
+								vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
+								vRebItems[aRebs[k] & "_" & x] = aItems[s];
+								vRebObjects[aRebs[k] & "_" & x] = MyRebr.Object;
+								vRebPrc[aRebs[k] & "_" & x] = MyRebrw.vra0;
+								vRebFromDate[aRebs[k] & "_" & x] = MyRebr.FromDate;
+								vRebToDate[aRebs[k] & "_" & x] = MyRebr.ToDate;
 								x = x + 1;
 							end;
 						end;
-						resetloop(INr);
 					end;
 					if (MyRebrw.CodeType==1) then begin
 						INr.Code = MyRebrw.ITCode;
 						if (ReadFirstMain(INr,1,true)) then begin
 							vRebcnt[aRebs[k]] = x;
 							vItemRebInMathm[INr.Code] = true;
-							vSaleQtyPrc[x] = 0;
-							aRebItems[x] = INr.Code;
-							aRebObjects[x] = MyRebr.Object;
-							aRebPrc[x] = MyRebrw.vra0;
-							aRebFromDate[x] = MyRebr.FromDate;
-							aRebToDate[x] = MyRebr.ToDate;
+							vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
+							vRebItems[aRebs[k] & "_" & x] = INr.Code;
+							vRebObjects[aRebs[k] & "_" & x] = MyRebr.Object;
+							vRebPrc[aRebs[k] & "_" & x] = MyRebrw.vra0;
+							vRebFromDate[aRebs[k] & "_" & x] = MyRebr.FromDate;
+							vRebToDate[aRebs[k] & "_" & x] = MyRebr.ToDate;
 							x = x + 1;
 						end;
 					end;
 				end;
 			end;
 			if (MyRebr.vra0 > 0) then begin
-				INr.Code = "";
-				while (loopmain(INr,1,true)) begin
-					if (INr.ConsgType==0 and !vItemRebInMathm[INr.Code]) then begin
+				for (s=0;s<INcnt;s=s+1) begin
+					testf1 = true;
+					if (!vItemRebInMathm[INr.Code]) then begin testf1 = false; end;
+					if (testf1) then begin
 						vRebcnt[aRebs[k]] = x;
-						vSaleQtyPrc[x] = 0;
-						aRebItems[x] = INr.Code;
-						aRebObjects[x] = MyRebr.Object;
-						aRebPrc[x] = MyRebr.vra0;
-						aRebFromDate[x] = MyRebr.FromDate;
-						aRebToDate[x] = MyRebr.ToDate;
+						vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
+						vRebItems[aRebs[k] & "_" & x] = aItems[s];
+						vRebObjects[aRebs[k] & "_" & x] = MyRebr.Object;
+						vRebPrc[aRebs[k] & "_" & x] = MyRebr.vra0;
+						vRebFromDate[aRebs[k] & "_" & x] = MyRebr.FromDate;
+						vRebToDate[aRebs[k] & "_" & x] = MyRebr.ToDate;
 						x = x + 1;
 					end;
 				end;
-				resetloop(INr);
 			end;
 		end;
 	end;
@@ -2815,7 +2821,7 @@ begin
 						if(testf1)then begin
 							for (j=aRebs.length-1;j>=0;j=j-1) begin
 								logtext(0,"5");
-								if (DateInRange(IVr.TransDate,aRebFromDate[aRebs[j]],aRebToDate[aRebs[j]])) then begin 
+								if (DateInRange(IVr.TransDate,vRebFromDate[aRebs[j]],vRebToDate[aRebs[j]])) then begin 
 									rebf = true;
 									if (nonblank(vRebObj[aRebs[j]]) and !SetInSet(vRebObj[aRebs[j]],IVrw.Objects)) then begin rebf = false; end;
 									if (rebf) then begin
@@ -2824,11 +2830,11 @@ begin
 											for (r=vRebcnt[aRebs[j]];r>=0;r=r-1) begin
 												logtext(0,"6");
 												rebitemf = true;
-												if (aRebItems[r]!=IVrw.ArtCode) then begin rebitemf = false; end;
-												if (aRebPrc[r]!=IVrw.vRebate) then begin rebitemf = false; end;
+												if (vRebItems[aRebs[j] & "_" & r]!=IVrw.ArtCode) then begin rebitemf = false; end;
+												if (vRebPrc[aRebs[j] & "_" & r]!=IVrw.vRebate) then begin rebitemf = false; end;
 												if (rebitemf) then begin
 													logtext(0,"7");
-													vSaleQtyPrc[r] = vSaleQtyPrc[r] + IVrw.Quant;
+													vSaleQtyPrc[aRebs[j] & "_" & r] = vSaleQtyPrc[aRebs[j] & "_" & r] + IVrw.Quant;
 												end;
 											end;
 										end;
@@ -2846,18 +2852,18 @@ begin
 	for (j=aRebs.length-1;j>=0;j=j-1) begin
 		if (vRebcnt[aRebs[j]]>-1)then begin
 			weboutstring("<tr>");
-			weboutstring("<td>" & aRebCodes[aRebs[j]] & "</td>");
+			weboutstring("<td>" & vRebCodes[aRebs[j]] & "</td>");
 			weboutstring("<td>" & vRebObj[aRebs[j]] & "</td>");
 			weboutstring("<td>" & vRebStartDate[aRebs[j]] & "</td>");
 			weboutstring("<td>" & vRebEndDate[aRebs[j]] & "</td>");
 			weboutstring("</tr>");
 			for (r=vRebcnt[aRebs[j]];r>=0;r=r-1) begin
 				weboutstring("<tr>");
-				weboutstring("<td>" & aRebItems[r] & "</td>");
-				weboutstring("<td>" & aRebPrc[r] & "</td>");
-				weboutstring("<td>" & aRebFromDate[r] & "</td>");
-				weboutstring("<td>" & aRebToDate[r] & "</td>");
-				weboutstring("<td>" & vSaleQtyPrc[r] & "</td>");
+				weboutstring("<td>" & vRebItems[aRebs[j] & "_" & r] & "</td>");
+				weboutstring("<td>" & vRebPrc[aRebs[j] & "_" & r] & "</td>");
+				weboutstring("<td>" & vRebFromDate[aRebs[j] & "_" & r] & "</td>");
+				weboutstring("<td>" & vRebToDate[aRebs[j] & "_" & r] & "</td>");
+				weboutstring("<td>" & vSaleQtyPrc[aRebs[j] & "_" & r] & "</td>");
 				weboutstring("</tr>");
 			end;
 		end;
