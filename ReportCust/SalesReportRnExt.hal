@@ -2555,7 +2555,7 @@ begin
 	row IVVc IVrw, IV2rw;
 	longint i,j,k,x,r,INcnt,s;
 	vector string 255 vItemRebObj, DubCodes, vRebObj;
-	boolean rebfound, TrHs, testf, testf1, testf2, rebf, rebitemf;
+	boolean rebfound, TrHs, testf, testf1, testf2, rebf, rebitemf, TrHs2;
 	date sd, ed;
 	string 255 location, brand, conslocation, deflocation;
 	vector string 255 vRebItems, vRebObjects, vRebFromDate, vRebToDate, vINGroup;
@@ -2565,7 +2565,9 @@ begin
 	vector boolean vItemRebInMathm, aRebFound, userbrand;
 	record ItemDuplicatesVc IDr;
 	integer pos;
-	vector val vSaleQtyPrc, vRebPrc;
+	vector val vRebPrc;
+	val vSaleQtyPrc;
+	record ItemHistVc IHr;
 
 
 	record RcVc RepSpec;
@@ -2589,8 +2591,6 @@ begin
 	end;
 	resetloop(INr);
 	
-	
-	
 	x = 0;
 	k = 0;
 	Rebr.Code = "ZZZZZZZZZZZZZZZ";
@@ -2606,45 +2606,200 @@ begin
 		if (blank(Rebr.FromDate)) then begin rebfound = true; end;
 		if (blank(Rebr.ToDate) and nonblank(Rebr.Object)) then begin rebfound = true; end;
 		if (rebfound) then begin
-			x = 0;
-			aRebs[k] = Rebr.Code & "_" & k;
-			if (!aRebFound[aRebs[k]]) then begin
-				aRebFound[aRebs[k]] = true;
-				vRebStartDate[aRebs[k]] = Rebr.FromDate;
-				vRebEndDate[aRebs[k]] = Rebr.ToDate;
-				vRebCodes[aRebs[k]] = Rebr.Code;
-				vRebObj[aRebs[k]] = Rebr.Object;
-			end;
+			weboutstring("<tr>");
+			weboutstring("<td>" & Rebr.Code & "</td>");
+			weboutstring("<td>" & Rebr.Object & "</td>");
+			weboutstring("<td>" & Rebr.FromDate & "</td>");
+			weboutstring("<td>" & Rebr.ToDate & "</td>");
+			weboutstring("</tr>");
+			weboutstring("<tr>");
+			weboutstring("<td>" & "____________________________________________________________________________________________" & "</td>");
+			weboutstring("</tr>");
+			
 			for (i=0;i<matrowcnt(Rebr);i=i+1) begin
 				matrowget(Rebr,i,Rebrw);
 				if (Rebrw.vra0 > 0) then begin
+					if (Rebrw.CodeType==1) then begin
+						IHr.FileName = "IVVc";
+						IHr.ArtCode = Rebrw.ITCode;
+						IHr.TransDate = sd;
+						IHr.SerNr = "";
+						TrHs2 = true;
+						vSaleQtyPrc = 0;
+						while (loopkey("FNArtCode",IHr,4,TrHs2)) begin
+							testf = true;
+							if(IHr.FileName!="RetVc")then begin TrHs2 = false; end;
+							if(IHr.ArtCode!=Rebrw.ITCode)then begin TrHs2 = false; end;
+							if(IHr.TransDate<sd)then begin TrHs2 = false; end;
+							if(IHr.TransDate>ed)then begin TrHs2 = false; end;
+							if(nonblank(Location) and IHr.Location!=Location)then begin testf = false; end;
+							if(TrHs2 and testf)then begin
+								IVr.SerNr = IHr.TransNr;
+								if (ReadFirstMain(IVr,1,true)) then begin
+									testf2 = true;
+									if(nonblank(RepSpec.f6) and !setinset(IVr.CustCode,RepSpec.f6))then begin testf2 = true; end;
+									if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,IVr.Objects))then begin testf2 = true; end;
+									if(IVr.PriceList!="RRP" and IVr.PriceList!="CC" and RepSpec.flags[3]!=0) then begin testf2 = false; end;
+									if(nonblank(IVrw.Location))then begin // conslocation, deflocation
+										if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+									end else begin
+										if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+									end;
+									if (testf2) then begin
+										matrowget(IVr,IHr.Row,IVrw);
+										matrowget(IVr,IHr.Row,IV2rw);
+										if(IVrw.vRebate!=0)then begin testf1=true; end;
+										IDr.DupCode = IVrw.ArtCode;
+										if(RepSpec.flags[5]==1 and INr.ConsgType!=1) then begin testf1 = false; end;
+										if(ReadFirstKey("DupCode",IDr,1,true) and testf1) then begin
+											dupINr.Code = IDr.OrigCode;
+											while(LoopMain(dupINr,1,testf2)) begin
+												if(dupINr.Code!=IDr.OrigCode) then begin testf2 = false; end;
+												if(dupINr.BPIBrand==IDr.OrigBrandCode and testf2) then begin
+													INr.Code = IDr.OrigCode;
+													DubCodes[IDr.OrigCode] = IDr.DupCode;
+												end;
+											end;
+										end;
+										readfirstmain(INr,1,true);
+										testf2=true;
+									
+										if(RepSpec.flags[0]==1 and INr.OutOfOrder==1)then begin testf1 = false; end;
+										if(nonblank(RepSpec.f2) and testf1)then begin
+											testf1=SetInSet2(RepSpec.f2,INr.DispGroups);
+										end;
+										if(nonblank(RepSpec.f9) and !setinset(RepSpec.f9,IVrw.Objects))then begin testf1 = false; end;
+										if(nonblank(RepSpec.f10) and RepSpec.f10!=IVrw.ArtCode)then begin testf1 = false; end;
+										// if(testf1)then begin
+											// pos = 0;
+											// brand = "";
+											// testf1 = false;
+											// ExtractObj(INr.DispGroups,pos,brand);
+											// while(nonblank(brand)) begin
+												// if(userbrand[brand])then begin
+													// testf1 = true;
+												// end;
+												// ExtractObj(INr.DispGroups,pos,brand);
+											// end;
+										// end;
+										
+										if(testf1)then begin
+											rebitemf = true;
+											if (Rebrw.vra0!=IVrw.vRebate) then begin rebitemf = false; end;
+											if (rebitemf) then begin
+												logtext(0,"7");
+												vSaleQtyPrc = vSaleQtyPrc + IVrw.Quant;
+											end;
+										end;
+									end;
+								end;
+							end;
+						end;
+						resetloop(IHr);
+						
+						weboutstring("<tr>");
+						weboutstring("<td>" & Rebrw.ITCode & "</td>");
+						weboutstring("<td>" & Rebrw.vra0 & "</td>");
+						weboutstring("<td>" & Rebr.FromDate & "</td>");
+						weboutstring("<td>" & Rebr.ToDate & "</td>");
+						weboutstring("<td>" & vSaleQtyPrc & "</td>");
+						weboutstring("</tr>");
+						vItemRebInMathm[Rebrw.ITCode] = true;
+					end;
 					if (Rebrw.CodeType==0) then begin
 						for (s=0;s<INcnt;s=s+1) begin
 							testf1 = true;
 							if (vINGroup[aItems[s]]!=Rebrw.ITCode) then begin testf1 = false; end;
-							if (testf1) then begin
-								vRebcnt[aRebs[k]] = x;
+							if (!vItemRebInMathm[aItems[s]]) then begin testf1 = false; end;
+							if (testf1) then begin								
+								IHr.FileName = "IVVc";
+								IHr.ArtCode = aItems[s];
+								IHr.TransDate = sd;
+								IHr.SerNr = "";
+								TrHs2 = true;
+								vSaleQtyPrc = 0;
+								while (loopkey("FNArtCode",IHr,4,TrHs2)) begin
+									testf = true;
+									if(IHr.FileName!="RetVc")then begin TrHs2 = false; end;
+									if(IHr.ArtCode!=aItems[s])then begin TrHs2 = false; end;
+									if(IHr.TransDate<sd)then begin TrHs2 = false; end;
+									if(IHr.TransDate>ed)then begin TrHs2 = false; end;
+									if(nonblank(Location) and IHr.Location!=Location)then begin testf = false; end;
+									if(TrHs2 and testf)then begin
+										IVr.SerNr = IHr.TransNr;
+										if (ReadFirstMain(IVr,1,true)) then begin
+											testf2 = true;
+											if(nonblank(RepSpec.f6) and !setinset(IVr.CustCode,RepSpec.f6))then begin testf2 = true; end;
+											if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,IVr.Objects))then begin testf2 = true; end;
+											if(IVr.PriceList!="RRP" and IVr.PriceList!="CC" and RepSpec.flags[3]!=0) then begin testf2 = false; end;
+											if(nonblank(IVrw.Location))then begin // conslocation, deflocation
+												if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+											end else begin
+												if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+											end;
+											if (testf2) then begin
+												matrowget(IVr,IHr.Row,IVrw);
+												matrowget(IVr,IHr.Row,IV2rw);
+												if(IVrw.vRebate!=0)then begin testf1=true; end;
+												IDr.DupCode = IVrw.ArtCode;
+												if(RepSpec.flags[5]==1 and INr.ConsgType!=1) then begin testf1 = false; end;
+												if(ReadFirstKey("DupCode",IDr,1,true) and testf1) then begin
+													dupINr.Code = IDr.OrigCode;
+													while(LoopMain(dupINr,1,testf2)) begin
+														if(dupINr.Code!=IDr.OrigCode) then begin testf2 = false; end;
+														if(dupINr.BPIBrand==IDr.OrigBrandCode and testf2) then begin
+															INr.Code = IDr.OrigCode;
+															DubCodes[IDr.OrigCode] = IDr.DupCode;
+														end;
+													end;
+												end;
+												readfirstmain(INr,1,true);
+												testf2=true;
+											
+												if(RepSpec.flags[0]==1 and INr.OutOfOrder==1)then begin testf1 = false; end;
+												if(nonblank(RepSpec.f2) and testf1)then begin
+													testf1=SetInSet2(RepSpec.f2,INr.DispGroups);
+												end;
+												if(nonblank(RepSpec.f9) and !setinset(RepSpec.f9,IVrw.Objects))then begin testf1 = false; end;
+												if(nonblank(RepSpec.f10) and RepSpec.f10!=IVrw.ArtCode)then begin testf1 = false; end;
+												// if(testf1)then begin
+													// pos = 0;
+													// brand = "";
+													// testf1 = false;
+													// ExtractObj(INr.DispGroups,pos,brand);
+													// while(nonblank(brand)) begin
+														// if(userbrand[brand])then begin
+															// testf1 = true;
+														// end;
+														// ExtractObj(INr.DispGroups,pos,brand);
+													// end;
+												// end;
+												
+												if(testf1)then begin
+													rebitemf = true;
+													if (Rebrw.vra0!=IVrw.vRebate) then begin rebitemf = false; end;
+													if (rebitemf) then begin
+														logtext(0,"7");
+														vSaleQtyPrc = vSaleQtyPrc + IVrw.Quant;
+													end;
+												end;
+											end;
+										end;
+									end;
+								end;
+								resetloop(IHr);
+								
+								weboutstring("<tr>");
+								weboutstring("<td>" & aItems[s] & "</td>");
+								weboutstring("<td>" & Rebrw.vra0 & "</td>");
+								weboutstring("<td>" & Rebr.FromDate & "</td>");
+								weboutstring("<td>" & Rebr.ToDate & "</td>");
+								weboutstring("<td>" & vSaleQtyPrc & "</td>");
+								weboutstring("</tr>");
 								vItemRebInMathm[aItems[s]] = true;
-								vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
-								vRebItems[aRebs[k] & "_" & x] = aItems[s];
-								vRebObjects[aRebs[k] & "_" & x] = Rebr.Object;
-								vRebPrc[aRebs[k] & "_" & x] = Rebrw.vra0;
-								vRebFromDate[aRebs[k] & "_" & x] = Rebr.FromDate;
-								vRebToDate[aRebs[k] & "_" & x] = Rebr.ToDate;
-								x = x + 1;
+								
 							end;
 						end;
-					end;
-					if (Rebrw.CodeType==1) then begin
-						vRebcnt[aRebs[k]] = x;
-						vItemRebInMathm[Rebrw.ITCode] = true;
-						vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
-						vRebItems[aRebs[k] & "_" & x] = Rebrw.ITCode;
-						vRebObjects[aRebs[k] & "_" & x] = Rebr.Object;
-						vRebPrc[aRebs[k] & "_" & x] = Rebrw.vra0;
-						vRebFromDate[aRebs[k] & "_" & x] = Rebr.FromDate;
-						vRebToDate[aRebs[k] & "_" & x] = Rebr.ToDate;
-						x = x + 1;
 					end;
 				end;
 			end;
@@ -2653,27 +2808,105 @@ begin
 					testf1 = true;
 					if (vItemRebInMathm[aItems[s]]) then begin testf1 = false; end;
 					if (testf1) then begin
-						vRebcnt[aRebs[k]] = x;
-						vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
-						vRebItems[aRebs[k] & "_" & x] = aItems[s];
-						vRebObjects[aRebs[k] & "_" & x] = Rebr.Object;
-						vRebPrc[aRebs[k] & "_" & x] = Rebr.vra0;
-						vRebFromDate[aRebs[k] & "_" & x] = Rebr.FromDate;
-						vRebToDate[aRebs[k] & "_" & x] = Rebr.ToDate;
-						x = x + 1;
+						IHr.FileName = "IVVc";
+						IHr.ArtCode = aItems[s];
+						IHr.TransDate = sd;
+						IHr.SerNr = "";
+						TrHs2 = true;
+						vSaleQtyPrc = 0;
+						while (loopkey("FNArtCode",IHr,4,TrHs2)) begin
+							testf = true;
+							if(IHr.FileName!="RetVc")then begin TrHs2 = false; end;
+							if(IHr.ArtCode!=aItems[s])then begin TrHs2 = false; end;
+							if(IHr.TransDate<sd)then begin TrHs2 = false; end;
+							if(IHr.TransDate>ed)then begin TrHs2 = false; end;
+							if(nonblank(Location) and IHr.Location!=Location)then begin testf = false; end;
+							if(TrHs2 and testf)then begin
+								IVr.SerNr = IHr.TransNr;
+								if (ReadFirstMain(IVr,1,true)) then begin
+									testf2 = true;
+									if(nonblank(RepSpec.f6) and !setinset(IVr.CustCode,RepSpec.f6))then begin testf2 = true; end;
+									if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,IVr.Objects))then begin testf2 = true; end;
+									if(IVr.PriceList!="RRP" and IVr.PriceList!="CC" and RepSpec.flags[3]!=0) then begin testf2 = false; end;
+									if(nonblank(IVrw.Location))then begin // conslocation, deflocation
+										if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+									end else begin
+										if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+									end;
+									if (testf2) then begin
+										matrowget(IVr,IHr.Row,IVrw);
+										matrowget(IVr,IHr.Row,IV2rw);
+										if(IVrw.vRebate!=0)then begin testf1=true; end;
+										IDr.DupCode = IVrw.ArtCode;
+										if(RepSpec.flags[5]==1 and INr.ConsgType!=1) then begin testf1 = false; end;
+										if(ReadFirstKey("DupCode",IDr,1,true) and testf1) then begin
+											dupINr.Code = IDr.OrigCode;
+											while(LoopMain(dupINr,1,testf2)) begin
+												if(dupINr.Code!=IDr.OrigCode) then begin testf2 = false; end;
+												if(dupINr.BPIBrand==IDr.OrigBrandCode and testf2) then begin
+													INr.Code = IDr.OrigCode;
+													DubCodes[IDr.OrigCode] = IDr.DupCode;
+												end;
+											end;
+										end;
+										readfirstmain(INr,1,true);
+										testf2=true;
+									
+										if(RepSpec.flags[0]==1 and INr.OutOfOrder==1)then begin testf1 = false; end;
+										if(nonblank(RepSpec.f2) and testf1)then begin
+											testf1=SetInSet2(RepSpec.f2,INr.DispGroups);
+										end;
+										if(nonblank(RepSpec.f9) and !setinset(RepSpec.f9,IVrw.Objects))then begin testf1 = false; end;
+										if(nonblank(RepSpec.f10) and RepSpec.f10!=IVrw.ArtCode)then begin testf1 = false; end;
+										// if(testf1)then begin
+											// pos = 0;
+											// brand = "";
+											// testf1 = false;
+											// ExtractObj(INr.DispGroups,pos,brand);
+											// while(nonblank(brand)) begin
+												// if(userbrand[brand])then begin
+													// testf1 = true;
+												// end;
+												// ExtractObj(INr.DispGroups,pos,brand);
+											// end;
+										// end;
+										
+										if(testf1)then begin
+											rebitemf = true;
+											if (Rebrw.vra0!=IVrw.vRebate) then begin rebitemf = false; end;
+											if (rebitemf) then begin
+												logtext(0,"7");
+												vSaleQtyPrc = vSaleQtyPrc + IVrw.Quant;
+											end;
+										end;
+									end;
+								end;
+							end;
+						end;
+						resetloop(IHr);
+						
+						weboutstring("<tr>");
+						weboutstring("<td>" & aItems[s] & "</td>");
+						weboutstring("<td>" & Rebrw.vra0 & "</td>");
+						weboutstring("<td>" & Rebr.FromDate & "</td>");
+						weboutstring("<td>" & Rebr.ToDate & "</td>");
+						weboutstring("<td>" & vSaleQtyPrc & "</td>");
+						weboutstring("</tr>");
 					end;
 				end;
 			end;
-			k = k + 1;
 		end;
 	end;
 	
 	resetloop(Rebr);
 	
+	
+	x = 0;
+	k = 0;
 	MyRebr.Code = "ZZZZZZZZZZZZZZZ";
 	MyRebr.ToDate = CurrentDate;
-	while(LoopBackKey("ToDate",MyRebr,1,true)) begin
-		logtext(0,Rebr.Code);
+	while(LoopBackKey("ToDate",MyRebr,2,true)) begin
+		logtext(0,MyRebr.Code);
 		clearVector(vItemRebInMathm);
 		rebfound = false;
 		if (DateInRange(sd,MyRebr.FromDate,MyRebr.ToDate)) then begin rebfound = true; end;
@@ -2681,47 +2914,201 @@ begin
 		if (DateInRange(MyRebr.FromDate,sd,ed)) then begin rebfound = true; end;
 		if (DateInRange(MyRebr.ToDate,sd,ed)) then begin rebfound = true; end;
 		if (blank(MyRebr.FromDate)) then begin rebfound = true; end;
-		if (blank(MyRebr.ToDate)) then begin rebfound = true; end;
-		if (rebfound and nonblank(MyRebr.Object)) then begin
-			aRebs[k] = MyRebr.Code & "_" & k;
-			if (!aRebFound[aRebs[k]]) then begin
-				aRebFound[aRebs[k]] = true;
-				vRebStartDate[aRebs[k]] = MyRebr.FromDate;
-				vRebEndDate[aRebs[k]] = MyRebr.ToDate;
-				vRebCodes[aRebs[k]] = MyRebr.Code;
-				vRebObj[aRebs[k]] = MyRebr.Object;
-			end;
-			x = 0;
+		if (blank(MyRebr.ToDate) and nonblank(MyRebr.Object)) then begin rebfound = true; end;
+		if (rebfound) then begin
+			weboutstring("<tr>");
+			weboutstring("<td>" & MyRebr.Code & "</td>");
+			weboutstring("<td>" & MyRebr.Object & "</td>");
+			weboutstring("<td>" & MyRebr.FromDate & "</td>");
+			weboutstring("<td>" & MyRebr.ToDate & "</td>");
+			weboutstring("</tr>");
+			weboutstring("<tr>");
+			weboutstring("<td>" & "____________________________________________________________________________________________" & "</td>");
+			weboutstring("</tr>");
+			
 			for (i=0;i<matrowcnt(MyRebr);i=i+1) begin
 				matrowget(MyRebr,i,MyRebrw);
 				if (MyRebrw.vra0 > 0) then begin
+					if (MyRebrw.CodeType==1) then begin
+						IHr.FileName = "IVVc";
+						IHr.ArtCode = MyRebrw.ITCode;
+						IHr.TransDate = sd;
+						IHr.SerNr = "";
+						TrHs2 = true;
+						vSaleQtyPrc = 0;
+						while (loopkey("FNArtCode",IHr,4,TrHs2)) begin
+							testf = true;
+							if(IHr.FileName!="RetVc")then begin TrHs2 = false; end;
+							if(IHr.ArtCode!=aItems[s])then begin TrHs2 = false; end;
+							if(IHr.TransDate<sd)then begin TrHs2 = false; end;
+							if(IHr.TransDate>ed)then begin TrHs2 = false; end;
+							if(nonblank(Location) and IHr.Location!=Location)then begin testf = false; end;
+							if(TrHs2 and testf)then begin
+								IVr.SerNr = IHr.TransNr;
+								if (ReadFirstMain(IVr,1,true)) then begin
+									testf2 = true;
+									if(nonblank(RepSpec.f6) and !setinset(IVr.CustCode,RepSpec.f6))then begin testf2 = true; end;
+									if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,IVr.Objects))then begin testf2 = true; end;
+									if(IVr.PriceList!="RRP" and IVr.PriceList!="CC" and RepSpec.flags[3]!=0) then begin testf2 = false; end;
+									if(nonblank(IVrw.Location))then begin // conslocation, deflocation
+										if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+									end else begin
+										if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+									end;
+									if (testf2) then begin
+										matrowget(IVr,IHr.Row,IVrw);
+										matrowget(IVr,IHr.Row,IV2rw);
+										if(IVrw.vRebate!=0)then begin testf1=true; end;
+										IDr.DupCode = IVrw.ArtCode;
+										if(RepSpec.flags[5]==1 and INr.ConsgType!=1) then begin testf1 = false; end;
+										if(ReadFirstKey("DupCode",IDr,1,true) and testf1) then begin
+											dupINr.Code = IDr.OrigCode;
+											while(LoopMain(dupINr,1,testf2)) begin
+												if(dupINr.Code!=IDr.OrigCode) then begin testf2 = false; end;
+												if(dupINr.BPIBrand==IDr.OrigBrandCode and testf2) then begin
+													INr.Code = IDr.OrigCode;
+													DubCodes[IDr.OrigCode] = IDr.DupCode;
+												end;
+											end;
+										end;
+										readfirstmain(INr,1,true);
+										testf2=true;
+									
+										if(RepSpec.flags[0]==1 and INr.OutOfOrder==1)then begin testf1 = false; end;
+										if(nonblank(RepSpec.f2) and testf1)then begin
+											testf1=SetInSet2(RepSpec.f2,INr.DispGroups);
+										end;
+										if(nonblank(RepSpec.f9) and !setinset(RepSpec.f9,IVrw.Objects))then begin testf1 = false; end;
+										if(nonblank(RepSpec.f10) and RepSpec.f10!=IVrw.ArtCode)then begin testf1 = false; end;
+										// if(testf1)then begin
+											// pos = 0;
+											// brand = "";
+											// testf1 = false;
+											// ExtractObj(INr.DispGroups,pos,brand);
+											// while(nonblank(brand)) begin
+												// if(userbrand[brand])then begin
+													// testf1 = true;
+												// end;
+												// ExtractObj(INr.DispGroups,pos,brand);
+											// end;
+										// end;
+										
+										if(testf1)then begin
+											rebitemf = true;
+											if (MyRebrw.vra0!=IVrw.vRebate) then begin rebitemf = false; end;
+											if (rebitemf) then begin
+												logtext(0,"7");
+												vSaleQtyPrc = vSaleQtyPrc + IVrw.Quant;
+											end;
+										end;
+									end;
+								end;
+							end;
+						end;
+						resetloop(IHr);
+						
+						weboutstring("<tr>");
+						weboutstring("<td>" & MyRebrw.ITCode & "</td>");
+						weboutstring("<td>" & MyRebrw.vra0 & "</td>");
+						weboutstring("<td>" & MyRebr.FromDate & "</td>");
+						weboutstring("<td>" & MyRebr.ToDate & "</td>");
+						weboutstring("<td>" & vSaleQtyPrc & "</td>");
+						weboutstring("</tr>");
+						vItemRebInMathm[MyRebrw.ITCode] = true;
+					end;
 					if (MyRebrw.CodeType==0) then begin
 						for (s=0;s<INcnt;s=s+1) begin
 							testf1 = true;
 							if (vINGroup[aItems[s]]!=MyRebrw.ITCode) then begin testf1 = false; end;
-							if (testf1) then begin
-								vRebcnt[aRebs[k]] = x;
+							if (!vItemRebInMathm[aItems[s]]) then begin testf1 = false; end;
+							if (testf1) then begin								
+								IHr.FileName = "IVVc";
+								IHr.ArtCode = aItems[s];
+								IHr.TransDate = sd;
+								IHr.SerNr = "";
+								TrHs2 = true;
+								vSaleQtyPrc = 0;
+								while (loopkey("FNArtCode",IHr,4,TrHs2)) begin
+									testf = true;
+									if(IHr.FileName!="RetVc")then begin TrHs2 = false; end;
+									if(IHr.ArtCode!=aItems[s])then begin TrHs2 = false; end;
+									if(IHr.TransDate<sd)then begin TrHs2 = false; end;
+									if(IHr.TransDate>ed)then begin TrHs2 = false; end;
+									if(nonblank(Location) and IHr.Location!=Location)then begin testf = false; end;
+									if(TrHs2 and testf)then begin
+										IVr.SerNr = IHr.TransNr;
+										if (ReadFirstMain(IVr,1,true)) then begin
+											testf2 = true;
+											if(nonblank(RepSpec.f6) and !setinset(IVr.CustCode,RepSpec.f6))then begin testf2 = true; end;
+											if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,IVr.Objects))then begin testf2 = true; end;
+											if(IVr.PriceList!="RRP" and IVr.PriceList!="CC" and RepSpec.flags[3]!=0) then begin testf2 = false; end;
+											if(nonblank(IVrw.Location))then begin // conslocation, deflocation
+												if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+											end else begin
+												if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+											end;
+											if (testf2) then begin
+												matrowget(IVr,IHr.Row,IVrw);
+												matrowget(IVr,IHr.Row,IV2rw);
+												if(IVrw.vRebate!=0)then begin testf1=true; end;
+												IDr.DupCode = IVrw.ArtCode;
+												if(RepSpec.flags[5]==1 and INr.ConsgType!=1) then begin testf1 = false; end;
+												if(ReadFirstKey("DupCode",IDr,1,true) and testf1) then begin
+													dupINr.Code = IDr.OrigCode;
+													while(LoopMain(dupINr,1,testf2)) begin
+														if(dupINr.Code!=IDr.OrigCode) then begin testf2 = false; end;
+														if(dupINr.BPIBrand==IDr.OrigBrandCode and testf2) then begin
+															INr.Code = IDr.OrigCode;
+															DubCodes[IDr.OrigCode] = IDr.DupCode;
+														end;
+													end;
+												end;
+												readfirstmain(INr,1,true);
+												testf2=true;
+											
+												if(RepSpec.flags[0]==1 and INr.OutOfOrder==1)then begin testf1 = false; end;
+												if(nonblank(RepSpec.f2) and testf1)then begin
+													testf1=SetInSet2(RepSpec.f2,INr.DispGroups);
+												end;
+												if(nonblank(RepSpec.f9) and !setinset(RepSpec.f9,IVrw.Objects))then begin testf1 = false; end;
+												if(nonblank(RepSpec.f10) and RepSpec.f10!=IVrw.ArtCode)then begin testf1 = false; end;
+												// if(testf1)then begin
+													// pos = 0;
+													// brand = "";
+													// testf1 = false;
+													// ExtractObj(INr.DispGroups,pos,brand);
+													// while(nonblank(brand)) begin
+														// if(userbrand[brand])then begin
+															// testf1 = true;
+														// end;
+														// ExtractObj(INr.DispGroups,pos,brand);
+													// end;
+												// end;
+												
+												if(testf1)then begin
+													rebitemf = true;
+													if (MyRebrw.vra0!=IVrw.vRebate) then begin rebitemf = false; end;
+													if (rebitemf) then begin
+														logtext(0,"7");
+														vSaleQtyPrc = vSaleQtyPrc + IVrw.Quant;
+													end;
+												end;
+											end;
+										end;
+									end;
+								end;
+								resetloop(IHr);
+								
+								weboutstring("<tr>");
+								weboutstring("<td>" & aItems[s] & "</td>");
+								weboutstring("<td>" & MyRebrw.vra0 & "</td>");
+								weboutstring("<td>" & MyRebr.FromDate & "</td>");
+								weboutstring("<td>" & MyRebr.ToDate & "</td>");
+								weboutstring("<td>" & vSaleQtyPrc & "</td>");
+								weboutstring("</tr>");
 								vItemRebInMathm[aItems[s]] = true;
-								vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
-								vRebItems[aRebs[k] & "_" & x] = aItems[s];
-								vRebObjects[aRebs[k] & "_" & x] = MyRebr.Object;
-								vRebPrc[aRebs[k] & "_" & x] = MyRebrw.vra0;
-								vRebFromDate[aRebs[k] & "_" & x] = MyRebr.FromDate;
-								vRebToDate[aRebs[k] & "_" & x] = MyRebr.ToDate;
-								x = x + 1;
 							end;
 						end;
-					end;
-					if (MyRebrw.CodeType==1) then begin
-						vRebcnt[aRebs[k]] = x;
-						vItemRebInMathm[MyRebrw.ITCode] = true;
-						vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
-						vRebItems[aRebs[k] & "_" & x] = INr.Code;
-						vRebObjects[aRebs[k] & "_" & x] = MyRebr.Object;
-						vRebPrc[aRebs[k] & "_" & x] = MyRebrw.vra0;
-						vRebFromDate[aRebs[k] & "_" & x] = MyRebr.FromDate;
-						vRebToDate[aRebs[k] & "_" & x] = MyRebr.ToDate;
-						x = x + 1;
 					end;
 				end;
 			end;
@@ -2730,140 +3117,97 @@ begin
 					testf1 = true;
 					if (vItemRebInMathm[aItems[s]]) then begin testf1 = false; end;
 					if (testf1) then begin
-						vRebcnt[aRebs[k]] = x;
-						vSaleQtyPrc[aRebs[k] & "_" & x] = 0;
-						vRebItems[aRebs[k] & "_" & x] = aItems[s];
-						vRebObjects[aRebs[k] & "_" & x] = MyRebr.Object;
-						vRebPrc[aRebs[k] & "_" & x] = MyRebr.vra0;
-						vRebFromDate[aRebs[k] & "_" & x] = MyRebr.FromDate;
-						vRebToDate[aRebs[k] & "_" & x] = MyRebr.ToDate;
-						x = x + 1;
-					end;
-				end;
-			end;
-			k = k + 1;
-		end;
-	end;
-	resetloop(MyRebr);
-	
-	
-	
-	IVr.TransDate = sd;
-	TrHs = true;
-	logtext(0,IVr.TransDate);
-	while(loopkey("TransDate",IVr,1,TrHs)) begin
-		testf = true;
-		if(RepSpec.flags[1]!=0 and IVr.OrderNr!=-1) then begin testf = false; end;
-		if(IVr.InvDate<sd)then begin testf = false; end;
-		if(IVr.InvDate>ed)then begin TrHs = false; testf = false; end;
-		if(IVr.OKFlag==0)then begin testf = false; end;
-		if(IVr.Invalid>0)then begin testf = false; end;
-		if(nonblank(RepSpec.f6) and !setinset(IVr.CustCode,RepSpec.f6))then begin testf = false; end;
-		if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,IVr.Objects))then begin testf = false; end;
-		if(IVr.PriceList!="RRP" and IVr.PriceList!="CC" and RepSpec.flags[3]!=0) then begin testf = false; end;
-		if (testf) then begin
-			For(i=0;i<matrowcnt(IVr);i=i+1) begin
-				testf2 = true;
-				matrowget(IVr,i,IVrw);
-				matrowget(IVr,i,IV2rw);
-				
-				if(nonblank(IVrw.Location))then begin // conslocation, deflocation
-					if(nonblank(location) and IVrw.Location!=location and IVrw.Location!=conslocation and IVrw.Location!=deflocation)then begin testf2 = false; end;
-				end else begin
-					if(nonblank(location) and IVr.Location!=location and IVr.Location!=conslocation and IVr.Location!=deflocation)then begin testf2 = false; end;
-				end;
-				if(testf2)then begin
-					if(IVrw.stp==kInvoiceRowTypeNormal and nonblank(IVrw.ArtCode))then begin
-						INr.Code = IVrw.ArtCode;
-						readfirstmain(INr,1,true);
-						if(IVrw.vRebate!=0)then begin testf1=true; end;
-						IDr.DupCode = IVrw.ArtCode;
-						if(RepSpec.flags[5]==1 and INr.ConsgType!=1) then begin testf1 = false; end;
-						if(ReadFirstKey("DupCode",IDr,1,true) and testf1) then begin
-							dupINr.Code = IDr.OrigCode;
-							while(LoopMain(dupINr,1,testf2)) begin
-								if(dupINr.Code!=IDr.OrigCode) then begin testf2 = false; end;
-								if(dupINr.BPIBrand==IDr.OrigBrandCode and testf2) then begin
-									INr.Code = IDr.OrigCode;
-									DubCodes[IDr.OrigCode] = IDr.DupCode;
-								end;
-							end;
-						end;
-						readfirstmain(INr,1,true);
-						testf2=true;
-					
-						if(RepSpec.flags[0]==1 and INr.OutOfOrder==1)then begin testf1 = false; end;
-						if(nonblank(RepSpec.f2) and testf1)then begin
-							testf1=SetInSet2(RepSpec.f2,INr.DispGroups);
-						end;
-						if(nonblank(RepSpec.f9) and !setinset(RepSpec.f9,IVrw.Objects))then begin testf1 = false; end;
-						if(nonblank(RepSpec.f10) and RepSpec.f10!=IVrw.ArtCode)then begin testf1 = false; end;
-						// if(testf1)then begin
-							// pos = 0;
-							// brand = "";
-							// testf1 = false;
-							// ExtractObj(INr.DispGroups,pos,brand);
-							// while(nonblank(brand)) begin
-								// if(userbrand[brand])then begin
-									// testf1 = true;
-								// end;
-								// ExtractObj(INr.DispGroups,pos,brand);
-							// end;
-						// end;
-						
-						if(testf1)then begin
-							for (j=aRebs.length-1;j>=0;j=j-1) begin
-								if (DateInRange(IVr.TransDate,vRebFromDate[aRebs[j]],vRebToDate[aRebs[j]])) then begin 
-									rebf = true;
-									if (nonblank(vRebObj[aRebs[j]]) and !SetInSet(vRebObj[aRebs[j]],IVrw.Objects)) then begin rebf = false; end;
-									if (rebf) then begin
-										if (vRebcnt[aRebs[j]]>=0) then begin
-											for (r=vRebcnt[aRebs[j]];r>=0;r=r-1) begin
-												rebitemf = true;
-												if (vRebItems[aRebs[j] & "_" & r]!=IVrw.ArtCode) then begin rebitemf = false; end;
-												if (vRebPrc[aRebs[j] & "_" & r]!=IVrw.vRebate) then begin rebitemf = false; end;
-												if (rebitemf) then begin
-													logtext(0,"7");
-													vSaleQtyPrc[aRebs[j] & "_" & r] = vSaleQtyPrc[aRebs[j] & "_" & r] + IVrw.Quant;
+						IHr.FileName = "IVVc";
+						IHr.ArtCode = aItems[s];
+						IHr.TransDate = sd;
+						IHr.SerNr = "";
+						TrHs2 = true;
+						vSaleQtyPrc = 0;
+						while (loopkey("FNArtCode",IHr,4,TrHs2)) begin
+							testf = true;
+							if(IHr.FileName!="RetVc")then begin TrHs2 = false; end;
+							if(IHr.ArtCode!=aItems[s])then begin TrHs2 = false; end;
+							if(IHr.TransDate<sd)then begin TrHs2 = false; end;
+							if(IHr.TransDate>ed)then begin TrHs2 = false; end;
+							if(nonblank(Location) and IHr.Location!=Location)then begin testf = false; end;
+							if(TrHs2 and testf)then begin
+								IVr.SerNr = IHr.TransNr;
+								if (ReadFirstMain(IVr,1,true)) then begin
+									testf2 = true;
+									if(nonblank(RepSpec.f6) and !setinset(IVr.CustCode,RepSpec.f6))then begin testf2 = true; end;
+									if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,IVr.Objects))then begin testf2 = true; end;
+									if(IVr.PriceList!="RRP" and IVr.PriceList!="CC" and RepSpec.flags[3]!=0) then begin testf2 = false; end;
+									if(nonblank(IVrw.Location))then begin // conslocation, deflocation
+										if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+									end else begin
+										if(nonblank(location) and IHr.Location!=location and IHr.Location!=conslocation and IHr.Location!=deflocation)then begin testf2 = false; end;
+									end;
+									if (testf2) then begin
+										matrowget(IVr,IHr.Row,IVrw);
+										matrowget(IVr,IHr.Row,IV2rw);
+										if(IVrw.vRebate!=0)then begin testf1=true; end;
+										IDr.DupCode = IVrw.ArtCode;
+										if(RepSpec.flags[5]==1 and INr.ConsgType!=1) then begin testf1 = false; end;
+										if(ReadFirstKey("DupCode",IDr,1,true) and testf1) then begin
+											dupINr.Code = IDr.OrigCode;
+											while(LoopMain(dupINr,1,testf2)) begin
+												if(dupINr.Code!=IDr.OrigCode) then begin testf2 = false; end;
+												if(dupINr.BPIBrand==IDr.OrigBrandCode and testf2) then begin
+													INr.Code = IDr.OrigCode;
+													DubCodes[IDr.OrigCode] = IDr.DupCode;
 												end;
+											end;
+										end;
+										readfirstmain(INr,1,true);
+										testf2=true;
+									
+										if(RepSpec.flags[0]==1 and INr.OutOfOrder==1)then begin testf1 = false; end;
+										if(nonblank(RepSpec.f2) and testf1)then begin
+											testf1=SetInSet2(RepSpec.f2,INr.DispGroups);
+										end;
+										if(nonblank(RepSpec.f9) and !setinset(RepSpec.f9,IVrw.Objects))then begin testf1 = false; end;
+										if(nonblank(RepSpec.f10) and RepSpec.f10!=IVrw.ArtCode)then begin testf1 = false; end;
+										// if(testf1)then begin
+											// pos = 0;
+											// brand = "";
+											// testf1 = false;
+											// ExtractObj(INr.DispGroups,pos,brand);
+											// while(nonblank(brand)) begin
+												// if(userbrand[brand])then begin
+													// testf1 = true;
+												// end;
+												// ExtractObj(INr.DispGroups,pos,brand);
+											// end;
+										// end;
+										
+										if(testf1)then begin
+											rebitemf = true;
+											if (MyRebrw.vra0!=IVrw.vRebate) then begin rebitemf = false; end;
+											if (rebitemf) then begin
+												logtext(0,"7");
+												vSaleQtyPrc = vSaleQtyPrc + IVrw.Quant;
 											end;
 										end;
 									end;
 								end;
 							end;
 						end;
+						resetloop(IHr);
+						
+						weboutstring("<tr>");
+						weboutstring("<td>" & aItems[s] & "</td>");
+						weboutstring("<td>" & MyRebrw.vra0 & "</td>");
+						weboutstring("<td>" & MyRebr.FromDate & "</td>");
+						weboutstring("<td>" & MyRebr.ToDate  & "</td>");
+						weboutstring("<td>" & vSaleQtyPrc & "</td>");
+						weboutstring("</tr>");
 					end;
 				end;
 			end;
 		end;
 	end;
-	logtext(0,aRebs.length & " aRebs.length");
-	weboutstring("<table>");
-	for (j=aRebs.length-1;j>=0;j=j-1) begin
-		logtext(0,vRebcnt[aRebs[j]] & " vRebcnt[aRebs[j]]");
-		if (vRebcnt[aRebs[j]]>-1)then begin
-			weboutstring("<tr>");
-			weboutstring("<td>" & vRebCodes[aRebs[j]] & "</td>");
-			weboutstring("<td>" & vRebObj[aRebs[j]] & "</td>");
-			weboutstring("<td>" & vRebStartDate[aRebs[j]] & "</td>");
-			weboutstring("<td>" & vRebEndDate[aRebs[j]] & "</td>");
-			weboutstring("</tr>");
-			weboutstring("<tr>");
-			weboutstring("<td>" & "____________________________________________________________________________________________" & "</td>");
-			weboutstring("</tr>");
-			for (r=vRebcnt[aRebs[j]];r>=0;r=r-1) begin
-				weboutstring("<tr>");
-				weboutstring("<td>" & vRebItems[aRebs[j] & "_" & r] & "</td>");
-				weboutstring("<td>" & vRebPrc[aRebs[j] & "_" & r] & "</td>");
-				weboutstring("<td>" & vRebFromDate[aRebs[j] & "_" & r] & "</td>");
-				weboutstring("<td>" & vRebToDate[aRebs[j] & "_" & r] & "</td>");
-				weboutstring("<td>" & vSaleQtyPrc[aRebs[j] & "_" & r] & "</td>");
-				weboutstring("</tr>");
-			end;
-		end;
-	end;
-	weboutstring("</table>");
 	
+	resetloop(MyRebr);
 	
 	return;
 end;
