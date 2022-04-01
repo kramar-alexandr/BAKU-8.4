@@ -2536,7 +2536,7 @@ end;
 
 
 
-procedure GetRebateSales (string ItemCode, date sd, date ed, string Location, var val vSaleQtyPrc, val RebPrc, record RcVc RepSpec)
+procedure GetRebateSales (string ItemCode, date sd, date ed, string Location, var val vSaleQtyPrc, val RebPrc, record RcVc RepSpec, vector boolean vIVItem)
 begin
 	
 	record INVc INr, dupINr;
@@ -2623,8 +2623,10 @@ begin
 					if(testf1)then begin
 						rebitemf = true;
 						if (RebPrc!=IVrw.vRebate) then begin rebitemf = false; end;
+						if (vIVItem[IVr.SerNr & "_" & IVrw.ArtCode]) then begin rebitemf = false; end;
 						if (rebitemf) then begin
 							vSaleQtyPrc = vSaleQtyPrc + IVrw.Quant;
+							vIVItem[IVr.SerNr & "_" & IVrw.ArtCode] = true;
 						end;
 					end;
 				end;
@@ -2667,6 +2669,7 @@ begin
 	vector val vRebPrc;
 	val vSaleQtyPrc, RebPrc;
 	record ItemHistVc IHr;
+	vector boolean vIVItem;
 
 
 	record RcVc RepSpec;
@@ -2690,6 +2693,99 @@ begin
 	end;
 	resetloop(INr);
 	weboutstring("<table>");
+	
+	
+	x = 0;
+	k = 0;
+	MyRebr.Code = "ZZZZZZZZZZZZZZZ";
+	MyRebr.ToDate = CurrentDate;
+	while(LoopBackKey("ToDate",MyRebr,2,true)) begin
+		clearVector(vItemRebInMathm);
+		rebfound = false;
+		if (DateInRange(sd,MyRebr.FromDate,MyRebr.ToDate)) then begin rebfound = true; end;
+		if (DateInRange(ed,MyRebr.FromDate,MyRebr.ToDate)) then begin rebfound = true; end;
+		if (DateInRange(MyRebr.FromDate,sd,ed)) then begin rebfound = true; end;
+		if (DateInRange(MyRebr.ToDate,sd,ed)) then begin rebfound = true; end;
+		if (blank(MyRebr.FromDate) and nonblank(MyRebr.Object)) then begin rebfound = true; end;
+		if (blank(MyRebr.ToDate) and nonblank(MyRebr.Object)) then begin rebfound = true; end;
+		if (rebfound) then begin
+			weboutstring("<tr>");
+			weboutstring("<td>" & MyRebr.Code & "</td>");
+			weboutstring("<td>" & MyRebr.Object & "</td>");
+			weboutstring("<td>" & MyRebr.FromDate & "</td>");
+			weboutstring("<td>" & MyRebr.ToDate & "</td>");
+			weboutstring("</tr>");
+			weboutstring("<tr>");
+			weboutstring("<td>" & "____________________________________________________________________________________________" & "</td>");
+			weboutstring("</tr>");
+			
+			for (i=0;i<matrowcnt(MyRebr);i=i+1) begin
+				matrowget(MyRebr,i,MyRebrw);
+				if (MyRebrw.vra0 > 0) then begin
+					if (MyRebrw.CodeType==1) then begin
+						ItemCode = MyRebrw.ITCode;
+						vSaleQtyPrc = 0;
+						RebPrc = Rebrw.vra0;
+						GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+						
+						weboutstring("<tr>");
+						weboutstring("<td>" & MyRebrw.ITCode & "</td>");
+						weboutstring("<td>" & MyRebrw.vra0 & "</td>");
+						weboutstring("<td>" & MyRebr.FromDate & "</td>");
+						weboutstring("<td>" & MyRebr.ToDate & "</td>");
+						weboutstring("<td>" & vSaleQtyPrc & "</td>");
+						weboutstring("</tr>");
+						vItemRebInMathm[MyRebrw.ITCode] = true;
+					end;
+					if (MyRebrw.CodeType==0) then begin
+						for (s=0;s<INcnt;s=s+1) begin
+							testf1 = true;
+							if (vINGroup[aItems[s]]!=MyRebrw.ITCode) then begin testf1 = false; end;
+							if (!vItemRebInMathm[aItems[s]]) then begin testf1 = false; end;
+							if (testf1) then begin								
+								ItemCode = aItems[s];
+								vSaleQtyPrc = 0;
+								RebPrc = Rebrw.vra0;
+								GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+								
+								weboutstring("<tr>");
+								weboutstring("<td>" & aItems[s] & "</td>");
+								weboutstring("<td>" & MyRebrw.vra0 & "</td>");
+								weboutstring("<td>" & MyRebr.FromDate & "</td>");
+								weboutstring("<td>" & MyRebr.ToDate & "</td>");
+								weboutstring("<td>" & vSaleQtyPrc & "</td>");
+								weboutstring("</tr>");
+								vItemRebInMathm[aItems[s]] = true;
+							end;
+						end;
+					end;
+				end;
+			end;
+			if (MyRebr.vra0 > 0) then begin
+				for (s=0;s<INcnt;s=s+1) begin
+					testf1 = true;
+					if (vItemRebInMathm[aItems[s]]) then begin testf1 = false; end;
+					if (testf1) then begin
+						ItemCode = aItems[s];
+						vSaleQtyPrc = 0;
+						RebPrc = MyRebr.vra0;
+						GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+						
+						weboutstring("<tr>");
+						weboutstring("<td>" & aItems[s] & "</td>");
+						weboutstring("<td>" & MyRebr.vra0 & "</td>");
+						weboutstring("<td>" & MyRebr.FromDate & "</td>");
+						weboutstring("<td>" & MyRebr.ToDate  & "</td>");
+						weboutstring("<td>" & vSaleQtyPrc & "</td>");
+						weboutstring("</tr>");
+					end;
+				end;
+			end;
+		end;
+	end;
+	
+	
+	
 	x = 0;
 	k = 0;
 	Rebr.Code = "ZZZZZZZZZZZZZZZ";
@@ -2721,7 +2817,7 @@ begin
 						ItemCode = Rebrw.ITCode;
 						vSaleQtyPrc = 0;
 						RebPrc = Rebrw.vra0;
-						GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec);
+						GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
 						
 						weboutstring("<tr>");
 						weboutstring("<td>" & Rebrw.ITCode & "</td>");
@@ -2741,7 +2837,7 @@ begin
 								ItemCode = aItems[s];
 								vSaleQtyPrc = 0;
 								RebPrc = Rebrw.vra0;
-								GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec);
+							GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
 								
 								weboutstring("<tr>");
 								weboutstring("<td>" & aItems[s] & "</td>");
@@ -2764,7 +2860,7 @@ begin
 						ItemCode = aItems[s];
 						vSaleQtyPrc = 0;
 						RebPrc = Rebr.vra0;
-						GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec);
+						GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
 						
 						weboutstring("<tr>");
 						weboutstring("<td>" & aItems[s] & "</td>");
@@ -2782,94 +2878,6 @@ begin
 	resetloop(Rebr);
 	
 	
-	x = 0;
-	k = 0;
-	MyRebr.Code = "ZZZZZZZZZZZZZZZ";
-	MyRebr.ToDate = CurrentDate;
-	while(LoopBackKey("ToDate",MyRebr,2,true)) begin
-		clearVector(vItemRebInMathm);
-		rebfound = false;
-		if (DateInRange(sd,MyRebr.FromDate,MyRebr.ToDate)) then begin rebfound = true; end;
-		if (DateInRange(ed,MyRebr.FromDate,MyRebr.ToDate)) then begin rebfound = true; end;
-		if (DateInRange(MyRebr.FromDate,sd,ed)) then begin rebfound = true; end;
-		if (DateInRange(MyRebr.ToDate,sd,ed)) then begin rebfound = true; end;
-		if (blank(MyRebr.FromDate)) then begin rebfound = true; end;
-		if (blank(MyRebr.ToDate) and nonblank(MyRebr.Object)) then begin rebfound = true; end;
-		if (rebfound) then begin
-			weboutstring("<tr>");
-			weboutstring("<td>" & MyRebr.Code & "</td>");
-			weboutstring("<td>" & MyRebr.Object & "</td>");
-			weboutstring("<td>" & MyRebr.FromDate & "</td>");
-			weboutstring("<td>" & MyRebr.ToDate & "</td>");
-			weboutstring("</tr>");
-			weboutstring("<tr>");
-			weboutstring("<td>" & "____________________________________________________________________________________________" & "</td>");
-			weboutstring("</tr>");
-			
-			for (i=0;i<matrowcnt(MyRebr);i=i+1) begin
-				matrowget(MyRebr,i,MyRebrw);
-				if (MyRebrw.vra0 > 0) then begin
-					if (MyRebrw.CodeType==1) then begin
-						ItemCode = MyRebrw.ITCode;
-						vSaleQtyPrc = 0;
-						RebPrc = Rebrw.vra0;
-						GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec);
-						
-						weboutstring("<tr>");
-						weboutstring("<td>" & MyRebrw.ITCode & "</td>");
-						weboutstring("<td>" & MyRebrw.vra0 & "</td>");
-						weboutstring("<td>" & MyRebr.FromDate & "</td>");
-						weboutstring("<td>" & MyRebr.ToDate & "</td>");
-						weboutstring("<td>" & vSaleQtyPrc & "</td>");
-						weboutstring("</tr>");
-						vItemRebInMathm[MyRebrw.ITCode] = true;
-					end;
-					if (MyRebrw.CodeType==0) then begin
-						for (s=0;s<INcnt;s=s+1) begin
-							testf1 = true;
-							if (vINGroup[aItems[s]]!=MyRebrw.ITCode) then begin testf1 = false; end;
-							if (!vItemRebInMathm[aItems[s]]) then begin testf1 = false; end;
-							if (testf1) then begin								
-								ItemCode = aItems[s];
-								vSaleQtyPrc = 0;
-								RebPrc = Rebrw.vra0;
-								GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec);
-								
-								weboutstring("<tr>");
-								weboutstring("<td>" & aItems[s] & "</td>");
-								weboutstring("<td>" & MyRebrw.vra0 & "</td>");
-								weboutstring("<td>" & MyRebr.FromDate & "</td>");
-								weboutstring("<td>" & MyRebr.ToDate & "</td>");
-								weboutstring("<td>" & vSaleQtyPrc & "</td>");
-								weboutstring("</tr>");
-								vItemRebInMathm[aItems[s]] = true;
-							end;
-						end;
-					end;
-				end;
-			end;
-			if (MyRebr.vra0 > 0) then begin
-				for (s=0;s<INcnt;s=s+1) begin
-					testf1 = true;
-					if (vItemRebInMathm[aItems[s]]) then begin testf1 = false; end;
-					if (testf1) then begin
-						ItemCode = aItems[s];
-						vSaleQtyPrc = 0;
-						RebPrc = MyRebr.vra0;
-						GetRebateSales (ItemCode, sd, ed, Location, vSaleQtyPrc, RebPrc, RepSpec);
-						
-						weboutstring("<tr>");
-						weboutstring("<td>" & aItems[s] & "</td>");
-						weboutstring("<td>" & MyRebr.vra0 & "</td>");
-						weboutstring("<td>" & MyRebr.FromDate & "</td>");
-						weboutstring("<td>" & MyRebr.ToDate  & "</td>");
-						weboutstring("<td>" & vSaleQtyPrc & "</td>");
-						weboutstring("</tr>");
-					end;
-				end;
-			end;
-		end;
-	end;
 	
 	resetloop(MyRebr);
 	
