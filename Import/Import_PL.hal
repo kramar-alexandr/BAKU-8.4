@@ -5469,12 +5469,14 @@ integer i,curcomp,cnt;
 string 100 item,brand;
 record BPIBrandVc BPIBrandr;
 boolean error;
+record CompaniesBlock Compb;
+row CompaniesBlock Comprw;
 
 	curcomp = currentcompany;
 	logtext(0,"CheckOffOutOfOrderIn start");
 	LogText(3, "Uncheck OutOfOrder - bulk update by codes and brand names");
 
-	
+	blockload(Compb);
 	error = false;
 
 	while (TestEOF()==false) begin
@@ -5485,39 +5487,42 @@ boolean error;
 		if(readfirstkey("Name",BPIBrandr,1,true))then begin
 			brand = BPIBrandr.Code;
 		end;
-		for(i=1;i<=34;i=i+1) begin
-			if(!CompanyIsJWLikeCompany(i) or i==3) then begin
-				SetCompany(i,false);
-				if(i!=18)then begin
-          INr.Code = item;
-          if(readfirstmain(INr,1,true)) begin
-            if(INr.OutOfOrder!=0)then begin
-              if(INr.Code==item and INr.BPIBrand==brand) then begin
-                INr.OutOfOrder = 0;
-                logtext(0,cnt & ". Updated: " & INr.Code & " " & INr.BPIBrand & " Company code: " & i);
-                RecordStore(INr,true);
-              end else begin
-                error = true;
-                LogText(3, cnt & ". Didn't update: " & item & " " & brand & " Company code: " & i & " ---------- Reason: incorrect brand name! ");
+		for(i=1;i<=matrowcnt(Compb);i=i+1) begin
+		  matrowget(Compb,i-1,Comprw);
+		  if(Comprw.ActiveStatus==0)then begin
+        if(!CompanyIsJWLikeCompany(i) or i==3) then begin
+          SetCompany(i,false);
+          if(i!=18)then begin
+            INr.Code = item;
+            if(readfirstmain(INr,1,true)) begin
+              if(INr.OutOfOrder!=0)then begin
+                if(INr.Code==item and INr.BPIBrand==brand) then begin
+                  INr.OutOfOrder = 0;
+                  logtext(0,cnt & ". Updated: " & INr.Code & " " & INr.BPIBrand & " Company code: " & i);
+                  RecordStore(INr,true);
+                end else begin
+                  error = true;
+                  LogText(3, cnt & ". Didn't update: " & item & " " & brand & " Company code: " & i & " ---------- Reason: incorrect brand name! ");
+                end;
+              end;
+            end;
+          end else begin
+            INr.AlternativeCode = item;
+            if(readfirstkey("AlternativeCode",INr,1,true)) begin
+              if(INr.OutOfOrder!=0)then begin
+                if(INr.AlternativeCode==item and INr.BPIBrand==brand) then begin
+                  INr.OutOfOrder = 0;
+                  logtext(0,cnt & ". Updated: " & INr.Code & " " & INr.BPIBrand & " Company code: " & i);
+                  RecordStore(INr,true);
+                end else begin
+                  error = true;
+                  LogText(3, cnt & ". Didn't update: " & item & " " & brand & " Company code: " & i & " ---------- Reason: incorrect brand name! ");
+                end;
               end;
             end;
           end;
-				end else begin
-				  INr.AlternativeCode = item;
-          if(readfirstkey("AlternativeCode",INr,1,true)) begin
-            if(INr.OutOfOrder!=0)then begin
-              if(INr.AlternativeCode==item and INr.BPIBrand==brand) then begin
-                INr.OutOfOrder = 0;
-                logtext(0,cnt & ". Updated: " & INr.Code & " " & INr.BPIBrand & " Company code: " & i);
-                RecordStore(INr,true);
-              end else begin
-                error = true;
-                LogText(3, cnt & ". Didn't update: " & item & " " & brand & " Company code: " & i & " ---------- Reason: incorrect brand name! ");
-              end;
-            end;
-          end;
-				end;
-			end;
+        end;
+      end;
 		end;
 		
 		if (NextImportLine(true)) then begin end;
