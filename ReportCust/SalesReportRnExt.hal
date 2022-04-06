@@ -2536,25 +2536,32 @@ end;
 
 
 
-procedure GetRebateSales (string ItemCode, date sd, date ed, string Location, var val vSaleQtyPrc, val RebPrc, record RcVc RepSpec, vector boolean vIVItem)
+procedure GetRebateSales (string ItemCode, date sd, date ed, string Location, var val vSaleQtyPrc, val RebPrc, record RcVc RepSpec, vector boolean vIVItem,
+														var val fifoazn, var val fifob1, var val rowfifoazn, var val rowfifob1, var val brandfifo, var val rowbrandfifo)
 begin
+		
 	
 	record INVc INr, dupINr;
 	record IVVc IVr;
 	row IVVc IVrw, IV2rw;
 	longint i,j,k,x,r,INcnt,s;
 	vector string 255 vItemRebObj, DubCodes, vRebObj;
-	boolean rebfound, TrHs, testf, testf1, testf2, rebf, rebitemf, TrHs2;
-	string 255 brand, conslocation, deflocation;
+	boolean rebfound, TrHs, testf, testf1, testf2, rebf, rebitemf, TrHs2, updst, additionalCurF, tmpbool;
+	string 255 brand, conslocation, deflocation, brandcur, azn, bcur;
 	vector string 255 vRebItems, vRebObjects, vRebFromDate, vRebToDate, vINGroup;
-	array string 255 aRebs, aItems, vRebCodes;
+	array string 255 aRebs, aItems, vRebCodes, addCurs;
 	vector date vRebStartDate, vRebEndDate;
 	vector longint vRebcnt;
 	vector boolean vItemRebInMathm, aRebFound, userbrand;
 	record ItemDuplicatesVc IDr;
 	integer pos;
-	vector val vRebPrc;
+	vector val vRebPrc, currencyBalances;
 	record ItemHistVc IHr;
+	val aznfr, aznto, to2, br1, br2;
+	integer cred;
+	record CurncyCodeVc CurncyCoder; //Edit***************************Sasha2,13:55 14.09.2017
+
+
 
 	IHr.FileName = "IVVc";
 	IHr.ArtCode = ItemCode;
@@ -2628,6 +2635,43 @@ begin
 							vSaleQtyPrc = vSaleQtyPrc + IVrw.Quant;
 							vIVItem[IVr.SerNr & "_" & IVrw.ArtCode] = true;
 						end;
+						
+						
+						
+						
+						
+						if(IVr.UpdStockFlag>0 and IVr.OrderNr<0)then begin
+							updst = true;
+						end else begin
+							updst = false;
+						end;
+						
+						
+						FindFIFOOrigValAndCurncyIV(IVr.SerNr,IHr.Row,brandfifo,brandcur,fifob1,updst,addCurs,currencyBalances,additionalCurF,tmpbool); //Edit***************************Sasha2,16:02 13.09.2017
+						if(fifob1==0)then begin
+							if(IVrw.FIFORowVal==0)then begin
+								fifob1 = IVrw.FIFORowVal;
+							end else begin
+								fifob1 = INr.WeighedAvPrice * IVrw.Quant;
+							end;
+						end;
+						fifob1 = AbsoluteVal(fifob1/IVrw.Quant);
+						for (j=0;j<addCurs.length;j=j+1) begin //Edit***************************Sasha2,11:46 14.09.2017 {
+							currencyBalances[addCurs[j]] = AbsoluteVal(currencyBalances[addCurs[j]]/IVrw.Quant);
+						end; //Edit***************************Sasha2,11:46 14.09.2017 }
+						
+						GetFullCurncyRate(azn,IVr.TransDate,aznfr,aznto,to2,br1,br2);
+						if(aznfr==0 or aznto==0)then begin
+							aznfr = 1; aznto = 1;
+						end;
+						fifoazn = fifob1*aznfr/aznto;
+						rowbrandfifo = brandfifo*IVrw.Quant*cred;
+						if(bcur==azn)then begin
+							rowfifoazn = fifoazn*IVrw.Quant*cred;
+						end;
+						if(bcur!=azn)then begin
+							rowfifob1 = fifob1*IVrw.Quant*cred;
+						end;
 					end;
 				end;
 			end;
@@ -2666,8 +2710,8 @@ begin
 	vector boolean vItemRebInMathm, aRebFound, userbrand;
 	record ItemDuplicatesVc IDr;
 	integer pos;
-	vector val vRebPrc, vItemStockQty, vItemSalesStockQty;
-	val vSaleQtyPrc, RebPrc;
+	vector val vRebPrc, vItemStockQty, vItemSalesStockQty, vEndItemStockQty;
+	val vSaleQtyPrc, RebPrc,  fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo;
 	record ItemHistVc IHr;
 	vector boolean vIVItem, vItemStockEx;
 	record LocationVc Locationr;
@@ -2756,11 +2800,12 @@ begin
 					while(loopkey("ArtCodeLoc",IHr,2,TrHs))begin
 						testf = true;
 						if(IHr.ArtCode!=INr.Code or IHr.Location!=aLocations[s])then begin TrHs=false; testf = false; end;
-						if(IHr.TransDate>sd)then begin testf = false; end;
 						if(IHr.StockAffectf==0)then begin testf=false; end;
-						
-						if(testf)then begin
+						if(testf and IHr.TransDate<=sd)then begin
 							vItemStockQty[INr.Code & "::" & IHr.Location] = vItemStockQty[INr.Code & "::" & IHr.Location] + IHr.Qty;
+						end;
+						if(testf and IHr.TransDate<=ed)then begin
+							vEndItemStockQty[INr.Code & "::" & IHr.Location] = vEndItemStockQty[INr.Code & "::" & IHr.Location] + IHr.Qty;
 						end;
 					end;
 					resetloop(IHr);
@@ -2823,7 +2868,7 @@ begin
 							inStockExf = false;
 							ClearVector(vItemSalesStockQty);
 							for (k=0;k<aLocations.length;k=k+1) begin
-								GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+								GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 								if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 								
 								
@@ -2847,14 +2892,14 @@ begin
 									& MyRebr.ToDate & chr(09) 																			
 									& MyRebrw.vra0 & chr(09) 																				//21
 									& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-									& "Количество стока на конец периода" & chr(09)									//23
+									& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 									& "Количество стока в ID group на начало периода" & chr(09)			//24
 									& "Количество стока в ID group на конец периода" & chr(09)			//25
 									& vSaleQtyPrc & chr(09)
-									& "Себестоимость за ед-цу в валюте Бренда" & chr(09)						//26
-									& "Себестоимость за ед-цу в валюте AZN" & chr(09)								//27
-									& "Сумма по себестоимости в валюте Бренда" & chr(09)						//28
-									& "Сумма по себестоимости в валюте AZN" & chr(09)								//29
+									& brandfifo & chr(09)																						//26
+									& fifoazn & chr(09)																							//27
+									& rowbrandfifo & chr(09)																				//28
+									& rowfifoazn & chr(09)																					//29
 									& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
 									& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
 									& "Сумма продажи в валюте Бренда" & chr(09)											//32
@@ -2888,7 +2933,7 @@ begin
 							end;
 							
 							if (!inStockExf) then begin
-								GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+								GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 								// StartFormat(15);
 									// outstring(0,0,ItemCode,false);
 									// outstring(0,0,aLocations[k],false);
@@ -2921,7 +2966,7 @@ begin
 									& MyRebr.ToDate & chr(09) 																			
 									& MyRebrw.vra0 & chr(09) 																				//21
 									& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-									& "Количество стока на конец периода" & chr(09)									//23
+									& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 									& "Количество стока в ID group на начало периода" & chr(09)			//24
 									& "Количество стока в ID group на конец периода" & chr(09)			//25
 									& vSaleQtyPrc & chr(09)
@@ -2962,7 +3007,7 @@ begin
 									inStockExf = false;
 									ClearVector(vItemSalesStockQty);
 									for (k=0;k<aLocations.length;k=k+1) begin
-										GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+										GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 										if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 											// StartFormat(15);
 												// outstring(0,0,ItemCode,false);
@@ -2995,7 +3040,7 @@ begin
 												& MyRebr.ToDate & chr(09) 																			
 												& MyRebrw.vra0 & chr(09) 																					//21
 												& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-												& "Количество стока на конец периода" & chr(09)									//23
+												& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 												& "Количество стока в ID group на начало периода" & chr(09)			//24
 												& "Количество стока в ID group на конец периода" & chr(09)			//25
 												& vSaleQtyPrc & chr(09)
@@ -3025,7 +3070,7 @@ begin
 									end;
 									
 									if (!inStockExf) then begin
-										GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+										GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 										
 										
 										
@@ -3049,7 +3094,7 @@ begin
 												& MyRebr.ToDate & chr(09) 																			
 												& MyRebrw.vra0 & chr(09) 																					//21
 												& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-												& "Количество стока на конец периода" & chr(09)									//23
+												& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 												& "Количество стока в ID group на начало периода" & chr(09)			//24
 												& "Количество стока в ID group на конец периода" & chr(09)			//25
 												& vSaleQtyPrc & chr(09)
@@ -3143,7 +3188,7 @@ begin
 							inStockExf = false;
 							ClearVector(vItemSalesStockQty);
 							for (k=0;k<aLocations.length;k=k+1) begin
-								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 								if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 								
 								
@@ -3167,7 +3212,7 @@ begin
 												& Rebr.ToDate & chr(09) 																			
 												& Rebrw.vra0 & chr(09) 																					//21
 												& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-												& "Количество стока на конец периода" & chr(09)									//23
+												& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 												& "Количество стока в ID group на начало периода" & chr(09)			//24
 												& "Количество стока в ID group на конец периода" & chr(09)			//25
 												& vSaleQtyPrc & chr(09)
@@ -3207,7 +3252,7 @@ begin
 							end;
 							
 							if (!inStockExf) then begin
-								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 								
 								
 								AddTextToArea	(ItemCode & chr(09) 																			//1
@@ -3230,7 +3275,7 @@ begin
 												& Rebr.ToDate & chr(09) 																			
 												& Rebrw.vra0 & chr(09) 																					//21
 												& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-												& "Количество стока на конец периода" & chr(09)									//23
+												& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 												& "Количество стока в ID group на начало периода" & chr(09)			//24
 												& "Количество стока в ID group на конец периода" & chr(09)			//25
 												& vSaleQtyPrc & chr(09)
@@ -3282,7 +3327,7 @@ begin
 									inStockExf = false;
 									ClearVector(vItemSalesStockQty);
 									for (k=0;k<aLocations.length;k=k+1) begin
-										GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+										GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 										if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 										
 											
@@ -3306,7 +3351,7 @@ begin
 												& Rebr.ToDate & chr(09) 																			
 												& Rebrw.vra0 & chr(09) 																					//21
 												& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-												& "Количество стока на конец периода" & chr(09)									//23
+												& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 												& "Количество стока в ID group на начало периода" & chr(09)			//24
 												& "Количество стока в ID group на конец периода" & chr(09)			//25
 												& vSaleQtyPrc & chr(09)
@@ -3347,7 +3392,7 @@ begin
 									end;
 									
 									if (!inStockExf) then begin
-										GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+										GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 										
 										AddTextToArea	(ItemCode & chr(09) 																//1
 												& "Название товара" & chr(09) 																	//2
@@ -3369,7 +3414,7 @@ begin
 												& Rebr.ToDate & chr(09) 																			
 												& Rebrw.vra0 & chr(09) 																					//21
 												& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-												& "Количество стока на конец периода" & chr(09)									//23
+												& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 												& "Количество стока в ID group на начало периода" & chr(09)			//24
 												& "Количество стока в ID group на конец периода" & chr(09)			//25
 												& vSaleQtyPrc & chr(09)
@@ -3423,7 +3468,7 @@ begin
 							inStockExf = false;
 							ClearVector(vItemSalesStockQty);
 							for (k=0;k<aLocations.length;k=k+1) begin
-								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 								if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 								
 								
@@ -3447,7 +3492,7 @@ begin
 												& Rebr.ToDate & chr(09) 																			
 												& Rebr.vra0 & chr(09) 																					//21
 												& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-												& "Количество стока на конец периода" & chr(09)									//23
+												& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 												& "Количество стока в ID group на начало периода" & chr(09)			//24
 												& "Количество стока в ID group на конец периода" & chr(09)			//25
 												& vSaleQtyPrc & chr(09)
@@ -3486,7 +3531,7 @@ begin
 							end;
 							
 							if (!inStockExf) then begin
-								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem);
+								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
 								
 								
 								AddTextToArea	(ItemCode & chr(09) 																//1
@@ -3509,7 +3554,7 @@ begin
 												& Rebr.ToDate & chr(09) 																			
 												& Rebr.vra0 & chr(09) 																					//21
 												& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)			//22
-												& "Количество стока на конец периода" & chr(09)									//23
+												& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)		//23
 												& "Количество стока в ID group на начало периода" & chr(09)			//24
 												& "Количество стока в ID group на конец периода" & chr(09)			//25
 												& vSaleQtyPrc & chr(09)
@@ -3553,7 +3598,7 @@ begin
 		end;
 		resetloop(Rebr);	
 	end;
-	WriteAreaToFile	(BodyAr,"/mnt/base/GlobalItemReports/" & FileName,0);
+	// WriteAreaToFile	(BodyAr,"/mnt/base/GlobalItemReports/" & FileName,0);
 	WriteAreaToFile	(BodyAr,FileName,0);
 	endjob;
 	return;
