@@ -2537,7 +2537,8 @@ end;
 
 
 procedure GetRebateSales (string ItemCode, date rebSd, date rebEd, date repSd, date repEd, string Location, var val vSaleQtyPrc, val RebPrc, record RcVc RepSpec, vector boolean vIVItem,
-														var val fifoazn, var val fifob1, var val rowfifoazn, var val rowfifob1, var val brandfifo, var val rowbrandfifo)
+														var val fifoazn, var val fifob1, var val rowfifoazn, var val rowfifob1, var val brandfifo, var val rowbrandfifo,
+														var val curprice, var val aznprice, var val curcusm, var val aznsum)
 begin
 		
 	
@@ -2557,7 +2558,7 @@ begin
 	integer pos;
 	vector val vRebPrc, currencyBalances;
 	record ItemHistVc IHr;
-	val aznfr, aznto, to2, br1, br2;
+	val aznfr, aznto, to2, br1, br2, fr,to1, bfr, bto;
 	integer cred;
 	record CurncyCodeVc CurncyCoder; //Edit***************************Sasha2,13:55 14.09.2017
 	date sd, ed;
@@ -2659,10 +2660,6 @@ begin
 							vIVItem[IVr.SerNr & "_" & IVrw.ArtCode] = true;
 						end;
 						
-						
-						
-						
-						
 						if(IVr.UpdStockFlag>0 and IVr.OrderNr<0)then begin
 							updst = true;
 						end else begin
@@ -2690,6 +2687,32 @@ begin
 						fifoazn = fifob1*aznfr/aznto;
 						rowbrandfifo = rowbrandfifo + brandfifo*IVrw.Quant*cred;	
 						rowfifoazn = rowfifoazn + fifoazn*IVrw.Quant*cred;
+						
+						
+						GetFullCurncyRate(brandcur,IVr.TransDate,fr,to1,to2,br1,br2);
+						if(fr==0 or to1==0)then begin
+							fr = 1; to1 = 1;
+						end;
+						bfr = IVr.FrRate;
+						bto = IVr.ToRateB1;
+						if(bfr==0 or bto==0)then begin
+							bfr = 1;
+							bto = 1;
+						end;
+						
+						if(brandcur==IVr.CurncyCode)then begin
+							curprice = IV2rw.Price*cred;
+						end else begin
+							curprice = round(IVrw.Price*fr/to1,SetRoundModeD(1))*cred;
+						end;
+						aznprice = IVrw.Price*aznfr/aznto;
+						
+						if(brandcur==IVr.CurncyCode)then begin
+							curcusm = IV2rw.Sum*cred;
+						end else begin
+							curcusm = round(IVrw.Sum*fr/to1,SetRoundModeD(1))*cred;
+						end;
+						aznsum = IVrw.Sum*aznfr/aznto*cred;
 					end;
 				end;
 			end;
@@ -2730,6 +2753,7 @@ begin
 	integer pos;
 	vector val vRebPrc, vItemStockQty, vItemSalesStockQty, vEndItemStockQty;
 	val vSaleQtyPrc, RebPrc,  fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo;
+	val curprice, aznprice, curcusm, aznsum;
 	record ItemHistVc IHr;
 	vector boolean vIVItem, vItemStockEx;
 	record LocationVc Locationr;
@@ -3030,7 +3054,8 @@ begin
 							ClearVector(vItemSalesStockQty);
 							for (k=0;k<aLocations.length;k=k+1) begin
 								vSaleQtyPrc = 0;
-								GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+								GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																curprice,aznprice,curcusm,aznsum);
 								if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 								
 								
@@ -3069,10 +3094,10 @@ begin
 												& fifoazn & chr(09)																							//27
 												& rowbrandfifo & chr(09)																				//28
 												& rowfifoazn & chr(09)																					//29
-												& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-												& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-												& "Сумма продажи в валюте Бренда" & chr(09)											//32
-												& "Сумма продажи в валюте AZN" & chr(09)												//33
+												& curprice & chr(09)																						//30
+												& aznprice & chr(09)																						//31
+												& curcusm & chr(09)																							//32
+												& aznsum & chr(09)																							//33
 												&	chr(13),BodyAr);
 								
 								
@@ -3103,7 +3128,8 @@ begin
 							
 							if (!inStockExf) then begin
 								vSaleQtyPrc = 0;
-								GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+								GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																curprice,aznprice,curcusm,aznsum);
 								// StartFormat(15);
 									// outstring(0,0,ItemCode,false);
 									// outstring(0,0,aLocations[k],false);
@@ -3151,10 +3177,10 @@ begin
 									& fifoazn & chr(09)																							//27
 									& rowbrandfifo & chr(09)																				//28
 									& rowfifoazn & chr(09)																					//29
-									& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-									& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-									& "Сумма продажи в валюте Бренда" & chr(09)											//32
-									& "Сумма продажи в валюте AZN" & chr(09)												//33
+									& curprice & chr(09)																						//30
+									& aznprice & chr(09)																						//31
+									& curcusm & chr(09)																							//32
+									& aznsum & chr(09)																							//33
 									&	chr(13),BodyAr);
 								
 											
@@ -3185,7 +3211,8 @@ begin
 									ClearVector(vItemSalesStockQty);
 									for (k=0;k<aLocations.length;k=k+1) begin
 										vSaleQtyPrc = 0;
-										GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+										GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																		curprice,aznprice,curcusm,aznsum);
 										if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 											// StartFormat(15);
 												// outstring(0,0,ItemCode,false);
@@ -3233,10 +3260,10 @@ begin
 												& fifoazn & chr(09)																							//27
 												& rowbrandfifo & chr(09)																				//28
 												& rowfifoazn & chr(09)																					//29
-												& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-												& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-												& "Сумма продажи в валюте Бренда" & chr(09)											//32
-												& "Сумма продажи в валюте AZN" & chr(09)												//33
+												& curprice & chr(09)																						//30
+												& aznprice & chr(09)																						//31
+												& curcusm & chr(09)																							//32
+												& aznsum & chr(09)																							//33
 												&	chr(13),BodyAr);
 								
 											
@@ -3256,7 +3283,8 @@ begin
 									
 									if (!inStockExf) then begin
 										vSaleQtyPrc = 0;
-										GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+										GetRebateSales (ItemCode, MyRebr.FromDate, MyRebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																		curprice, aznprice, curcusm ,aznsum);
 										
 										
 										
@@ -3295,10 +3323,10 @@ begin
 												& fifoazn & chr(09)																							//27
 												& rowbrandfifo & chr(09)																				//28
 												& rowfifoazn & chr(09)																					//29
-												& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-												& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-												& "Сумма продажи в валюте Бренда" & chr(09)											//32
-												& "Сумма продажи в валюте AZN" & chr(09)												//33
+												& curprice & chr(09)																						//30
+												& aznprice & chr(09)																						//31
+												& curcusm & chr(09)																							//32
+												& aznsum & chr(09)																							//33
 												&	chr(13),BodyAr);
 										
 										
@@ -3382,7 +3410,8 @@ begin
 							ClearVector(vItemSalesStockQty);
 							for (k=0;k<aLocations.length;k=k+1) begin
 								vSaleQtyPrc = 0;
-								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																curprice, aznprice, curcusm ,aznsum);
 								if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 								
 								
@@ -3421,10 +3450,10 @@ begin
 												& fifoazn & chr(09)																							//27
 												& rowbrandfifo & chr(09)																				//28
 												& rowfifoazn & chr(09)																					//29
-												& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-												& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-												& "Сумма продажи в валюте Бренда" & chr(09)											//32
-												& "Сумма продажи в валюте AZN" & chr(09)												//33
+												& curprice & chr(09)																						//30
+												& aznprice & chr(09)																						//31
+												& curcusm & chr(09)																							//32
+												& aznsum & chr(09)																							//33
 												&	chr(13),BodyAr);
 								
 								
@@ -3454,7 +3483,8 @@ begin
 							
 							if (!inStockExf) then begin
 								vSaleQtyPrc = 0;
-								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																curprice, aznprice, curcusm ,aznsum);
 								
 								
 								AddTextToArea	(ItemCode & chr(09) 																			//1
@@ -3492,10 +3522,10 @@ begin
 												& fifoazn & chr(09)																							//27
 												& rowbrandfifo & chr(09)																				//28
 												& rowfifoazn & chr(09)																					//29
-												& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-												& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-												& "Сумма продажи в валюте Бренда" & chr(09)											//32
-												& "Сумма продажи в валюте AZN" & chr(09)												//33
+												& curprice & chr(09)																						//30
+												& aznprice & chr(09)																						//31
+												& curcusm & chr(09)																							//32
+												& aznsum & chr(09)																							//33
 												&	chr(13),BodyAr);
 								
 								
@@ -3537,7 +3567,8 @@ begin
 									ClearVector(vItemSalesStockQty);
 									for (k=0;k<aLocations.length;k=k+1) begin
 										vSaleQtyPrc = 0;
-										GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+										GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																		curprice, aznprice, curcusm, aznsum);
 										if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 										
 											
@@ -3576,10 +3607,10 @@ begin
 												& fifoazn & chr(09)																							//27
 												& rowbrandfifo & chr(09)																				//28
 												& rowfifoazn & chr(09)																					//29
-												& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-												& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-												& "Сумма продажи в валюте Бренда" & chr(09)											//32
-												& "Сумма продажи в валюте AZN" & chr(09)												//33
+												& curprice & chr(09)																						//30
+												& aznprice & chr(09)																						//31
+												& curcusm & chr(09)																							//32
+												& aznsum & chr(09)																							//33
 												&	chr(13),BodyAr);
 											
 											
@@ -3610,7 +3641,8 @@ begin
 									
 									if (!inStockExf) then begin
 										vSaleQtyPrc = 0;
-										GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+										GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																		curprice, aznprice, curcusm, aznsum);
 										
 										AddTextToArea	(ItemCode & chr(09) 																//1
 												& vINName[ItemCode] & chr(09) 																	//2
@@ -3647,10 +3679,10 @@ begin
 												& fifoazn & chr(09)																							//27
 												& rowbrandfifo & chr(09)																				//28
 												& rowfifoazn & chr(09)																					//29
-												& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-												& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-												& "Сумма продажи в валюте Бренда" & chr(09)											//32
-												& "Сумма продажи в валюте AZN" & chr(09)												//33
+												& curprice & chr(09)																						//30
+												& aznprice & chr(09)																						//31
+												& curcusm & chr(09)																							//32
+												& aznsum & chr(09)																							//33
 												&	chr(13),BodyAr);
 										
 										// StartFormat(15);
@@ -3694,7 +3726,8 @@ begin
 							ClearVector(vItemSalesStockQty);
 							for (k=0;k<aLocations.length;k=k+1) begin
 								vSaleQtyPrc = 0;
-								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, aLocations[k], vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																curprice, aznprice, curcusm, aznsum);
 								if (vItemStockEx[ItemCode & "::" & aLocations[k]] or vSaleQtyPrc>0) then begin
 								
 								
@@ -3733,10 +3766,10 @@ begin
 												& fifoazn & chr(09)																							//27
 												& rowbrandfifo & chr(09)																				//28
 												& rowfifoazn & chr(09)																					//29
-												& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-												& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-												& "Сумма продажи в валюте Бренда" & chr(09)											//32
-												& "Сумма продажи в валюте AZN" & chr(09)												//33
+												& curprice & chr(09)																						//30
+												& aznprice & chr(09)																						//31
+												& curcusm & chr(09)																							//32
+												& aznsum & chr(09)																							//33
 												&	chr(13),BodyAr);
 								
 								
@@ -3765,7 +3798,8 @@ begin
 							
 							if (!inStockExf) then begin
 								vSaleQtyPrc = 0;
-								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo);
+								GetRebateSales (ItemCode, Rebr.FromDate, Rebr.ToDate, sd, ed, "", vSaleQtyPrc, RebPrc, RepSpec, vIVItem, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+																curprice, aznprice, curcusm, aznsum);
 								
 								
 								AddTextToArea	(ItemCode & chr(09) 																			//1
@@ -3803,10 +3837,10 @@ begin
 												& fifoazn & chr(09)																							//27
 												& rowbrandfifo & chr(09)																				//28
 												& rowfifoazn & chr(09)																					//29
-												& "Ритейл за ед-цу в валюте Бренда" & chr(09)										//30
-												& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
-												& "Сумма продажи в валюте Бренда" & chr(09)											//32
-												& "Сумма продажи в валюте AZN" & chr(09)												//33
+												& curprice & chr(09)																						//30
+												& aznprice & chr(09)																						//31
+												& curcusm & chr(09)																							//32
+												& aznsum & chr(09)																							//33
 												&	chr(13),BodyAr);
 								
 								
