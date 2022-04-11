@@ -1122,7 +1122,9 @@ begin
 						if(usercanaction("ViewCustomerInfo",true))then begin
 							outstring(0,0,USetStr(31069),false);
 							outstring(0,0,USetStr(31070),false);
-							outstring(0,0,USetStr(36442),false);
+							if (left(currentuser,2)=="SA") then begin
+								outstring(0,0,USetStr(36442),false);
+							end;
 							if(RepSpec.flags[2]==1)then begin
 								outstring(0,0,"Телефон клиента",false);
 								outstring(0,0,"Фиксация визитов: Имя",false);
@@ -1943,16 +1945,18 @@ begin
 												if(usercanaction("ViewCustomerInfo",true))then begin
 													outstring(0,0,IVr.CustCode,false);
 													outstring(0,0,IVr.Addr0,false);
-													if (FoundObjEx(IVrw)) then begin
-														outstring(0,0,"FOUNDER",false);
-													end else begin
-														if (left(IVr.CustCode,4)=="FOB_") then begin
-															outstring(0,0,"FOB",false);
+													if (left(currentuser,2)=="SA") then begin
+														if (FoundObjEx(IVrw)) then begin
+															outstring(0,0,"FOUNDER",false);
 														end else begin
-															if (IVr.CustCode=="FOBE_COMMERCE") then begin
-																outstring(0,0,"E_COMMERCE",false);
+															if (left(IVr.CustCode,4)=="FOB_") then begin
+																outstring(0,0,"FOB",false);
 															end else begin
-																outstring(0,0,"CLIENT",false);
+																if (IVr.CustCode=="FOBE_COMMERCE") then begin
+																	outstring(0,0,"E_COMMERCE",false);
+																end else begin
+																	outstring(0,0,"CLIENT",false);
+																end;
 															end;
 														end;
 													end;
@@ -2288,6 +2292,1676 @@ begin
 	EndJob;
 return;
 end;
+
+
+
+
+
+global
+procedure SalesReportExtInFile(record RcVc RepSpec)
+begin
+  Date sd,ed;
+  Boolean TrHs,testf;
+  record IVVc IVr,IV2r;
+  row IVVc IVrw,IV2rw;
+  integer i,keyi,mtrw,k,j;
+  string 20 keystr;
+  record INVc INr,dupINr;
+  string 100 classname,classname2,classcode; //Edit***************************Sasha2,11:14 20.11.2014
+  record DIVc DIr;
+  val brandfifo;
+  string 5 brandcur;
+  val fr,to1,to2,br1,br2;
+  val curcusm,curprice,fifob1;
+  boolean testf1,userlocation;
+  string 255 location,tstr,OBJStr,Obj,APriceObj;
+  record UserVc User;
+  integer pos,headrow;
+  string 50 uloc,uloc1;
+  boolean updst,modef;
+	val total_rebate,total_rebate_qty;//Edit***********************Vitalii 14:28 26.08.2014
+  val total_qty;
+  val total_cost,total_price,total_gp;
+  string 200 classfind,model,brand,category, conslocation, deflocation;
+  record ORVc ORr;
+  record BaseCurBlock BCb;
+  string 5 bcur,azn;
+  val bfr,bto;
+  val aznfr,aznto,fifoazn;
+  val btotal_cost,btotal_price,btotal_gp;
+  array val arrvals; //Edit***************************Sasha2,10:46 20.11.2014
+  array string 20 arrstrs; //Edit***************************Sasha2,10:46 20.11.2014
+  integer valscnt,strscnt,rangeval,rangecnt,arrsize; //Edit***************************Sasha2,12:11 20.11.2014
+  val itemoccurrences; //Edit***************************Sasha2,12:11 20.11.2014
+  boolean iteminf,addclassf,tmpbool;
+  integer cred;
+  Record CTypeVc CTyper; //Edit***************************Sasha2,12:23 11.11.2015
+  integer ctypecnt,m; //Edit***************************Sasha2,12:24 11.11.2015
+  array string 10 typeindex; //Edit***************************Sasha2,14:08 11.11.2015
+  vector string 255 dispnames; //Edit***************************Sasha2,14:08 11.11.2015
+  vector string 20 typeval; //Edit***************************Sasha2,14:11 08.02.2016
+  array string 20 typecode; //Edit***************************Sasha2,14:11 08.02.2016
+  vector string 200 typename; //Edit***************************Sasha2,14:11 08.02.2016
+  record DiCheckBlock DiCb; //Edit***************************Sasha2,14:10 08.02.2016
+  row DiCheckBlock DiCbw; //Edit***************************Sasha2,14:10 08.02.2016
+  integer rwcnt,typescnt,pos1; //Edit***************************Sasha2,14:11 08.02.2016
+  Boolean collf,metalf; //Edit***************************Sasha2,14:09 02.06.2016
+  string 20 collstr,metalstr; //Edit***************************Sasha2,14:09 02.06.2016
+  vector val currencyBalances; //Edit***************************Sasha2,15:49 13.09.2017
+	array string 10 addCurs; //Edit***************************Sasha2,15:50 13.09.2017
+	Boolean additionalCurF, testf2; //Edit***************************Sasha2,10:33 14.09.2017
+	val EURprice,EURcusm; //Edit***************************Sasha2,11:26 14.09.2017
+	record CurncyCodeVc CurncyCoder; //Edit***************************Sasha2,13:55 14.09.2017
+	record OldDIVc OldDIr;
+  record ObjVc Objr;
+	vector boolean userbrand;
+  boolean userbrandf;
+  record MarketingVc MCr;
+  vector string 200 vVisitName,vVisitPhone;
+  record CUVc CUr;
+	record LCCashbackLevelVc LCCBLevelr;
+  row LCCashbackLevelVc LCCBLevelrw;
+  record LoyaltyCardVc LoyaltyCardr;
+  roundmode rnd;
+  Boolean found;
+  Integer rowcnt;
+  val loyCardPointsBalance,cashbackPercent;
+	record ItemDuplicatesVc IDr;
+  vector string 255 DubCodes;
+	record LocationVc Locr;
+	area BodyAr;
+	string 255 FileName;
+
+
+	FileName = "SalesReportExt/SalesReportExtInFile_" & DateToString(RepSpec.sStartDate,"DD.MM.YYYY") & "_" & DateToString(RepSpec.sEndDate,"DD.MM.YYYY") & "_" & CurrentCompany & ".txt";
+	
+
+	if (!FileExists(FileName)) then begin
+		userbrandf = CheckUserBrands(currentuser,userbrand);
+		
+		blockload(BCb);
+		bcur = BCb.BaseCur1;
+		azn = "AZN";
+		if(currentcompany==10)THEN BEGIN
+			azn = "PLN";
+		end;
+		if(currentcompany==11 or currentcompany==12)THEN BEGIN
+			azn = "IRR";
+		end;
+		headrow = 2;
+		//SetLangMode(LangRussian,"RUS",0);
+			
+			sd = RepSpec.sStartDate;
+			ed = RepSpec.sEndDate;
+			location = RepSpec.f1;
+			Locr.Code = location;
+			if (ReadFirstMain(Locr,1,true)) then begin
+				if (nonblank(Locr.ConsigStockCode)) then begin
+					conslocation = Locr.ConsigStockCode;
+				end;
+				if (nonblank(Locr.DefectStockCode)) then begin
+					deflocation = Locr.DefectStockCode;
+				end;
+			end;
+			
+			Header(headrow,USetStr(13835) & sd & ":" & ed,0);
+			headrow = headrow + 1;
+			
+			if (NonBlank(location)) then begin
+				Header(headrow,USetStr(31097) & ": " & location,0);
+			end else begin
+				Header(headrow,USetStr(31097) & ": " & USetStr(12727),0);
+			end;
+			headrow = headrow + 1;
+			
+			if (NonBlank(RepSpec.f2)) then begin
+				Header(headrow,USetStr(11605) & RepSpec.f2,0);
+			end else begin
+				Header(headrow,USetStr(11605) & USetStr(12727),0);
+			end;
+			headrow = headrow + 1;
+			
+			if (NonBlank(RepSpec.f4)) then begin
+				Header(headrow,USetStr(31044) & ": " & RepSpec.f4,0);
+			end else begin
+				Header(headrow,USetStr(31044) & ": " & USetStr(12727),0);
+			end;
+			headrow = headrow + 1;
+			
+			if (NonBlank(RepSpec.f5)) then begin
+				Header(headrow,USetStr(8833) & ": " & RepSpec.f5,0);
+			end else begin
+				Header(headrow,USetStr(8833) & ": " & USetStr(12727),0);
+			end;
+			headrow = headrow + 1;
+			
+			EndHeader; //Edit***************************Sasha2,16:57 19.11.2014 }
+			
+			if (NonBlank(RepSpec.f7)) then begin //Edit***************************Sasha2,16:02 13.09.2017 {
+				CurncyCoder.CurncyCode = RepSpec.f7;
+				if (ReadFirstMain(CurncyCoder,1,true)) then begin
+					addCurs[addCurs.length] = CurncyCoder.CurncyCode; 
+					additionalCurF = true;
+				end;
+			end;//Edit***************************Sasha2,16:02 13.09.2017 }
+			
+			if (CompanyIsJWLikeCompany(CurrentCompany)) then begin //Edit***************************Sasha2,11:27 02.06.2016 {
+				addclassf = true;
+			end else begin
+				addclassf = false;
+			end; 
+
+			if (addclassf) then begin
+				typescnt = 0;
+				BlockLoad(DiCb);
+				rwcnt = MatRowCnt(DiCb);  
+				for (j=0;j<rwcnt;j=j+1) begin
+					MatRowGet(DiCb,j,DiCbw);
+					if (NonBlank(DiCbw.DiType)) then begin
+						DIr.Code = DiCbw.DiCode;
+						ReadFirstMain(DIr,1,true);
+						DiCbw.DiType = DIr.CType & "," & DiCbw.DiType;
+						pos = 0;
+						ExtractObj(DiCbw.DiType,pos,uloc);
+						while (nonblank(uloc)) begin
+							if (blank(typeval[uloc])) then begin
+								CTyper.Code = uloc;
+								if (ReadFirstMain(CTyper,1,true)) then begin
+									if (CTyper.Code=="GENDER") then begin
+										switch (UpperCase(Left(DiCbw.DiCode,1))) begin
+											case "A":
+												if (blank(typeval[CTyper.Code & "_A"])) then begin
+													typeval[CTyper.Code & "_A"] = ".";
+													typecode[typescnt] = CTyper.Code & "_A";
+													typename[typecode[typescnt]] = "ACCESSORIES " & CTyper.Comment;
+													typescnt = typescnt + 1;  
+												end;
+											case "J":
+												if (blank(typeval[CTyper.Code & "_J"])) then begin
+													typeval[CTyper.Code & "_J"] = ".";
+													typecode[typescnt] = CTyper.Code & "_J";
+													typename[typecode[typescnt]] = "JEWELRY " & CTyper.Comment;
+													typescnt = typescnt + 1;  
+												end;
+											case "W":
+												if (blank(typeval[CTyper.Code & "_W"])) then begin
+													typeval[CTyper.Code & "_W"] = ".";
+													typecode[typescnt] = CTyper.Code & "_W";
+													typename[typecode[typescnt]] = "WATCH " & CTyper.Comment;
+													typescnt = typescnt + 1;
+												end;
+										end;
+									end else begin
+										typeval[CTyper.Code] = ".";
+										typecode[typescnt] = CTyper.Code;
+										typename[CTyper.Code] = CTyper.Comment;
+										typescnt = typescnt + 1;  
+									end;
+								end;
+							end;
+							ExtractObj(DiCbw.DiType,pos,uloc);
+						end;
+					end;
+				end;
+				SortAndClearClassifications(typecode,typename,typescnt);
+			end;//Edit***************************Sasha2,11:27 02.06.2016 }
+
+			if (RepSpec.ArtMode==0) then begin
+				modef = true;
+			end else begin
+				modef = false;
+				RECORDNEW(IV2r);
+			end;
+		
+			userlocation = false;
+			User.Code = currentuser;
+			if(readfirstmain(User,1,true))then begin
+				if(nonblank(User.UserLocations) and usercanaction("AllowReportWithUserLoc",false))then begin
+					userlocation = true;
+					pos = 0;
+					ExtractObj(User.UserLocations,pos,uloc);
+					while (nonblank(uloc)) begin
+						if(uloc==location)then begin
+							userlocation = false;
+						end;
+						ExtractObj(User.UserLocations,pos,uloc);
+					end;
+				end;
+			end;
+		
+			if(userlocation)then begin
+				// startformat(15);
+					// outstring(50,0,USetStr(31014),false);
+				// endformat;
+				
+				
+				AddTextToArea	(USetStr(31014) & chr(09) 																							
+										&	chr(13),BodyAr);
+				
+				
+			end else begin
+				if(nonblank(RepSpec.sStartDate) and nonblank(RepSpec.sEndDate))then begin
+
+					
+					AddTextToArea	(USetStr(31102) & chr(09) 																						
+										& RepSpec.sStartDate & chr(09) 																						
+										&	chr(13),BodyAr);
+
+					
+					AddTextToArea	(USetStr(31103) & chr(09),BodyAr);	
+					if(nonblank(RepSpec.f1))then begin
+						AddTextToArea	(RepSpec.f1 & chr(09),BodyAr);	
+					end else begin
+						AddTextToArea	(USetStr(31104) & chr(09),BodyAr);	
+					end;
+					AddTextToArea	(chr(13),BodyAr);					
+					
+
+					AddTextToArea	(USetStr(31105) & chr(09) 																						
+										& RepSpec.f2 & chr(09) 																						
+										&	chr(13),BodyAr);
+					
+
+					AddTextToArea	(USetStr(31205) & chr(09) 																						
+										& RepSpec.f4 & chr(09) 																						
+										&	chr(13),BodyAr);
+					
+
+					AddTextToArea	(USetStr(31206) & chr(09) 																						
+										& RepSpec.f5 & chr(09) 																						
+										&	chr(13),BodyAr);
+
+					
+					startformat(15);
+						AddTextToArea	(USetStr(31042) & chr(09),BodyAr);	
+						AddTextToArea	(USetStr(31043) & chr(09),BodyAr);	
+						if (RepSpec.ArtMode==0) then begin
+							AddTextToArea	(USetStr(36287) & chr(09),BodyAr);	
+							AddTextToArea	("Коды дубликатов" & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(12815) & chr(09),BodyAr);	
+						if (modef) then begin
+							AddTextToArea	(USetStr(31044) & chr(09),BodyAr);	
+							if (addclassf==false) then begin //Edit***************************Sasha2,13:15 02.06.2016
+								AddTextToArea	(USetStr(19357) & chr(09),BodyAr);	
+							end;
+							if(currentcompany==9)then begin
+								AddTextToArea	(USetStr(9131) & chr(09),BodyAr);	
+							end;
+							AddTextToArea	(USetStr(12713) & chr(09),BodyAr);	
+							if (addclassf==false And CurrentCompany==9) then begin //Edit***************************Sasha2,13:17 02.06.2016 {
+								AddTextToArea	(USetStr(31045) & chr(09),BodyAr);	
+								AddTextToArea	(USetStr(31047) & chr(09),BodyAr);	
+								AddTextToArea	(USetStr(14533) & chr(09),BodyAr);	
+								AddTextToArea	(USetStr(31048) & chr(09),BodyAr);	
+								//if(CompanyIsJWLikeCompany(currentcompany))then begin
+									//outstring(0,0,USetStr(31049),false); //Braslet/Remeshok
+									//outstring(0,0,USetStr(31050),false); //Tsvet tsyferblata
+								//end;
+								if(currentcompany==13)then begin		//Edit-----------------------------Dima  30.04.2015
+									AddTextToArea	(USetStr(31320) & chr(09),BodyAr);	
+									AddTextToArea	(USetStr(35007) & chr(09),BodyAr);	
+								end else begin		
+								AddTextToArea	(USetStr(31320) & chr(09),BodyAr);	
+								AddTextToArea	(USetStr(31321) & chr(09),BodyAr);	
+							end;
+							end else begin //Edit***************************Sasha2,13:17 02.06.2016 }
+							 // for (j=0;j<30;j=j+1) begin //if you change "30" do it in other places having "For" loop 
+								 // outstring(0,0,typename[typecode[j]],false);
+								//end;
+							end;
+						end;
+						// if(CurrentCompany!=9) then begin
+							// outstring(0,0,"Reference",false);
+							// outstring(0,0,"Group",false); 
+							// outstring(0,0,"SubGroup",false);
+							// outstring(0,0,"Category",false);
+							// if(currentcompany==25)then begin
+								// outstring(0,0,"CC Collection",false); 
+								// outstring(0,0,"Product Group",false); 							
+							// end;
+							// outstring(0,0,"Material",false); 		
+							// if(currentcompany==13)then begin
+								// outstring(0,0,"Size",false);
+								// outstring(0,0,"Colour",false); 
+							// end else begin
+								// outstring(0,0,"Colour",false); 
+								// outstring(0,0,"Size",false); 
+							// end;						
+							// if(CompanyIsJWLikeCompany(currentcompany))then begin
+								// outstring(0,0,"Кар.",false); 
+								// outstring(0,0,"JW Weight",false);
+								// outstring(0,0,"SAP",false);
+							// end;					
+							// outstring(0,0,"Use",false);
+							// outstring(0,0,"Sex",false);
+							// outstring(0,0,"Plating",false);						
+							// outstring(0,0,"Collection",false); 
+							// outstring(0,0,"Clarity",false);
+							// outstring(0,0,"Weight",false); 
+							// outstring(0,0,"Cut",false); 
+							// outstring(0,0,"Shape",false);
+							// outstring(0,0,"Stone",false); 
+							// outstring(0,0,"Strap",false);
+							// outstring(0,0,"Odour",false);
+							// outstring(0,0,"Year",false); 
+							// outstring(0,0,"High",false); 
+						// end;
+						
+						
+						
+						if(CurrentCompany!=9 and modef) then begin   // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:49 06.11.2020
+							AddTextToArea	("Reference" & chr(09),BodyAr);	
+							AddTextToArea	("Collection" & chr(09),BodyAr);	
+							AddTextToArea	("Group" & chr(09),BodyAr);	
+							AddTextToArea	("SubGroup" & chr(09),BodyAr);	
+							AddTextToArea	("Category" & chr(09),BodyAr);	
+							AddTextToArea	("Material" & chr(09),BodyAr);	
+							AddTextToArea	("Colour" & chr(09),BodyAr);	
+							AddTextToArea	("Year" & chr(09),BodyAr);	
+							AddTextToArea	("Life" & chr(09),BodyAr);	
+							AddTextToArea	("Size" & chr(09),BodyAr);	
+							AddTextToArea	("Use" & chr(09),BodyAr);	
+							AddTextToArea	("Sex" & chr(09),BodyAr);	
+							AddTextToArea	("Plating" & chr(09),BodyAr);	
+							AddTextToArea	("CC Collection" & chr(09),BodyAr);	
+							AddTextToArea	("Clarity" & chr(09),BodyAr);	
+							AddTextToArea	("Weight" & chr(09),BodyAr);	
+							AddTextToArea	("Cut" & chr(09),BodyAr);	
+							AddTextToArea	("Shape" & chr(09),BodyAr);	
+							AddTextToArea	("Stone" & chr(09),BodyAr);	
+							AddTextToArea	("Strap" & chr(09),BodyAr);	
+							AddTextToArea	("Odour" & chr(09),BodyAr);	
+							AddTextToArea	("Product Group" & chr(09),BodyAr);	
+							if(CompanyIsJWLikeCompany(currentcompany))then begin
+								AddTextToArea	("Кар." & chr(09),BodyAr);	
+								AddTextToArea	("JW Weight" & chr(09),BodyAr);	
+								AddTextToArea	("SAP" & chr(09),BodyAr);	
+							end;		
+						end;
+						
+						
+						
+						
+						
+						
+						
+						
+						AddTextToArea	(USetStr(31051) & chr(09),BodyAr);	
+						AddTextToArea	("EAN code" & chr(09),BodyAr);	
+						AddTextToArea	(USetStr(13199) & chr(09),BodyAr);	
+						AddTextToArea	(USetStr(31052) & chr(09),BodyAr);	
+						if (left(CurrentUser,2)=="SA") then begin
+							AddTextToArea	("EUR cur.rate" & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(31053) & chr(09),BodyAr);	
+						if (additionalCurF) then begin //additional currency cost //Edit***************************Sasha2,17:02 13.09.2017
+							AddTextToArea	(USetStr(31055) & chr(09),BodyAr);	
+						end;
+						if(bcur==azn)then begin
+							AddTextToArea	(USetStr(31055) & chr(09),BodyAr);	
+						end;
+						if(bcur!=azn)then begin
+							AddTextToArea	(USetStr(31055) & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(31056) & chr(09),BodyAr);	
+						if (additionalCurF) then begin //additional currency cost sum//Edit***************************Sasha2,17:02 13.09.2017
+							AddTextToArea	(USetStr(31058) & chr(09),BodyAr);	
+						end;
+						if(bcur==azn)then begin
+							AddTextToArea	(USetStr(31058) & chr(09),BodyAr);	
+						end;
+						if(bcur!=azn)then begin
+							AddTextToArea	(USetStr(31058) & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(31059) & chr(09),BodyAr);	
+						if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+							AddTextToArea	(USetStr(31061) & chr(09),BodyAr);	
+						end;
+						if(bcur==azn)then begin
+							AddTextToArea	(USetStr(31061) & chr(09),BodyAr);	
+						end;
+						if(bcur!=azn)then begin
+							AddTextToArea	(USetStr(31061) & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(31062) & chr(09),BodyAr);	
+						if (additionalCurF) then begin //additional currency retail sum //Edit***************************Sasha2,17:02 13.09.2017
+							AddTextToArea	(USetStr(31064) & chr(09),BodyAr);	
+						end;
+						if(bcur==azn)then begin
+							AddTextToArea	(USetStr(31064) & chr(09),BodyAr);	
+						end;
+						if(bcur!=azn)then begin
+							AddTextToArea	(USetStr(31064) & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(31065) & chr(09),BodyAr);	
+						if (additionalCurF) then begin //additional currency retail difference //Edit***************************Sasha2,17:02 13.09.2017
+							AddTextToArea	(USetStr(31067) & chr(09),BodyAr);	
+						end;
+						if(bcur==azn)then begin
+							AddTextToArea	(USetStr(31067) & chr(09),BodyAr);	
+						end;
+						if(bcur!=azn)then begin
+							AddTextToArea	(USetStr(31067) & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(31068) & chr(09),BodyAr);	
+						if (modef) then begin
+							if(usercanaction("ViewCustomerInfo",true))then begin
+								AddTextToArea	(USetStr(31069) & chr(09),BodyAr);	
+								AddTextToArea	(USetStr(31070) & chr(09),BodyAr);	
+								if (left(currentuser,2)=="SA") then begin
+									AddTextToArea	(USetStr(36442) & chr(09),BodyAr);	
+								end;
+								if(RepSpec.flags[2]==1)then begin
+									AddTextToArea	("Телефон клиента"& chr(09),BodyAr);	
+									AddTextToArea	("Фиксация визитов: Имя" & chr(09),BodyAr);	
+									AddTextToArea	("Фиксация визитов: Телефоны" & chr(09),BodyAr);	
+									AddTextToArea	("Карта лояльности" & chr(09),BodyAr);	
+									AddTextToArea	("Пол" & chr(09),BodyAr);	
+									AddTextToArea	("Возраст" & chr(09),BodyAr);	
+								end;
+							end;
+							
+							AddTextToArea	(USetStr(31071) & chr(09),BodyAr);	
+							AddTextToArea	(USetStr(16709) & chr(09),BodyAr);	
+							AddTextToArea	(USetStr(36286) & chr(09),BodyAr);	
+							AddTextToArea	(USetStr(31072) & chr(09),BodyAr);	
+							AddTextToArea	(USetStr(9269) & chr(09),BodyAr);	
+							AddTextToArea	(USetStr(16574) & chr(09),BodyAr);	
+							if(currentcompany==9)then begin
+								AddTextToArea	(USetStr(3264) & chr(09),BodyAr);	
+							end;
+							AddTextToArea	(USetStr(36250) & chr(09),BodyAr);	
+							AddTextToArea	("Код доп. скидки" & chr(09),BodyAr);	
+							AddTextToArea	(USetStr(31073) & chr(09),BodyAr);	
+							AddTextToArea	("Fiscal number" & chr(09),BodyAr);	
+						end;
+						if(currentcompany==25 and RepSpec.flags[2]!=0) then begin
+							AddTextToArea	("Текущий процент при покупке" & chr(09),BodyAr);	
+						end;
+						//if (addclassf) then begin //Edit***************************Sasha2,14:00 08.02.2016 {
+						 // for (j=30;j<typescnt;j=j+1) begin //if you change "30" do it in other places having "For" loop 
+						 //   outstring(0,0,typename[typecode[j]],false);
+						 // end;
+						//end; //Edit***************************Sasha2,14:01 08.02.2016 }
+						
+						/*ctypecnt = 0; //Edit***************************Sasha2,14:10 11.11.2015 { 
+						CTyper.Code = "";
+						while (LoopMain(CTyper,1,true)) begin
+							typeindex[ctypecnt] = CTyper.Code;
+							dispnames[typeindex[ctypecnt]] = "";
+							outstring(0,0,CTyper.Code,false);
+							ctypecnt = ctypecnt + 1;
+						end;*///Edit***************************Sasha2,14:10 11.11.2015 }	
+					AddTextToArea	(chr(13),BodyAr);
+
+					total_rebate = 0;//Edit***********************Vitalii 14:28 26.08.2014
+					total_rebate_qty = 0;
+					total_qty = 0;
+					total_cost = 0;
+					total_price = 0;
+					total_gp = 0;
+					btotal_cost = 0;
+					btotal_price = 0;
+					btotal_gp = 0;
+					rangecnt = 0; //Edit***************************Sasha2,11:41 20.11.2014
+					arrsize = 25; 
+					
+					//arrsize = arrsize + ctypecnt; //Edit***************************Sasha2,16:49 11.11.2015
+					arrsize = arrsize + typescnt;
+					
+					IVr.TransDate = sd;
+					keyi = 1;
+					keystr = "TransDate";
+					
+					// _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 14:58 14.01.2020
+					
+					// Для вывода отчета по кодам локаций с матриц счетов-фактур не подходит следующий ключ
+					
+					// if(nonblank(location))then begin	
+						// IVr.Location = location;
+						// keyi = 2;
+						// keystr = "Location";
+					// end;
+					
+					if(RepSpec.flags[2]==1)then begin
+						MCr.TransDate = sd;
+						TrHs = true;
+						while(loopkey("TransDate",MCr,1,TrHs))begin
+							if(MCr.TransDate>ed)then begin TrHs = false; end;
+						
+							if(TrHs)then begin
+								if(nonblank(MCr.InvNr))then begin
+									pos = 0;
+									tstr = "";
+									ExtractObj(MCr.InvNr,pos,tstr);
+									while(nonblank(tstr))begin
+										if(nonblank(tstr))then begin
+											vVisitName[tstr] = MCr.Name;
+											vVisitPhone[tstr] = MCr.Phone3 & " " & MCr.Phone2 & " " & MCr.Phone1;
+										end;
+										ExtractObj(MCr.InvNr,pos,tstr);
+									end;
+								end;
+							end;
+						end;
+					end;
+					LCCBLevelr.LCMLevel = "CASACOIN";
+					found = ReadFirstMain(LCCBLevelr,1,true);
+					TrHs = true;
+					while(loopkey(keystr,IVr,keyi,TrHs)) begin
+						if(CurrentCompany==25 and RepSpec.flags[2]!=0) then begin
+							cashbackPercent = 0;
+							LoyaltyCardr.SerNr = IVr.LoyaltyCardNr;
+							if ((nonblank(IVr.LoyaltyCardNr) and ReadFirstMain(LoyaltyCardr,1,true))) then begin
+								rnd = DefaultValRoundoff;
+								rnd.decimals = 2;
+								rnd.mode = kRoundingModeHalfUp;
+								loyCardPointsBalance = LoyaltyCardr.CashbackLevelPoints;
+								rowcnt = MatRowCnt(IVr);							
+								if (found) then begin						
+									rnd.decimals = LCCBLevelr.RndTo;
+									rwcnt = MatRowCnt(LCCBLevelr);
+									for (i=0;i<rwcnt;i=i+1) begin
+										MatRowGet(LCCBLevelr,i,LCCBLevelrw);
+										if (LCCBLevelrw.FromPoints<=loyCardPointsBalance and LCCBLevelrw.CashbackPercent>0) then begin									
+											if (LCCBLevelrw.ToPoints>=loyCardPointsBalance or LCCBLevelrw.ToPoints==BlankVal) then begin
+												cashbackPercent = LCCBLevelrw.CashbackPercent;
+												i = rwcnt;
+											end;
+										end;
+									end;
+								end;	
+							end;
+						end;
+						testf = true;
+						cred = 1;
+						if(IVr.InvType==kInvoiceTypeCredit)then begin
+							cred = -1;
+						end;
+											
+						
+						if(RepSpec.flags[1]!=0 and IVr.OrderNr!=-1) then begin testf = false; end;
+						if(IVr.InvDate<sd)then begin testf = false; end;
+						if(IVr.InvDate>ed)then begin TrHs = false; testf = false; end;
+						// if(nonblank(location) and IVr.Location!=location)then begin TrHs = false; testf = false; end;
+						if(IVr.OKFlag==0)then begin testf = false; end;
+						if(IVr.Invalid>0)then begin testf = false; end;
+						if(nonblank(RepSpec.f6) and !setinset(IVr.CustCode,RepSpec.f6))then begin testf = false; end;
+						if(nonblank(RepSpec.f8) and !setinset(RepSpec.f8,IVr.Objects))then begin testf = false; end;
+						if(IVr.PriceList!="RRP" and IVr.PriceList!="CC" and RepSpec.flags[3]!=0) then begin testf = false; end;
+						
+						if(RepSpec.flags[4]==1)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 21 09 2020 y. at 11:38:16 AM
+							if(IVr.ECOMMERCEOrdf==0)then begin
+								testf = false;
+							end;
+						end;
+						if(RepSpec.flags[4]==2)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 01, 21 09 2020 y. at 11:38:16 AM
+							if(IVr.ECOMMERCEOrdf!=0)then begin
+								testf = false;
+							end;
+						end;
+						
+						if(RepSpec.flags[6]==1)then begin
+							if(blank(IVr.TaxTransactionCode))then begin
+								testf = false;
+							end;
+						end;
+						
+						if(testf)then begin
+							mtrw = matrowcnt(IVr);
+							
+							tstr = "";
+							For(i=0;i<mtrw;i=i+1) begin
+								matrowget(IVr,i,IVrw);
+								if(setinset(IVrw.PayMode,tstr)==false)then begin
+									if(nonblank(tstr))then begin
+										tstr = tstr & ",";
+									end;
+									tstr = tstr & IVrw.PayMode;
+								end;
+							end; 
+							
+							if(RepSpec.flags[2]==1)then begin
+								CUr.Code = IVr.CustCode;
+								readfirstmain(CUr,1,true);
+							end;
+							
+							For(i=0;i<mtrw;i=i+1) begin
+								testf2 = true;
+								matrowget(IVr,i,IVrw);
+								matrowget(IVr,i,IV2rw);
+								
+								if(nonblank(IVrw.Location))then begin // conslocation, deflocation
+									if(nonblank(location) and IVrw.Location!=location and IVrw.Location!=conslocation and IVrw.Location!=deflocation)then begin testf2 = false; end;
+								end else begin
+									if(nonblank(location) and IVr.Location!=location and IVr.Location!=conslocation and IVr.Location!=deflocation)then begin testf2 = false; end;
+								end;
+								if(testf2)then begin
+									if(IVrw.stp==kInvoiceRowTypeGiftVoucherSold and blank(RepSpec.f4) and blank(RepSpec.f5) and blank(RepSpec.f2) and blank(RepSpec.f9) and blank(RepSpec.f10) and userbrandf==false)then begin
+										PrintGftSertSold(IVr,i,total_price,bcur,azn,addclassf, modef);
+									end;
+									if(IVrw.stp==kInvoiceRowTypeNormal and nonblank(IVrw.ArtCode))then begin
+										INr.Code = IVrw.ArtCode;
+										readfirstmain(INr,1,true);
+										testf1=true;
+										IDr.DupCode = IVrw.ArtCode;
+										INr.Code = IVrw.ArtCode;
+										if(RepSpec.flags[5]==1 and INr.ConsgType!=1) then begin testf1 = false; end;
+										if(ReadFirstKey("DupCode",IDr,1,true) and testf1) then begin
+											dupINr.Code = IDr.OrigCode;
+											while(LoopMain(dupINr,1,testf2)) begin
+												if(dupINr.Code!=IDr.OrigCode) then begin testf2 = false; end;
+												if(dupINr.BPIBrand==IDr.OrigBrandCode and testf2) then begin
+													INr.Code = IDr.OrigCode;
+													DubCodes[IDr.OrigCode] = IDr.DupCode;
+												end;
+											end;
+										end;
+										readfirstmain(INr,1,true);
+										testf2=true;
+									
+										if(RepSpec.flags[0]==1 and INr.OutOfOrder==1)then begin testf1 = false; end;
+										if(nonblank(RepSpec.f2) and testf1)then begin
+											testf1=SetInSet2(RepSpec.f2,INr.DispGroups);
+										end;
+										if(nonblank(RepSpec.f9) and !setinset(RepSpec.f9,IVrw.Objects))then begin testf1 = false; end;
+										if(nonblank(RepSpec.f10) and RepSpec.f10!=IVrw.ArtCode)then begin testf1 = false; end;
+										
+										if(userbrandf and testf1)then begin// Edit ************************** BPI Ukraine - KramarAlexandr - 03, 19 06 2019 y. at 4:35:18 PM
+											pos = 0;
+											brand = "";
+											testf1 = false;
+											ExtractObj(INr.DispGroups,pos,brand);
+											while(nonblank(brand)) begin
+												if(userbrand[brand])then begin
+													testf1 = true;
+												end;
+												ExtractObj(INr.DispGroups,pos,brand);
+											end;
+										end;
+										
+										if(testf1)then begin
+											if(nonblank(RepSpec.f4) or nonblank(RepSpec.f5))then begin
+												brand = "";
+												model = "";
+												category = "";
+												pos = 0;
+												classfind = "";
+												ExtractObj(INr.DispGroups,pos,classfind);
+												while(nonblank(classfind)) begin
+													DIr.Code = classfind;
+													readfirstmain(DIr,1,true);
+													if(DIr.CType=="BRAND")then begin
+														brand = DIr.Code;
+													end;
+													if(DIr.CType=="MODEL")then begin
+														model = DIr.Code;
+													end;
+													ExtractObj(INr.DispGroups,pos,classfind);
+												end;
+												if(nonblank(RepSpec.f4) and brand!=RepSpec.f4)then begin
+													testf1 = false;
+												end;
+												if(nonblank(RepSpec.f5) and model!=RepSpec.f5)then begin
+													testf1 = false;
+												end;
+											end;
+										end;
+										
+										if(testf1) then begin
+											pos = 0;
+											brand = "";
+											model = "";
+											if (addclassf) then begin //Edit***************************Sasha2,14:05 02.06.2016 {
+												ExtractObj(INr.DispGroups,pos,uloc);
+												while (NonBlank(uloc)) begin
+													DIr.Code = uloc;
+													if (readfirstmain(DIr,1,true)) then begin
+														if (DIr.CType=="BRAND") then begin
+															brand = DIr.Name;
+														end;
+														if (DIr.CType=="MODEL") then begin
+															model = DIr.Name;
+														end;
+														if (NonBlank(DIr.CType)) then begin 
+															if (DIr.CType=="GENDER") then begin
+																switch (Left(UpperCase(INr.MainDisp),1)) begin
+																	case "A":
+																		DIr.CType = DIr.CType & "_A";
+																		typeval[DIr.CType] = INr.Code & ";" & DIr.Name;
+																	case "J":
+																		DIr.CType = DIr.CType & "_J";
+																		typeval[DIr.CType] = INr.Code & ";" & DIr.Name;
+																	case "W":
+																		DIr.CType = DIr.CType & "_W";
+																		typeval[DIr.CType] = INr.Code & ";" & DIr.Name;
+																end;
+															end else begin
+																typeval[DIr.CType] = INr.Code & ";" & DIr.Name;
+																switch (Left(UpperCase(INr.MainDisp),1)) begin //if classifications in custom separate fields {
+																	case "A":
+																		if (NonBlank(INr.Reference)) then begin
+																			collf = true;
+																			collstr = "COLL_A";
+																		end;
+																		if (NonBlank(INr.Metal)) then begin
+																			metalf = true;
+																			metalstr = "MATERIAL_A";
+																		end;
+																	case "J":
+																		if (NonBlank(INr.Reference)) then begin
+																			collf = true;
+																			collstr = "COLL_J";
+																		end;
+																		if (NonBlank(INr.Metal)) then begin
+																			metalf = true;
+																			metalstr = "MATERIAL_J";
+																		end;
+																		if (NonBlank(INr.RowWeight)) then begin
+																			tstr = typeval["WEIGHT"];
+																			pos1 = 0;
+																			ExtractObj(tstr,pos1,uloc1);
+																			if (uloc1==INr.Code) then begin
+																				ExtractObj(tstr,pos1,uloc1);
+																				if (blank(uloc1)) then begin
+																					typeval["WEIGHT"] = INr.Code & ";" & INr.RowWeight;
+																				end;
+																			end else begin
+																				typeval["WEIGHT"] = INr.Code & ";" & INr.RowWeight;
+																			end;
+																		end;
+																		if (NonBlank(INr.MajStoneDet)) then begin
+																			tstr = typeval["D_CARAT"];
+																			pos1 = 0;
+																			ExtractObj(tstr,pos1,uloc1);
+																			if (uloc1==INr.Code) then begin
+																				ExtractObj(tstr,pos1,uloc1);
+																				if (blank(uloc1)) then begin
+																					typeval["D_CARAT"] = INr.Code & ";" & INr.MajStoneDet;
+																				end;
+																			end else begin
+																				typeval["D_CARAT"] = INr.Code & ";" & INr.MajStoneDet;
+																			end;
+																		end;
+																	case "W":
+																		if (NonBlank(INr.Reference)) then begin
+																			collf = true;
+																			collstr = "COLL_W";
+																		end;
+																		if (NonBlank(INr.Metal)) then begin
+																			metalf = true;
+																			metalstr = "MATERIAL_W";
+																		end;
+																end; 
+																if (collf) then begin
+																	tstr = typeval[collstr];
+																	pos1 = 0;
+																	ExtractObj(tstr,pos1,uloc1);
+																	if (uloc1==INr.Code) then begin
+																		ExtractObj(tstr,pos1,uloc1);
+																		if (blank(uloc1)) then begin
+																			typeval[collstr] = INr.Code & ";" & INr.Reference;
+																		end;
+																	end else begin
+																		typeval[collstr] = INr.Code & ";" & INr.Reference;
+																	end;  
+																	collf = false;
+																end;
+																if (metalf) then begin
+																	tstr = typeval[metalstr];
+																	pos1 = 0;
+																	ExtractObj(tstr,pos1,uloc1);
+																	if (uloc1==INr.Code) then begin
+																		ExtractObj(tstr,pos1,uloc1);
+																		if (blank(uloc1)) then begin
+																			typeval[metalstr] = INr.Code & ";" & INr.Metal;
+																		end;
+																	end else begin
+																		typeval[metalstr] = INr.Code & ";" & INr.Metal;
+																	end;
+																	metalf = false;
+																end;//if classifications in custom separate fields }
+															end;
+														end;
+													end; //Edit***************************Sasha2,14:05 02.06.2016 }
+													ExtractObj(INr.DispGroups,pos,uloc);
+												end;
+											end;
+											if (modef) then begin
+												startformat(15);
+											end;
+												if (modef) then begin
+													if(Left(INr.Code,3)=="IN_") then begin
+														AddTextToArea	(INr.AlternativeCode & chr(09),BodyAr);	
+														AddTextToArea	(INr.Code & chr(09),BodyAr);	
+													end else begin
+														if (left(INr.Code,2)=="IN" and currentcompany==29) then begin
+															AddTextToArea	(Right(INr.GlobalArtCode,len(INr.GlobalArtCode)-9) & chr(09),BodyAr);	
+															AddTextToArea	(INr.Code & chr(09),BodyAr);	
+														end else begin
+															AddTextToArea	(INr.Code & chr(09),BodyAr);	
+															AddTextToArea	(INr.AlternativeCode & chr(09),BodyAr);	
+														end;
+													end;
+													AddTextToArea	(INr.OrigCode & chr(09),BodyAr);	
+													AddTextToArea	(DubCodes[INr.Code] & chr(09),BodyAr);	
+													if(nonblank(IVrw.Location))then begin
+														AddTextToArea	(IVrw.Location & chr(09),BodyAr);	
+													end else begin
+														AddTextToArea	(IVr.Location & chr(09),BodyAr);	
+													end;
+													
+													if (addclassf==false) then begin
+														classname = "";
+														if(nonblank(INr.BPIBrand)) then begin
+															AddTextToArea	(BPICodeToName(INr.BPIBrand) & chr(09),BodyAr);	
+														end else begin
+															if (currentcompany==29) then begin
+																if (nonblank(GetECItemBrand(INr.GlobalArtCode))) then begin
+																	AddTextToArea	(GetECItemBrand(INr.GlobalArtCode) & chr(09),BodyAr);	
+																end else begin
+																	AddTextToArea	("" & chr(09),BodyAr);	
+																end;
+															end else begin
+																AddTextToArea	("" & chr(09),BodyAr);	
+															end;
+														end;
+														classname2 = "";
+														k=0;
+														ExtractObj(INr.DispGroups,k,classcode);
+														DIr.Code = classcode;
+														readfirstmain(DIr,1,true);
+														classname2 = DIr.Name;
+														if(currentcompany==9) then begin
+															category = DIr.CCat;	//Edit----------------------Dima  20.03.2015
+														end;	
+														if(currentcompany==13)then begin										
+															AddTextToArea	(DIr.Name & chr(09),BodyAr);	
+														end else begin
+															AddTextToArea	(BPICodeToName(INr.BPICollection) & chr(09),BodyAr);	
+														end;
+														//dispnames[DIr.CType] = dispnames[DIr.CType] & classcode & ","; //Edit***************************Sasha2,14:50 11.11.2015
+													end else begin //Edit***************************Sasha2,14:11 02.06.2016 {
+														if(nonblank(INr.BPIBrand)) then begin
+															AddTextToArea	(BPICodeToName(INr.BPIBrand) & chr(09),BodyAr);	
+														end else begin
+															AddTextToArea	(brand & chr(09),BodyAr);	
+														end;	
+													end; //Edit***************************Sasha2,14:11 02.06.2016 ]
+
+													
+													/*ExtractObj(INr.DispGroups,k,classcode); //Edit***************************Sasha2,14:52 11.11.2015 {
+													while (NonBlank(classcode)) begin
+														DIr.Code = classcode;
+														if (readfirstmain(DIr,1,true)) then begin
+															dispnames[DIr.CType] = dispnames[DIr.CType] & classcode & ",";
+														end;
+														ExtractObj(INr.DispGroups,k,classcode);
+													end;*/ //Edit***************************Sasha2,14:52 11.11.2015 }
+													
+													if(currentcompany==9) then begin
+														AddTextToArea	(category & chr(09),BodyAr);	
+														AddTextToArea	(prepareStr(IVrw.Spec) & chr(09),BodyAr);	
+														AddTextToArea	(INr.Reference & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIMaterial) & chr(09),BodyAr);	
+														AddTextToArea	(INr.MajStoneDet & chr(09),BodyAr);	
+														AddTextToArea	(INr.SN & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPISize) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIColor) & chr(09),BodyAr);	
+													end else begin
+														AddTextToArea	(prepareStr(IVrw.Spec) & chr(09),BodyAr);	
+														AddTextToArea	(INr.Reference & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPICollection) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIGroup) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPISubGroup) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPICategory) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIMaterial) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIColor) & chr(09),BodyAr);	
+														AddTextToArea	(INr.High & chr(09),BodyAr);	
+														AddTextToArea	(INr.Life2 & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPISize) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIUse) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPISex) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIPlating) & chr(09),BodyAr);	
+														if (INr.BPIBrand=="BRND0046") then begin
+															AddTextToArea	(INr.CCCollectName & chr(09),BodyAr);	
+														end else begin
+															AddTextToArea	("" & chr(09),BodyAr);	
+														end;						
+														AddTextToArea	(BPICodeToName(INr.BPIClarity) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIWeight) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPICut) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIShape) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIStone) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIStrap) & chr(09),BodyAr);	
+														AddTextToArea	(BPICodeToName(INr.BPIOdour) & chr(09),BodyAr);	
+														if (CurrentCompany==25) then begin
+															AddTextToArea	(INr.SNOne & chr(09),BodyAr);	
+														end else begin
+															AddTextToArea	("" & chr(09),BodyAr);	
+														end;
+														if(CompanyIsJWLikeCompany(currentcompany))then begin
+															AddTextToArea	(INr.RowWeight & chr(09),BodyAr);	
+															AddTextToArea	(INr.MajStoneDet & chr(09),BodyAr);	
+															AddTextToArea	(INr.SN & chr(09),BodyAr);	
+														end;
+													end else begin
+														/*for (j=0;j<30;j=j+1) begin //if you change "30" do it in other places having "For" loop 
+															pos = 0;
+															ExtractObjWithSeparator(";",typeval[typecode[j]],true,pos,uloc);
+															if (uloc==INr.Code) then begin
+																ExtractObjWithSeparator(";",typeval[typecode[j]],true,pos,uloc);
+																outstring(0,0,uloc,false);
+															end else begin
+																outstring(0,0,"",false);
+															end;
+														end;*/
+													end; //Edit***************************Sasha2,14:21 02.06.2016 }
+													
+													AddTextToArea	(IVrw.SerialNr & chr(09),BodyAr);	
+													AddTextToArea	(INr.BarCode & chr(09),BodyAr);	
+													AddTextToArea	(INr.EKNCode & chr(09),BodyAr);	
+													AddTextToArea	(IVrw.Quant*cred & chr(09),BodyAr);	
+												end else begin //Edit***************************Sasha2,11:17 20.11.2014 {
+													if(nonblank(IVrw.Location))then begin
+														rangeval = CalculateCoef(IV2r,rangecnt,IVrw.ArtCode,IVrw.Location,iteminf,arrsize);
+													end else begin
+														rangeval = CalculateCoef(IV2r,rangecnt,IVrw.ArtCode,IVr.Location,iteminf,arrsize);
+													end;
+													valscnt = rangeval;
+													strscnt = rangeval;
+													if (iteminf==false) then begin
+														arrstrs[strscnt] = IVrw.ArtCode; strscnt = strscnt + 1;
+														arrstrs[strscnt] = INr.AlternativeCode; strscnt = strscnt + 1;
+														if(nonblank(IVrw.Location))then begin
+															arrstrs[strscnt] = IVrw.Location; strscnt = strscnt + 1;
+														end else begin
+															arrstrs[strscnt] = IVr.Location; strscnt = strscnt + 1;
+														end;
+														
+														if (addclassf==false) then begin
+															classname = "";
+															k=0;
+															ExtractObj(INr.DispGroups,k,classcode);
+															DIr.Code = classcode;
+															readfirstmain(DIr,1,true);
+															classname = DIr.Name;
+															//dispnames[DIr.CType] = dispnames[DIr.CType] & classcode & ","; //Edit***************************Sasha2,14:50 11.11.2015
+															arrstrs[strscnt] = classname; strscnt = strscnt + 1;
+															
+															classname2 = "";
+															ExtractObj(INr.DispGroups,k,classcode);
+															DIr.Code = classcode;
+															readfirstmain(DIr,1,true);
+															classname2 = DIr.Name;
+															//dispnames[DIr.CType] = dispnames[DIr.CType] & classcode & ","; //Edit***************************Sasha2,14:50 11.11.2015
+															arrstrs[strscnt] = classname2; strscnt = strscnt + 1;
+														end else begin //Edit***************************Sasha2,14:23 02.06.2016 {
+															arrstrs[strscnt] = brand; strscnt = strscnt + 1;
+														end; //Edit***************************Sasha2,14:23 02.06.2016 }
+														
+														arrstrs[strscnt] = prepareStr(IVrw.Spec); strscnt = strscnt + 1;
+														if (addclassf==false) then begin //Edit***************************Sasha2,14:21 02.06.2016 {
+															arrstrs[strscnt] = INr.Reference; strscnt = strscnt + 1; 
+															arrstrs[strscnt] = INr.Metal; strscnt = strscnt + 1; 
+															arrstrs[strscnt] = INr.RowWeight;strscnt = strscnt + 1;
+															arrstrs[strscnt] = INr.MajStoneDet; strscnt = strscnt + 1;
+															//if(CompanyIsJWLikeCompany(currentcompany))then begin
+																//arrstrs[strscnt] = INr.BrcStr; strscnt = strscnt + 1; 
+																//arrstrs[strscnt] = INr.Gender; strscnt = strscnt + 1;
+															//end;
+															if(currentcompany==13)then begin	//Edit----------------------Dima  30.04.2015
+																arrstrs[strscnt] = INr.Size; strscnt = strscnt + 1; 
+																arrstrs[strscnt] = INr.Colour; strscnt = strscnt + 1;
+															end;	  
+														end else begin
+															for (j=0;j<30;j=j+1) begin //if you change "30" do it in other places having "For" loop 
+																pos = 0;
+																ExtractObjWithSeparator(";",typeval[typecode[j]],true,pos,uloc);
+																if (uloc==INr.Code) then begin
+																	ExtractObjWithSeparator(";",typeval[typecode[j]],true,pos,uloc);
+																	arrstrs[strscnt] = uloc; strscnt = strscnt + 1;
+																end else begin
+																	arrstrs[strscnt] = ""; strscnt = strscnt + 1;
+																end;
+															end;
+														end; //Edit***************************Sasha2,14:21 02.06.2016 }
+														//arrstrs[strscnt] = ""; strscnt = strscnt + 1;											
+														arrstrs[strscnt] = INr.BarCode; strscnt = strscnt + 1;
+														arrstrs[strscnt] = INr.EKNCode; strscnt = strscnt + 1;
+														
+														/*ExtractObj(INr.DispGroups,k,classcode); //Edit***************************Sasha2,14:52 11.11.2015 {
+														while (NonBlank(classcode)) begin
+															DIr.Code = classcode;
+															if (readfirstmain(DIr,1,true)) then begin
+																dispnames[DIr.CType] = dispnames[DIr.CType] & classcode & ",";
+															end;
+															ExtractObj(INr.DispGroups,k,classcode);
+														end; *///Edit***************************Sasha2,14:52 11.11.2015 }
+														
+													end else begin
+														if(addclassf)then begin
+															strscnt = strscnt + 7 + typescnt;
+														end else begin
+															if (currentcompany==13) then begin
+																strscnt = strscnt + 14;
+															end else begin
+																strscnt = strscnt + 12;
+															end;
+														end;
+													end;
+													arrvals[valscnt] = arrvals[valscnt] + IVrw.Quant * cred; valscnt = valscnt + 1;
+												end; //Edit***************************Sasha2,11:18 20.11.2014 }
+												
+												total_qty = total_qty + IVrw.Quant;
+												fr = IVr.FrRate;
+												to1 = IVr.ToRateB1;
+												if(fr==0 or to1==0)then begin
+													fr = 1;
+													to1 = 1;
+												end;
+												IVrw.Price = IVrw.Price/fr*to1;
+												IVrw.Sum = IVrw.Sum/fr*to1;
+												
+												if(IVr.UpdStockFlag>0 and IVr.OrderNr<0)then begin
+													updst = true;
+												end else begin
+													updst = false;
+												end;
+												
+												
+												FindFIFOOrigValAndCurncyIV(IVr.SerNr,i,brandfifo,brandcur,fifob1,updst,addCurs,currencyBalances,additionalCurF,tmpbool); //Edit***************************Sasha2,16:02 13.09.2017
+												if(fifob1==0)then begin
+													if(IVrw.FIFORowVal==0)then begin
+														fifob1 = IVrw.FIFORowVal;
+													end else begin
+														fifob1 = INr.WeighedAvPrice * IVrw.Quant;
+													end;
+												end;
+												if(brandfifo==0)then begin
+													brandfifo = INr.LastPurchPrice2 * IVrw.Quant;
+												end;
+												
+												
+												brandfifo = AbsoluteVal(brandfifo/IVrw.Quant);
+												fifob1 = AbsoluteVal(fifob1/IVrw.Quant);
+												for (j=0;j<addCurs.length;j=j+1) begin //Edit***************************Sasha2,11:46 14.09.2017 {
+													currencyBalances[addCurs[j]] = AbsoluteVal(currencyBalances[addCurs[j]]/IVrw.Quant);
+												end; //Edit***************************Sasha2,11:46 14.09.2017 }
+												
+												
+												if (left(CurrentUser,2)=="SA") then begin
+													azn = "EUR";
+													GetFullCurncyRate(azn,IVr.TransDate,aznfr,aznto,to2,br1,br2);
+													outstring(100,0,aznto,false);
+													AddTextToArea	(aznto & chr(09),BodyAr);	
+													azn = "AZN";
+													if(currentcompany==10)THEN BEGIN
+														azn = "PLN";
+													end;
+													if(currentcompany==11 or currentcompany==12)THEN BEGIN
+														azn = "IRR";
+													end;
+												end;
+												
+												
+												GetFullCurncyRate(azn,IVr.TransDate,aznfr,aznto,to2,br1,br2);
+												if(aznfr==0 or aznto==0)then begin
+													aznfr = 1; aznto = 1;
+												end;
+												fifoazn = fifob1*aznfr/aznto;
+												if (modef) then begin
+													AddTextToArea	(brandfifo & chr(09),BodyAr);	
+													if (additionalCurF) then begin //additional currency cost //Edit***************************Sasha2,17:02 13.09.2017
+														AddTextToArea	(currencyBalances[CurncyCoder.CurncyCode] & chr(09),BodyAr);	
+													end;
+													if(bcur==azn)then begin
+														AddTextToArea	(fifoazn & chr(09),BodyAr);	
+													end;
+													if(bcur!=azn)then begin
+														outstring(102,0,fifob1,false);//basecur
+														AddTextToArea	(fifob1 & chr(09),BodyAr);	
+													end;
+													AddTextToArea	(brandfifo*IVrw.Quant*cred & chr(09),BodyAr);	
+													if (additionalCurF) then begin //additional currency cost sum//Edit***************************Sasha2,17:02 13.09.2017
+														AddTextToArea	(currencyBalances[CurncyCoder.CurncyCode]*IVrw.Quant*cred & chr(09),BodyAr);	
+													end;
+													if(bcur==azn)then begin
+														AddTextToArea	(fifoazn*IVrw.Quant*cred & chr(09),BodyAr);	
+													end;
+													if(bcur!=azn)then begin
+														AddTextToArea	(fifob1*IVrw.Quant*cred & chr(09),BodyAr);	
+													end;
+												end else begin //Edit***************************Sasha2,11:17 20.11.2014 {
+													arrvals[valscnt] = arrvals[valscnt] + brandfifo; valscnt = valscnt + 1;
+													if (additionalCurF) then begin //additional currency cost //Edit***************************Sasha2,17:02 13.09.2017
+														arrvals[valscnt] = arrvals[valscnt] + currencyBalances[CurncyCoder.CurncyCode]; valscnt = valscnt + 1;
+													end;
+													arrvals[valscnt] = arrvals[valscnt] + fifoazn; valscnt = valscnt + 1;
+													if(bcur!=azn)then begin
+														arrvals[valscnt] = arrvals[valscnt] + fifob1; valscnt = valscnt + 1;
+													end;
+													arrvals[valscnt] = arrvals[valscnt] + brandfifo*IVrw.Quant*cred; valscnt = valscnt + 1;
+													if (additionalCurF) then begin //additional currency cost sum//Edit***************************Sasha2,17:02 13.09.2017
+														arrvals[valscnt] = arrvals[valscnt] + currencyBalances[CurncyCoder.CurncyCode]*IVrw.Quant*cred; valscnt = valscnt + 1;
+													end;
+													arrvals[valscnt] = arrvals[valscnt] + fifoazn*IVrw.Quant*cred; valscnt = valscnt + 1;
+													if(bcur!=azn)then begin
+														arrvals[valscnt] = arrvals[valscnt] + fifob1*IVrw.Quant*cred; valscnt = valscnt + 1;
+													end;
+												end; //Edit***************************Sasha2,11:18 20.11.2014 }
+												
+												GetFullCurncyRate(brandcur,IVr.TransDate,fr,to1,to2,br1,br2);
+												if(fr==0 or to1==0)then begin
+													fr = 1; to1 = 1;
+												end;
+												/*if(fr==0 or to1==0)then begin
+													fr = 1; to1 = 1;
+												end;*/
+												bfr = IVr.FrRate;
+												bto = IVr.ToRateB1;
+												if(bfr==0 or bto==0)then begin
+													bfr = 1;
+													bto = 1;
+												end;
+												
+												total_cost = total_cost + fifoazn*IVrw.Quant*cred;
+												btotal_cost = btotal_cost + fifob1*IVrw.Quant*cred;
+												
+												if(brandcur==IVr.CurncyCode)then begin
+													curprice = IV2rw.Price*cred;
+												end else begin
+													curprice = round(IVrw.Price*fr/to1,SetRoundModeD(1))*cred;
+												end;
+												
+												if (additionalCurF) then begin  //Edit***************************Sasha2,11:27 14.09.2017 {
+													if (IVr.CurncyCode==CurncyCoder.CurncyCode) then begin
+														EURprice = IV2rw.Price*cred;
+													end else begin
+														EURprice = BlankVal;
+														CurValToOtherCur(IVr.InvDate,azn,IVrw.Price,CurncyCoder.CurncyCode,EURprice,SetRoundModeD(1)); //Edit***************************Sasha2,11:13 14.09.2017
+														EURprice = EURprice*cred;
+													end;
+												end; //Edit***************************Sasha2,11:27 14.09.2017 }
+												
+												if (modef) then begin
+													AddTextToArea	(curprice & chr(09),BodyAr);	
+													if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+														AddTextToArea	(EURprice & chr(09),BodyAr);	
+													end;
+													if(bcur==azn)then begin
+														AddTextToArea	(IVrw.Price*aznfr/aznto & chr(09),BodyAr);	
+													end;
+												end else begin //Edit***************************Sasha2,11:17 20.11.2014 {
+													arrvals[valscnt] = arrvals[valscnt] + curprice; valscnt = valscnt + 1;
+													if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+														arrvals[valscnt] = arrvals[valscnt] + EURprice; valscnt = valscnt + 1;
+													end;
+													arrvals[valscnt] = arrvals[valscnt] + IVrw.Price*aznfr/aznto; valscnt = valscnt + 1;
+												end; //Edit***************************Sasha2,11:18 20.11.2014 }
+												
+												total_rebate = total_rebate + IVrw.Price*aznfr/aznto*IVrw.Quant;// Edit ************************** Wednesday, 22 October 2014 16:43:55
+												
+												if (modef) then begin
+													if(bcur!=azn)then begin
+														AddTextToArea	(IVrw.Price & chr(09),BodyAr);	
+													end;
+												end else  begin //Edit***************************Sasha2,11:17 20.11.2014 {
+													if(bcur!=azn)then begin
+														arrvals[valscnt] = arrvals[valscnt] + IV2rw.Price; valscnt = valscnt + 1;
+													end;
+												end; //Edit***************************Sasha2,11:18 20.11.2014 }
+												
+												if(brandcur==IVr.CurncyCode)then begin
+													curcusm = IV2rw.Sum*cred;
+												end else begin
+													curcusm = round(IVrw.Sum*fr/to1,SetRoundModeD(1))*cred;
+												end;
+												if (additionalCurF) then begin  //Edit***************************Sasha2,11:27 14.09.2017 {
+													if (IVr.CurncyCode==CurncyCoder.CurncyCode) then begin
+														EURcusm = IVrw.Sum*cred*fr/to1;
+													end else begin
+														EURcusm = BlankVal;
+														CurValToOtherCur(IVr.InvDate,azn,IVrw.Sum,CurncyCoder.CurncyCode,EURcusm,SetRoundModeD(1)); //Edit***************************Sasha2,11:13 14.09.2017
+														EURcusm = EURcusm*cred;
+													end;
+												end; //Edit***************************Sasha2,11:27 14.09.2017 }
+												
+												if (modef) then begin
+													AddTextToArea	(curcusm & chr(09),BodyAr);	
+													if (additionalCurF) then begin //additional currency retail sum //Edit***************************Sasha2,17:02 13.09.2017
+														AddTextToArea	(EURcusm & chr(09),BodyAr);	
+													end;
+													if(bcur==azn)then begin
+														AddTextToArea	(IVrw.Sum*aznfr/aznto*cred & chr(09),BodyAr);	
+													end;
+												end else begin //Edit***************************Sasha2,11:17 20.11.2014 {
+													arrvals[valscnt] = arrvals[valscnt] + curcusm; valscnt = valscnt + 1;
+													if (additionalCurF) then begin //additional currency retail sum //Edit***************************Sasha2,17:02 13.09.2017
+														arrvals[valscnt] = arrvals[valscnt] + EURcusm; valscnt = valscnt + 1;
+													end;
+													arrvals[valscnt] = arrvals[valscnt] + IVrw.Sum*aznfr/aznto*cred; valscnt = valscnt + 1;
+												end; //Edit***************************Sasha2,11:17 20.11.2014 }
+												
+												total_rebate_qty = total_rebate_qty + IVrw.Sum*aznfr/aznto*cred;// Edit ************************** Wednesday, 22 October 2014 16:44:51
+												if (modef) then begin
+													if(bcur!=azn)then begin
+														AddTextToArea	(IVrw.Sum*cred & chr(09),BodyAr);	
+													end;
+												end else  begin //Edit***************************Sasha2,11:17 20.11.2014 {
+													if(bcur!=azn)then begin
+														arrvals[valscnt] = arrvals[valscnt] + IVrw.Sum*cred; valscnt = valscnt + 1;
+													end;
+												end; //Edit***************************Sasha2,11:17 20.11.2014 {
+												
+												total_price = total_price + IVrw.Sum*aznfr/aznto*cred;
+												btotal_price = btotal_price + IVrw.Sum*cred;
+												
+												if (modef) then begin
+													AddTextToArea	((curcusm - brandfifo*IVrw.Quant)*cred & chr(09),BodyAr);	
+													if (additionalCurF) then begin //additional currency retail difference //Edit***************************Sasha2,17:02 13.09.2017
+														AddTextToArea	((EURcusm -  currencyBalances[CurncyCoder.CurncyCode]*IVrw.Quant)*cred & chr(09),BodyAr);	
+													end;
+													if(bcur==azn)then begin
+														AddTextToArea	(IVrw.Sum*aznfr/aznto*cred - fifob1*IVrw.Quant*aznfr/aznto*cred & chr(09),BodyAr);	
+													end;
+													if(bcur!=azn)then begin
+														AddTextToArea	((IVrw.Sum - fifob1*IVrw.Quant)*cred & chr(09),BodyAr);	
+													end;
+													AddTextToArea	(brandcur & chr(09),BodyAr);	
+													if(usercanaction("ViewCustomerInfo",true))then begin
+														AddTextToArea	(IVr.CustCode & chr(09),BodyAr);	
+														AddTextToArea	(IVr.Addr0 & chr(09),BodyAr);	
+														if (left(currentuser,2)=="SA") then begin
+															if (FoundObjEx(IVrw)) then begin
+																AddTextToArea	("FOUNDER" & chr(09),BodyAr);	
+															end else begin
+																if (left(IVr.CustCode,4)=="FOB_") then begin
+																	AddTextToArea	("FOB" & chr(09),BodyAr);	
+																end else begin
+																	if (IVr.CustCode=="FOBE_COMMERCE") then begin
+																		AddTextToArea	("E_COMMERCE" & chr(09),BodyAr);	
+																	end else begin
+																		AddTextToArea	("CLIENT" & chr(09),BodyAr);	
+																	end;
+																end;
+															end;
+														end;
+														if(RepSpec.flags[2]==1)then begin
+															AddTextToArea	(CUr.Phone & " " & CUr.Mobile & " " & CUr.AltPhone & chr(09),BodyAr);	
+															AddTextToArea	(vVisitName[IVr.SerNr] & chr(09),BodyAr);	
+															AddTextToArea	(vVisitPhone[IVr.SerNr] & chr(09),BodyAr);	
+															if(IVr.LCMLevel=="CASACOIN") then begin
+																AddTextToArea	(IVr.LoyaltyCardNr & chr(09),BodyAr);	
+															end else begin	
+																AddTextToArea	("" & chr(09),BodyAr);	
+															end;	
+															Switch(CUr.Gender)begin
+																case 0: AddTextToArea	("Мужской" & chr(09),BodyAr);	
+																case 1: AddTextToArea	("Женский" & chr(09),BodyAr);	
+																case 2: AddTextToArea	("Компания" & chr(09),BodyAr);	
+																otherwise
+																	AddTextToArea	("" & chr(09),BodyAr);	
+															end;
+															if(nonblankdate(CUr.BirthDate))then begin
+																AddTextToArea	(getYear(currentdate)-getyear(CUr.BirthDate) & chr(09),BodyAr);	
+															end else begin
+																AddTextToArea	(" " & chr(09),BodyAr);	
+															end;
+														end;
+													end;
+												
+													
+													AddTextToArea	(IVrw.vRebate & chr(09),BodyAr);	
+													//total_rebate = total_rebate + IVrw.vRebate*AbsoluteVal(IVrw.Quant);//Edit***********************Vitalii 14:28 26.08.2014
+													/*if(IVrw.vRebate!=0)then begin
+														total_rebate_qty = total_rebate_qty + AbsoluteVal(IVrw.Quant);											
+													end;*/
+													AddTextToArea	(IVr.SalesMan & chr(09),BodyAr);	
+													AddTextToArea	(IVr.SerNr & chr(09),BodyAr);	
+													AddTextToArea	(IVr.TransDate & chr(09),BodyAr);	
+													AddTextToArea	(IVr.PayDeal & chr(09),BodyAr);	
+													pos = 0;	
+													OBJStr = IVrw.Objects;
+													Obj = "";
+													APriceObj = "";
+													ExtractObjWithSeparator(",",OBJStr,true,pos,Obj);
+													while (nonblank(Obj)) begin
+														Objr.Code = Obj;
+														if(ReadFirstMain(Objr,1,true)) then begin
+															if(Objr.OTCode=="PROMO")then begin
+																APriceObj = Obj;
+															end;	
+															if(Objr.OTCode=="APRIC")then begin // Edit ************************** Ihor Trubachov 17*05*2021
+																if(nonblank(IVrw.Objects))then begin
+																	APriceObj = APriceObj & ",";
+																end;
+																APriceObj = APriceObj & Obj;
+															end;	
+															if(Objr.OTCode=="AREB")then begin
+																if(nonblank(IVrw.Objects))then begin
+																	APriceObj = APriceObj & ",";
+																end;
+																APriceObj = APriceObj & Obj;
+															end;	
+														end;
+														ExtractObjWithSeparator(",",OBJStr,true,pos,Obj);
+													end;
+													AddTextToArea	(IVr.InvComment & chr(09),BodyAr);	
+													AddTextToArea	(APriceObj & chr(09),BodyAr);	
+													AddTextToArea	(GetIVRebCode(IVr.AddRebCode,IVrw.Objects) & chr(09),BodyAr);	
+											
+												end else begin //Edit***************************Sasha2,11:17 20.11.2014 {
+													arrvals[valscnt] = arrvals[valscnt] + (curcusm - brandfifo*IVrw.Quant)*cred; valscnt = valscnt + 1;
+													if (additionalCurF) then begin //additional currency retail difference //Edit***************************Sasha2,17:02 13.09.2017
+														arrvals[valscnt] = arrvals[valscnt] + (EURcusm -  currencyBalances[CurncyCoder.CurncyCode]*IVrw.Quant)*cred; valscnt = valscnt + 1;
+													end;
+													arrvals[valscnt] = arrvals[valscnt] + (IVrw.Sum*aznfr/aznto - fifob1*IVrw.Quant*aznfr/aznto)*cred; valscnt = valscnt + 1;
+													if(bcur!=azn)then begin
+														arrvals[valscnt] = arrvals[valscnt] + (IVrw.Sum - fifob1*IVrw.Quant)*cred; valscnt = valscnt + 1;
+													end;
+													arrstrs[strscnt] = brandcur; strscnt = strscnt + 1;
+													if (addclassf) then begin //Edit***************************Sasha2,14:37 08.02.2016 {
+														for (j=30;j<typescnt;j=j+1) begin //if you change "30" do it in other places having "For" loop 
+															pos = 0;
+															ExtractObjWithSeparator(";",typeval[typecode[j]],true,pos,uloc);
+															if (uloc==INr.Code) then begin
+																ExtractObjWithSeparator(";",typeval[typecode[j]],true,pos,uloc);
+																arrstrs[strscnt] = uloc; strscnt = strscnt + 1;
+															end else begin
+																arrstrs[strscnt] = ""; strscnt = strscnt + 1;
+															end;
+														end;
+													end; //Edit***************************Sasha2,14:37 08.02.2016 }
+													/*for (m=0;m<ctypecnt;m=m+1) begin 
+														arrstrs[strscnt] = dispnames[typeindex[m]]; strscnt = strscnt + 1;
+													end; 
+													MyClearVector(dispnames,typeindex,ctypecnt);*/
+												end; //Edit***************************Sasha2,11:17 20.11.2014 }
+												
+												if (modef) then begin //Edit***************************Sasha2,11:17 20.11.2014	
+													if(currentcompany==9)then begin
+														if(IVr.OrderNr>-1)then begin
+															ORr.SerNr = IVr.OrderNr;
+															readfirstmain(ORr,1,true);
+															if(nonblank(ORr.OrderClass))then begin
+																AddTextToArea	(ORr.OrderClass & chr(09),BodyAr);	
+															end;
+														end;
+													end;
+													AddTextToArea	(tstr & chr(09),BodyAr);	
+													if (addclassf) then begin //Edit***************************Sasha2,14:37 08.02.2016 {
+														for (j=30;j<typescnt;j=j+1) begin //if you change "30" do it in other places having "For" loop 
+															pos = 0;
+															ExtractObjWithSeparator(";",typeval[typecode[j]],true,pos,uloc);
+															if (uloc==INr.Code) then begin
+																ExtractObjWithSeparator(";",typeval[typecode[j]],true,pos,uloc);
+																AddTextToArea	(uloc & chr(09),BodyAr);	
+															end else begin
+																AddTextToArea	("" & chr(09),BodyAr);	
+															end;
+														end;
+													end; //Edit***************************Sasha2,14:37 08.02.2016 }
+													/*for (m=0;m<ctypecnt;m=m+1) begin //Edit***************************Sasha2,15:28 11.11.2015 {
+														outstring(0,0,Left(dispnames[typeindex[m]],len(dispnames[typeindex[m]])-1),false);
+													end; 
+													MyClearVector(dispnames,typeindex,ctypecnt);*/ //Edit***************************Sasha2,15:28 11.11.2015 }
+													AddTextToArea	(IVr.TaxTransactionCode & chr(09),BodyAr);	
+												end;
+											if(currentcompany==25 and RepSpec.flags[2]!=0) then begin
+												if(cashbackPercent!=0) then begin
+													AddTextToArea	(cashbackPercent & chr(09),BodyAr);	
+												end else begin
+													AddTextToArea	("" & chr(09),BodyAr);	
+												end;
+											end;	
+											if (modef) then begin	//Edit***************************Sasha2,11:12 20.11.2014								
+												AddTextToArea	(chr(13),BodyAr);
+											end;
+										end;
+									end;
+								end;
+							end; 
+						end;
+					end;
+					if (modef==false) then begin
+						mtrw = matrowcnt(IV2r);
+						for (i=0;i<mtrw;i=i+1) begin
+							matrowget(IV2r,i,IVrw);
+							valscnt = IVrw.Quant;
+							strscnt = IVrw.Quant;
+							itemoccurrences = IVrw.Sum*cred;
+							startformat(15);
+								AddTextToArea	(arrstrs[strscnt] & chr(09),BodyAr);	
+								AddTextToArea	(arrstrs[strscnt] & chr(09),BodyAr);	
+								AddTextToArea	(arrstrs[strscnt] & chr(09),BodyAr);	
+								// outstring(4,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //classname
+								// if (addclassf==false) then begin //Edit***************************Sasha2,17:43 02.06.2016 {
+									// outstring(5,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //classname2
+								// end; //Edit***************************Sasha2,17:43 02.06.2016 }
+								// outstring(6,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //prepareStr(IVrw.Spec)
+								// if (addclassf==false) then begin
+									// outstring(7,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //INr.Reference
+									// outstring(8,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //INr.Metal
+									// outstring(9,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //INr.RowWeight
+									// outstring(10,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //INr.MajStoneDet
+									// //if(CompanyIsJWLikeCompany(currentcompany))then begin
+										// //outstring(11,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //INr.BrcStr
+										// //outstring(12,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //INr.Gender
+									// //end;
+									// if(currentcompany==13)then begin			//Edit----------------------Dima  30.04.2015
+										// outstring(11,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //INr.Size
+										// outstring(12,0,arrstrs[strscnt],false); strscnt = strscnt + 1; //INr.Colour
+									// end;	
+								// end else begin  //Edit***************************Sasha2,17:43 02.06.2016 {
+									for (j=0;j<41;j=j+1) begin //if you change "30" do it in other places having "For" loop 
+										/*outstring(12,0,arrstrs[strscnt],false);*/ strscnt = strscnt + 1;
+									end;
+								// end;	//Edit***************************Sasha2,17:43 02.06.2016 }
+								AddTextToArea	("" & chr(09),BodyAr);	
+								AddTextToArea	(arrstrs[strscnt] & chr(09),BodyAr);	
+								AddTextToArea	(arrstrs[strscnt] & chr(09),BodyAr);	
+								AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								AddTextToArea	(arrvals[valscnt]/itemoccurrences & chr(09),BodyAr);	
+								if (additionalCurF) then begin //additional currency cost //Edit***************************Sasha2,17:02 13.09.2017
+									AddTextToArea	(arrvals[valscnt]/itemoccurrences & chr(09),BodyAr);	
+								end;
+								if(bcur==azn)then begin
+									AddTextToArea	(arrvals[valscnt]/itemoccurrences & chr(09),BodyAr);	
+								end;
+								if(bcur!=azn)then begin
+									AddTextToArea	(arrvals[valscnt]/itemoccurrences & chr(09),BodyAr);	
+								end;
+								AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								if (additionalCurF) then begin //additional currency cost sum//Edit***************************Sasha2,17:02 13.09.2017
+									AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								end;
+								if(bcur==azn)then begin
+									AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								end;
+								if(bcur!=azn)then begin
+									AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								end;
+								AddTextToArea	(arrvals[valscnt]/itemoccurrences & chr(09),BodyAr);	
+								if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+									AddTextToArea	(arrvals[valscnt]/itemoccurrences & chr(09),BodyAr);	
+								end;
+								if(bcur==azn)then begin
+									AddTextToArea	(arrvals[valscnt]/itemoccurrences & chr(09),BodyAr);	
+								end;
+								if(bcur!=azn)then begin
+									AddTextToArea	(arrvals[valscnt]/itemoccurrences & chr(09),BodyAr);	
+								end;
+								AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								if (additionalCurF) then begin //additional currency retail sum //Edit***************************Sasha2,17:02 13.09.2017
+									AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);									
+								end;
+								if(bcur==azn)then begin
+									AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								end;
+								if(bcur!=azn)then begin
+									AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								end;
+								AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								if (additionalCurF) then begin //additional currency retail difference //Edit***************************Sasha2,17:02 13.09.2017
+									AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								end;
+								if(bcur==azn)then begin
+									AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								end;
+								if(bcur!=azn)then begin
+									AddTextToArea	(arrvals[valscnt] & chr(09),BodyAr);	
+								end;
+								AddTextToArea	(arrstrs[strscnt] & chr(09),BodyAr);	
+								if (addclassf) then begin //Edit***************************Sasha2,14:37 08.02.2016 {
+									for (j=30;j<typescnt;j=j+1) begin //if you change "30" do it in other places having "For" loop 
+										AddTextToArea	(arrstrs[strscnt] & chr(09),BodyAr);	
+									end;
+								end; //Edit***************************Sasha2,14:37 08.02.2016 }
+								/*for (m=0;m<ctypecnt;m=m+1) begin //Edit***************************Sasha2,16:15 11.11.2015 {
+									outstring(32,0,Left(arrstrs[strscnt],len(arrstrs[strscnt])-1),false); strscnt = strscnt + 1; //disp types
+								end;*/ //Edit***************************Sasha2,16:15 11.11.2015 }
+								AddTextToArea	(chr(13),BodyAr);
+
+						end;
+					end;
+									
+					startformat(15);
+						AddTextToArea	("" & chr(09),BodyAr);	
+						AddTextToArea	("" & chr(09),BodyAr);	
+						AddTextToArea	("" & chr(09),BodyAr);	
+						AddTextToArea	("" & chr(09),BodyAr);	
+						if (modef) then begin
+							if (addclassf==false) then begin
+								AddTextToArea	("" & chr(09),BodyAr);	
+							end;
+							if (currentcompany==9) then begin
+								AddTextToArea	("" & chr(09),BodyAr);	
+							end;
+							AddTextToArea	("" & chr(09),BodyAr);	
+							if (addclassf==false) then begin
+								AddTextToArea	("" & chr(09),BodyAr);	
+								AddTextToArea	("" & chr(09),BodyAr);	
+								AddTextToArea	("" & chr(09),BodyAr);	
+								AddTextToArea	("" & chr(09),BodyAr);	
+								if (currentcompany==13) then begin
+									AddTextToArea	("" & chr(09),BodyAr);	
+									AddTextToArea	("" & chr(09),BodyAr);	
+								end;
+							end else begin
+								for (j=0;j<30;j=j+1) begin //if you change "30" do it in other places having "For" loop 
+									AddTextToArea	("" & chr(09),BodyAr);	
+								end;
+							end;				
+							AddTextToArea	("" & chr(09),BodyAr);	
+						end;
+						AddTextToArea	("" & chr(09),BodyAr);	
+						AddTextToArea	(USetStr(31074) & chr(09),BodyAr);	
+						AddTextToArea	(total_qty & chr(09),BodyAr);	
+						AddTextToArea	("" & chr(09),BodyAr);	
+						if(bcur!=azn)then begin
+							AddTextToArea	("" & chr(09),BodyAr);	
+						end;
+						if(bcur==azn)then begin
+							AddTextToArea	("" & chr(09),BodyAr);	
+						end;
+						if (additionalCurF) then begin //additional currency cost, additional currency cost sum //Edit***************************Sasha2,17:02 13.09.2017
+							AddTextToArea	("" & chr(09),BodyAr);	
+							AddTextToArea	("" & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(31075) & chr(09),BodyAr);	
+						if(bcur==azn)then begin
+							AddTextToArea	(total_cost & chr(09),BodyAr);	
+						end;
+						if(bcur!=azn)then begin
+							AddTextToArea	(btotal_cost & chr(09),BodyAr);	
+						end;
+						AddTextToArea	("" & chr(09),BodyAr);	
+						if (additionalCurF) then begin //additional currency retail price //Edit***************************Sasha2,17:02 13.09.2017
+							AddTextToArea	("" & chr(09),BodyAr);	
+						end;
+						if(bcur==azn)then begin
+							AddTextToArea	("" & chr(09),BodyAr);	
+						end;
+						if (additionalCurF) then begin //additional currency retail sum  //Edit***************************Sasha2,17:02 13.09.2017
+							AddTextToArea	("" & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(31076) & chr(09),BodyAr);	
+						if(bcur==azn)then begin
+							AddTextToArea	(total_price & chr(09),BodyAr);	
+						end;
+						if(bcur!=azn)then begin
+							AddTextToArea	(btotal_price & chr(09),BodyAr);	
+						end;
+						if (additionalCurF) then begin //additional currency retail difference//Edit***************************Sasha2,17:02 13.09.2017
+							AddTextToArea	("" & chr(09),BodyAr);	
+						end;
+						AddTextToArea	(USetStr(31077) & chr(09),BodyAr);	
+						if(bcur==azn)then begin
+							AddTextToArea	(total_price - total_cost & chr(09),BodyAr);	
+						end;
+						if(bcur!=azn)then begin
+							AddTextToArea	(btotal_price - btotal_cost & chr(09),BodyAr);	
+						end;
+						//Edit***********************Vitalii 14:28 26.08.2014
+						AddTextToArea	("" & chr(09),BodyAr);	
+						AddTextToArea	("" & chr(09),BodyAr);	
+						AddTextToArea	(USetStr(31078) & chr(09),BodyAr);	
+						AddTextToArea	(100-(100*(total_rebate_qty/total_rebate)) & chr(09),BodyAr);	
+						AddTextToArea	(chr(13),BodyAr);
+
+				end else begin
+					startformat(15);
+						AddTextToArea	(USetStr(31079) & chr(09),BodyAr);	
+						AddTextToArea	(chr(13),BodyAr);
+				end;
+			end;
+				WriteAreaToFile	(BodyAr,FileName,0);
+		end;
+return;
+end;
+
+
+
+
+
+
+
+
+
+global
+procedure SalesReportExtInFileStart(record RcVc RepSpec)
+begin
+	integer compNo, i;
+	date startYear;
+	
+	
+	for (compNo=1;compNo<35;compNo=compNo+1) begin
+		if (SetCompany(compNo,false)) then begin
+			startYear = "1/1/2017";
+			for (i=0;i<6;i=i+1) begin
+				logtext(0,CurrentCompany);
+				RepSpec.sStartDate = startYear;
+				RepSpec.sEndDate = AddYear(startYear,1);
+				SalesReportExtInFile(RepSpec);
+				startYear = AddYear(startYear,1);
+			end;
+		end;
+	end;
+	return;
+end;
+
+
+
+
+
+
+
+
+
+
+
 
 
 
