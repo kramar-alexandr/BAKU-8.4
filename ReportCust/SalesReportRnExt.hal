@@ -5989,7 +5989,7 @@ begin
 	row IVVc IVrw, IV2rw;
 	longint i,j,k,x,r,INcnt,s;
 	vector string 255 vItemRebObj, DubCodes, vRebObj, vClassName, vINName, vINAlt, vINBrand, vINCollection, vINIGroup, vINSubGroup, vINCategory, vINMaterial, vINBPIColor, vINShape, vINSize, vINUse, vINSex, vINPlating, vINClarity, vINWeigh, vINCut, vINStone, vINStrap, vINOdour;
-	boolean rebfound, TrHs, testf, testf1, testf2, rebf, rebitemf, TrHs2, inStockExf;
+	boolean rebfound, TrHs, testf, testf1, testf2, rebf, rebitemf, TrHs2, inStockExf, ItemStockEx;
 	date sd, ed;
 	string 255 Location, brand, conslocation, deflocation, ItemCode;
 	vector string 255 vRebItems, vRebObjects, vRebFromDate, vRebToDate, vINGroup;
@@ -5999,12 +5999,11 @@ begin
 	vector boolean vItemRebInMathm, aRebFound, userbrand;
 	record ItemDuplicatesVc IDr;
 	integer pos, cCompany;
-	vector val vRebPrc, vItemStockQty, vItemSalesStockQty, vEndItemStockQty, vConsItemStockQty, vConsEndItemStockQty, vItemStockRPRICE, vItemStockFIFO;
-	val vSaleQtyPrc, RebPrc,  fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo;
+	val vSaleQtyPrc, RebPrc,  fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo, ItemStockQty, EndItemStockQty, ItemStockFIFO;
 	val curprice, aznprice, curcusm, aznsum, halt, ItemsQty;
 	record ItemHistVc IHr;
 	record ConsItemVc CIr;
-	vector boolean vIVItem, vItemStockEx;
+	vector boolean vIVItem;
 	record LocationVc Locationr;
 	area BodyAr;
 	string 255 FileName;
@@ -6172,20 +6171,28 @@ begin
 		ResetCompany(cCompany);
 		
 		logtext(0,"2");
-		// s = 0;
+		s = 0;
 		INr.Code = "";
 		TrHs2 = true;
 		while (loopmain(INr,1,TrHs2)) begin
+		
+			ItemStockQty = 0;
+			EndItemStockQty = 0;
+			ItemStockFIFO = 0;
+		
+		
+		
+		
 			if (INr.ConsgType==0) then begin testf1 = true; end;
-			// if (s>100) then begin testf1 = false; TrHs2 = false; end;
-			// logtext(0,s);
+			if (s>100) then begin testf1 = false; TrHs2 = false; end;
+			logtext(0,s);
 			testf1 = true;
 			if (testf1) then begin
 				ItemCode = INr.Code;
 				vSaleQtyPrc = 0;
 				RebPrc = Rebr.vra0;
 				inStockExf = false;
-				ClearVector(vItemSalesStockQty);
+				
 				for (k=0;k<aLocations.length;k=k+1) begin
 					vSaleQtyPrc = 0;
 					IHr.ArtCode = INr.Code;
@@ -6198,92 +6205,93 @@ begin
 						if(IHr.ArtCode!=ItemCode or IHr.Location!=aLocations[k])then begin TrHs=false; testf = false; end;
 						if(IHr.StockAffectf==0)then begin testf=false; end;
 						if(testf and IHr.TransDate>=sd)then begin
-							vItemStockQty[ItemCode & "::" & IHr.Location] = vItemStockQty[ItemCode & "::" & IHr.Location] + IHr.Qty;
+							ItemStockQty = ItemStockQty + IHr.Qty;
 						end;
 						if(testf and IHr.TransDate>=ed)then begin
-							vEndItemStockQty[ItemCode & "::" & IHr.Location] = vEndItemStockQty[ItemCode & "::" & IHr.Location] + IHr.Qty;
+							EndItemStockQty = EndItemStockQty + IHr.Qty;
 						end;
 					end;
 					resetloop(IHr);
 					ISr.Code = INr.Code;
 					ISr.Location = aLocations[k];
 					if (ReadFirstMain(ISr,2,true)) then begin
-						vItemStockQty[ItemCode & "::" & aLocations[k]] = ISr.Instock - vItemStockQty[ItemCode & "::" & aLocations[k]];
-						vEndItemStockQty[ItemCode & "::" & aLocations[k]] = ISr.Instock - vEndItemStockQty[ItemCode & "::" & aLocations[k]];
+						ItemStockQty = ISr.Instock - ItemStockQty;
+						EndItemStockQty = ISr.Instock - EndItemStockQty;
 					end else begin
-						vItemStockQty[ItemCode & "::" & aLocations[k]] = 0 - vItemStockQty[ItemCode & "::" & aLocations[k]];
-						vEndItemStockQty[ItemCode & "::" & aLocations[k]] = 0 - vEndItemStockQty[ItemCode & "::" & aLocations[k]];
+						ItemStockQty = 0 - ItemStockQty;
+						EndItemStockQty = 0 - EndItemStockQty;
 					end;
 					
-					if (vItemStockQty[ItemCode & "::" & aLocations[k]]>vEndItemStockQty[ItemCode & "::" & aLocations[k]]) then begin
-						ItemsQty = vItemStockQty[ItemCode & "::" & aLocations[k]];
+					if (ItemStockQty>EndItemStockQty) then begin
+						ItemsQty = ItemStockQty;
 					end else begin
-						ItemsQty = vEndItemStockQty[ItemCode & "::" & aLocations[k]];
+						ItemsQty = EndItemStockQty;
 					end;
-					
-					IHr.ArtCode = INr.Code;
-					IHr.Location = aLocations[k];
-					IHr.TransDate = ed;
-					if (vEndItemStockQty[ItemCode & "::" & aLocations[k]]==0 and vItemStockQty[ItemCode & "::" & aLocations[k]] > 0) then begin IHr.TransDate = sd; end;
-					TrHs = true;
-					halt = 0;
-					while(loopBackkey("ArtCodeLoc",IHr,3,TrHs))begin
-						testf = true;
-						if(IHr.ArtCode!=ItemCode or IHr.Location!=aLocations[k])then begin TrHs=false; testf=false; end;
-						if(IHr.StockAffectf==0)then begin testf=false; end;
-						if (IHr.TransDate<=ed and testf) then begin
-							halt = halt + IHr.Qty;
-							if (IHr.Qty>0) then begin
-								vItemStockFIFO[ItemCode & "::" & IHr.Location] = vItemStockFIFO[ItemCode & "::" & IHr.Location] + IHr.TotCostPrice;
-							end else begin
-								vItemStockFIFO[ItemCode & "::" & IHr.Location] = vItemStockFIFO[ItemCode & "::" & IHr.Location] - IHr.TotCostPrice;
-							end;
-							if (halt==ItemsQty) then begin
-								TrHs = false;
+					if (ItemsQty>0) then begin
+						IHr.ArtCode = INr.Code;
+						IHr.Location = aLocations[k];
+						IHr.TransDate = ed;
+						if (EndItemStockQty==0 and ItemStockQty > 0) then begin IHr.TransDate = sd; end;
+						TrHs = true;
+						halt = 0;
+						while(loopBackkey("ArtCodeLoc",IHr,3,TrHs))begin
+							testf = true;
+							if(IHr.ArtCode!=ItemCode or IHr.Location!=aLocations[k])then begin TrHs=false; testf=false; end;
+							if(IHr.StockAffectf==0)then begin testf=false; end;
+							if (IHr.TransDate<=ed and testf) then begin
+								halt = halt + IHr.Qty;
+								if (IHr.Qty>0) then begin
+									ItemStockFIFO = ItemStockFIFO + IHr.TotCostPrice;
+								end else begin
+									ItemStockFIFO = ItemStockFIFO - IHr.TotCostPrice;
+								end;
+								if (halt==ItemsQty) then begin
+									TrHs = false;
+								end;
 							end;
 						end;
-					end;
-					
-					if (vItemStockQty[ItemCode & "::" & aLocations[k]]>0 or vEndItemStockQty[ItemCode & "::" & aLocations[k]]>0) then begin
-						vItemStockEx[ItemCode & "::" & aLocations[k]] = true;
-					end;
-					vItemStockFIFO[ItemCode & "::" & aLocations[k]] = vItemStockFIFO[ItemCode & "::" & aLocations[k]] / halt;					
-					resetloop(IHr);
-					
-					
-					if (vItemStockEx[ItemCode & "::" & aLocations[k]]) then begin	
-						// s = s + 1;
-						GetPrice (ItemCode, sd, ed, aLocations[k], vSaleQtyPrc, RepSpec, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
-													curprice, aznprice, curcusm, aznsum);					
-						AddTextToArea	(ItemCode & chr(09) 																						//1
-									& vINName[ItemCode] & chr(09) 																					//2
-									& vINAlt[ItemCode] & chr(09) 																						//3
-									& aLocations[k] & chr(09) 																							//5
-									& vClassName[INr.BPIBrand] & chr(09) 																		//6
-									& vClassName[INr.BPICollection] & chr(09) 															//8
-									& vClassName[INr.BPIGroup] & chr(09) 																		//9
-									& vClassName[INr.BPISubGroup] & chr(09) 																//10
-									& vClassName[INr.BPICategory] & chr(09) 																//11
-									& vClassName[INr.BPIMaterial] & chr(09) 																//12
-									& vClassName[INr.BPIColor] & chr(09) 																		//13
-									& vClassName[INr.BPIShape] & chr(09) 																		//14
-									& vClassName[INr.BPISize] & chr(09) 																		//15
-									& vClassName[INr.BPIUse] & chr(09) 																			//16
-									& vClassName[INr.BPISex] & chr(09) 																			//17
-									& vClassName[INr.BPIPlating] & chr(09)																	//18
-									& vClassName[INr.BPIClarity] & chr(09)
-									& vClassName[INr.BPIWeight] & chr(09)
-									& vClassName[INr.BPICut] & chr(09)
-									& vClassName[INr.BPIStone] & chr(09)
-									& vClassName[INr.BPIStrap] & chr(09)
-									& vClassName[INr.BPIOdour] & chr(09)
-									& vItemStockFIFO[ItemCode & "::" & aLocations[k]] & chr(09)							//27
-									& aznprice & chr(09)																										//31
-									& vItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)							//22
-									& vItemStockQty[ItemCode & "::" & aLocations[k]] * vItemStockFIFO[ItemCode & "::" & aLocations[k]] & chr(09)			//29
-									& vEndItemStockQty[ItemCode & "::" & aLocations[k]] & chr(09)						//23
-									& vEndItemStockQty[ItemCode & "::" & aLocations[k]] * vItemStockFIFO[ItemCode & "::" & aLocations[k]] & chr(09)	//23
-									&	chr(13),BodyAr);
+						
+						if (ItemStockQty>0 or EndItemStockQty>0) then begin
+							ItemStockEx = true;
+						end;
+						ItemStockFIFO = ItemStockFIFO / halt;					
+						resetloop(IHr);
+						
+						
+						if (ItemStockEx) then begin	
+							s = s + 1;
+							GetPrice (ItemCode, sd, ed, aLocations[k], vSaleQtyPrc, RepSpec, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+														curprice, aznprice, curcusm, aznsum);					
+							AddTextToArea	(ItemCode & chr(09) 																						//1
+										& vINName[ItemCode] & chr(09) 																					//2
+										& vINAlt[ItemCode] & chr(09) 																						//3
+										& aLocations[k] & chr(09) 																							//5
+										& vClassName[INr.BPIBrand] & chr(09) 																		//6
+										& vClassName[INr.BPICollection] & chr(09) 															//8
+										& vClassName[INr.BPIGroup] & chr(09) 																		//9
+										& vClassName[INr.BPISubGroup] & chr(09) 																//10
+										& vClassName[INr.BPICategory] & chr(09) 																//11
+										& vClassName[INr.BPIMaterial] & chr(09) 																//12
+										& vClassName[INr.BPIColor] & chr(09) 																		//13
+										& vClassName[INr.BPIShape] & chr(09) 																		//14
+										& vClassName[INr.BPISize] & chr(09) 																		//15
+										& vClassName[INr.BPIUse] & chr(09) 																			//16
+										& vClassName[INr.BPISex] & chr(09) 																			//17
+										& vClassName[INr.BPIPlating] & chr(09)																	//18
+										& vClassName[INr.BPIClarity] & chr(09)
+										& vClassName[INr.BPIWeight] & chr(09)
+										& vClassName[INr.BPICut] & chr(09)
+										& vClassName[INr.BPIStone] & chr(09)
+										& vClassName[INr.BPIStrap] & chr(09)
+										& vClassName[INr.BPIOdour] & chr(09)
+										& ItemStockFIFO & chr(09)																							//27
+										& aznprice & chr(09)																										//31
+										& ItemStockQty & chr(09)																								//22
+										& ItemStockQty * ItemStockFIFO & chr(09)															//29
+										& EndItemStockQty & chr(09)																						//23
+										& EndItemStockQty * ItemStockFIFO & chr(09)														//23
+										&	chr(13),BodyAr);
+						end;
 					end;
 				end;
 			end;
