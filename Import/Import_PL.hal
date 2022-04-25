@@ -17683,14 +17683,14 @@ begin
 	record INVc INr;
 	record GlobalItemVc Gir;
 	vector string 255 gircodes;
-	boolean TrHs;
+	boolean TrHs, testf;
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	integer i;
 	record PLVc PLr;
 	area BodyAr;
 	string 255 FileName, LogFileName;
-	val price;
+	val price, oldprice;
 
 	
 	logtext(0,"================================================ WebImportSetMaxPriceItemsIn");
@@ -17709,15 +17709,27 @@ begin
 					matrowget(Compb,i,Comprw);
 					if(Comprw.ActiveStatus==0 and i+1!=29 and !CompanyIsJWLikeCompany(i+1) and i+1!=1)then begin
 						SetCompany(i+1,false);
-						INr.Code = GIr.HansaCode;
+						INr.Code = hansacode;
 						if (ReadFirstMain(INr,1,true)) then begin
 							if (left(itemcode,8)==INr.BPIBrand) then begin
 								PLr.PLCode = "RRP";
 								PLr.ArtCode = INr.Code;
 								if (ReadFirstMain(PLr,2,true)) then begin
 									if (PLr.ExVatPrice<price) then begin
-										queued.UpdPLAndPLHistQueued(PLr,price);
-										millisleep (50);
+										testf = true;
+										if (nonblank(plcurcode) and plcurcode!=PLr.CurncyCode) then begin testf = false; end;
+										if (testf) then begin
+											oldprice = PLr.ExVatPrice;
+											queued.UpdPLAndPLHistQueued(PLr,price);
+											millisleep (50);
+											AddTextToArea	(GIr.Code & chr(09) 																//1
+												& hansacode & chr(09) 																					//2
+												& itemcode & chr(09)																						//3
+												& oldprice & chr(09) 																						//4
+												& price & chr(09) 																							//5
+												& plcurcode & chr(09) 																					//5
+												&	chr(13),BodyAr);
+										end;
 									end;
 								end else begin
 									PLr.PLCode = "RRP";
@@ -17728,6 +17740,13 @@ begin
 									PLr.ExVatPrice = price;
 									queued.UpdPriceQueued(PLr);
 									millisleep (50);
+									AddTextToArea	(GIr.Code & chr(09) 																//1
+										& hansacode & chr(09) 																					//2
+										& itemcode & chr(09)																						//3
+										& "notfound" & chr(09) 																						//4
+										& price & chr(09) 																							//5
+										& plcurcode & chr(09) 																					//5
+										&	chr(13),BodyAr);
 								end;
 							end;
 						end;
@@ -17735,6 +17754,7 @@ begin
 				end;
 				NextImportLine(true);
 			end;
+			WriteAreaToFile	(BodyAr,LogFileName,0);
 			CloseFile;
 		end;
  return;
