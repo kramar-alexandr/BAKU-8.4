@@ -54,7 +54,7 @@ external procedure TimeStamps(var row GlobalItemVc,val,string); //Edit *********
 external procedure GIWasUpdated(record GlobalItemVc,record GlobalItemVc,string);	//Edit **********************************************Vas-P	14/07/2021
 external updating procedure QdDelGir(record GlobalItemVc);
 remote updating procedure PasteMaxTS (var record GlobalItemVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:13 09.12.2021
-
+remote updating procedure AddPLHist(record PLVc,record PLVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 21:14 25.04.2022
 
 
 
@@ -17654,15 +17654,32 @@ end;
 
 
 
+updating procedure UpdPLAndPLHistQueued (record PLVc PLr, val newPrice)
+begin
+	if (PLr.ExVatPrice!=newPrice) then begin
+		PLr.ExVatPrice = newPrice;
+		if (recordstore(PLr,true)) then begin
+			AddPLHist(PLr,PLr);
+		end;
+	end;
+return;
+end;
 
 
+
+updating procedure UpdPriceQueued (record PLVc PLr)
+begin
+		if (recordstore(PLr,true)) then begin
+		end;
+return;
+end;
 
 
 
 
 global webpublic procedure WebImportSetMaxPriceItemsIn()
 begin
-	string 200 itemcode, hansacode, trxbrand;
+	string 200 itemcode, hansacode, trxbrand, plcurcode;
 	record INVc INr;
 	record GlobalItemVc Gir;
 	vector string 255 gircodes;
@@ -17672,20 +17689,22 @@ begin
 	integer i;
 	record PLVc PLr;
 	area BodyAr;
-	string 255 FileName;
+	string 255 FileName, LogFileName;
 	val price;
 
 	
-	logtext(0,"================================================ WebImportDeleteItemsIn");
+	logtext(0,"================================================ WebImportSetMaxPriceItemsIn");
 		SetImportCodePage("UTF-8");
+		LogFileName = "SalesReportExt/LogsSetMaxRRPItemsInFile.txt";
 		FileName = "SalesReportExt/WebGetMaxRRPItemsInFile.txt";
-		if (fileexists(FileName)) then begin
+		if (fileexists(FileName) and !fileexists(LogFileName)) then begin
 			openfile(FileName);
 			while (TestEOF()==false) begin
 				itemcode = ImportField;
 				hansacode = ImportField;
 				trxbrand = ImportField;
 				price = StringToVal(ImportField,M4Val);
+				plcurcode = ImportField;
 				for (i=0;i<35;i=i+1)begin
 					matrowget(Compb,i,Comprw);
 					if(Comprw.ActiveStatus==0 and i+1!=29 and !CompanyIsJWLikeCompany(i+1) and i+1!=1)then begin
@@ -17696,9 +17715,19 @@ begin
 								PLr.PLCode = "RRP";
 								PLr.ArtCode = INr.Code;
 								if (ReadFirstMain(PLr,2,true)) then begin
-									if (price>PLr.ExVatPrice) then begin
-										PLr.ExVatPrice = price;
+									if (PLr.ExVatPrice<price) then begin
+										queued.UpdPLAndPLHistQueued(PLr,price);
+										millisleep (50);
 									end;
+								end else begin
+									PLr.PLCode = "RRP";
+									PLr.ArtCode = INr.Code;
+									PLr.Comment = INr.Name;
+									PLr.SalesAcc = "";
+									PLr.CurncyCode = plcurcode;
+									PLr.ExVatPrice = price;
+									queued.UpdPriceQueued(PLr);
+									millisleep (50);
 								end;
 							end;
 						end;
@@ -17707,18 +17736,6 @@ begin
 				NextImportLine(true);
 			end;
 			CloseFile;
-			GIr.Code = "_IN_0105093";
-			TrHs = true;
-			while(loopbackkey("Code",GIr,1,TrHs))begin
-				if (fileexists("stop")) then begin TrHs = false; end;
-				if(left(GIr.Code,4)!="BRND")then begin
-					if(GIr.Code!=gircodes[GIr.Code])then begin
-						logtexttofile(GIr.Code,"OtherGIrs.txt");
-						queued.QdDelGir(GIr);
-						millisleep (50);
-					end;
-				end;
-			end;
 		end;
  return;
 end;
