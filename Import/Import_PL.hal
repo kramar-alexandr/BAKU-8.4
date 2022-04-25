@@ -17653,3 +17653,85 @@ begin
 end;
 
 
+
+
+
+
+
+
+
+global webpublic procedure WebImportSetMaxPriceItemsIn()
+begin
+	string 200 itemcode, hansacode, trxbrand;
+	record INVc INr;
+	record GlobalItemVc Gir;
+	vector string 255 gircodes;
+	boolean TrHs;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	integer i;
+	record PLVc PLr;
+	area BodyAr;
+	string 255 FileName;
+	val price;
+
+	
+	logtext(0,"================================================ WebImportDeleteItemsIn");
+		SetImportCodePage("UTF-8");
+		FileName = "SalesReportExt/WebGetMaxRRPItemsInFile.txt";
+		if (fileexists(FileName)) then begin
+			openfile(FileName);
+			while (TestEOF()==false) begin
+				itemcode = ImportField;
+				hansacode = ImportField;
+				trxbrand = ImportField;
+				price = StringToVal(ImportField,M4Val);
+				for (i=0;i<35;i=i+1)begin
+					matrowget(Compb,i,Comprw);
+					if(Comprw.ActiveStatus==0 and i+1!=29 and !CompanyIsJWLikeCompany(i+1) and i+1!=1)then begin
+						SetCompany(i+1,false);
+						INr.Code = GIr.HansaCode;
+						if (ReadFirstMain(INr,1,true)) then begin
+							if (left(itemcode,8)==INr.BPIBrand) then begin
+								PLr.PLCode = "RRP";
+								PLr.ArtCode = INr.Code;
+								if (ReadFirstMain(PLr,2,true)) then begin
+									if (price>PLr.ExVatPrice) then begin
+										PLr.ExVatPrice = price;
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+				NextImportLine(true);
+			end;
+			CloseFile;
+			GIr.Code = "_IN_0105093";
+			TrHs = true;
+			while(loopbackkey("Code",GIr,1,TrHs))begin
+				if (fileexists("stop")) then begin TrHs = false; end;
+				if(left(GIr.Code,4)!="BRND")then begin
+					if(GIr.Code!=gircodes[GIr.Code])then begin
+						logtexttofile(GIr.Code,"OtherGIrs.txt");
+						queued.QdDelGir(GIr);
+						millisleep (50);
+					end;
+				end;
+			end;
+		end;
+ return;
+end;
+
+
+
+
+
+
+
+
+
+
+
+
+
