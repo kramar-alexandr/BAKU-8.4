@@ -6329,6 +6329,273 @@ end;
 
 
 
+
+
+
+
+
+global
+procedure ItemSaldReportPartsMn (record RcVc RepSpec)
+begin
+	record INVc INr, dupINr;
+	record RebVc Rebr;
+	row RebVc Rebrw;
+	record MyRebVc MyRebr;
+	row MyRebVc MyRebrw;
+	record OnePOneRebVc OPORr;
+	row OnePOneRebVc OPORrw;
+	record TemporaryPricesVc TPr;
+	row TemporaryPricesVc TPrw;
+	record IVVc IVr;
+	row IVVc IVrw, IV2rw;
+	longint i,j,k,x,r,INcnt,s;
+	vector string 255 vItemRebObj, DubCodes, vRebObj, vClassName, vINName, vINAlt, vINBrand, vINCollection, vINIGroup, vINSubGroup, vINCategory, vINMaterial, vINBPIColor, vINShape, vINSize, vINUse, vINSex, vINPlating, vINClarity, vINWeigh, vINCut, vINStone, vINStrap, vINOdour;
+	boolean rebfound, TrHs, testf, testf1, testf2, rebf, rebitemf, TrHs2, inStockExf, ItemStockEx;
+	date sd, ed;
+	string 255 Location, brand, conslocation, deflocation, ItemCode;
+	vector string 255 vRebItems, vRebObjects, vRebFromDate, vRebToDate, vINGroup;
+	array string 255 aRebs, aItems, vRebCodes, aLocations, aConsLocations;
+	vector date vRebStartDate, vRebEndDate;
+	vector longint vRebcnt;
+	vector boolean vItemRebInMathm, aRebFound, userbrand;
+	record ItemDuplicatesVc IDr;
+	integer pos, cCompany;
+	val vSaleQtyPrc, RebPrc,  fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo, ItemStockQty, EndItemStockQty, ItemStockFIFO, ItemStockPartsQty;
+	val curprice, aznprice, curcusm, aznsum, halt, ItemsQty, partscnt;
+	record ItemHistVc IHr;
+	record ConsItemVc CIr;
+	vector boolean vIVItem;
+	record LocationVc Locationr;
+	area BodyAr;
+	string 255 FileName;
+	record BPIBrandVc BPIBrandr;
+	array date aPUPartsDates;
+	array val aPUPartsQty;
+	record ItemStatusVc ISr;
+	
+
+	BPIBrandr.Code = "";
+	while(loopmain(BPIBrandr,1,true))begin
+		vClassName[BPIBrandr.Code] = BPIBrandr.Name;
+	end;
+	
+	
+	// record RcVc RepSpec;
+	sd = RepSpec.sStartDate;
+	ed = RepSpec.sEndDate;
+	Location = RepSpec.f1;
+	
+	// FileName = "AllRebateReport" & DateToString(CurrentDate,"DD.MM.YYYY") & ".txt";
+	// runprogram("chmod","-R a+rw /mnt/base/RebateReports/");
+	
+	// logtext(0,"GlobalItemClassInStock Start");
+	// if (!fileexists("/mnt/base/RebateReports/" & FileName))then begin
+	// FileName = "ItemSaldReport" & DateToString(CurrentDate,"DD.MM.YYYY") & ".txt";
+	FileName = "SalesReportExt/" & CurrentCompany & "_ItemSaldoReport_" & DateToString(RepSpec.sStartDate,"DD.MM.YYYY") & "_" & DateToString(RepSpec.sEndDate,"DD.MM.YYYY") & ".txt";
+	logtext(0,"ItemSaldReportMn Start");
+	if (!fileexists(FileName))then begin
+		AddTextToArea	("Товар" & chr(09) 																							//1
+									& "Название товара" & chr(09) 																	//2
+									& "Дополнительные кодировки товаров" & chr(09) 									//3
+									& "Склад" & chr(09) 																						//5
+									& "Бренд" & chr(09) 																						//6
+									& "COLLECTION" & chr(09) 																				//8
+									& "GROUP" & chr(09) 																						//9
+									& "SUBGROUP" & chr(09) 																					//10
+									& "CATEGORY" & chr(09) 																					//11
+									& "MATERIAL" & chr(09) 																					//12
+									& "COLOR" & chr(09) 																						//13
+									& "SHAPE" & chr(09) 																						//14
+									& "SIZE" & chr(09) 																							//15
+									& "USE" & chr(09) 																							//16
+									& "SEX" & chr(09) 																							//17
+									& "PLATING" & chr(09)																						//18
+									& "CLARITY" & chr(09)
+									& "WEIGH" & chr(09)
+									& "CUT" & chr(09)
+									& "STONE" & chr(09)
+									& "STRAP" & chr(09)
+									& "ODOUR" & chr(09)
+									& "Себестоимость за ед-цу в валюте AZN" & chr(09)								//27
+									& "Ритейл за ед-цу в валюте AZN" & chr(09)											//31
+									& "Количество стока на начало периода" & chr(09)								//22
+									& "Сумма по себестоимости в валюте AZN" & chr(09)								//29
+									& "Количество стока на конец периода" & chr(09)									//23
+									& "Сумма по себестоимости в валюте AZN" & chr(09)	
+									& "Дата окончания периода" & chr(09)											//29
+									&	chr(13),BodyAr);
+		// setCompany(4,false);
+		// sd = AddYear(CurrentDate,-1);
+		// ed = CurrentDate;
+		
+		logtext(0,"1");
+		
+		Locationr.Code = "";
+		x = 0;
+		while (loopmain(Locationr,1,true)) begin
+			aLocations[x] = Locationr.Code;
+			x = x + 1;
+		end;
+		Resetloop(Locationr);
+		
+		
+		logtext(0,"2");
+		// s = 0;
+		INr.Code = "";
+		TrHs2 = true;
+		while (loopmain(INr,1,TrHs2)) begin
+		
+		
+			if (INr.ConsgType==0) then begin testf1 = true; end;
+			// if (s>1000) then begin testf1 = false; TrHs2 = false; end;
+			// logtext(0,s);
+			testf1 = true;
+			if (testf1) then begin
+				ItemCode = INr.Code;
+				vSaleQtyPrc = 0;
+				RebPrc = Rebr.vra0;
+				inStockExf = false;
+				
+				for (k=0;k<aLocations.length;k=k+1) begin
+					ItemStockQty = 0;
+					EndItemStockQty = 0;
+					ItemStockFIFO = 0;
+					ItemStockEx = false;
+					ItemsQty = 0;
+		
+					vSaleQtyPrc = 0;
+					IHr.ArtCode = INr.Code;
+					IHr.Location = aLocations[k];
+					IHr.TransDate = sd;
+					TrHs = true;
+					halt = 0;
+					while(loopkey("ArtCodeLoc",IHr,3,TrHs))begin
+						testf = true;
+						if(IHr.ArtCode!=ItemCode or IHr.Location!=aLocations[k])then begin TrHs=false; testf = false; end;
+						if(IHr.StockAffectf==0)then begin testf=false; end;
+						if(testf and IHr.TransDate>=sd)then begin
+							ItemStockQty = ItemStockQty + IHr.Qty;
+						end;
+						if(testf and IHr.TransDate>=ed)then begin
+							EndItemStockQty = EndItemStockQty + IHr.Qty;
+						end;
+					end;
+					resetloop(IHr);
+					ISr.Code = INr.Code;
+					ISr.Location = aLocations[k];
+					if (ReadFirstMain(ISr,2,true)) then begin
+						ItemStockQty = ISr.Instock - ItemStockQty;
+						EndItemStockQty = ISr.Instock - EndItemStockQty;
+					end else begin
+						ItemStockQty = 0 - ItemStockQty;
+						EndItemStockQty = 0 - EndItemStockQty;
+					end;
+					ClearArray(aPUPartsDates);
+					ClearArray(aPUPartsQty);
+					ItemStockPartsQty = 0;
+					IHr.ArtCode = INr.Code;
+					IHr.Location = aLocations[k];
+					IHr.TransDate = ed;
+					TrHs = true;
+					partscnt = 0;
+					while(loopbackkey("ArtCodeLoc",IHr,3,TrHs))begin
+						testf = true;
+						if (ItemStockPartsQty>=EndItemStockQty) then begin TrHs = false; testf = false; end;
+						if(IHr.ArtCode!=ItemCode or IHr.Location!=aLocations[k])then begin TrHs=false; testf = false; end;
+						if(IHr.StockAffectf==0)then begin testf=false; end;
+						if(IHr.FileName!="PUVc")then begin testf=false; end;
+						if(testf and IHr.TransDate<=ed)then begin
+							ItemStockPartsQty = ItemStockPartsQty + IHr.Qty;
+							aPUPartsDates[partscnt] = IHr.TransDate;
+							aPUPartsQty[partscnt] = IHr.Qty;
+							if (ItemStockPartsQty > EndItemStockQty) then begin
+								aPUPartsQty[partscnt] = ItemStockPartsQty - EndItemStockQty;
+							end;
+							partscnt = partscnt + 1;
+						end;
+					end;
+					resetloop(IHr);
+					
+					if (ItemStockQty>EndItemStockQty) then begin
+						ItemsQty = ItemStockQty;
+					end else begin
+						ItemsQty = EndItemStockQty;
+					end;
+					if (ItemsQty>0) then begin
+						IHr.ArtCode = INr.Code;
+						IHr.Location = aLocations[k];
+						IHr.TransDate = ed;
+						if (EndItemStockQty==0 and ItemStockQty > 0) then begin IHr.TransDate = sd; end;
+						TrHs = true;
+						halt = 0;
+						while(loopBackkey("ArtCodeLoc",IHr,3,TrHs))begin
+							testf = true;
+							if(IHr.ArtCode!=ItemCode or IHr.Location!=aLocations[k])then begin TrHs=false; testf=false; end;
+							if(IHr.StockAffectf==0)then begin testf=false; end;
+							if (IHr.TransDate<=ed and testf) then begin
+								halt = halt + IHr.Qty;
+								if (IHr.Qty>0) then begin
+									ItemStockFIFO = ItemStockFIFO + IHr.TotCostPrice;
+								end else begin
+									ItemStockFIFO = ItemStockFIFO - IHr.TotCostPrice;
+								end;
+								if (halt==ItemsQty) then begin
+									TrHs = false;
+								end;
+							end;
+						end;
+						
+						if (ItemStockQty>0 or EndItemStockQty>0) then begin
+							ItemStockEx = true;
+						end;
+						ItemStockFIFO = ItemStockFIFO / halt;					
+						resetloop(IHr);
+						
+						
+						if (ItemStockEx) then begin	
+							// s = s + 1;
+							GetPrice (ItemCode, sd, ed, aLocations[k], vSaleQtyPrc, RepSpec, fifoazn, fifob1, rowfifoazn, rowfifob1, brandfifo, rowbrandfifo,
+														curprice, aznprice, curcusm, aznsum);					
+							AddTextToArea	(ItemCode & chr(09) 																						//1
+										& INr.Name & chr(09) 																										//2
+										& INr.AlternativeCode & chr(09) 																				//3
+										& aLocations[k] & chr(09) 																							//5
+										& vClassName[INr.BPIBrand] & chr(09) 																		//6
+										& ItemStockFIFO & chr(09)																								//27
+										& aznprice & chr(09)																										//31
+										& ItemStockQty & chr(09)																								//22
+										& ItemStockQty * ItemStockFIFO & chr(09)																//29
+										& EndItemStockQty & chr(09)																							//23
+										& EndItemStockQty * ItemStockFIFO & chr(09)
+										& ed & chr(09),BodyAr);
+										
+							if (partscnt>0) then begin
+								for (x=0;x<partscnt;x=x+1) begin
+									AddTextToArea	(aPUPartsDates[x] & chr(09)
+																& aPUPartsQty[x] & chr(09),BodyAr);
+								end;
+							end;										
+							AddTextToArea	(chr(13),BodyAr);
+						end;
+					end;
+				end;
+			end;
+		end;
+		logtext(0,"3");
+		WriteAreaToFile	(BodyAr,FileName,0);
+		resetloop(INr);
+	end;
+	endjob;
+	return;
+end;
+
+
+
+
+
+
+
+
 global
 webpublic procedure WebSaldRepInFileStart()
 begin
