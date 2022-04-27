@@ -6789,6 +6789,111 @@ end;
 
 
 
+global
+webpublic procedure WebGetJWMaxRRPItemsInFile()
+begin
+	area fillitems;
+	record GlobalItemVc GIr,mainGIr,DupGir,OldGir,LogGIr;
+	row GlobalItemVc GIrw, DupGIrw,OldGirw;
+	record INVc INr,oldINr;
+	record DIVc DIr;
+	record ItemHistVc IHr;
+	record ItemStatusVc ISr;
+	record RebVc Rebr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	row RebVc Rebrw;
+	record LocationVc LCr;
+	LongInt CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant,k,OrGCcnt,y;
+	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1, isfirst, isfirst2, isfirst3;
+	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
+	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
+	integer flcnt,flushcnt,li;
+	array string 20 aloc,alocation;
+	integer aloccnt;
+	vector boolean vbrandcode;
+	vector string 255 vbrandname,vcomp,vloc,vlocname,vmaxcurr;
+	vector val vlocinst,vmaxprice;
+	record BPIBrandVc BPIBr;
+	record WEBReservStock WRSb;
+	boolean entf,locfnd;
+	record ItemDuplicatesVc IDr;
+	vector boolean OrigCodes;
+	vector string 255 OrigBrandCodes;
+	array string 255 aOrigGlobalCodes,acomp;
+	string 150 fn;
+	record PLVc PLr;
+	area BodyAr;
+	string 255 FileName;
+	vector integer vmaxcomp;
+
+	
+	CompQty = 35;
+	OldComp = CurrentCompany;
+	BlockLoad(Compb);
+	
+	
+	TrHs1=true;
+	FileName = "SalesReportExt/WebGetJVMaxRRPItemsInFile.txt";
+	logtext(0,"ItemSaldReportMn Start");
+	if (!fileexists(FileName))then begin
+		GIr.Code = "";
+		while (loopmain(GIr,1,TrHs1)) begin
+			testf = true;
+			if (GIr.ExtProwItRegulations>0) then begin testf = false; end;
+			if(testf)then begin
+				for (i=0;i<CompQty;i=i+1)begin
+					BlockLoad(Compb);
+					matrowget(Compb,i,Comprw);
+					if(Comprw.ActiveStatus==0 and (i+1==16 or CompanyIsJWLikeCompany(i+1)))then begin
+						SetCompany(i+1,false);
+						INr.Code = GIr.HansaCode;
+						if (ReadFirstMain(INr,1,true)) then begin
+							if (left(GIr.Code,8)==INr.BPIBrand) then begin
+								PLr.PLCode = "RRP";
+								PLr.ArtCode = INr.Code;
+								if (ReadFirstMain(PLr,2,true)) then begin
+									if (vmaxprice[GIr.Code]<PLr.ExVatPrice) then begin
+										testf1 = true;
+										if (nonblank(vmaxcurr[GIr.Code]) and vmaxcurr[GIr.Code]!=PLr.CurncyCode) then begin testf1 = false; end;
+										if (testf1) then begin
+											vmaxprice[GIr.Code] = PLr.ExVatPrice;
+											vmaxcurr[GIr.Code] = PLr.CurncyCode;
+											vmaxcomp[GIr.Code] = CurrentCompany;
+										end;
+									end;
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;	
+		resetloop(GIr);
+		GIr.Code = "";
+		TrHs1 = true;
+		while (loopmain(GIr,1,TrHs1)) begin
+			testf = true;
+			if (GIr.ExtProwItRegulations>0) then begin testf = false; end;
+			if (vmaxcomp[GIr.Code]==0) then begin testf = false; end;
+			if(testf)then begin
+				AddTextToArea	(GIr.Code & chr(09) 																						//1
+											& GIr.HansaCode & chr(09) 																			//2
+											& GIr.BPIBrand & chr(09)																				//3
+											& vmaxprice[GIr.Code] & chr(09) 																//4
+											& vmaxcurr[GIr.Code] & chr(09) 																	//5
+											& vmaxcomp[GIr.Code] & chr(09) 																	//5
+											&	chr(13),BodyAr);
+			end;
+		end;	
+		WriteAreaToFile	(BodyAr,FileName,0);
+	end;
+	
+	
+	
+  return;
+end;
+
 
 
 

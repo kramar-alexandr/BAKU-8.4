@@ -17789,6 +17789,99 @@ end;
 
 
 
+global webpublic procedure WebImportSetMaxJWPriceItemsIn()
+begin
+	string 200 itemcode, hansacode, trxbrand, plcurcode;
+	record INVc INr;
+	record GlobalItemVc Gir;
+	vector string 255 gircodes;
+	boolean TrHs, testf;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	integer i;
+	record PLVc PLr;
+	area BodyAr;
+	string 255 FileName, LogFileName;
+	val price, oldprice;
+	array string 255 ahansacode, aitemcode, atrxbrand, aplcurcode;
+	array val aprice;
+	longint cnt, j;
+
+	
+	logtext(0,"================================================ WebImportSetMaxPriceItemsIn");
+		SetImportCodePage("UTF-8");
+		LogFileName = "SalesReportExt/WebImportSetMaxJWPriceItemsIn.txt";
+		FileName = "SalesReportExt/WebGetJVMaxRRPItemsInFile.txt";
+		if (fileexists(FileName) and !fileexists(LogFileName)) then begin
+			openfile(FileName);
+			j=0;
+			while (TestEOF()==false) begin
+				aitemcode[j] = ImportField;
+				ahansacode[j] = ImportField;
+				atrxbrand[j] = ImportField;
+				aprice[j] = StringToVal(ImportField,M4Val);
+				aplcurcode[j] = ImportField;
+				j=j+1;
+				NextImportLine(true);
+			end;
+			cnt = j;
+			CloseFile;
+			
+			for (j=0;j<cnt;j=j+1) begin
+				for (i=0;i<35;i=i+1)begin
+					BlockLoad(Compb);
+					matrowget(Compb,i,Comprw);
+					if(Comprw.ActiveStatus==0 and (i+1==16 or CompanyIsJWLikeCompany(i+1)))then begin
+						SetCompany(i+1,false);
+						INr.Code = ahansacode[j];
+						if (ReadFirstMain(INr,1,true)) then begin
+							if (left(aitemcode[j],8)==INr.BPIBrand) then begin
+								PLr.PLCode = "RRP";
+								PLr.ArtCode = INr.Code;
+								oldprice = 0;
+								if (ReadFirstMain(PLr,2,true)) then begin
+									if (PLr.ExVatPrice<aprice[j]) then begin
+										testf = true;
+										if (nonblank(aplcurcode[j]) and aplcurcode[j]!=PLr.CurncyCode) then begin testf = false; end;
+										if (testf) then begin
+											oldprice = PLr.ExVatPrice;
+											queued.UpdPLAndPLHistQueued(PLr.PLCode,PLr.ArtCode,aprice[j]);
+											millisleep(50);
+											AddTextToArea	(ahansacode[j] & chr(09) 														//2
+												& aitemcode[j] & chr(09)																				//3
+												& oldprice & chr(09) 																						//4
+												& aprice[j] & chr(09) 																					//5
+												& aplcurcode[j] & chr(09) 																			//6
+												& CurrentCompany & chr(09) 																			//7
+												&	chr(13),BodyAr);
+										end;
+									end;
+								// end else begin
+									// queued.UpdPriceQueued("RRP",INr.Code,INr.Name,aprice[j],aplcurcode[j]);
+									// millisleep(50);
+									// AddTextToArea	(ahansacode[j] & chr(09) 														//2
+											// & aitemcode[j] & chr(09)																			//3
+											// & "notfound" & chr(09) 																				//4
+											// & aprice[j] & chr(09) 																				//5
+											// & aplcurcode[j] & chr(09) 																		//6
+											// & CurrentCompany & chr(09) 																		//7
+											// &	chr(13),BodyAr);
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+			
+			
+			WriteAreaToFile	(BodyAr,LogFileName,0);
+		end;
+ return;
+end;
+
+
+
+
 
 
 global webpublic procedure WebgetSetMaxPriceItemsIn()
