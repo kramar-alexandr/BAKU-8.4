@@ -6901,6 +6901,191 @@ end;
 
 
 
+
+global
+webpublic procedure WebGetORClientStatInFile()
+begin
+	area fillitems;
+	record INVc INr,oldINr;
+	record ItemStatusVc ISr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record LocationVc LCr;
+	LongInt CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant,k,OrGCcnt,y;
+	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, parttestf, allnotextestf, POtestf, PUParttestf, PUtestf;
+	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
+	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
+	integer flcnt,flushcnt,li, x;
+	array string 20 aloc,alocation;
+	integer aloccnt;
+	vector boolean vbrandcode;
+	vector string 255 vbrandname,vcomp,vloc,vlocname,vmaxcurr;
+	vector val vlocinst,itemQTyOR;
+	record BPIBrandVc BPIBr;
+	record WEBReservStock WRSb;
+	boolean entf,locfnd;
+	record ItemDuplicatesVc IDr;
+	vector boolean OrigCodes;
+	vector string 255 OrigBrandCodes;
+	array string 255 aOrigGlobalCodes,acomp;
+	string 150 fn;
+	record PLVc PLr;
+	area BodyAr;
+	string 255 FileName;
+	vector integer vmaxcomp;
+	record ORVc ORr;
+	row ORVc ORrw;
+	record RLinkVc RLinkr, RLink2r;
+	record POVc POr;
+	record PUVc PUr;
+	row PUVc PUrw;
+	
+
+	
+	CompQty = 35;
+	OldComp = CurrentCompany;
+	BlockLoad(Compb);
+	
+	
+	TrHs1=true;
+	FileName = "SalesReportExt/WebGetORClientStatInFile.txt";
+	logtext(0,"WebGetORClientStatInFile Start");
+	if (!fileexists(FileName))then begin
+		while (LoopMain(ORr,1,true)) begin
+			if (ORr.OrderClass == "CLIEN") then begin 
+				parttestf = false;
+				allnotextestf = true;
+				ClearVector(itemQTyOR);
+				for (i=0;i<matrowcnt(ORr);i=i+1) begin
+					matrowget(ORr,i,ORrw);
+					itemQTyOR[ORrw.ArtCode] = -ORrw.Quant;
+					if (ORrw.Quant>ORrw.Shipd2 and ORrw.Shipd2>0 and ORrw.Quant>0) then begin
+						parttestf = true;
+					end;
+				end;
+				if (!parttestf) begin
+					for (i=0;i<matrowcnt(ORr);i=i+1) begin
+						matrowget(ORr,i,ORrw);
+						if (ORrw.Quant>0 and ORrw.Shipd2>0) then begin
+							allnotextestf = false;
+						end;
+					end;
+				end;
+				POtestf = false;
+				PUtestf = false;
+				while (ReadRecordLink(ORr,i,POr,RLinkr))begin
+					if (ReadFIrstMain(POr,1,true)) then begin
+						POtestf = true;
+						while (ReadRecordLink(POr,j,PUr,RLink2r))begin
+							if (ReadFIrstMain(PUr,1,true)) then begin
+								if (PUr.OKFlag==1) then begin
+									PUtestf = true;
+								end;
+								for (x=0;x<matrowcnt(PUr);x=x+1) begin
+									matrowget(PUr,x,PUrw);
+									itemQTyOR[ORrw.ArtCode] = itemQTyOR[ORrw.ArtCode] + PUrw.Quant;
+								end;
+							end;
+							j = j + 1;
+						end;
+					end;
+					i = i + 1;
+				end;
+				if (allnotextestf) then begin
+					if (!POtestf) then begin
+						AddTextToArea	(ORr.SerNr & chr(09) 																																				//1
+									& ORr.CustCode & chr(09) 																																						//2
+									& ORr.Addr0 & chr(09)																																								//3
+									& "No order has been placed on the customer's account to the supplier (new order)" & chr(09) 													//4
+									&	chr(13),BodyAr);
+					end else begin
+						if (!PUtestf) then begin
+							AddTextToArea	(ORr.SerNr & chr(09) 																																			//1
+									& ORr.CustCode & chr(09) 																																						//2
+									& ORr.Addr0 & chr(09)																																								//3
+									& "The order has been sent to the supplier" & chr(09) 																							//4
+									&	chr(13),BodyAr);
+						end else begin
+							PUParttestf = false;
+							for (i=0;i<matrowcnt(ORr);i=i+1) begin
+								matrowget(ORr,i,ORrw);
+								if (itemQTyOR[ORrw.ArtCode]<0) then begin
+									PUParttestf = true;
+								end;
+							end;
+							if (PUParttestf) then begin
+								AddTextToArea	(ORr.SerNr & chr(09) 																																		//1
+									& ORr.CustCode & chr(09) 																																						//2
+									& ORr.Addr0 & chr(09)																																								//3
+									& "Partial receipt made to order and not shipped" & chr(09) 																				//4
+									&	chr(13),BodyAr);
+							end else begin
+								AddTextToArea	(ORr.SerNr & chr(09) 																																		//1
+									& ORr.CustCode & chr(09) 																																						//2
+									& ORr.Addr0 & chr(09)																																								//3
+									& "Receipt made by order, but not shipped" & chr(09) 																								//4
+									&	chr(13),BodyAr);
+							end;
+						end;
+					end;				
+				end else begin
+					if (parttestf) then begin
+						if (!POtestf) then begin
+						AddTextToArea	(ORr.SerNr & chr(09) 																																				//1
+									& ORr.CustCode & chr(09) 																																						//2
+									& ORr.Addr0 & chr(09)																																								//3
+									& "No order has been placed on the customer's account to the supplier (new order)" & chr(09) 													//4
+									&	chr(13),BodyAr);
+					end else begin
+						if (!PUtestf) then begin
+							AddTextToArea	(ORr.SerNr & chr(09) 																																			//1
+									& ORr.CustCode & chr(09) 																																						//2
+									& ORr.Addr0 & chr(09)																																								//3
+									& "The order has been sent to the supplier" & chr(09) 																							//4
+									&	chr(13),BodyAr);
+						end else begin
+							PUParttestf = false;
+							for (i=0;i<matrowcnt(ORr);i=i+1) begin
+								matrowget(ORr,i,ORrw);
+								if (itemQTyOR[ORrw.ArtCode]<0) then begin
+									PUParttestf = true;
+								end;
+							end;
+							if (PUParttestf) then begin
+								AddTextToArea	(ORr.SerNr & chr(09) 																																		//1
+									& ORr.CustCode & chr(09) 																																						//2
+									& ORr.Addr0 & chr(09)																																								//3
+									& "Partial receipt made to order and not shipped (partial)" & chr(09) 																				//4
+									&	chr(13),BodyAr);
+							end else begin
+								AddTextToArea	(ORr.SerNr & chr(09) 																																		//1
+									& ORr.CustCode & chr(09) 																																						//2
+									& ORr.Addr0 & chr(09)																																								//3
+									& "Receipt made by order, but not shipped (partial)" & chr(09) 																								//4
+									&	chr(13),BodyAr);
+							end;
+						end;
+					end;	
+					end;
+				end;
+			end;
+		end;
+		WriteAreaToFile	(BodyAr,FileName,0);
+	end;
+	
+	
+	
+  return;
+end;
+
+
+
+
+
+
+
+
+
 global
 procedure RebSalesReportRn1(record RcVc RepSpec)
 begin
