@@ -6911,7 +6911,7 @@ begin
 	record CompaniesBlock Compb;
 	row CompaniesBlock Comprw;
 	record LocationVc LCr;
-	LongInt CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant,k,OrGCcnt,y;
+	LongInt CompQty,i,OldComp,rwcnt,j,exportflag,quant,k,OrGCcnt,y, CompORNr, CompPONr;
 	boolean TrHs, testf, JewCompf, TrHs1, allexf, calcprice, parttestf, allnotextestf, POtestf, PUParttestf, PUtestf;
 	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
 	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
@@ -6931,15 +6931,16 @@ begin
 	string 150 fn;
 	record PLVc PLr;
 	area BodyAr;
-	string 255 FileName;
+	string 255 FileName, POSerNrstr, Companystr;
 	vector integer vmaxcomp;
-	record ORVc ORr;
-	row ORVc ORrw;
+	record ORVc ORr, compORr;
+	row ORVc ORrw, compORrw;
 	record RLinkVc RLinkr, RLink2r;
-	record POVc POr;
+	record POVc POr, compPOr;
 	record PUVc PUr;
 	row PUVc PUrw;
-	
+	integer pos;
+	record ConsItemVc CIr;
 	
 	IDr.OrigCode = "";
 	while(loopMain(IDr,1,true))begin
@@ -6961,6 +6962,50 @@ begin
 				parttestf = false;
 				allnotextestf = false;
 				allexf = true;
+				
+				pos = 0;
+				ExtractObjWithSeparator(":",ORr.OfficialSerNr,true,pos,POSerNrstr);
+				ExtractObjWithSeparator(":",ORr.OfficialSerNr,true,pos,Companystr);
+				CompORNr = 0;
+				CompPONr = 0;
+				
+				if(SetCompany(StringToInt(Companystr),false)) then begin
+					compPOr.SerNr = StringToInt(POSerNrstr);
+					if (ReadFIrstMain(compPOr,1,true)) then begin
+						CompPONr = compPOr.SerNr;
+						compORr.SerNr = compPOr.OrdNr;
+						if (ReadFIrstMain(compORr,1,true)) then begin
+							CompORNr = compORr.SerNr;
+							ClearVector(itemQTyOR);
+							for (i=0;i<matrowcnt(compORr);i=i+1) begin
+								matrowget(compORr,i,compORrw);
+								INr.Code = compORrw.ArtCode;
+								if (ReadFIrstMain(INr,1,true)) then begin
+									CIr.LocCode = INr.Code;
+									CIr.BrandCode = INr.BPIBrand;
+									if(ReadFirstKey("LocCodeBrand",CIr,2,true))then begin
+										if (nonblank(vMainItemCodes[CIr.Code])) then begin
+											itemQTyOR[vMainItemCodes[CIr.Code]] = -compORrw.Quant;
+										end else begin
+											itemQTyOR[CIr.Code] = -compORrw.Quant;
+										end;
+										if (compORrw.Quant>0 and compORrw.Shipd2>0) then begin
+											parttestf = true;
+										end;
+										if (compORrw.Quant>compORrw.Shipd2) then begin
+											allexf = false;
+										end;
+									end;
+								end;
+							end;
+							if (!parttestf) begin
+								allnotextestf = true;
+							end;
+						end;
+					end;
+				end;
+				
+				ResetCompany(18);
 				
 				ClearVector(itemQTyOR);
 				for (i=0;i<matrowcnt(ORr);i=i+1) begin
@@ -6990,17 +7035,11 @@ begin
 					if (ReadFIrstMain(POr,1,true)) then begin
 						if (POr.OrdNr==ORr.SerNr) then begin
 							POtestf = true;
-							if (ORr.SerNr==5510) then begin
-								logtext(0,ORr.SerNr & " 1_4");
-							end;
 							j = 1;
 							while (ReadRecordLink(POr,j,PUr,RLink2r))begin
 								if (ReadFIrstMain(PUr,1,true)) then begin
 									if (PUr.OKFlag==1) then begin
 										PUtestf = true;
-									end;
-									if (ORr.SerNr==5510) then begin
-										logtext(0,ORr.SerNr & " 1_5");
 									end;
 									for (x=0;x<matrowcnt(PUr);x=x+1) begin
 										matrowget(PUr,x,PUrw);
@@ -7008,9 +7047,6 @@ begin
 											itemQTyOR[vMainItemCodes[PUrw.ArtCode]] = itemQTyOR[vMainItemCodes[PUrw.ArtCode]] + PUrw.Quant;
 										end else begin
 											itemQTyOR[PUrw.ArtCode] = itemQTyOR[PUrw.ArtCode] + PUrw.Quant;
-											if (ORr.SerNr==5510) then begin
-												logtext(0,ORr.SerNr & " 2");
-											end;
 										end;
 									end;
 								end;
@@ -7022,14 +7058,16 @@ begin
 				end;
 				if (allnotextestf) then begin
 					if (!POtestf) then begin
-						AddTextToArea	(ORr.SerNr & chr(09) 																																				//1
+						AddTextToArea	(CompORNr & chr(09)
+									& ORr.SerNr & chr(09) 																																							//1
 									& ORr.CustCode & chr(09) 																																						//2
 									& ORr.Addr0 & chr(09)																																								//3
-									& "No order has been placed on the customer's account to the supplier (new order)" & chr(09) 													//4
+									& "No order has been placed on the customer's account to the supplier (new order)" & chr(09) 				//4
 									&	chr(13),BodyAr);
 					end else begin
 						if (!PUtestf) then begin
-							AddTextToArea	(ORr.SerNr & chr(09) 																																			//1
+							AddTextToArea	(CompORNr & chr(09)
+									& ORr.SerNr & chr(09) 																																							//1
 									& ORr.CustCode & chr(09) 																																						//2
 									& ORr.Addr0 & chr(09)																																								//3
 									& "The order has been sent to the supplier" & chr(09) 																							//4
@@ -7042,9 +7080,6 @@ begin
 									if (itemQTyOR[vMainItemCodes[ORrw.ArtCode]]<0) then begin
 										PUParttestf = true;
 									end;
-									if (ORr.SerNr==5510) then begin
-										logtext(0,ORr.SerNr & " 3 " & itemQTyOR[vMainItemCodes[ORrw.ArtCode]]);
-									end;
 								end else begin
 									if (itemQTyOR[ORrw.ArtCode]<0) then begin
 										PUParttestf = true;
@@ -7052,13 +7087,15 @@ begin
 								end;
 							end;
 							if (PUParttestf) then begin
-								AddTextToArea	(ORr.SerNr & chr(09) 																																		//1
+								AddTextToArea	(CompORNr & chr(09)
+									& ORr.SerNr & chr(09) 																																							//1
 									& ORr.CustCode & chr(09) 																																						//2
 									& ORr.Addr0 & chr(09)																																								//3
 									& "Partial receipt made to order and not shipped" & chr(09) 																				//4
 									&	chr(13),BodyAr);
 							end else begin
-								AddTextToArea	(ORr.SerNr & chr(09) 																																		//1
+								AddTextToArea	(CompORNr & chr(09)
+									& ORr.SerNr & chr(09) 																																							//1
 									& ORr.CustCode & chr(09) 																																						//2
 									& ORr.Addr0 & chr(09)																																								//3
 									& "Receipt made by order, but not shipped" & chr(09) 																								//4
@@ -7069,14 +7106,16 @@ begin
 				end else begin
 					if (parttestf and !allexf) then begin
 						if (!POtestf) then begin
-							AddTextToArea	(ORr.SerNr & chr(09) 																																				//1
+							AddTextToArea	(CompORNr & chr(09)
+									& ORr.SerNr & chr(09) 																																							//1
 									& ORr.CustCode & chr(09) 																																						//2
 									& ORr.Addr0 & chr(09)																																								//3
-									& "No order has been placed on the customer's account to the supplier (new order)" & chr(09) 													//4
+									& "No order has been placed on the customer's account to the supplier (new order)" & chr(09) 				//4
 									&	chr(13),BodyAr);
 						end else begin
 							if (!PUtestf) then begin
-								AddTextToArea	(ORr.SerNr & chr(09) 																																			//1
+								AddTextToArea	(CompORNr & chr(09)
+										& ORr.SerNr & chr(09) 																																							//1
 										& ORr.CustCode & chr(09) 																																						//2
 										& ORr.Addr0 & chr(09)																																								//3
 										& "The order has been sent to the supplier" & chr(09) 																							//4
@@ -7096,16 +7135,18 @@ begin
 									end;
 								end;
 								if (PUParttestf) then begin
-									AddTextToArea	(ORr.SerNr & chr(09) 																																		//1
+									AddTextToArea	(CompORNr & chr(09)
+										& ORr.SerNr & chr(09) 																																							//1
 										& ORr.CustCode & chr(09) 																																						//2
 										& ORr.Addr0 & chr(09)																																								//3
-										& "Partial receipt made to order and shipped (partial)" & chr(09) 																				//4
+										& "Partial receipt made to order and shipped (partial)" & chr(09) 																	//4
 										&	chr(13),BodyAr);
 								end else begin
-									AddTextToArea	(ORr.SerNr & chr(09) 																																		//1
+									AddTextToArea	(CompORNr & chr(09)
+										& ORr.SerNr & chr(09) 																																							//1
 										& ORr.CustCode & chr(09) 																																						//2
 										& ORr.Addr0 & chr(09)																																								//3
-										& "Receipt made by order and shipped (partial)" & chr(09) 																								//4
+										& "Receipt made by order and shipped (partial)" & chr(09) 																					//4
 										&	chr(13),BodyAr);
 								end;
 							end;
