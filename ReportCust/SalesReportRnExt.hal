@@ -7029,8 +7029,8 @@ begin
 	integer flcnt,flushcnt,li;
 	array string 20 aloc,alocation,agroup,agroupname;
 	integer aloccnt;
-	vector boolean vbrandcode, vITGcode, vItemCode;
-	vector string 255 vbrandname,vcomp,vloc,vlocname,vmaxcurr;
+	vector boolean vbrandcode, vITGcode, vItemCode, vBrandExInCompf, vBrandActive;
+	vector string 255 vbrandname,vcomp,vloc,vlocname,vmaxcurr, vBrandExInCompNames;
 	vector val vlocinst,vmaxprice;
 	record BPIBrandVc BPIBr;
 	record WEBReservStock WRSb;
@@ -7076,6 +7076,7 @@ begin
 				PLDr.Code = "RRP";
 				ClearVector(vITGcode);
 				ClearVector(vItemCode);
+				ClearVector(vBrandExInCompf);
 				if (ReadFIrstMain(PLDr,1,true)) then begin
 					for (j=0;j<matrowcnt(PLDr);j=j+1) begin
 						matrowget(PLDr,j,PLDrw);
@@ -7094,6 +7095,17 @@ begin
 				INr.Code = "";
 				TrHs1=true;
 				while (loopmain(INr,1,TrHs1)) begin
+					if (!vBrandExInCompf[INr.BPIBrand]) then begin
+						vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ",";
+						vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
+						vBrandExInCompf[INr.BPIBrand] = true;
+					end;
+					ISr.Code = INr.Code;
+					ISr.Location = ";;;";
+					readfirstmain(ISr,2,true);
+					if (INr.LastPriceChange>stringtodate("1/01/2019") or ISr.Instock>0) then begin
+						vBrandActive[INr.BPIBrand] = true;
+					end;
 					if (!vBrandGroup[INr.BPIBrand & "_" & INr.Group]) then begin 
 						vBrandGroup[INr.BPIBrand & "_" & INr.Group] = true;
 						vBrandGroupf[INr.BPIBrand & "_" & INr.Group] = true;
@@ -7128,23 +7140,26 @@ begin
 			end;
 		end;
 		SetCompany(1,false);
-		
 		BPIBrandr.Code = "";
 		while (loopMain(BPIBrandr,1,true)) begin
-			if(vbrandcode[BPIBrandr.Code]) then begin
-				AddTextToArea	(BPIBrandr.Code & chr(09) 																						//1
-											& vbrandname[BPIBrandr.Code] & chr(09) 																			//2
-											& "All groups" & chr(09)
-											& "All groups" & chr(09)
-											&	chr(13),BodyAr);
-			end else begin
-				for (i=0;i<itcnt;i=i+1) begin
-					if(vBrandGroupf[BPIBrandr.Code & "_" & agroup[i]]) then begin
-						AddTextToArea	(BPIBrandr.Code & chr(09) 																						//1
-											& vbrandname[BPIBrandr.Code] & chr(09) 																			//2
-											& agroup[i] & chr(09)
-											& agroupname[i] & chr(09)
-											&	chr(13),BodyAr);
+			if (vBrandActive[BPIBrandr.Code]) then begin
+				if(vbrandcode[BPIBrandr.Code]) then begin
+					AddTextToArea	(BPIBrandr.Code & chr(09) 																						//1
+												& vbrandname[BPIBrandr.Code] & chr(09)
+												&	vBrandExInCompNames[BPIBrandr.Code] & chr(09)									//2
+												& "All groups" & chr(09)
+												& "All groups" & chr(09)
+												&	chr(13),BodyAr);
+				end else begin
+					for (i=0;i<itcnt;i=i+1) begin
+						if(vBrandGroupf[BPIBrandr.Code & "_" & agroup[i]]) then begin
+							AddTextToArea	(BPIBrandr.Code & chr(09) 																						//1
+												& vbrandname[BPIBrandr.Code] & chr(09) 		
+												&	vBrandExInCompNames[BPIBrandr.Code] & chr(09)											//2
+												& agroup[i] & chr(09)
+												& agroupname[i] & chr(09)
+												&	chr(13),BodyAr);
+						end;
 					end;
 				end;
 			end;
