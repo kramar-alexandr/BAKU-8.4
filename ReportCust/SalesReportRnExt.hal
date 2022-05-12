@@ -7022,12 +7022,12 @@ begin
 	row CompaniesBlock Comprw;
 	row RebVc Rebrw;
 	record LocationVc LCr;
-	LongInt CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant,k,OrGCcnt,y;
+	LongInt CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant,k,OrGCcnt,y, g, itcnt;
 	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1, isfirst, isfirst2, isfirst3;
 	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
 	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
 	integer flcnt,flushcnt,li;
-	array string 20 aloc,alocation;
+	array string 20 aloc,alocation,agroup,agroupname;
 	integer aloccnt;
 	vector boolean vbrandcode, vITGcode, vItemCode;
 	vector string 255 vbrandname,vcomp,vloc,vlocname,vmaxcurr;
@@ -7036,7 +7036,7 @@ begin
 	record WEBReservStock WRSb;
 	boolean entf,locfnd;
 	record ItemDuplicatesVc IDr;
-	vector boolean OrigCodes;
+	vector boolean OrigCodes, vBrandGroup, vBrandGroupf, groupf;
 	vector string 255 OrigBrandCodes;
 	array string 255 aOrigGlobalCodes,acomp;
 	string 150 fn;
@@ -7047,6 +7047,7 @@ begin
 	record BPIBrandVc BPIBrandr;
   record PLDefVc PLDr;
 	row PLDefVc PLDrw;
+	record ITVc ITr;
 	
 	CompQty = 35;
 	OldComp = CurrentCompany;
@@ -7057,6 +7058,7 @@ begin
 	FileName = "SalesReportExt/WebGetRRPNExistfBrandsInFile.txt";
 	logtext(0,"ItemSaldReportMn Start");
 	if (!fileexists(FileName))then begin
+		g = 0;
 		for (i=0;i<CompQty;i=i+1)begin
 			logtext(0,i+1 & " WebGetRRPNExistfBrandsInFile");
 			BlockLoad(Compb);
@@ -7092,15 +7094,32 @@ begin
 				INr.Code = "";
 				TrHs1=true;
 				while (loopmain(INr,1,TrHs1)) begin
+					if (!vBrandGroup[INr.BPIBrand & "_" & INr.Group]) then begin 
+						vBrandGroup[INr.BPIBrand & "_" & INr.Group] = true;
+						vBrandGroupf[INr.BPIBrand & "_" & INr.Group] = true;
+					end;
+					if (!groupf[INr.Group]) then begin
+						groupf[INr.Group] = true;
+						agroup[g] = INr.Group;
+						ITr.Code = INr.Group;
+						if(readfirstmain(ITr,1,true))then begin
+							agroupname[g] = ITr.Comment;
+						end;
+						g = g + 1;
+					end;
+					itcnt = g;
 					if (nonblank(INr.CPSCode) and (CurrentCompany==1 or CurrentCompany==16)) then begin
 						vbrandcode[INr.BPIBrand] = false;
+						vBrandGroupf[INr.BPIBrand & "_" & INr.Group] = false;
 					end else begin
 						if (vITGcode[INr.Group]) then begin
 							if (INr.BPIBrand=="BRND0046") then begin logtext(0,"CurrentCompany COINC" & CurrentCompany & "_" & INr.Code); end;
 							vbrandcode[INr.BPIBrand] = false;
+							vBrandGroupf[INr.BPIBrand & "_" & INr.Group] = false;
 						end else begin
 							if (vItemCode[INr.Code]) then begin
 								vbrandcode[INr.BPIBrand] = false;
+								vBrandGroupf[INr.BPIBrand & "_" & INr.Group] = false;
 							end;
 						end;
 					end;
@@ -7115,9 +7134,19 @@ begin
 			if(vbrandcode[BPIBrandr.Code]) then begin
 				AddTextToArea	(BPIBrandr.Code & chr(09) 																						//1
 											& vbrandname[BPIBrandr.Code] & chr(09) 																			//2
+											& "All groups" & chr(09)
+											& "All groups" & chr(09)
 											&	chr(13),BodyAr);
 			end else begin
-				logtext(0,vbrandname[BPIBrandr.Code]);
+				for (i=0;i<itcnt;i=i+1) begin
+					if(vBrandGroupf[BPIBrandr.Code & "_" & agroup[i]]) then begin
+						AddTextToArea	(BPIBrandr.Code & chr(09) 																						//1
+											& vbrandname[BPIBrandr.Code] & chr(09) 																			//2
+											& agroup[i] & chr(09)
+											& agroupname[i] & chr(09)
+											&	chr(13),BodyAr);
+					end;
+				end;
 			end;
 		end;
 		
