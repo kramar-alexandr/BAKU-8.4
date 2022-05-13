@@ -7183,6 +7183,204 @@ end;
 	
 	
 	
+
+global
+webpublic procedure WebGetRRPExistfBrandsInFile()
+begin
+	area fillitems;
+	record GlobalItemVc GIr,mainGIr,DupGir,OldGir,LogGIr;
+	row GlobalItemVc GIrw, DupGIrw,OldGirw;
+	record INVc INr,oldINr;
+	record DIVc DIr;
+	record ItemHistVc IHr;
+	record ItemStatusVc ISr;
+	record RebVc Rebr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	row RebVc Rebrw;
+	record LocationVc LCr;
+	LongInt CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant,k,OrGCcnt,y, g, itcnt;
+	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1, isfirst, isfirst2, isfirst3;
+	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
+	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
+	integer flcnt,flushcnt,li;
+	array string 20 aloc,alocation,agroup,agroupname,aitemcode,aitemname;
+	integer aloccnt;
+	vector boolean vbrandcode, vITGcode, vItemCode, vBrandExInCompf, vBrandActive;
+	vector string 255 vbrandname,vcomp,vloc,vlocname,vmaxcurr, vBrandExInCompNames;
+	vector val vlocinst,vmaxprice;
+	record BPIBrandVc BPIBr;
+	record WEBReservStock WRSb;
+	boolean entf,locfnd;
+	record ItemDuplicatesVc IDr;
+	vector boolean OrigCodes, vBrandGroup, vBrandGroupf, groupf, itemf;
+	vector string 255 OrigBrandCodes, groupForm, brandForm, vBrandCPSCode;
+	array string 255 aOrigGlobalCodes,acomp;
+	string 150 fn;
+	record PLVc PLr;
+	area BodyAr;
+	string 255 FileName;
+	vector integer vmaxcomp;
+	record BPIBrandVc BPIBrandr;
+  record PLDefVc PLDr;
+	row PLDefVc PLDrw;
+	record ITVc ITr;
+	
+	CompQty = 35;
+	OldComp = CurrentCompany;
+	BlockLoad(Compb);
+	
+	
+	TrHs1=true;
+	FileName = "SalesReportExt/WebGetRRPNExistfBrandsInFile.txt";
+	logtext(0,"ItemSaldReportMn Start");
+	if (!fileexists(FileName))then begin
+		g = 0;
+		y = 0;
+		for (i=0;i<CompQty;i=i+1)begin
+			logtext(0,i+1 & " WebGetRRPNExistfBrandsInFile");
+			BlockLoad(Compb);
+			matrowget(Compb,i,Comprw);
+			if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(i+1) or (i+1)==3) and (i+1)!=18)then begin
+				SetCompany(i+1,false);
+				if (i==0) then begin
+					BPIBrandr.Code = "";
+					while (loopMain(BPIBrandr,1,true)) begin
+						vbrandcode[BPIBrandr.Code] = true;
+						vbrandname[BPIBrandr.Code] = BPIBrandr.Name;
+					end;
+					resetloop(BPIBrandr);
+				end;
+				PLDr.Code = "RRP";
+				ClearVector(vITGcode);
+				ClearVector(vItemCode);
+				ClearVector(vBrandExInCompf);
+				if (ReadFIrstMain(PLDr,1,true)) then begin
+					for (j=0;j<matrowcnt(PLDr);j=j+1) begin
+						matrowget(PLDr,j,PLDrw);
+						if (PLDrw.CodeType==0) then begin 
+							if (nonblank(PLDrw.Formula)) then begin
+								if (PLDrw.ItemCode=="COINC") then begin logtext(0,"CurrentCompany COINC" & CurrentCompany); end;
+								vITGcode[PLDrw.ItemCode] = true;
+								groupForm[PLDrw.ItemCode & "_" & i+1] = PLDrw.Formula;
+							end;
+						end else begin
+							if (nonblank(PLDrw.Formula)) then begin
+								vItemCode[PLDrw.ItemCode] = true;
+								groupForm[PLDrw.ItemCode & "_" & i+1] = PLDrw.Formula;
+							end;
+						end;
+					end;
+				end;
+				INr.Code = "";
+				TrHs1=true;
+				while (loopmain(INr,1,TrHs1)) begin
+					ISr.Code = INr.Code;
+					ISr.Location = ";;;";
+					readfirstmain(ISr,2,true);
+					vBrandActive[INr.BPIBrand] = true;
+					if (!vBrandExInCompf[INr.BPIBrand & "_" & INr.Group] and nonblank(INr.Group)) then begin
+						vBrandExInCompNames[INr.BPIBrand & "_" & INr.Group & "_" & i+1] = Comprw.CompName;
+						vBrandExInCompf[INr.BPIBrand & "_" & INr.Group] = true;
+						vBrandGroupf[INr.BPIBrand & "_" & INr.Group & "_" & i+1] = true;
+					end;
+					if (!vBrandGroupf[INr.BPIBrand & "_" & INr.Group & "_" & i+1] and nonblank(groupForm[INr.Code & "_" & i+1])) then begin
+						if (!itemf[INr.Code]) then begin
+							itemf[INr.Code] = true;
+							aitemcode[y] = INr.Code;
+							aitemname[y] = INr.Name;
+							y = y + 1;
+						end;
+						vBrandExInCompNames[INr.BPIBrand & "_" & INr.Code & "_" & i+1] = Comprw.CompName;
+						vBrandExInCompf[INr.BPIBrand & "_" & INr.Code] = true;
+						vBrandGroupf[INr.BPIBrand & "_" & INr.Code & "_" & i+1] = true;
+					end;
+					if (!vBrandGroupf[INr.BPIBrand & "_" & INr.Group & "_" & i+1] and blank(groupForm[INr.Code & "_" & i+1]) and nonblank(INr.CPSCode)) then begin
+						if (!itemf[INr.Code]) then begin
+							itemf[INr.Code] = true;
+							aitemcode[y] = INr.Code;
+							aitemname[y] = INr.Name;
+							y = y + 1;
+						end;
+						vBrandExInCompNames[INr.BPIBrand & "_" & INr.Code & "_" & i+1] = Comprw.CompName;
+						vBrandExInCompf[INr.BPIBrand & "_" & INr.Code] = true;
+						vBrandGroupf[INr.BPIBrand & "_" & INr.Code & "_" & i+1] = true;
+						vBrandCPSCode[INr.BPIBrand & "_" & INr.Code & "_" & i+1] = INr.CPSCode;
+					end;
+					if (!groupf[INr.Group] and nonblank(INr.Group)) then begin
+						groupf[INr.Group] = true;
+						agroup[g] = INr.Group;
+						ITr.Code = INr.Group;
+						if(readfirstmain(ITr,1,true))then begin
+							agroupname[g] = ITr.Comment;
+						end;
+						g = g + 1;
+					end;
+					itcnt = g;
+				end;
+				resetloop(INr);
+			end;
+		end;
+		SetCompany(1,false);
+		BPIBrandr.Code = "";
+		while (loopMain(BPIBrandr,1,true)) begin
+			if (vBrandActive[BPIBrandr.Code]) then begin
+				testf = false;
+				for (j=0;j<35;j=j+1) begin
+					for (i=0;i<itcnt;i=i+1) begin
+						if (vBrandGroupf[BPIBrandr.Code & "_" & agroup[i] & "_" & j+1]) then begin
+							if (nonblank(groupForm[agroup[i] & "_" & j+1])) then begin
+								AddTextToArea	(BPIBrandr.Code & chr(09) 																						//1
+													& vbrandname[BPIBrandr.Code] & chr(09) 		
+													& agroup[i] & chr(09)
+													& agroupname[i] & chr(09)
+													&	vBrandExInCompNames[BPIBrandr.Code & "_" & agroup[i] & "_" & j+1] & chr(09)	
+													&	groupForm[agroup[i] & "_" & j+1] & chr(09)	
+													&	chr(13),BodyAr);
+								testf = true;
+							end;
+						end;
+					end;
+					for (g=0;g<y;g=g+1) begin
+						if (vBrandGroupf[BPIBrandr.Code & "_" & aitemcode[y] & "_" & j+1] and nonblank(vBrandCPSCode[BPIBrandr.Code & "_" & aitemcode[y] & "_" & j+1])) then begin
+							AddTextToArea	(BPIBrandr.Code & chr(09) 																						//1
+												& vbrandname[BPIBrandr.Code] & chr(09) 		
+												& aitemcode[y] & chr(09)
+												& aitemname[y] & chr(09)
+												&	vBrandExInCompNames[BPIBrandr.Code & "_" & aitemcode[y] & "_" & j+1] & chr(09)	
+												&	vBrandCPSCode[BPIBrandr.Code & "_" & aitemcode[y] & "_" & j+1] & chr(09) & chr(09)	
+												&	chr(13),BodyAr);
+							testf = true;
+						end else begin
+							if (vBrandGroupf[BPIBrandr.Code & "_" & aitemcode[y] & "_" & j+1]) then begin
+								AddTextToArea	(BPIBrandr.Code & chr(09) 																						//1
+													& vbrandname[BPIBrandr.Code] & chr(09) 		
+													& aitemcode[y] & chr(09)
+													& aitemname[y] & chr(09)
+													&	vBrandExInCompNames[BPIBrandr.Code & "_" & aitemcode[y] & "_" & j+1] & chr(09)	
+													&	groupForm[aitemcode[y] & "_" & j+1] & chr(09) & chr(09)	
+													&	chr(13),BodyAr);
+								testf = true;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+		
+		WriteAreaToFile	(BodyAr,FileName,0);
+	end;
+	
+	
+	
+  return;
+end;
+
+
+
+	
+	
+	
 	
 	
 	
