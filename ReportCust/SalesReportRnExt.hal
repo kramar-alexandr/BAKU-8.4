@@ -7180,6 +7180,173 @@ end;
 
 
 
+
+
+
+
+
+
+
+	
+	
+
+global
+webpublic procedure WebGetStockMovementsInFile()
+begin
+	area fillitems;
+	record GlobalItemVc GIr,mainGIr,DupGir,OldGir,LogGIr;
+	row GlobalItemVc GIrw, DupGIrw,OldGirw;
+	record INVc INr,oldINr;
+	record DIVc DIr;
+	record ItemHistVc IHr;
+	record ItemStatusVc ISr;
+	record RLinkVc RLr;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	row RebVc Rebrw;
+	record LocationVc LCr;
+	LongInt CompQty,i,OldComp,pos,rwcnt,j,exportflag,quant,k,OrGCcnt,y, g, itcnt;
+	boolean TrHs, testf, JewCompf, TrHs1, dummyf, calcprice, testf1, isfirst, isfirst2, isfirst3;
+	string 255 class,BrandName,BrandCode,CurCode,salesacc,location,curitemname,tax2code,taxtemplatecode,vatcode;
+	val ITRebate,price,FrRate,ToRateB1,ToRateB2,BaseRate1,BaseRate2,baseprice,tax2prc;
+	integer flcnt,flushcnt,li;
+	array string 20 aloc,alocation,agroup,agroupname;
+	integer aloccnt;
+	vector boolean vbrandcode, vITGcode, vItemCode, vBrandExInCompf, vBrandActive;
+	vector string 255 vbrandname,vcomp,vloc,vlocname,vmaxcurr, vBrandExInCompNames;
+	vector val vlocinst,vmaxprice;
+	record POVc POr;
+	record PUVc PUr;
+	record WEBReservStock WRSb;
+	boolean entf,locfnd;
+	record ItemDuplicatesVc IDr;
+	vector boolean OrigCodes, vBrandGroup, vBrandGroupf, groupf;
+	vector string 255 OrigBrandCodes;
+	array string 255 aOrigGlobalCodes,acomp;
+	string 150 fn;
+	record PLVc PLr;
+	area BodyAr;
+	string 255 FileName;
+	vector integer vmaxcomp;
+	record SHVc SHr;
+	row SHVc SHrw;
+  record SDVc SDr;
+	row SDVc SDrw;
+  record StockMovVc SMr;
+	row StockMovVc SMrw;
+	record ITVc ITr;
+	
+	CompQty = 35;
+	OldComp = CurrentCompany;
+	BlockLoad(Compb);
+	
+	
+	TrHs1=true;
+	FileName = "SalesReportExt/WebGetStockMovementsInFile.txt";
+	logtext(0,"ItemSaldReportMn Start");
+	if (!fileexists(FileName))then begin
+		g = 0;
+		for (i=0;i<CompQty;i=i+1)begin
+			if(Comprw.ActiveStatus==0)then begin
+				if(SetCompany(i+1,false)) then begin
+					if (CurrentCompany!=18) then begin
+						SMr.OKFlag = 1;
+						SMr.TransDate = stringtodate("01/01/2019");
+						TrHs = true;
+						while (loopkey("OKFlagTransDate",SMr,2,TrHs)) begin
+							if (SMr.TransDate<stringtodate("01/01/2019")) then begin TrHs = false; end;
+							if (SMr.OKFlag!=1) then begin TrHs = false; end;
+							if (TrHs) then begin
+								AddTextToArea	("StockMovVc" & chr(09) 																						//1
+															& SMr.SerNr & chr(09) 		
+															& SMr.FrLocation & chr(09)
+															& SMr.ToLocation & chr(09)
+															& SMr.TransDate & chr(09)
+															&	matrowcnt(SMr) & chr(09)	
+															& SMr.TotQty & chr(09)	
+															&	chr(13),BodyAr);
+							end;
+						end;
+						resetloop(SMr);
+						SDr.OKFlag = 1;
+						SDr.TransDate = stringtodate("01/01/2019");
+						TrHs = true;
+						while (loopkey("OKFlagTransDate",SDr,2,TrHs)) begin
+							testf = true;
+							if (SDr.TransDate<stringtodate("01/01/2019")) then begin TrHs = false; end;
+							if (SDr.OKFlag!=1) then begin TrHs = false; end;
+							if (SDr.Reservf!=1) then begin testf = false; end;
+							if (TrHs and testf) then begin
+								if(ReadRecordLink(SDr,1,POr,RLr)) then begin
+									AddTextToArea	("SDVc" & chr(09) 																						//1
+																& SDr.SerNr & chr(09) 		
+																& SDr.Location & chr(09)
+																& POr.Location & chr(09)
+																& SDr.TransDate & chr(09)
+																&	matrowcnt(SDr) & chr(09)	
+																& SDr.TotQty & chr(09)	
+																&	chr(13),BodyAr);
+								end else begin
+									if(ReadRecordLink(SHr,1,PUr,RLr)) then begin
+										AddTextToArea	("SDVc" & chr(09) 																						//1
+																	& SHr.SerNr & chr(09) 		
+																	& SHr.Location & chr(09)
+																	& PUr.Location & chr(09)
+																	& SHr.ShipDate & chr(09)
+																	&	matrowcnt(SHr) & chr(09)	
+																	& SHr.TotQty & chr(09)	
+																	&	chr(13),BodyAr);
+									end;
+								end;
+							end;
+						end;
+						
+					end else begin
+						SHr.OKFlag = 1;
+						SHr.ShipDate = stringtodate("01/01/2019");
+						TrHs = true;
+						while (loopkey("OKFlagShipDate",SHr,2,TrHs)) begin
+							testf = true;
+							if (SHr.ShipDate<stringtodate("01/01/2019")) then begin TrHs = false; end;
+							if (SHr.OKFlag!=1) then begin TrHs = false; end;
+							if (TrHs and testf) then begin
+								if(ReadRecordLink(SHr,1,POr,RLr)) then begin
+									AddTextToArea	("SHVc" & chr(09) 																						//1
+																& SHr.SerNr & chr(09) 		
+																& SHr.Location & chr(09)
+																& POr.Location & chr(09)
+																& SHr.ShipDate & chr(09)
+																&	matrowcnt(SHr) & chr(09)	
+																& SHr.TotQty & chr(09)	
+																&	chr(13),BodyAr);
+								end;
+							end;
+						end;
+						resetloop(SHr);
+					end;
+				end;
+			end;
+		end;
+		
+		WriteAreaToFile	(BodyAr,FileName,0);
+	end;
+	
+	
+	
+  return;
+end;
+
+
+
+	
+	
+	
+
+
+
+
+
+
 	
 	
 	
