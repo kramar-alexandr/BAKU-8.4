@@ -7690,7 +7690,7 @@ begin
 	record WEBReservStock WRSb;
 	boolean entf,locfnd;
 	record ItemDuplicatesVc IDr;
-	vector boolean OrigCodes, vBrandGroup, vBrandGroupf, groupf, itemf, vtestf;
+	vector boolean OrigCodes, vBrandGroup, vBrandGroupf, groupf, itemf, vtestf, instfInJW;
 	vector string 255 OrigBrandCodes, groupForm, brandForm, vBrandCPSCode;
 	array string 255 aOrigGlobalCodes,acomp;
 	string 150 fn;
@@ -7720,7 +7720,7 @@ begin
 			logtext(0,i+1 & " WebGetRRPExistfBrandsInFile");
 			BlockLoad(Compb);
 			matrowget(Compb,i,Comprw);
-			if(Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(i+1) or (i+1)==3) and (i+1)!=18)then begin
+			if(Comprw.ActiveStatus==0/* and (!CompanyIsJWLikeCompany(i+1) or (i+1)==3)*/ and (i+1)!=18)then begin
 				SetCompany(i+1,false);
 				if (nonblank(Comprw.CompName)) then begin
 					if (i==0) then begin
@@ -7757,7 +7757,7 @@ begin
 					end;
 					INr.Code = "";
 					TrHs1=true;
-					if (CurrentCompany==3) then begin Comprw.CompName = "All JW Comp."; end;
+					if (CompanyIsJWLikeCompany(CurrentCompany)) then begin Comprw.CompName = "All JW Comp."; end;
 					while (loopmain(INr,1,TrHs1)) begin
 						if (nonblank(INr.BPIBrand)) then begin
 							ISr.Code = INr.Code;
@@ -7768,93 +7768,136 @@ begin
 								CPSf = true;
 							end;
 							if (nonblank(INr.Group) and nonblank(groupForm[INr.Group & "_" & CurrentCompany]) and vITGcode[INr.Group & "_" & CurrentCompany] and !vItemCode[INr.Code & "_" & CurrentCompany] and !CPSf) then begin
-								vBGSQty[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] = vBGSQty[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] + 1;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									vBGSQty[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] = vBGSQty[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] + 1;
+								end;
 								vBGSQtyInstock[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] = vBGSQtyInstock[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] + ISr.Instock;
-								if (ISr.Instock>0) then begin
+								if (ISr.Instock>0 and (!instfInJW[INr.Code] or !CompanyIsJWLikeCompany(CurrentCompany))) then begin
 									vBGSQtyInstockUnCodes[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] = vBGSQtyInstockUnCodes[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] + 1;
+									if (CompanyIsJWLikeCompany(CurrentCompany)) then begin
+										instfInJW[INr.Code] = true;
+									end;
 								end;
-								if (vBGSLastPurchPate[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"]<INr.LastPriceChange) then begin
-									vBGSLastPurchPate[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] = INr.LastPriceChange;
-								end;
-								if (!vBrandExInCompf[INr.BPIBrand]) then begin
-									if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
-									vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
-									vBrandExInCompf[INr.BPIBrand] = true;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									if (vBGSLastPurchPate[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"]<INr.LastPriceChange) then begin
+										vBGSLastPurchPate[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] = INr.LastPriceChange;
+									end;
+									if (!vBrandExInCompf[INr.BPIBrand]) then begin
+										if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
+										vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
+										vBrandExInCompf[INr.BPIBrand] = true;
+									end;
 								end;
 							end;
 							if (nonblank(INr.Group) and blank(groupForm[INr.Group & "_" & CurrentCompany]) and vITGcode[INr.Group & "_" & CurrentCompany] and !vItemCode[INr.Code & "_" & CurrentCompany] and !CPSf) then begin
-								vBGSQty[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] = vBGSQty[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] + 1;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									vBGSQty[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] = vBGSQty[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] + 1;
+								end;
 								vBGSQtyInstock[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] = vBGSQtyInstock[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] + ISr.Instock;
-								if (ISr.Instock>0) then begin
+								if (ISr.Instock>0 and (!instfInJW[INr.Code] or !CompanyIsJWLikeCompany(CurrentCompany))) then begin
 									vBGSQtyInstockUnCodes[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] = vBGSQtyInstockUnCodes[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] + 1;
+									if (CompanyIsJWLikeCompany(CurrentCompany)) then begin
+										instfInJW[INr.Code] = true;
+									end;
 								end;
-								if (vBGSLastPurchPate[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"]<INr.LastPriceChange) then begin
-									vBGSLastPurchPate[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] = INr.LastPriceChange;
-								end;
-								if (!vBrandExInCompf[INr.BPIBrand]) then begin
-									if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
-									vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
-									vBrandExInCompf[INr.BPIBrand] = true;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									if (vBGSLastPurchPate[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"]<INr.LastPriceChange) then begin
+										vBGSLastPurchPate[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_HD"] = INr.LastPriceChange;
+									end;
+									if (!vBrandExInCompf[INr.BPIBrand]) then begin
+										if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
+										vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
+										vBrandExInCompf[INr.BPIBrand] = true;
+									end;
 								end;
 							end;
 							if (nonblank(groupForm[INr.Code & "_" & i+1]) and vItemCode[INr.Code & "_" & CurrentCompany] and !CPSf) then begin
-								vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] = vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] + 1;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] = vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] + 1;
+								end;
 								vBGSQtyInstock[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] = vBGSQtyInstock[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] + ISr.Instock;
-								if (ISr.Instock>0) then begin
-									vBGSQtyInstockUnCodes[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] = vBGSQtyInstockUnCodes[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] + 1;
+								if (ISr.Instock>0 and (!instfInJW[INr.Code] or !CompanyIsJWLikeCompany(CurrentCompany))) then begin
+									vBGSQtyInstockUnCodes[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] = vBGSQtyInstockUnCodes[INr.BPIBrand & "_" & INr.Group & "_" & Comprw.CompName & "_PF"] + 1;
+									if (CompanyIsJWLikeCompany(CurrentCompany)) then begin
+										instfInJW[INr.Code] = true;
+									end;
 								end;
-								if (vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"]<INr.LastPriceChange) then begin
-									vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] = INr.LastPriceChange;
-								end;
-								if (!vBrandExInCompf[INr.BPIBrand]) then begin
-									if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
-									vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
-									vBrandExInCompf[INr.BPIBrand] = true;
+
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									if (vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"]<INr.LastPriceChange) then begin
+										vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PF"] = INr.LastPriceChange;
+									end;
+									if (!vBrandExInCompf[INr.BPIBrand]) then begin
+										if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
+										vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
+										vBrandExInCompf[INr.BPIBrand] = true;
+									end;
 								end;
 							end;
 							if (CPSf) then begin
-								vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] = vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] + 1;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] = vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] + 1;
+								end;
 								vBGSQtyInstock[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] = vBGSQtyInstock[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] + ISr.Instock;
-								if (ISr.Instock>0) then begin
+								if (ISr.Instock>0 and (!instfInJW[INr.Code] or !CompanyIsJWLikeCompany(CurrentCompany))) then begin
 									vBGSQtyInstockUnCodes[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] = vBGSQtyInstockUnCodes[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] + 1;
+									if (CompanyIsJWLikeCompany(CurrentCompany)) then begin
+										instfInJW[INr.Code] = true;
+									end;
 								end;
-								if (vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"]<INr.LastPriceChange) then begin
-									vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] = INr.LastPriceChange;
-								end;
-								if (!vBrandExInCompf[INr.BPIBrand]) then begin
-									if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
-									vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
-									vBrandExInCompf[INr.BPIBrand] = true;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									if (vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"]<INr.LastPriceChange) then begin
+										vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_PP"] = INr.LastPriceChange;
+									end;
+									if (!vBrandExInCompf[INr.BPIBrand]) then begin
+										if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
+										vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
+										vBrandExInCompf[INr.BPIBrand] = true;
+									end;
 								end;
 							end;
 							if (blank(groupForm[INr.Code & "_" & i+1]) and !CPSf and vItemCode[INr.Code & "_" & CurrentCompany]) then begin
-								vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] + 1;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] + 1;
+								end;
 								vBGSQtyInstock[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = vBGSQtyInstock[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] + ISr.Instock;
-								if (ISr.Instock>0) then begin
+								if (ISr.Instock>0 and (!instfInJW[INr.Code] or !CompanyIsJWLikeCompany(CurrentCompany))) then begin
 									vBGSQtyInstockUnCodes[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = vBGSQtyInstockUnCodes[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] + 1;
+									if (CompanyIsJWLikeCompany(CurrentCompany)) then begin
+										instfInJW[INr.Code] = true;
+									end;
 								end;
-								if (vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"]<INr.LastPriceChange) then begin
-									vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = INr.LastPriceChange;
-								end;
-								if (!vBrandExInCompf[INr.BPIBrand]) then begin
-									if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
-									vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
-									vBrandExInCompf[INr.BPIBrand] = true;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									if (vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"]<INr.LastPriceChange) then begin
+										vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = INr.LastPriceChange;
+									end;
+									if (!vBrandExInCompf[INr.BPIBrand]) then begin
+										if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
+										vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
+										vBrandExInCompf[INr.BPIBrand] = true;
+									end;
 								end;
 							end;
 							if (blank(groupForm[INr.Code & "_" & i+1]) and !CPSf and !vItemCode[INr.Code & "_" & CurrentCompany] and nonblank(INr.BPIBrand) and blank(groupForm[INr.Group & "_" & CurrentCompany]) and !vITGcode[INr.Group & "_" & CurrentCompany]) then begin
-								vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] + 1;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = vBGSQty[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] + 1;
+								end;
 								vBGSQtyInstock[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = vBGSQtyInstock[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] + ISr.Instock;
-								if (ISr.Instock>0) then begin
+								if (ISr.Instock>0 and (!instfInJW[INr.Code] or !CompanyIsJWLikeCompany(CurrentCompany))) then begin
 									vBGSQtyInstockUnCodes[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = vBGSQtyInstockUnCodes[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] + 1;
+									if (CompanyIsJWLikeCompany(CurrentCompany)) then begin
+										instfInJW[INr.Code] = true;
+									end;
 								end;
-								if (vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"]<INr.LastPriceChange) then begin
-									vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = INr.LastPriceChange;
-								end;
-								if (!vBrandExInCompf[INr.BPIBrand]) then begin
-									if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
-									vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
-									vBrandExInCompf[INr.BPIBrand] = true;
+								if (!CompanyIsJWLikeCompany(CurrentCompany) or CurrentCompany==3) then begin
+									if (vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"]<INr.LastPriceChange) then begin
+										vBGSLastPurchPate[INr.BPIBrand & "_Items_" & Comprw.CompName & "_HD"] = INr.LastPriceChange;
+									end;
+									if (!vBrandExInCompf[INr.BPIBrand]) then begin
+										if nonblank(vBrandExInCompNames[INr.BPIBrand]) then begin vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & ","; end;
+										vBrandExInCompNames[INr.BPIBrand] = vBrandExInCompNames[INr.BPIBrand] & Comprw.CompName;
+										vBrandExInCompf[INr.BPIBrand] = true;
+									end;
 								end;
 							end;
 						end;
