@@ -32,7 +32,7 @@ external function Boolean IVDchrsum(var record IVVc,Integer);
 external procedure IVDchsum(var record IVVc,Integer);
 remote procedure NPTSPaymentPasteAmounts_IVVc(var record IVVc,Array string,Array string,Array Integer,Array string,Array val,Array string,Array string,Integer);
 remote procedure LoyaltyPointsPayment_IVVc(var record IVVc,val,string);
-remote function Integer IVVc_PasteGiftCertificate(var record IVVc,Integer,Integer);
+remote function Integer IVVc_PasteGiftCertificate(var record IVVc,Integer,Integer,boolean);
 external function Boolean IVVc_PasteQuantity(var record IVVc,Integer);
 external procedure IVDClass_RefreshStringList(Integer,record IVVc);
 remote procedure IVSumup(var record IVVc,Boolean);
@@ -980,7 +980,7 @@ begin
   record GCVc GCr;
   record GCSVc GCSr;
   record GCTypeVc GCTr;
-  Boolean found;
+  Boolean found,foundbybc,needtoreturn;
 
   wn = CurWindow;
   DeselectWindow(wn,true);
@@ -992,6 +992,7 @@ begin
     if (found==false) then begin    
       GCr.BarCode = RepSpec.f1;
       found = ReadFirstKey("BarCode",GCr,1,true);
+      foundbybc = true;
     end;
     if (found==false) then begin    
       MessageBox(2184,"");
@@ -1000,9 +1001,15 @@ begin
     end;
     GCSr.SerNr = GCr.SerNr;
     if (ReadFirstMain(GCSr,1,true)) then begin
-      MessageBox(2186,"");
-      WindowFieldGoto(wn,RepSpec,-1,"f1",true);
-      goto LProceedGiftVoucherSalesTouchScreenDClass;
+      if(foundbybc)then begin
+        if(GCSr.Balance==GCr.Amount)then begin
+          needtoreturn = true;
+        end;
+      end else begin
+        MessageBox(2186,"");
+        WindowFieldGoto(wn,RepSpec,-1,"f1",true);
+        goto LProceedGiftVoucherSalesTouchScreenDClass;
+      end;
     end;
     if (NonBlankDate(GCr.ExpiryDate) and (GCr.ExpiryDate<CurrentDate)) then begin // Edit ************************** Thursday, 8 January 2015 12:38:41
       MessageBox(2185,"");
@@ -1048,7 +1055,7 @@ begin
           IVrw.PayMode = GCTr.PayMode;
         end;
         MatRowPut(IVr,rownr,IVrw);
-        err = IVVc_PasteGiftCertificate(IVr,rownr,kInvoiceRowTypeGiftVoucherSold);
+        err = IVVc_PasteGiftCertificate(IVr,rownr,kInvoiceRowTypeGiftVoucherSold,needtoreturn);
         if (err!=0) then begin
           MessageBox(err,"");
           CloseWindow(wn);
