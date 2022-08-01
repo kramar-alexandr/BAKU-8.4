@@ -10,7 +10,8 @@ remote function boolean CompanyIsJWLikeCompany(Integer);
 external function string 60 AddObjectToObjectList(string,string);
 external function string 60 RemoveObjectFromObjectList(string,string);// Edit ************************** Friday, 14 November 2014 09:35:09
 external function roundmode SetRoundModeD(Integer);
- external function val AbsoluteVal(val);
+external function val AbsoluteVal(val);
+external procedure GetObjs(string,string,var string);
 
 global function string 255 imgStrReplace(string instr)
 begin
@@ -950,6 +951,109 @@ begin
 	
   return;
 end;
+
+
+
+
+
+
+
+webpublic global
+procedure WebGetClientSHrIn() // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 18:21 29.07.2022
+begin
+  LongInt ser;
+	record ORVc ORr;
+  record CompaniesBlock CBb;
+	row CompaniesBlock Comprw;
+	integer j,oldCompany,rwcnt,i,k;
+	boolean TrHs,TrHs1,update;
+	vector string 255 Codes,Groups;
+	record SHVc SHr;
+	row SHVc SHrw;
+	record IVVc IVr;
+	row IVVc IVrw;
+	record INVc INr;
+	string 255 FileName, LogFileName, keyCode, promoobj;
+	area BodyAr;
+	boolean testf;
+
+	
+	SetCompany(1,false);
+	logtext(0,"================================================ WebGetGCDataIn");
+	FileName = "SalesReportExt/WebGetClientSHrIn.txt";
+	if (!fileexists(FileName)) then begin
+		oldCompany = currentCompany;
+		blockload(CBb);
+		rwcnt = matrowcnt(CBb);
+		For(j=0;j<rwcnt;j=j+1) begin
+			matrowget(CBb,j,Comprw);
+			if(Comprw.ActiveStatus==0 and j+1!=18 and j+1!=33)then begin
+				SetCompany(j+1,false);
+				TrHs = true;
+				SHr.OrderNr = 1;
+				while(Loopkey("OrderKey",SHr,1,TrHs)) begin
+					testf = true;
+					ORr.SerNr = SHr.OrderNr;
+					readfirstmain(ORr,1,true);
+					if (left(ORr.OfficialSerNr,3)=="EC_") then begin testf = false; end;
+					if (SHr.OrderNr < 1) then begin TrHs = false; testf = false; end;
+					if (left(SHr.CustCode,3)=="FOB") then begin testf = false; end;
+					if (testf) then begin
+						for (i=0;i<matrowcnt(SHr);i=i+1) begin
+							matrowget(SHr,i,SHrw);
+							TrHs1 = true;
+							IVr.OrderNr = SHr.OrderNr;
+							While(LoopKey("OrderNr",IVr,1,TrHs1)) begin
+								if (IVr.OrderNr!=SHr.OrderNr) then begin TrHs1=false; end;
+								if (TrHs1) then begin
+									for (k=0;k<matrowcnt(IVr);k=k+1) begin
+										matrowget(IVr,k,IVrw);
+										if (IVrw.ArtCode==SHrw.ArtCode) then begin
+											k = matrowcnt(IVr);
+											TrHs1 = false;
+											promoobj = "";
+											GetObjs("PROMO",IVrw.Objects,promoobj);
+										end;
+									end;
+								end;
+							end;
+							AddTextToArea	(Comprw.CompName & chr(09)
+								& SHrw.ArtCode & chr(09)
+								& SHrw.Spec & chr(09) 														//1
+								& SHrw.Ship & chr(09) 														//2
+								& SHr.ShipDate & chr(09)													//3
+								& SHr.SerNr & chr(09) 														//4
+								& SHr.CustCode & chr(09) 													//5
+								& SHr.Addr0 & chr(09) 														//6
+								& IVrw.Price & chr(09) 														//7
+								& IVrw.Price * IVrw.Quant - IVrw.Price * IVrw.Quant / 100 * IVrw.vRebate & chr(09) 
+								& promoobj & chr(09),BodyAr);
+								if (IVrw.vRebate > 0) then begin
+									AddTextToArea	(IVrw.vRebate & "%" & chr(09),BodyAr);
+								end else begin
+									AddTextToArea	("" & chr(09),BodyAr);
+								end;
+								AddTextToArea	(SHrw.FIFORowVal/SHrw.Ship & chr(09) 	
+								& SHrw.FIFORowVal & chr(09)
+								&	chr(13),BodyAr);
+						end;
+						ResetLoop(IVr);
+					end;
+				end;
+				ResetLoop(SHr);
+			end;
+			WriteAreaToFile	(BodyAr,FileName,0);
+		end;
+	end;
+  ResetCompany(oldCompany); 
+  return;
+end;
+
+
+
+
+
+
 
 webpublic global
 updating procedure WebRepasteObjectsfromRebFix()
