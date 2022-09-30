@@ -17975,6 +17975,196 @@ end;
 
 
 
+global webpublic procedure WebGetGCDataIn()
+begin
+	string 200 itemcode, hansacode, trxbrand, plcurcode;
+	record INVc INr;
+	record GlobalItemVc Gir;
+	vector string 255 gircodes;
+	boolean TrHs, testf;
+	record CompaniesBlock Compb;
+	row CompaniesBlock Comprw;
+	record PLVc PLr;
+	area BodyAr;
+	string 255 FileName, LogFileName, keyCode;
+	val price, oldprice;
+	array string 255 ahansacode, aitemcode, atrxbrand, aplcurcode;
+	array val aprice, aoldprice;
+	array integer acurcomp;
+	longint cnt, j;
+	record BPIBrandVc BPIBrandr;
+	record ItemStatusVc ISr;
+	record GCVc GCr;
+	record GCSVc GCSr;
+	record GCRVc GCRr;
+	record IVVc IVr, IV2r;
+	integer i,comp,curcomp, k, comp1;
+	row IVVc IVrw, IVrw2, IV2rw, IV2rw2;
+	boolean okflag;	
+	longint curtick;
+
+	SetCompany(1,false);
+	logtext(0,"================================================ WebGetGCDataIn");
+	FileName = "SalesReportExt/WebGetGCDataIn.txt";
+	if (!fileexists(FileName)) then begin
+		cnt = 34;
+		for (j=0;j<cnt;j=j+1) begin
+			BlockLoad(Compb);
+			matrowget(Compb,j,Comprw);
+			SetCompany(j + 1,false);
+			if (Comprw.ActiveStatus==0 and (!CompanyIsJWLikeCompany(j+1) or j+1==3)) then begin
+				curcomp = CurrentCompany;
+				logtext(0,curcomp);
+				// AddTextToArea	("Компания" & chr(09)
+				// & "Номер в хансе" & chr(09) 														//1
+				// & "Дата прод." & chr(09) 																			//2
+				// & "Сумма прод." & chr(09)																				//3
+				// & "Магазин прод." & chr(09) 																						//4
+				// & "Срок действия прод." & chr(09) 																					//5
+				// & "Закрыт прод." & chr(09) 																			//6
+				// & "Номер сч/ф прод." & chr(09) 
+				// &	"Штрихкод прод." & chr(09) 
+				// &	"Остаток прод." & chr(09) 
+				// &	"Клиент прод." & chr(09) 
+				// &	"Склад прод." & chr(09) 
+				// &	"Сумма сч/ф прод." & chr(09) 
+				// &	"Способ оплаты" & chr(09) 
+				// &	"Касса/терминал" & chr(09) 
+				// &	"Коммантарий" & chr(09) 
+				// & "Дата получ." & chr(09) 																			//2
+				// & "Сумма получ." & chr(09)																				//3
+				// & "Магазин получ." & chr(09) 																						//4
+				// & "Номер сч/ф получ." & chr(09) 
+				// &	"Склад получ." & chr(09) 
+				// &	"Сумма сч/ф получ." & chr(09) 
+				// &	"Валюта сч/ф получ." & chr(09) 
+				// &	chr(13),BodyAr);
+				if (CurrentCompany==3) then begin Comprw.CompName = "JW"; end;
+				GCSr.SerNr = 0;
+				while(loopmain(GCSr,1,true))begin
+					if (nonblank(GCSr.SerNr)) then begin
+						logtext(0,"1 " & Comprw.CompName);
+						// if (nonblank(GCSr.BarCode)) then begin
+							// GCRr.BarCode = GCSr.BarCode;
+							// keyCode = "BarCode";
+						// end else begin
+							GCRr.GCSSerNr = GCSr.SerNr;
+							keyCode = "GCSSerNr";
+						// end;
+						TrHs = true;
+						while(LoopKey(keyCode,GCRr,1,TrHs))begin
+							if (GCRr.GCSSerNr!=GCSr.SerNr) then begin TrHs = false; end;
+							if (TrHs) then begin
+								logtext(0,"2 " & Comprw.CompName);
+								for(comp=1;comp<=cnt;comp=comp+1) begin
+									SetCompany(comp,false);
+									IVr.SerNr = GCRr.InvSerNr;
+								
+									readfirstmain(IVr,1,true);
+									logtext(0,"5 " & IVr.SerNr);
+									okflag=false;
+									for(i=0;i<MatRowCnt(IVr);i=i+1) begin
+										MatRowGet(IVr,i,IVrw);
+										MatRowGet(IVr,i+1,IVrw2);
+										logtext(0,"6 " & GCSr.SerNr & " " & IVrw.GCNr);
+										if(IVrw.stp==kInvoiceRowTypeGiftVoucherPayment AND GCSr.SerNr==IVrw.GCNr) then begin
+								
+											logtext(0,"3 " & Comprw.CompName);
+											AddTextToArea	(Comprw.CompName & chr(09)
+											& GCSr.SerNr & chr(09) 														//1
+											& GCSr.TransDate & chr(09) 																			//2
+											& GCSr.Amount & chr(09)																				//3
+											& GCSr.Comment & chr(09) 																						//4
+											& GCSr.ExpiryDate & chr(09) 																					//5
+											& GCSr.Closed & chr(09) 																			//6
+											& GCSr.InvSerNr & chr(09) 																			//7
+											& GCSr.BarCode & chr(09) 																
+											& GCSr.Balance & chr(09),BodyAr);															
+											for(comp1=1;comp1<=cnt;comp1=comp1+1) begin
+												SetCompany(comp1,false);
+												IV2r.SerNr = GCSr.InvSerNr;
+											
+												readfirstmain(IV2r,1,true);
+												okflag=false;
+												for(k=0;k<MatRowCnt(IV2r);k=k+1) begin
+													MatRowGet(IV2r,k,IV2rw);
+													MatRowGet(IV2r,k+1,IV2rw2);
+													if(IV2rw.stp==kInvoiceRowTypeGiftVoucherSold AND GCSr.SerNr==IV2rw.GCNr) then begin
+														if (IV2r.Sum4==-1) then begin IV2r.Sum4 = 0; end;
+														AddTextToArea	(IV2r.Addr0 & chr(09)  														//1
+														& IV2r.Location & chr(09)		
+														& IV2r.Sum4 & chr(09),BodyAr);	
+														testf = false;
+														if(IV2rw2.stp==kInvoiceRowTypeCashPayment) then begin
+															testf = true;
+															AddTextToArea	("Налич." & chr(09)
+																						 & IV2rw2.PayMode & chr(09)
+																						 & IV2rw2.Spec,BodyAr);	 														//1
+														end;
+														if(IV2rw2.stp==kInvoiceRowTypeLoyaltyPointsPayment) then begin
+															testf = true;
+															AddTextToArea	("Баллы лояльности" & chr(09)
+																						 & IV2rw2.PayMode & chr(09)
+																						 & IV2rw2.Spec,BodyAr); 														//1
+														end;
+														if(IV2rw2.stp==kInvoiceRowTypeLoyaltyPointsBonus) then begin
+															testf = true;
+															AddTextToArea	("Бонусы" & chr(09)
+																						 & IV2rw2.PayMode & chr(09)
+																						 & IV2rw2.Spec,BodyAr);	 														//1
+														end;
+														if(IV2rw2.stp==kInvoiceRowTypeCreditCardPayment) then begin
+															testf = true;
+															AddTextToArea	("Кредитная карта" & chr(09)
+																						 & IV2rw2.PayMode & chr(09)
+																						 & IV2rw2.Spec,BodyAr);	 														//1
+														end;
+														if (!testf) then begin
+															AddTextToArea	("" & chr(09)
+																						 & "" & chr(09)
+																						 & "",BodyAr);
+														end;
+														goto ENDLOOPFORCOMP;
+													end;	
+												end;	
+											end;
+											ENDLOOPFORCOMP:;
+											SetCompany(curcomp,false);
+											AddTextToArea	("" & chr(09) 														//1
+											& GCRr.TransDate & chr(09) 																			//2
+											& GCRr.Amount & chr(09)																				//3
+											& GCRr.Comment & chr(09) 																						//4
+											& GCRr.InvSerNr & chr(09) 																					//5
+											& IVr.Location & chr(09) 																			//6
+											& IVr.Sum4 & chr(09) 
+											&	IVr.CurncyCode & chr(09),BodyAr);
+											if (IVr.Sum4==-1) then begin IVr.Sum4 = 0; end;
+											AddTextToArea	(IVr.Addr0 & chr(09)  														//1
+											& IVr.Location & chr(09)		
+											& IVr.Sum4 & chr(09),BodyAr);	
+											AddTextToArea	(chr(13),BodyAr);
+											goto ENDLOOPFORCOMP1;
+										end;	
+									end;
+								end;
+								ENDLOOPFORCOMP1:;
+								SetCompany(curcomp,false);
+							end;
+						end;
+						ResetLoop(GCRr);
+					end;
+				end;
+				ResetLoop(GCSr);
+			end;
+		end;
+		WriteAreaToFile	(BodyAr,FileName,0);
+	end;
+ return;
+end;
+
+
+
+
 
 global webpublic procedure WebERVcRn()
 begin
