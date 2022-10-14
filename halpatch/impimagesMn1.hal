@@ -5,6 +5,8 @@ external function string 60 RemoveObjectFromObjectList(string,string);
 external procedure GIWasUpdated(record GlobalItemVc,record GlobalItemVc,string);	
 external procedure ExtractObjWithSeparator(string,string,Boolean,var Integer,var string);
 remote updating procedure PasteMaxTS (var record GlobalItemVc); // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 13:13 09.12.2021
+external procedure ExtractObjectsByType(string, string, var array string, var integer);
+external function string 60 AddObjectToObjectList(string,string);
 
 
 
@@ -109,8 +111,53 @@ return;
 end;
 
 
+global  // _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- Anton Preisinger 12:03 14.10.2022
+updating procedure RecalcPromoObjInIV(record TemporaryPricesVc TPr)
+begin
+	record IVVc IVr;
+	row IVVc IVrw;
+	row TemporaryPricesVc TPrw;
+	boolean TrHs, change;
+	integer i, j, oscnt;
+  array string 20 rebobj;
+	string 20 obj;
+	
+	
+	IVr.TransDate = TPr.FromDate;
+	TrHs = true;
+	while (loopkey("TransDate",IVr,1,TrHs)) begin
+		if (IVr.TransDate > TPr.ToDate) then begin TrHs = false; end;
+		if (TrHs) then begin
+			change = false;
+			for (i=0;i<matrowcnt(IVr);i=i+1) begin
+				matrowget(IVr,i,IVrw);
+				if (nonblank(IVrw.ArtCode)) then begin
+					for (j=0;i<matrowcnt(TPr);j=j+1) begin
+						matrowget(TPr,j,TPrw);
+						if (TPrw.ArtCode==IVrw.ArtCode and TPrw.Price==IVrw.Price) then begin
+							cleararray(rebobj);
+							oscnt = 0;
+							ExtractObjectsByType(IVrw.Objects,"PROMO",rebobj,oscnt);
+							obj = rebobj[0];
+							if(blank(obj)) then begin obj = "blank"; end;
+							if (obj=="blank") then begin
+								IVrw.Objects = AddObjectToObjectList(IVrw.Objects,TPr.Object);
+								matrowput(IVr,i,IVrw);
+								change = true;
+							end;
+						end;
+					end;
+				end;
+			end;
+			if (change) then begin
+				recordstore(IVr,true);
+				logtext(0,IVr.SerNr);
+			end;
+		end;
+	end;
 
-
+return;
+end;
 
 global 
 updating procedure ImportResetAdditionalCatGIIn()
